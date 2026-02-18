@@ -29,7 +29,7 @@ Adicionar resiliencia sem perder simplicidade: o sistema deve falhar de forma pr
 - Context guard inicial por janela:
   - limite de mensagens (`KAEL_CONTEXT_MAX_MESSAGES`)
   - limite de caracteres (`KAEL_CONTEXT_MAX_CHARS`)
-- `PiEngineAdapter` agora recebe contexto recente no prompt (HTTP e SDK/local-process com prompt serializado).
+- `PiEngineAdapter` (SDK embutido) agora recebe contexto recente no prompt.
 
 ## Pendencias desta fase
 

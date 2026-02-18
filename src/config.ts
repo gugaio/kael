@@ -3,22 +3,15 @@ import fs from "node:fs/promises";
 import { expandHome, loadGlobalConfig } from "./global-config.js";
 
 export type EngineMode = "simple" | "pi" | "hybrid";
-export type PiTransportMode = "pi_sdk" | "local_process" | "openai_http";
 
 export type PiEngineConfig = {
   enabled: boolean;
   provider: string;
-  transport: PiTransportMode;
   systemPrompt: string;
   systemPromptSource?: string;
-  apiUrl: string;
   apiKey?: string;
   model: string;
   timeoutMs: number;
-  local: {
-    command: string;
-    args: string[];
-  };
   retry: {
     attempts: number;
     baseDelayMs: number;
@@ -86,32 +79,6 @@ function parseEngineMode(raw: string | undefined): EngineMode {
   return "simple";
 }
 
-function parsePiTransportMode(raw: string | undefined): PiTransportMode {
-  const value = raw?.trim().toLowerCase();
-  if (value === "pi_sdk") {
-    return "pi_sdk";
-  }
-  if (value === "openai_http") {
-    return "openai_http";
-  }
-  return "pi_sdk";
-}
-
-function parseJsonStringArray(raw: string | undefined): string[] | undefined {
-  if (!raw?.trim()) {
-    return undefined;
-  }
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.every((item) => typeof item === "string")) {
-      return parsed;
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
-}
-
 export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
   const globalConfig = await loadGlobalConfig();
   const soulPrompt = await loadSoulPrompt(cwd);
@@ -168,22 +135,8 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
   const timeoutRaw = Number(process.env.KAEL_PI_TIMEOUT_MS ?? String(defaultTimeout));
   const timeoutMs = Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? timeoutRaw : defaultTimeout;
 
-  const transport = parsePiTransportMode(
-    process.env.KAEL_PI_TRANSPORT ?? globalConfig?.defaults.pi.transport,
-  );
-
   const provider =
     process.env.KAEL_PI_PROVIDER?.trim() || globalConfig?.defaults.pi.provider || "openai";
-
-  const localCommand =
-    process.env.KAEL_PI_LOCAL_COMMAND?.trim() ||
-    globalConfig?.defaults.pi.local?.command ||
-    "pi";
-
-  const localArgs =
-    parseJsonStringArray(process.env.KAEL_PI_LOCAL_ARGS_JSON) ??
-    globalConfig?.defaults.pi.local?.args ??
-    [];
 
   const defaultRetryAttempts = globalConfig?.defaults.pi.retry?.attempts ?? 3;
   const retryAttemptsRaw = Number(
@@ -220,29 +173,14 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     Number.isFinite(retryJitterRaw) && retryJitterRaw >= 0 ? retryJitterRaw : defaultRetryJitterMs;
 
   const apiKey = process.env.KAEL_PI_API_KEY?.trim();
-  const enabled =
-    transport === "openai_http"
-      ? Boolean(apiKey)
-      : transport === "local_process"
-        ? Boolean(localCommand)
-        : true;
   const pi: PiEngineConfig = {
-    enabled,
+    enabled: true,
     provider,
-    transport,
     systemPrompt: soulPrompt.prompt,
     systemPromptSource: soulPrompt.source,
-    apiUrl:
-      process.env.KAEL_PI_API_URL?.trim() ||
-      globalConfig?.defaults.pi.apiUrl ||
-      "https://api.openai.com/v1/chat/completions",
     apiKey,
     model: process.env.KAEL_PI_MODEL?.trim() || globalConfig?.defaults.pi.model || "gpt-4o-mini",
     timeoutMs,
-    local: {
-      command: localCommand,
-      args: localArgs,
-    },
     retry: {
       attempts: retryAttempts,
       baseDelayMs: retryBaseDelayMs,

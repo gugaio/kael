@@ -167,6 +167,32 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-02-18 - Simplificacao do runtime PI (SDK-only)
+
+Resumo:
+- Removidos caminhos `local_process` e `openai_http` para reduzir custo de manutencao.
+- `PiEngineAdapter` agora opera exclusivamente com PI SDK embutido.
+- Configuracao PI foi simplificada (sem `transport`, `apiUrl` e `local.command/args`).
+- Documentacao atualizada com estrategia atual e nota para reintroducao futura se necessario.
+
+Arquivos-chave:
+- `src/engine/pi-engine-adapter.ts`
+- `src/config.ts`
+- `src/global-config.ts`
+- `README.md`
+- `docs/architecture/phases/phase-2.md`
+- `docs/architecture/phases/phase-3.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [ ] teste manual de `/chat` em `hybrid` confirmando fluxo PI normal
+
+Pendencias:
+- Se houver necessidade futura de multiplos transportes, reintroduzir via novo adapter dedicado (nao no caminho principal).
+
+Proximo passo recomendado:
+- Continuar Fase 3 com reset controlado de sessao + observabilidade de turnos.
+
 ### 2026-02-18 - Fase 3 (incremento): TurnOrchestrator + context guard multi-turn
 
 Resumo:

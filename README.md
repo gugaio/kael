@@ -105,11 +105,7 @@ Se a mesma chave for reutilizada com payload diferente, a API retorna `409`.
 - `KAEL_CONTEXT_MAX_MESSAGES` (janela de contexto para engine; default: `24`)
 - `KAEL_CONTEXT_MAX_CHARS` (limite de caracteres da janela; default: `12000`)
 - `KAEL_PI_PROVIDER` (default: `openai`)
-- `KAEL_PI_TRANSPORT` (`pi_sdk`, `local_process` ou `openai_http`; default: `pi_sdk`)
-- `KAEL_PI_LOCAL_COMMAND` (default: `pi`)
-- `KAEL_PI_LOCAL_ARGS_JSON` (default: `[]`, exemplo: `["chat","--plain"]`)
-- `KAEL_PI_API_URL` (usado em `openai_http`)
-- `KAEL_PI_API_KEY` (opcional no `pi_sdk`; obrigatoria no `openai_http` quando nao houver env do provider)
+- `KAEL_PI_API_KEY` (opcional; pode ser usado para resolver credencial do provider)
 - `KAEL_PI_MODEL` (default: `gpt-4o-mini`)
 - `KAEL_PI_TIMEOUT_MS` (default: `45000`)
 - `KAEL_PI_RETRY_ATTEMPTS` (default: `3`)
@@ -122,13 +118,13 @@ Se a mesma chave for reutilizada com payload diferente, a API retorna `409`.
 
 ### Runtime do PI
 
-Por padrao, Kael executa PI embutido via SDK (`pi_sdk`) usando dependencias npm.
-Isso elimina a necessidade de binario `pi` no PATH.
+Kael executa PI embutido via SDK usando dependencias npm:
+- `@mariozechner/pi-agent-core`
+- `@mariozechner/pi-ai`
 
-Modos:
-- `pi_sdk` (padrao): `@mariozechner/pi-agent-core` + `@mariozechner/pi-ai`.
-- `local_process`: shell-out para comando externo (`KAEL_PI_LOCAL_COMMAND`) via `stdin/stdout`.
-- `openai_http`: modo legado por endpoint compatível com chat completions.
+Nao ha dependencia do binario `pi` no PATH.
+
+Se no futuro for necessario reintroduzir transportes alternativos (processo local/HTTP), a recomendacao e criar um adapter separado e manter `PiEngineAdapter` principal limpo (SDK-only).
 
 Observacao: Kael agora carrega `.env` automaticamente no bootstrap da app.
 Observacao: no modo PI (`pi`/`hybrid`), Kael monta o `system prompt` com `docs/core/SOUL.md` automaticamente (ou `KAEL_SOUL_PATH`, se definido).

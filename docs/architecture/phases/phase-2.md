@@ -18,7 +18,7 @@ Acoplar um engine de IA real sem perder operacao local deterministica para coman
 ## Modos de engine
 
 - `simple`: apenas comandos locais.
-- `pi`: runtime PI embutido via SDK (`pi_sdk`) com fallback para `local_process` e modo HTTP legado opcional.
+- `pi`: runtime PI embutido via SDK.
 - `hybrid`: slash commands locais + conversa via PI com fallback para simple.
 
 ## Expansao de tools de video
