@@ -208,3 +208,26 @@ Pendencias:
 
 Proximo passo recomendado:
 - Iniciar Fase 3 com retry utilitario e camada de dedupe/idempotency.
+
+### 2026-02-18 - CLI init e home global (~/.kael)
+
+Resumo:
+- Adicionado comando `kael init` para bootstrap de configuracao global.
+- Implementado carregamento automatico de `~/.kael/config.json` com override por env.
+- Criada base para home global com `data` e `logs`.
+
+Arquivos-chave:
+- `src/cli/index.ts`
+- `src/global-config.ts`
+- `src/config.ts`
+- `README.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] teste manual de `init` e leitura de config global
+
+Pendencias:
+- Validar manualmente fluxo de `init --force` e valores globais.
+
+Proximo passo recomendado:
+- Iniciar Fase 3 com retry utilitario e camada de dedupe/idempotency.

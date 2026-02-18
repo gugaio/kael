@@ -1,5 +1,6 @@
 import { startApiServer } from "../api/server.js";
 import { loadConfig } from "../config.js";
+import { initKaelHome, resolveKaelHome } from "../global-config.js";
 
 type Args = {
   command: string;
@@ -32,19 +33,38 @@ function parseArgs(argv: string[]): Args {
 
 function printHelp(): void {
   console.log("Kael CLI");
+  console.log("  kael init [--force]");
   console.log("  kael server");
   console.log('  kael chat --message "..." [--session main] [--url http://127.0.0.1:3210]');
   console.log("  kael jobs [--url http://127.0.0.1:3210]");
 }
 
-function resolveUrl(flags: Record<string, string | boolean>): string {
+async function resolveUrl(flags: Record<string, string | boolean>): Promise<string> {
   const explicit = typeof flags.url === "string" ? flags.url : undefined;
   if (explicit) {
     return explicit;
   }
 
-  const cfg = loadConfig();
+  const cfg = await loadConfig();
   return `http://${cfg.host}:${cfg.port}`;
+}
+
+async function commandInit(flags: Record<string, string | boolean>): Promise<void> {
+  const force = flags.force === true;
+  const result = await initKaelHome(force);
+
+  console.log(`Kael home: ${result.kaelHome}`);
+  console.log(`Config: ${result.configPath}`);
+  if (result.created) {
+    console.log("Global config criado/atualizado com sucesso.");
+  } else {
+    console.log("Global config ja existia. Use --force para sobrescrever.");
+  }
+
+  if (!process.env.KAEL_HOME) {
+    const expectedHome = resolveKaelHome();
+    console.log(`KAEL_HOME ativo: ${expectedHome}`);
+  }
 }
 
 async function commandChat(flags: Record<string, string | boolean>): Promise<void> {
@@ -54,7 +74,7 @@ async function commandChat(flags: Record<string, string | boolean>): Promise<voi
   }
 
   const sessionKey = typeof flags.session === "string" ? flags.session : "main";
-  const url = resolveUrl(flags);
+  const url = await resolveUrl(flags);
 
   const response = await fetch(`${url}/chat`, {
     method: "POST",
@@ -71,7 +91,7 @@ async function commandChat(flags: Record<string, string | boolean>): Promise<voi
 }
 
 async function commandJobs(flags: Record<string, string | boolean>): Promise<void> {
-  const url = resolveUrl(flags);
+  const url = await resolveUrl(flags);
   const response = await fetch(`${url}/jobs`);
   const data = (await response.json()) as {
     ok: boolean;
@@ -96,6 +116,11 @@ async function commandJobs(flags: Record<string, string | boolean>): Promise<voi
 
 async function main(): Promise<void> {
   const { command, flags } = parseArgs(process.argv.slice(2));
+
+  if (command === "init") {
+    await commandInit(flags);
+    return;
+  }
 
   if (command === "server") {
     await startApiServer();

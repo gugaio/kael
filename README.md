@@ -33,6 +33,7 @@ Super agente para videos e automacao.
 ```bash
 npm install
 npm run check
+npx tsx src/cli/index.ts init
 npm run dev
 ```
 
@@ -41,6 +42,12 @@ Servidor padrao: `http://127.0.0.1:3210`
 ## Comandos CLI
 
 ```bash
+# inicializar ~/.kael (ou $KAEL_HOME)
+npx tsx src/cli/index.ts init
+
+# sobrescrever config global
+npx tsx src/cli/index.ts init --force
+
 # iniciar API
 npx tsx src/cli/index.ts server
 
@@ -85,3 +92,17 @@ npx tsx src/cli/index.ts jobs
 - `KAEL_PI_API_KEY` (obrigatoria para modo `pi`)
 - `KAEL_PI_MODEL` (default: `gpt-4o-mini`)
 - `KAEL_PI_TIMEOUT_MS` (default: `45000`)
+
+## Config global (~/.kael)
+
+O comando `init` cria a home global com:
+
+- `~/.kael/config.json`
+- `~/.kael/data`
+- `~/.kael/logs`
+
+Ordem de prioridade da configuracao:
+
+1. Variaveis de ambiente (`KAEL_*`)
+2. Config global (`~/.kael/config.json`)
+3. Fallback local do projeto

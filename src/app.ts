@@ -15,7 +15,7 @@ export type KaelApp = {
 };
 
 export async function createKaelApp(): Promise<KaelApp> {
-  const config = loadConfig();
+  const config = await loadConfig();
   const sessions = new SessionStore(config.dataDir);
   const jobStore = new JobStore(config.dataDir);
 
