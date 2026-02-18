@@ -1,6 +1,6 @@
 # Arquitetura - Fase 3 (Resiliencia Operacional)
 
-Status: planejada
+Status: em andamento
 
 ## Objetivo
 
@@ -12,6 +12,25 @@ Adicionar resiliencia sem perder simplicidade: o sistema deve falhar de forma pr
 - Dedupe/idempotency para rotas criticas (`/chat`, `/jobs/*`).
 - Classificacao de erro no engine remoto para fallback inteligente.
 - Guard de contexto e reset de sessao em falhas fatais.
+
+## Entregas implementadas (incremento atual)
+
+- Retry generico em `src/infra/retry.ts` com politica configuravel.
+- `PiEngineAdapter` com retry e classificacao de erro (`timeout`, `rate_limit`, `auth`, `provider_unavailable`, etc.).
+- Fallback no modo `hybrid` orientado por tipo de erro (nao mais catch generico).
+- Idempotency layer em memoria com TTL para:
+  - `POST /chat`
+  - `POST /jobs/transcode`
+  - `POST /jobs/hls`
+  - `POST /jobs/capture`
+  - `POST /jobs/probe`
+- Protecao de conflito de chave idempotente com payload divergente (`409`).
+
+## Pendencias desta fase
+
+- Guard de contexto antes da chamada ao provider.
+- Reset automatico de sessao em falhas irrecoveraveis.
+- Evoluir idempotency store para persistente (se necessario).
 
 ## Design proposto
 

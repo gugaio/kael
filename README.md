@@ -16,7 +16,7 @@ Super agente para videos e automacao.
 - Sessao persistente com transcript JSONL
 - Engine desacoplada com modos:
   - `simple` (comandos)
-  - `pi` (LLM via endpoint compatível com chat completions)
+  - `pi` (runtime PI local por processo)
   - `hybrid` (slash commands local + conversa via PI com fallback)
 - Jobs de video assíncronos:
   - `transcode`
@@ -73,7 +73,7 @@ npx tsx src/cli/index.ts jobs
 ## Endpoints
 
 - `GET /health`
-- `POST /chat`
+- `POST /chat` (opcional: `?includeMessages=true` para incluir objetos `user` e `assistant`)
 - `GET /sessions/:sessionKey/messages`
 - `POST /jobs/transcode`
 - `POST /jobs/hls`
@@ -83,16 +83,53 @@ npx tsx src/cli/index.ts jobs
 - `GET /jobs/:jobId`
 - `GET /jobs/:jobId/log`
 
+### Idempotency (Fase 3)
+
+Para evitar duplicacao em retries de cliente, envie o header `x-idempotency-key` em:
+
+- `POST /chat`
+- `POST /jobs/transcode`
+- `POST /jobs/hls`
+- `POST /jobs/capture`
+- `POST /jobs/probe`
+
+Se a mesma chave e mesmo payload forem repetidos dentro do TTL, a API retorna a resposta cacheada com header `x-idempotency-replayed: true`.
+Se a mesma chave for reutilizada com payload diferente, a API retorna `409`.
+
 ## Configuracao por ambiente
 
 - `KAEL_PORT` (default: `3210`)
 - `KAEL_HOST` (default: `127.0.0.1`)
 - `KAEL_DATA_DIR` (default: `./.kael-data`)
 - `KAEL_ENGINE_MODE` (`simple`, `pi`, `hybrid`; default: `simple`)
-- `KAEL_PI_API_URL` (default: `https://api.openai.com/v1/chat/completions`)
-- `KAEL_PI_API_KEY` (obrigatoria para modo `pi`)
+- `KAEL_PI_PROVIDER` (default: `openai`)
+- `KAEL_PI_TRANSPORT` (`pi_sdk`, `local_process` ou `openai_http`; default: `pi_sdk`)
+- `KAEL_PI_LOCAL_COMMAND` (default: `pi`)
+- `KAEL_PI_LOCAL_ARGS_JSON` (default: `[]`, exemplo: `["chat","--plain"]`)
+- `KAEL_PI_API_URL` (usado em `openai_http`)
+- `KAEL_PI_API_KEY` (opcional no `pi_sdk`; obrigatoria no `openai_http` quando nao houver env do provider)
 - `KAEL_PI_MODEL` (default: `gpt-4o-mini`)
 - `KAEL_PI_TIMEOUT_MS` (default: `45000`)
+- `KAEL_PI_RETRY_ATTEMPTS` (default: `3`)
+- `KAEL_PI_RETRY_BASE_MS` (default: `300`)
+- `KAEL_PI_RETRY_MAX_MS` (default: `3000`)
+- `KAEL_PI_RETRY_JITTER_MS` (default: `250`)
+- `KAEL_SOUL_PATH` (opcional; caminho explicito para `SOUL.md`)
+- `KAEL_IDEMPOTENCY_ENABLED` (default: `true`)
+- `KAEL_IDEMPOTENCY_TTL_MS` (default: `600000`)
+
+### Runtime do PI
+
+Por padrao, Kael executa PI embutido via SDK (`pi_sdk`) usando dependencias npm.
+Isso elimina a necessidade de binario `pi` no PATH.
+
+Modos:
+- `pi_sdk` (padrao): `@mariozechner/pi-agent-core` + `@mariozechner/pi-ai`.
+- `local_process`: shell-out para comando externo (`KAEL_PI_LOCAL_COMMAND`) via `stdin/stdout`.
+- `openai_http`: modo legado por endpoint compatível com chat completions.
+
+Observacao: Kael agora carrega `.env` automaticamente no bootstrap da app.
+Observacao: no modo PI (`pi`/`hybrid`), Kael monta o `system prompt` com `docs/core/SOUL.md` automaticamente (ou `KAEL_SOUL_PATH`, se definido).
 
 ## Config global (~/.kael)
 

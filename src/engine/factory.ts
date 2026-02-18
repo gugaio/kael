@@ -1,4 +1,5 @@
 import type { KaelConfig } from "../config.js";
+import { shouldFallbackOnPiError } from "./pi-errors.js";
 import type { AgentEngine } from "./types.js";
 import { HybridEngine } from "./hybrid-engine.js";
 import { PiEngineAdapter } from "./pi-engine-adapter.js";
@@ -21,7 +22,10 @@ export function createEngine(config: KaelConfig): AgentEngine {
     async runTurn(input) {
       try {
         return await pi.runTurn(input);
-      } catch {
+      } catch (error) {
+        if (!shouldFallbackOnPiError(error)) {
+          throw error;
+        }
         return simple.runTurn(input);
       }
     },

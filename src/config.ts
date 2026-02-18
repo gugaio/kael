@@ -1,14 +1,30 @@
 import path from "node:path";
+import fs from "node:fs/promises";
 import { expandHome, loadGlobalConfig } from "./global-config.js";
 
 export type EngineMode = "simple" | "pi" | "hybrid";
+export type PiTransportMode = "pi_sdk" | "local_process" | "openai_http";
 
 export type PiEngineConfig = {
   enabled: boolean;
+  provider: string;
+  transport: PiTransportMode;
+  systemPrompt: string;
+  systemPromptSource?: string;
   apiUrl: string;
   apiKey?: string;
   model: string;
   timeoutMs: number;
+  local: {
+    command: string;
+    args: string[];
+  };
+  retry: {
+    attempts: number;
+    baseDelayMs: number;
+    maxDelayMs: number;
+    jitterMs: number;
+  };
 };
 
 export type KaelConfig = {
@@ -16,8 +32,47 @@ export type KaelConfig = {
   host: string;
   dataDir: string;
   engineMode: EngineMode;
+  idempotency: {
+    enabled: boolean;
+    ttlMs: number;
+  };
   pi: PiEngineConfig;
 };
+
+const DEFAULT_KAEL_SYSTEM_PROMPT =
+  "Voce e Kael, super agente local de video e automacao. Seja direto, tecnico e util. Use comandos slash para acionar jobs locais quando for apropriado.";
+
+async function loadSoulPrompt(cwd: string): Promise<{ prompt: string; source?: string }> {
+  const explicitPath = process.env.KAEL_SOUL_PATH?.trim();
+  const candidates = [
+    explicitPath ? expandHome(explicitPath) : null,
+    path.join(cwd, "docs/core/SOUL.md"),
+    path.join(cwd, "SOUL.md"),
+  ].filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    try {
+      const raw = await fs.readFile(candidate, "utf-8");
+      const soul = raw.trim();
+      if (!soul) {
+        continue;
+      }
+
+      return {
+        prompt: [
+          DEFAULT_KAEL_SYSTEM_PROMPT,
+          "A identidade do Kael e definida pelo arquivo SOUL.md abaixo. Siga essas diretrizes de forma consistente:",
+          soul,
+        ].join("\n\n"),
+        source: candidate,
+      };
+    } catch {
+      // continua tentando os proximos candidatos
+    }
+  }
+
+  return { prompt: DEFAULT_KAEL_SYSTEM_PROMPT };
+}
 
 function parseEngineMode(raw: string | undefined): EngineMode {
   const value = raw?.trim().toLowerCase();
@@ -27,8 +82,35 @@ function parseEngineMode(raw: string | undefined): EngineMode {
   return "simple";
 }
 
+function parsePiTransportMode(raw: string | undefined): PiTransportMode {
+  const value = raw?.trim().toLowerCase();
+  if (value === "pi_sdk") {
+    return "pi_sdk";
+  }
+  if (value === "openai_http") {
+    return "openai_http";
+  }
+  return "pi_sdk";
+}
+
+function parseJsonStringArray(raw: string | undefined): string[] | undefined {
+  if (!raw?.trim()) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every((item) => typeof item === "string")) {
+      return parsed;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
 export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
   const globalConfig = await loadGlobalConfig();
+  const soulPrompt = await loadSoulPrompt(cwd);
 
   const defaultPort = globalConfig?.defaults.port ?? 3210;
   const envPort = Number(process.env.KAEL_PORT ?? String(defaultPort));
@@ -47,13 +129,87 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     process.env.KAEL_ENGINE_MODE ?? globalConfig?.defaults.engineMode,
   );
 
+  const idempotencyEnabledRaw =
+    process.env.KAEL_IDEMPOTENCY_ENABLED?.trim() ??
+    String(globalConfig?.defaults.idempotency?.enabled ?? true);
+  const idempotencyEnabled = idempotencyEnabledRaw.toLowerCase() !== "false";
+  const defaultIdempotencyTtlMs = globalConfig?.defaults.idempotency?.ttlMs ?? 10 * 60 * 1000;
+  const idempotencyTtlRaw = Number(
+    process.env.KAEL_IDEMPOTENCY_TTL_MS ?? String(defaultIdempotencyTtlMs),
+  );
+  const idempotencyTtlMs =
+    Number.isFinite(idempotencyTtlRaw) && idempotencyTtlRaw > 0
+      ? idempotencyTtlRaw
+      : defaultIdempotencyTtlMs;
+
   const defaultTimeout = globalConfig?.defaults.pi.timeoutMs ?? 45000;
   const timeoutRaw = Number(process.env.KAEL_PI_TIMEOUT_MS ?? String(defaultTimeout));
   const timeoutMs = Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? timeoutRaw : defaultTimeout;
 
+  const transport = parsePiTransportMode(
+    process.env.KAEL_PI_TRANSPORT ?? globalConfig?.defaults.pi.transport,
+  );
+
+  const provider =
+    process.env.KAEL_PI_PROVIDER?.trim() || globalConfig?.defaults.pi.provider || "openai";
+
+  const localCommand =
+    process.env.KAEL_PI_LOCAL_COMMAND?.trim() ||
+    globalConfig?.defaults.pi.local?.command ||
+    "pi";
+
+  const localArgs =
+    parseJsonStringArray(process.env.KAEL_PI_LOCAL_ARGS_JSON) ??
+    globalConfig?.defaults.pi.local?.args ??
+    [];
+
+  const defaultRetryAttempts = globalConfig?.defaults.pi.retry?.attempts ?? 3;
+  const retryAttemptsRaw = Number(
+    process.env.KAEL_PI_RETRY_ATTEMPTS ?? String(defaultRetryAttempts),
+  );
+  const retryAttempts =
+    Number.isFinite(retryAttemptsRaw) && retryAttemptsRaw > 0
+      ? Math.floor(retryAttemptsRaw)
+      : defaultRetryAttempts;
+
+  const defaultRetryBaseDelayMs = globalConfig?.defaults.pi.retry?.baseDelayMs ?? 300;
+  const retryBaseDelayRaw = Number(
+    process.env.KAEL_PI_RETRY_BASE_MS ?? String(defaultRetryBaseDelayMs),
+  );
+  const retryBaseDelayMs =
+    Number.isFinite(retryBaseDelayRaw) && retryBaseDelayRaw >= 0
+      ? retryBaseDelayRaw
+      : defaultRetryBaseDelayMs;
+
+  const defaultRetryMaxDelayMs = globalConfig?.defaults.pi.retry?.maxDelayMs ?? 3000;
+  const retryMaxDelayRaw = Number(
+    process.env.KAEL_PI_RETRY_MAX_MS ?? String(defaultRetryMaxDelayMs),
+  );
+  const retryMaxDelayMs =
+    Number.isFinite(retryMaxDelayRaw) && retryMaxDelayRaw >= 0
+      ? retryMaxDelayRaw
+      : defaultRetryMaxDelayMs;
+
+  const defaultRetryJitterMs = globalConfig?.defaults.pi.retry?.jitterMs ?? 250;
+  const retryJitterRaw = Number(
+    process.env.KAEL_PI_RETRY_JITTER_MS ?? String(defaultRetryJitterMs),
+  );
+  const retryJitterMs =
+    Number.isFinite(retryJitterRaw) && retryJitterRaw >= 0 ? retryJitterRaw : defaultRetryJitterMs;
+
   const apiKey = process.env.KAEL_PI_API_KEY?.trim();
+  const enabled =
+    transport === "openai_http"
+      ? Boolean(apiKey)
+      : transport === "local_process"
+        ? Boolean(localCommand)
+        : true;
   const pi: PiEngineConfig = {
-    enabled: Boolean(apiKey),
+    enabled,
+    provider,
+    transport,
+    systemPrompt: soulPrompt.prompt,
+    systemPromptSource: soulPrompt.source,
     apiUrl:
       process.env.KAEL_PI_API_URL?.trim() ||
       globalConfig?.defaults.pi.apiUrl ||
@@ -61,7 +217,24 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     apiKey,
     model: process.env.KAEL_PI_MODEL?.trim() || globalConfig?.defaults.pi.model || "gpt-4o-mini",
     timeoutMs,
+    local: {
+      command: localCommand,
+      args: localArgs,
+    },
+    retry: {
+      attempts: retryAttempts,
+      baseDelayMs: retryBaseDelayMs,
+      maxDelayMs: retryMaxDelayMs,
+      jitterMs: retryJitterMs,
+    },
   };
 
-  return { port, host, dataDir, engineMode, pi };
+  return {
+    port,
+    host,
+    dataDir,
+    engineMode,
+    idempotency: { enabled: idempotencyEnabled, ttlMs: idempotencyTtlMs },
+    pi,
+  };
 }

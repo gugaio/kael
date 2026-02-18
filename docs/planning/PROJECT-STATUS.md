@@ -119,7 +119,7 @@ Definition of Done (checklist):
 
 ### Fase 3 - Resiliencia Operacional
 
-Status: **Planejada**
+Status: **Em andamento**
 
 Objetivos:
 - Retry com backoff + jitter.
@@ -128,11 +128,11 @@ Objetivos:
 - Dedupe/idempotency para requests.
 
 Definition of Done (checklist):
-- [ ] Retry utilitario com politicas configuraveis.
-- [ ] Fallback classificado por tipo de erro.
+- [x] Retry utilitario com politicas configuraveis.
+- [x] Fallback classificado por tipo de erro.
 - [ ] Guard de contexto aplicado antes de chamada de modelo.
 - [ ] Reset automatico de sessao para falhas fatais.
-- [ ] Dedupe/idempotency ativo nos endpoints criticos.
+- [x] Dedupe/idempotency ativo nos endpoints criticos.
 
 ### Fase 4 - Autonomia (Heartbeat + Cron)
 
@@ -218,6 +218,34 @@ Resumo:
 
 Arquivos-chave:
 - `src/cli/index.ts`
+
+### 2026-02-18 - Fase 3 (incremento): retry + fallback classificado + idempotency
+
+Resumo:
+- Implementado retry generico com backoff exponencial + jitter configuravel.
+- `PiEngineAdapter` passou a classificar erros e aplicar retry apenas para falhas transientes.
+- `HybridEngine` (via factory) agora usa fallback por classe de erro, sem catch generico.
+- Rotas criticas ganharam idempotency via `x-idempotency-key` com TTL e resposta replay.
+
+Arquivos-chave:
+- `src/infra/retry.ts`
+- `src/engine/pi-errors.ts`
+- `src/engine/pi-engine-adapter.ts`
+- `src/engine/factory.ts`
+- `src/infra/idempotency-store.ts`
+- `src/api/server.ts`
+- `src/config.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [ ] teste manual de replay idempotente (`x-idempotency-key`) nas rotas criticas
+- [ ] teste manual de fallback classificado no modo `hybrid`
+
+Pendencias:
+- Guard de contexto e reset de sessao para completar Fase 3.
+
+Proximo passo recomendado:
+- Implementar context guard no fluxo de chat e rotina de reset controlado de sessao em falhas irrecoveraveis.
 - `src/global-config.ts`
 - `src/config.ts`
 - `README.md`
@@ -256,6 +284,77 @@ Pendencias:
 
 Proximo passo recomendado:
 - Iniciar Fase 3 no codigo e manter `docs/architecture/phases/phase-3.md` sincronizado durante a implementacao.
+
+### 2026-02-18 - SOUL.md injetado no system prompt do PI
+
+Resumo:
+- `system prompt` do `PiEngineAdapter` deixou de ser hardcoded e agora e montado no bootstrap de config.
+- Quando existe `docs/core/SOUL.md` (ou `KAEL_SOUL_PATH`), seu conteudo e anexado ao prompt base do Kael.
+- Mesmo comportamento vale para os transportes `pi_sdk` e `openai_http`.
+
+Arquivos-chave:
+- `src/config.ts`
+- `src/engine/pi-engine-adapter.ts`
+- `README.md`
+- `docs/architecture/phases/phase-2.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [ ] teste manual do `/chat` validando resposta aderente ao `SOUL.md`
+
+Pendencias:
+- Adicionar testes automatizados para garantir montagem do prompt com fallback quando `SOUL.md` nao existir.
+
+Proximo passo recomendado:
+- Implementar guard de contexto + reset de sessao (Fase 3) sobre fluxo `pi_sdk`.
+
+### 2026-02-18 - Revisao da abstracao PI: runtime local-first
+
+Resumo:
+- Refatorado `PiEngineAdapter` para priorizar runtime local por processo (`stdin/stdout`).
+- Mantido `openai_http` apenas como modo legado opcional.
+- Config estendida com `KAEL_PI_TRANSPORT`, `KAEL_PI_LOCAL_COMMAND` e `KAEL_PI_LOCAL_ARGS_JSON`.
+
+Arquivos-chave:
+- `src/engine/pi-engine-adapter.ts`
+- `src/config.ts`
+- `src/global-config.ts`
+- `README.md`
+
+Checklist de validacao:
+- [ ] `npm run check`
+- [ ] teste manual do modo `local_process` com comando PI real
+
+Pendencias:
+- Conectar runtime local a uma integracao PI nativa (SDK) na fase seguinte.
+
+Proximo passo recomendado:
+- Implementar `EmbeddedPiEngine` usando SDK do ecossistema PI (sem shell-out) e manter `local_process` como fallback.
+
+### 2026-02-18 - Fase 2.5: PI SDK embutido (sem dependencia de binario)
+
+Resumo:
+- Integrado runtime nativo com `@mariozechner/pi-agent-core` + `@mariozechner/pi-ai`.
+- Novo transporte default `pi_sdk` (sem exigir comando `pi` no PATH).
+- Mantidos transportes de compatibilidade: `local_process` e `openai_http`.
+- Bootstrap agora carrega `.env` automaticamente.
+
+Arquivos-chave:
+- `src/engine/pi-engine-adapter.ts`
+- `src/config.ts`
+- `src/global-config.ts`
+- `src/app.ts`
+- `README.md`
+
+Checklist de validacao:
+- [ ] `npm run check`
+- [ ] teste manual do `/chat` em `hybrid` com `pi_sdk`
+
+Pendencias:
+- Evoluir sessao/contexo do SDK para historico completo multi-turn no adapter.
+
+Proximo passo recomendado:
+- Implementar context guard + reset de sessao (pendencias da Fase 3) sobre o caminho `pi_sdk`.
 
 ### 2026-02-18 - CLI migrada para commander
 

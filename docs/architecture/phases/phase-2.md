@@ -10,6 +10,7 @@ Acoplar um engine de IA real sem perder operacao local deterministica para coman
 
 - Engine factory (`src/engine/factory.ts`)
 - Pi adapter (`src/engine/pi-engine-adapter.ts`)
+- Bootstrap de prompt/identidade via `SOUL.md` (`src/config.ts`)
 - Engine hibrida (`src/engine/hybrid-engine.ts`)
 - Video job service (`src/tools/video/video-job-service.ts`)
 - Config global/home (`src/global-config.ts`, `src/config.ts`)
@@ -17,7 +18,7 @@ Acoplar um engine de IA real sem perder operacao local deterministica para coman
 ## Modos de engine
 
 - `simple`: apenas comandos locais.
-- `pi`: apenas provider remoto via API compatível com chat completions.
+- `pi`: runtime PI embutido via SDK (`pi_sdk`) com fallback para `local_process` e modo HTTP legado opcional.
 - `hybrid`: slash commands locais + conversa via PI com fallback para simple.
 
 ## Expansao de tools de video
@@ -32,8 +33,9 @@ Acoplar um engine de IA real sem perder operacao local deterministica para coman
 1. Mensagem chega em `/chat`.
 2. Se for slash command, vai direto para executor local.
 3. Se for texto livre, tenta `PiEngineAdapter`.
-4. Se PI falhar, fallback para `SimpleCommandEngine`.
-5. Resultado e persistido na sessao.
+4. `PiEngineAdapter` usa `system prompt` montado com `docs/core/SOUL.md`.
+5. Se PI falhar, fallback para `SimpleCommandEngine`.
+6. Resultado e persistido na sessao.
 
 ## Valor arquitetural da fase
 

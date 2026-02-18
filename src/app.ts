@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { loadConfig, type KaelConfig } from "./config.js";
 import { createEngine } from "./engine/factory.js";
 import { JobManager } from "./jobs/manager.js";

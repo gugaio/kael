@@ -9,10 +9,26 @@ export type KaelGlobalConfig = {
     port: number;
     dataDir: string;
     engineMode: "simple" | "pi" | "hybrid";
+    idempotency: {
+      enabled: boolean;
+      ttlMs: number;
+    };
     pi: {
+      provider: string;
+      transport: "pi_sdk" | "local_process" | "openai_http";
       apiUrl: string;
       model: string;
       timeoutMs: number;
+      local: {
+        command: string;
+        args: string[];
+      };
+      retry: {
+        attempts: number;
+        baseDelayMs: number;
+        maxDelayMs: number;
+        jitterMs: number;
+      };
     };
   };
 };
@@ -63,10 +79,26 @@ export function buildDefaultGlobalConfig(kaelHome: string): KaelGlobalConfig {
       port: 3210,
       dataDir: withHomePlaceholder(dataDir),
       engineMode: "simple",
+      idempotency: {
+        enabled: true,
+        ttlMs: 10 * 60 * 1000,
+      },
       pi: {
+        provider: "openai",
+        transport: "pi_sdk",
         apiUrl: "https://api.openai.com/v1/chat/completions",
         model: "gpt-4o-mini",
         timeoutMs: 45000,
+        local: {
+          command: "pi",
+          args: [],
+        },
+        retry: {
+          attempts: 3,
+          baseDelayMs: 300,
+          maxDelayMs: 3000,
+          jitterMs: 250,
+        },
       },
     },
   };
