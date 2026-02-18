@@ -1,46 +1,13 @@
+import { Command } from "commander";
 import { startApiServer } from "../api/server.js";
 import { loadConfig } from "../config.js";
 import { initKaelHome, resolveKaelHome } from "../global-config.js";
 
-type Args = {
-  command: string;
-  flags: Record<string, string | boolean>;
+type UrlOption = {
+  url?: string;
 };
 
-function parseArgs(argv: string[]): Args {
-  const [command = "help", ...rest] = argv;
-  const flags: Record<string, string | boolean> = {};
-
-  for (let i = 0; i < rest.length; i += 1) {
-    const token = rest[i];
-    if (!token.startsWith("--")) {
-      continue;
-    }
-
-    const key = token.slice(2);
-    const next = rest[i + 1];
-    if (!next || next.startsWith("--")) {
-      flags[key] = true;
-      continue;
-    }
-
-    flags[key] = next;
-    i += 1;
-  }
-
-  return { command, flags };
-}
-
-function printHelp(): void {
-  console.log("Kael CLI");
-  console.log("  kael init [--force]");
-  console.log("  kael server");
-  console.log('  kael chat --message "..." [--session main] [--url http://127.0.0.1:3210]');
-  console.log("  kael jobs [--url http://127.0.0.1:3210]");
-}
-
-async function resolveUrl(flags: Record<string, string | boolean>): Promise<string> {
-  const explicit = typeof flags.url === "string" ? flags.url : undefined;
+async function resolveUrl(explicit?: string): Promise<string> {
   if (explicit) {
     return explicit;
   }
@@ -49,8 +16,7 @@ async function resolveUrl(flags: Record<string, string | boolean>): Promise<stri
   return `http://${cfg.host}:${cfg.port}`;
 }
 
-async function commandInit(flags: Record<string, string | boolean>): Promise<void> {
-  const force = flags.force === true;
+async function commandInit(force: boolean): Promise<void> {
   const result = await initKaelHome(force);
 
   console.log(`Kael home: ${result.kaelHome}`);
@@ -67,14 +33,13 @@ async function commandInit(flags: Record<string, string | boolean>): Promise<voi
   }
 }
 
-async function commandChat(flags: Record<string, string | boolean>): Promise<void> {
-  const message = typeof flags.message === "string" ? flags.message : "";
-  if (!message.trim()) {
-    throw new Error("--message is required");
-  }
+type ChatOptions = UrlOption & {
+  session: string;
+};
 
-  const sessionKey = typeof flags.session === "string" ? flags.session : "main";
-  const url = await resolveUrl(flags);
+async function commandChat(message: string, options: ChatOptions): Promise<void> {
+  const sessionKey = options.session;
+  const url = await resolveUrl(options.url);
 
   const response = await fetch(`${url}/chat`, {
     method: "POST",
@@ -90,8 +55,8 @@ async function commandChat(flags: Record<string, string | boolean>): Promise<voi
   console.log(data.reply ?? "");
 }
 
-async function commandJobs(flags: Record<string, string | boolean>): Promise<void> {
-  const url = await resolveUrl(flags);
+async function commandJobs(options: UrlOption): Promise<void> {
+  const url = await resolveUrl(options.url);
   const response = await fetch(`${url}/jobs`);
   const data = (await response.json()) as {
     ok: boolean;
@@ -115,29 +80,51 @@ async function commandJobs(flags: Record<string, string | boolean>): Promise<voi
 }
 
 async function main(): Promise<void> {
-  const { command, flags } = parseArgs(process.argv.slice(2));
+  const program = new Command();
+  program
+    .name("kael")
+    .description("Kael CLI")
+    .showHelpAfterError("(use --help for usage)");
 
-  if (command === "init") {
-    await commandInit(flags);
+  program
+    .command("init")
+    .description("Inicializa ~/.kael (ou $KAEL_HOME)")
+    .option("-f, --force", "sobrescreve config global existente", false)
+    .action(async (options: { force: boolean }) => {
+      await commandInit(options.force);
+    });
+
+  program
+    .command("server")
+    .description("Inicia API HTTP local")
+    .action(async () => {
+      await startApiServer();
+    });
+
+  program
+    .command("chat")
+    .description("Envia mensagem para /chat")
+    .requiredOption("-m, --message <text>", "mensagem do usuario")
+    .option("-s, --session <sessionKey>", "chave da sessao", "main")
+    .option("-u, --url <url>", "url base da API (ex: http://127.0.0.1:3210)")
+    .action(async (options: ChatOptions & { message: string }) => {
+      await commandChat(options.message, options);
+    });
+
+  program
+    .command("jobs")
+    .description("Lista jobs")
+    .option("-u, --url <url>", "url base da API (ex: http://127.0.0.1:3210)")
+    .action(async (options: UrlOption) => {
+      await commandJobs(options);
+    });
+
+  if (process.argv.slice(2).length === 0) {
+    program.outputHelp();
     return;
   }
 
-  if (command === "server") {
-    await startApiServer();
-    return;
-  }
-
-  if (command === "chat") {
-    await commandChat(flags);
-    return;
-  }
-
-  if (command === "jobs") {
-    await commandJobs(flags);
-    return;
-  }
-
-  printHelp();
+  await program.parseAsync(process.argv);
 }
 
 main().catch((error: unknown) => {

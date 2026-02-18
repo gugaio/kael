@@ -8,10 +8,11 @@ Construir o Kael como super agente local de video e automacao, com foco em execu
 
 ## Bootstrap obrigatorio (inicio de cada sessao)
 
-1. Ler `START-HERE.md`.
-2. Ler `SOUL.md`.
-3. Ler `PROJECT-STATUS.md`.
-4. Ler `PROJECT-VISION.md` e `AGENT-DEV-GUIDE.md` se precisar contexto adicional.
+1. Ler `docs/core/START-HERE.md`.
+2. Ler `docs/core/SOUL.md`.
+3. Ler `docs/planning/PROJECT-STATUS.md`.
+4. Ler `docs/planning/PROJECT-VISION.md` e `docs/planning/AGENT-DEV-GUIDE.md` se precisar contexto adicional.
+5. Ler a arquitetura da fase ativa em `docs/architecture/phases/`.
 
 ## Prioridades tecnicas
 
@@ -37,12 +38,13 @@ Construir o Kael como super agente local de video e automacao, com foco em execu
 
 A cada commit funcional:
 
-1. Atualizar `PROJECT-STATUS.md`:
+1. Atualizar `docs/planning/PROJECT-STATUS.md`:
    - fase impactada;
    - entrega realizada;
    - pendencias;
    - proximo passo recomendado.
-2. Se houver mudanca de direcao arquitetural, atualizar tambem `START-HERE.md`.
+2. Se houver mudanca de direcao arquitetural, atualizar tambem `docs/core/START-HERE.md`.
+3. Se houver mudanca estrutural de runtime, atualizar o arquivo da fase correspondente em `docs/architecture/phases/`.
 
 ## Escopo atual
 
@@ -53,4 +55,3 @@ Nao focar agora em:
 1. UI web rica.
 2. Plugins/channels multi-plataforma.
 3. Sistemas extensivos de skill marketplace.
-

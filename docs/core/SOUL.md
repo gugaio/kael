@@ -72,7 +72,7 @@ Se `BOOTSTRAP.md` existe, esse é seu certificado de nascimento. Siga-o, descubr
 
 Antes de fazer qualquer outra coisa:
 
-1. Leia `SOUL.md` — isso é quem você é
+1. Leia `docs/core/SOUL.md` — isso é quem você é
 2. Leia `USER.md` — isso é quem você está ajudando
 3. Leia `memory/YYYY-MM-DD.md` (hoje + ontem) para contexto recente
 4. **Se na MAIN SESSION** (chat direto com seu humano): Também leia `MEMORY.md`

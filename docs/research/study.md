@@ -362,7 +362,7 @@ O path do projeto é /home/gugaime/IA/openclaw/
   - Para novo projeto: focar apenas Gateway fluxo, local é feature secundária.
   - Arquivo criado:
   - `local-vs-gateway-flow.md` - diagramas Mermaid + tabela de diferenças.
-  - `gateway-send-flow.md` - fluxo completo de envio via Gateway (9 fases).
+  - `docs/research/gateway-send-flow.md` - fluxo completo de envio via Gateway (9 fases).
 - Aprendizados-chave:
   - **Fluxo Gateway completo**: CLI → WebSocket → Gateway → Dispatch → PI Agent → Response
   - **9 fases identificadas**:
@@ -462,7 +462,7 @@ O path do projeto é /home/gugaime/IA/openclaw/
   4. Features de UX (typing, followup)
   5. Link/media understanding
 - Arquivos-chave:
-  - `gateway-send-flow.md` - fluxo completo de envio via Gateway.
+  - `docs/research/gateway-send-flow.md` - fluxo completo de envio via Gateway.
   - `local-vs-gateway-flow.md` - comparação local vs gateway.
 - Aprendizados-chave:
   - **Gateway é ponto de entrada único**: tudo entra por WebSocket.
@@ -472,23 +472,23 @@ O path do projeto é /home/gugaime/IA/openclaw/
   - **Princípio de evolução**: comece simples, adicione complexidade gradualmente conforme necessidade.
   - Próximo passo:
   - Começar desenho da arquitetura inicial (Gateway-only, sem auto-reply).
-  - Consultar `openclaw-interesting-patterns.md` para os 8 aspectos mais valiosos.
+  - Consultar `docs/research/openclaw-interesting-patterns.md` para os 8 aspectos mais valiosos.
 
 ### 2026-02-18 - Sessão 10 (atualização dos arquivos de projeto)
 
 - Foco:
-  - Atualizar PROJECT-VISION.md e AGENT-DEV-GUIDE.md baseado no estudo do OpenClaw.
+  - Atualizar docs/planning/PROJECT-VISION.md e docs/planning/AGENT-DEV-GUIDE.md baseado no estudo do OpenClaw.
   - Remover referências específicas do Kael (vídeo processing, investimentos) e substituir por padrões do OpenClaw.
   - Adaptar documentos para contexto de [NOME_DO_PROJETO] como referência.
 - O que estudamos/atualizamos:
-  - Atualizamos PROJECT-VISION.md:
+  - Atualizamos docs/planning/PROJECT-VISION.md:
     - Substituímos referências do Kael por [NOME_DO_PROJETO] e por [ÁREAS FUTURAS]
     - Removemos especializações de vídeo e investimentos
     - Substituímos stack tecnológica por padrões do OpenClaw (Fastify, WS plugin, JSONL, etc.)
     - Atualizamos Roadmap para ser baseado em fases do OpenClaw (MVP, Skills, Resiliência, Channels)
     - Adicionamos arquitetura de referência (gateway single-process)
     - Adicionamos tabela de conceitos-chave do OpenClaw
-  - Atualizamos AGENT-DEV-GUIDE.md:
+  - Atualizamos docs/planning/AGENT-DEV-GUIDE.md:
     - Criamos guia completo usando OpenClaw como referência técnica
     - Organizamos por conceitos-chave (Gateway, Sessions, PI Agent, Resiliência, etc.)
     - Adicionamos roadmap de implementação em fases
@@ -496,8 +496,8 @@ O path do projeto é /home/gugaime/IA/openclaw/
     - Adicionamos boas práticas baseadas no estudo
     - Adicionamos seção "Diferenças vs OpenClaw" para focar no que é relevante
 - Arquivos atualizados:
-  - `PROJECT-VISION.md` - visão geral, stack sugerida, roadmap baseado em OpenClaw
-  - `AGENT-DEV-GUIDE.md` - guia completo de desenvolvimento
+  - `docs/planning/PROJECT-VISION.md` - visão geral, stack sugerida, roadmap baseado em OpenClaw
+  - `docs/planning/AGENT-DEV-GUIDE.md` - guia completo de desenvolvimento
 - Aprendizados-chave:
   - **Gateway single-process**: unifica Gateway + Agent + Cron + Heartbeat em um processo.
   - **Session management**: sessionKey/sessionId/JSONL transcripts (padrão OpenClaw).
@@ -509,10 +509,10 @@ O path do projeto é /home/gugaime/IA/openclaw/
   - **Referência técnica**: OpenClaw como implementação battle-tested de padrões.
   - **Diferenças**: documentado o que NÃO copiar do OpenClaw (multi-channel, skills complexas).
 - Próximo passo:
-  - Desenvolver seguindo o guia AGENT-DEV-GUIDE.md.
+  - Desenvolver seguindo o guia docs/planning/AGENT-DEV-GUIDE.md.
   - Começar pela Fase 1 (Core Gateway + PI Agent básico + Sessions).
-  - Consultar os arquivos-chave do OpenClaw listados em AGENT-DEV-GUIDE.md para patterns concretos.
-  - Usar study.md como registro do que já aprendemos.
+  - Consultar os arquivos-chave do OpenClaw listados em docs/planning/AGENT-DEV-GUIDE.md para patterns concretos.
+  - Usar docs/research/study.md como registro do que já aprendemos.
 
 
 ## Checklist de evolução contínua

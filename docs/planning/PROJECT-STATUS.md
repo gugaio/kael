@@ -231,3 +231,50 @@ Pendencias:
 
 Proximo passo recomendado:
 - Iniciar Fase 3 com retry utilitario e camada de dedupe/idempotency.
+
+### 2026-02-18 - Reorganizacao de docs + arquitetura por fase
+
+Resumo:
+- Reorganizados documentos em subpastas (`core`, `planning`, `research`, `architecture`).
+- Mantido na raiz apenas `README.md` e `AGENTS.md`.
+- Criados documentos incrementais de arquitetura por fase (1, 2, 3).
+
+Arquivos-chave:
+- `docs/core/START-HERE.md`
+- `docs/planning/PROJECT-STATUS.md`
+- `docs/architecture/README.md`
+- `docs/architecture/phases/phase-1.md`
+- `docs/architecture/phases/phase-2.md`
+- `docs/architecture/phases/phase-3.md`
+
+Checklist de validacao:
+- [x] paths de onboarding atualizados em `AGENTS.md` e `README.md`
+- [x] referencias principais migradas para novos caminhos
+
+Pendencias:
+- Revisar periodicamente os docs de fase conforme evolucao do runtime.
+
+Proximo passo recomendado:
+- Iniciar Fase 3 no codigo e manter `docs/architecture/phases/phase-3.md` sincronizado durante a implementacao.
+
+### 2026-02-18 - CLI migrada para commander
+
+Resumo:
+- Substituido parser manual da CLI por `commander`.
+- Mantidos comandos existentes (`init`, `server`, `chat`, `jobs`) com help/validacao padrao.
+- Dependencia `commander` adicionada ao projeto.
+
+Arquivos-chave:
+- `src/cli/index.ts`
+- `package.json`
+- `package-lock.json`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] teste manual de `--help`
+
+Pendencias:
+- Nenhuma para esta entrega.
+
+Proximo passo recomendado:
+- Iniciar Fase 3 no codigo e manter `docs/architecture/phases/phase-3.md` sincronizado durante a implementacao.

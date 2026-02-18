@@ -5,8 +5,9 @@ Super agente para videos e automacao.
 ## Documentos de orientacao
 
 - `AGENTS.md`: instrucoes principais para qualquer agente.
-- `START-HERE.md`: indice rapido de onboarding.
-- `PROJECT-STATUS.md`: fases, entregas e checklist por commit.
+- `docs/core/START-HERE.md`: indice rapido de onboarding.
+- `docs/planning/PROJECT-STATUS.md`: fases, entregas e checklist por commit.
+- `docs/architecture/README.md`: arquitetura incremental por fase.
 
 ## Escopo atual
 

@@ -8,17 +8,18 @@ Indice rapido para humanos e onboarding inicial.
 
 ## Contexto e estrategia
 
-- `SOUL.md`
-- `PROJECT-VISION.md`
-- `AGENT-DEV-GUIDE.md`
-- `PROJECT-STATUS.md`
+- `docs/core/SOUL.md`
+- `docs/planning/PROJECT-VISION.md`
+- `docs/planning/AGENT-DEV-GUIDE.md`
+- `docs/planning/PROJECT-STATUS.md`
+- `docs/architecture/README.md`
 
 ## Estudos e referencias tecnicas
 
-- `study.md`
-- `openclaw-interesting-patterns.md`
-- `openclaw-pi-agent-architecture.md`
-- `gateway-send-flow.md`
+- `docs/research/study.md`
+- `docs/research/openclaw-interesting-patterns.md`
+- `docs/research/openclaw-pi-agent-architecture.md`
+- `docs/research/gateway-send-flow.md`
 - OpenClaw: `/home/gugaime/IA/openclaw`
 - Thesis: `/home/gugaime/IA/thesis`
 
