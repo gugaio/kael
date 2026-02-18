@@ -39,8 +39,11 @@ export type KaelConfig = {
 const DEFAULT_KAEL_SYSTEM_PROMPT =
   "Voce e Kael, super agente local de video e automacao. Seja direto, tecnico e util. Use comandos slash para acionar jobs locais quando for apropriado.";
 
-async function loadSoulPrompt(cwd: string): Promise<{ prompt: string; source?: string }> {
-  const explicitPath = process.env.KAEL_SOUL_PATH?.trim();
+export async function loadSoulPromptWithDeps(
+  readFile: (path: string) => Promise<string>,
+  cwd: string,
+  explicitPath: string | undefined = process.env.KAEL_SOUL_PATH?.trim(),
+): Promise<{ prompt: string; source?: string }> {
   const candidates = [
     explicitPath ? expandHome(explicitPath) : null,
     path.join(cwd, "docs/core/SOUL.md"),
@@ -49,7 +52,7 @@ async function loadSoulPrompt(cwd: string): Promise<{ prompt: string; source?: s
 
   for (const candidate of candidates) {
     try {
-      const raw = await fs.readFile(candidate, "utf-8");
+      const raw = await readFile(candidate);
       const soul = raw.trim();
       if (!soul) {
         continue;
@@ -69,6 +72,10 @@ async function loadSoulPrompt(cwd: string): Promise<{ prompt: string; source?: s
   }
 
   return { prompt: DEFAULT_KAEL_SYSTEM_PROMPT };
+}
+
+async function loadSoulPrompt(cwd: string): Promise<{ prompt: string; source?: string }> {
+  return loadSoulPromptWithDeps((path) => fs.readFile(path, "utf-8"), cwd);
 }
 
 function parseEngineMode(raw: string | undefined): EngineMode {

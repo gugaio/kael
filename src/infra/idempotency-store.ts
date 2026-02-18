@@ -22,7 +22,7 @@ export class IdempotencyStore {
     signature: string;
     handler: () => Promise<T>;
   }): Promise<{ replayed: boolean; value: T }> {
-    this.cleanupExpired();
+    this.cleanup();
 
     const completed = this.completed.get(params.key);
     if (completed) {
@@ -57,7 +57,7 @@ export class IdempotencyStore {
     return { replayed: false, value };
   }
 
-  private cleanupExpired(): void {
+  cleanup(): void {
     const now = Date.now();
     for (const [key, entry] of this.completed.entries()) {
       if (entry.expiresAt <= now) {

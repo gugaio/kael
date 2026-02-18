@@ -15,7 +15,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function computeDelayMs(policy: RetryPolicy, attempt: number): number {
+export function computeDelayMs(policy: RetryPolicy, attempt: number): number {
   const exponential = policy.baseDelayMs * Math.pow(2, attempt - 1);
   const withCap = Math.min(exponential, policy.maxDelayMs);
   const jitter = policy.jitterMs > 0 ? Math.floor(Math.random() * policy.jitterMs) : 0;
