@@ -9,6 +9,8 @@ export async function startApiServer(): Promise<void> {
     ok: true,
     service: "kael",
     now: new Date().toISOString(),
+    engineMode: app.config.engineMode,
+    piEnabled: app.config.pi.enabled,
   }));
 
   server.post<{ Body: { sessionKey?: string; message?: string } }>("/chat", async (request, reply) => {
@@ -62,6 +64,75 @@ export async function startApiServer(): Promise<void> {
       args: request.body.args,
     });
 
+    return { ok: true, job };
+  });
+
+  server.post<{
+    Body: {
+      sessionKey?: string;
+      inputPath?: string;
+      outputPlaylistPath?: string;
+      segmentTime?: number;
+    };
+  }>("/jobs/hls", async (request, reply) => {
+    const sessionKey = request.body.sessionKey?.trim() || "main";
+    const inputPath = request.body.inputPath?.trim();
+    const outputPlaylistPath = request.body.outputPlaylistPath?.trim();
+
+    if (!inputPath || !outputPlaylistPath) {
+      return reply.code(400).send({ ok: false, error: "inputPath and outputPlaylistPath are required" });
+    }
+
+    const job = await app.jobs.startConvertHls({
+      sessionKey,
+      inputPath,
+      outputPlaylistPath,
+      segmentTime: request.body.segmentTime,
+    });
+
+    return { ok: true, job };
+  });
+
+  server.post<{
+    Body: {
+      sessionKey?: string;
+      streamUrl?: string;
+      outputPath?: string;
+      durationSeconds?: number;
+    };
+  }>("/jobs/capture", async (request, reply) => {
+    const sessionKey = request.body.sessionKey?.trim() || "main";
+    const streamUrl = request.body.streamUrl?.trim();
+    const outputPath = request.body.outputPath?.trim();
+
+    if (!streamUrl || !outputPath) {
+      return reply.code(400).send({ ok: false, error: "streamUrl and outputPath are required" });
+    }
+
+    const job = await app.jobs.startCaptureStream({
+      sessionKey,
+      streamUrl,
+      outputPath,
+      durationSeconds: request.body.durationSeconds,
+    });
+
+    return { ok: true, job };
+  });
+
+  server.post<{
+    Body: {
+      sessionKey?: string;
+      inputPath?: string;
+    };
+  }>("/jobs/probe", async (request, reply) => {
+    const sessionKey = request.body.sessionKey?.trim() || "main";
+    const inputPath = request.body.inputPath?.trim();
+
+    if (!inputPath) {
+      return reply.code(400).send({ ok: false, error: "inputPath is required" });
+    }
+
+    const job = await app.jobs.startProbeMedia({ sessionKey, inputPath });
     return { ok: true, job };
   });
 

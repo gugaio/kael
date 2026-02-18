@@ -18,12 +18,15 @@ export type SessionEntry = {
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed";
 
-export type TranscodeJob = {
+export type VideoJobType = "transcode" | "convert_hls" | "capture_stream" | "probe_media";
+
+export type VideoJob = {
   id: string;
-  type: "transcode";
+  type: VideoJobType;
   sessionKey: string;
-  inputPath: string;
-  outputPath: string;
+  command: "ffmpeg" | "ffprobe";
+  input: string;
+  output?: string;
   args: string[];
   status: JobStatus;
   createdAt: string;

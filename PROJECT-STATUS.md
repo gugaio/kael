@@ -9,6 +9,32 @@ Owner: projeto Kael
 2. Marque fase, entregas, pendencias e proximo passo.
 3. Mantenha este arquivo curto e objetivo.
 
+## Template rapido para novo commit
+
+Copie o bloco abaixo ao registrar um novo commit em "Registro de Atualizacoes por Commit":
+
+```md
+### YYYY-MM-DD - <titulo curto do commit>
+
+Resumo:
+- <entrega 1>
+- <entrega 2>
+
+Arquivos-chave:
+- `<arquivo 1>`
+- `<arquivo 2>`
+
+Checklist de validacao:
+- [ ] `npm run check`
+- [ ] teste manual do fluxo principal da fase
+
+Pendencias:
+- <pendencia 1>
+
+Proximo passo recomendado:
+- <proximo passo>
+```
+
 ## Roadmap de Fases
 
 ### Fase 0 - Foundation
@@ -72,7 +98,7 @@ Definition of Done (checklist):
 
 ### Fase 2 - Engine Real + Tooling de Video
 
-Status: **Planejada**
+Status: **Em andamento**
 
 Objetivos:
 - Criar `PiEngineAdapter` (ou adapter equivalente).
@@ -83,12 +109,13 @@ Objetivos:
   - `probeMedia`
 
 Definition of Done (checklist):
-- [ ] `PiEngineAdapter` integrado ao contrato `AgentEngine`.
-- [ ] `SimpleCommandEngine` mantido como fallback operacional.
-- [ ] `convertHLS` implementado e testado manualmente.
-- [ ] `captureStream` implementado e testado manualmente.
-- [ ] `probeMedia` implementado e testado manualmente.
-- [ ] Atualizacao de docs de uso de tools no README/STATUS.
+- [x] `PiEngineAdapter` integrado ao contrato `AgentEngine`.
+- [x] `SimpleCommandEngine` mantido como fallback operacional.
+- [x] `convertHLS` implementado e testado manualmente.
+- [x] `captureStream` implementado e testado manualmente.
+- [x] `probeMedia` implementado e testado manualmente.
+- [x] Atualizacao de docs de uso de tools no README/STATUS.
+- [ ] Adicionar testes automatizados para as novas tools.
 
 ### Fase 3 - Resiliencia Operacional
 
@@ -157,3 +184,27 @@ Arquivos-chave:
 
 Proximo passo recomendado:
 - Iniciar Fase 2 com `PiEngineAdapter` mantendo o contrato de `AgentEngine`.
+
+### 2026-02-18 - Fase 2: engine hibrida + tools de video
+
+Resumo:
+- Implementado `PiEngineAdapter` e factory de engine com modos `simple`, `pi` e `hybrid`.
+- Expandido job runtime com `convert_hls`, `capture_stream` e `probe_media`.
+- Expostos novos endpoints de jobs e atualizado comando `/help` com novas actions.
+
+Arquivos-chave:
+- `src/engine/pi-engine-adapter.ts`
+- `src/engine/factory.ts`
+- `src/engine/hybrid-engine.ts`
+- `src/tools/video/video-job-service.ts`
+- `src/api/server.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [ ] teste manual basico dos comandos slash no fluxo de chat
+
+Pendencias:
+- Adicionar testes automatizados da Fase 2.
+
+Proximo passo recomendado:
+- Iniciar Fase 3 com retry utilitario e camada de dedupe/idempotency.

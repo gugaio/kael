@@ -1,11 +1,11 @@
 import { loadConfig, type KaelConfig } from "./config.js";
+import { createEngine } from "./engine/factory.js";
 import { JobManager } from "./jobs/manager.js";
 import { JobStore } from "./jobs/store.js";
 import { SessionStore } from "./session/store.js";
-import { LocalProcessRunner } from "./tools/system/process-runner.js";
-import { TranscodeService } from "./tools/video/transcode-service.js";
-import { SimpleCommandEngine } from "./engine/simple-engine.js";
 import { ChatService } from "./services/chat-service.js";
+import { LocalProcessRunner } from "./tools/system/process-runner.js";
+import { VideoJobService } from "./tools/video/video-job-service.js";
 
 export type KaelApp = {
   config: KaelConfig;
@@ -23,9 +23,9 @@ export async function createKaelApp(): Promise<KaelApp> {
   await jobStore.init();
 
   const runner = new LocalProcessRunner();
-  const transcode = new TranscodeService(jobStore, runner);
-  const jobs = new JobManager(jobStore, transcode);
-  const engine = new SimpleCommandEngine();
+  const video = new VideoJobService(jobStore, runner);
+  const jobs = new JobManager(jobStore, video);
+  const engine = createEngine(config);
   const chat = new ChatService(sessions, jobs, engine);
 
   return {

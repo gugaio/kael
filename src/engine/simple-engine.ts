@@ -11,6 +11,10 @@ function parseCommand(message: string): { name: string; args: string[] } | null 
   return { name: name.toLowerCase(), args };
 }
 
+export function isSlashCommand(message: string): boolean {
+  return message.trim().startsWith("/");
+}
+
 export class SimpleCommandEngine implements AgentEngine {
   async runTurn(input: EngineTurnInput): Promise<EngineTurnOutput> {
     const parsed = parseCommand(input.message);
@@ -18,25 +22,25 @@ export class SimpleCommandEngine implements AgentEngine {
     if (!parsed) {
       return {
         reply:
-          "Comando nao reconhecido. Use /help para ver comandos. Este engine e um bootstrap ate plugar o provider LLM.",
+          "Mensagem recebida. Para comandos de video use /help. Para conversa natural, ative KAEL_ENGINE_MODE=pi ou hybrid com chave da API.",
       };
     }
 
     if (parsed.name === "/help") {
       return {
         reply:
-          "Comandos: /transcode <input> <output> | /jobs | /help. Exemplo: /transcode ./input.mp4 ./output.mp4",
+          "Comandos: /transcode <input> <output> | /hls <input> <playlist.m3u8> [segmentSeconds] | /capture <url> <output> [durationSeconds] | /probe <input> | /jobs | /help",
       };
     }
 
     if (parsed.name === "/jobs") {
-      const jobs = input.tooling.listJobs().slice(0, 5);
+      const jobs = input.tooling.listJobs().slice(0, 8);
       if (jobs.length === 0) {
         return { reply: "Nenhum job encontrado." };
       }
 
       const summary = jobs
-        .map((job) => `- ${job.id} | ${job.status} | ${job.outputPath}`)
+        .map((job) => `- ${job.id} | ${job.type} | ${job.status} | ${job.output ?? "(sem output)"}`)
         .join("\n");
 
       return { reply: `Ultimos jobs:\n${summary}` };
@@ -53,10 +57,49 @@ export class SimpleCommandEngine implements AgentEngine {
         inputPath,
         outputPath,
       });
+      return { reply: `Transcode iniciado. jobId=${job.id}` };
+    }
 
-      return {
-        reply: `Transcode iniciado. jobId=${job.id} status=${job.status} output=${job.outputPath}`,
-      };
+    if (parsed.name === "/hls") {
+      if (parsed.args.length < 2) {
+        return { reply: "Uso: /hls <input> <playlist.m3u8> [segmentSeconds]" };
+      }
+      const [inputPath, outputPlaylistPath, segmentRaw] = parsed.args;
+      const segmentTime = segmentRaw ? Number(segmentRaw) : undefined;
+      const job = await input.tooling.startConvertHls({
+        sessionKey: input.sessionKey,
+        inputPath,
+        outputPlaylistPath,
+        segmentTime,
+      });
+      return { reply: `HLS iniciado. jobId=${job.id}` };
+    }
+
+    if (parsed.name === "/capture") {
+      if (parsed.args.length < 2) {
+        return { reply: "Uso: /capture <streamUrl> <output> [durationSeconds]" };
+      }
+      const [streamUrl, outputPath, durationRaw] = parsed.args;
+      const durationSeconds = durationRaw ? Number(durationRaw) : undefined;
+      const job = await input.tooling.startCaptureStream({
+        sessionKey: input.sessionKey,
+        streamUrl,
+        outputPath,
+        durationSeconds,
+      });
+      return { reply: `Capture iniciado. jobId=${job.id}` };
+    }
+
+    if (parsed.name === "/probe") {
+      if (parsed.args.length < 1) {
+        return { reply: "Uso: /probe <input>" };
+      }
+      const [inputPath] = parsed.args;
+      const job = await input.tooling.startProbeMedia({
+        sessionKey: input.sessionKey,
+        inputPath,
+      });
+      return { reply: `Probe iniciado. jobId=${job.id}` };
     }
 
     return { reply: "Comando desconhecido. Use /help." };

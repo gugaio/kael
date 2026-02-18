@@ -75,7 +75,7 @@ async function commandJobs(flags: Record<string, string | boolean>): Promise<voi
   const response = await fetch(`${url}/jobs`);
   const data = (await response.json()) as {
     ok: boolean;
-    jobs?: Array<{ id: string; status: string; outputPath: string }>;
+    jobs?: Array<{ id: string; status: string; type: string; output?: string }>;
     error?: string;
   };
 
@@ -90,7 +90,7 @@ async function commandJobs(flags: Record<string, string | boolean>): Promise<voi
   }
 
   for (const job of jobs) {
-    console.log(`${job.id} | ${job.status} | ${job.outputPath}`);
+    console.log(`${job.id} | ${job.type} | ${job.status} | ${job.output ?? "(sem output)"}`);
   }
 }
 

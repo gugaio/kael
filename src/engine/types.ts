@@ -1,4 +1,4 @@
-import type { TranscodeJob } from "../types.js";
+import type { VideoJob } from "../types.js";
 
 export type EngineTooling = {
   startTranscode: (params: {
@@ -6,11 +6,28 @@ export type EngineTooling = {
     inputPath: string;
     outputPath: string;
     args?: string[];
-  }) => Promise<TranscodeJob>;
+  }) => Promise<VideoJob>;
+  startConvertHls: (params: {
+    sessionKey: string;
+    inputPath: string;
+    outputPlaylistPath: string;
+    segmentTime?: number;
+  }) => Promise<VideoJob>;
+  startCaptureStream: (params: {
+    sessionKey: string;
+    streamUrl: string;
+    outputPath: string;
+    durationSeconds?: number;
+  }) => Promise<VideoJob>;
+  startProbeMedia: (params: {
+    sessionKey: string;
+    inputPath: string;
+  }) => Promise<VideoJob>;
   listJobs: () => {
     id: string;
     status: string;
-    outputPath: string;
+    type: string;
+    output?: string;
   }[];
 };
 

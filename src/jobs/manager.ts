@@ -1,19 +1,19 @@
 import fs from "node:fs/promises";
-import type { TranscodeJob } from "../types.js";
+import type { VideoJob } from "../types.js";
 import type { JobStore } from "./store.js";
-import type { TranscodeService } from "../tools/video/transcode-service.js";
+import type { VideoJobService } from "../tools/video/video-job-service.js";
 
 export class JobManager {
   constructor(
     private readonly store: JobStore,
-    private readonly transcode: TranscodeService,
+    private readonly video: VideoJobService,
   ) {}
 
-  listJobs(): TranscodeJob[] {
+  listJobs(): VideoJob[] {
     return this.store.list();
   }
 
-  getJob(jobId: string): TranscodeJob | null {
+  getJob(jobId: string): VideoJob | null {
     return this.store.get(jobId);
   }
 
@@ -30,7 +30,32 @@ export class JobManager {
     inputPath: string;
     outputPath: string;
     args?: string[];
-  }): Promise<TranscodeJob> {
-    return this.transcode.start(params);
+  }): Promise<VideoJob> {
+    return this.video.startTranscode(params);
+  }
+
+  async startConvertHls(params: {
+    sessionKey: string;
+    inputPath: string;
+    outputPlaylistPath: string;
+    segmentTime?: number;
+  }): Promise<VideoJob> {
+    return this.video.startConvertHls(params);
+  }
+
+  async startCaptureStream(params: {
+    sessionKey: string;
+    streamUrl: string;
+    outputPath: string;
+    durationSeconds?: number;
+  }): Promise<VideoJob> {
+    return this.video.startCaptureStream(params);
+  }
+
+  async startProbeMedia(params: {
+    sessionKey: string;
+    inputPath: string;
+  }): Promise<VideoJob> {
+    return this.video.startProbeMedia(params);
   }
 }

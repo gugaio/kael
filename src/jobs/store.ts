@@ -1,15 +1,15 @@
 import path from "node:path";
-import type { TranscodeJob } from "../types.js";
+import type { VideoJob } from "../types.js";
 import { ensureDir, readJsonFile, writeJsonFile } from "../infra/fs.js";
 
 type JobIndex = {
-  jobs: Record<string, TranscodeJob>;
+  jobs: Record<string, VideoJob>;
 };
 
 export class JobStore {
   private readonly jobsPath: string;
   private readonly logsDir: string;
-  private jobs: Map<string, TranscodeJob> = new Map();
+  private jobs: Map<string, VideoJob> = new Map();
 
   constructor(dataDir: string) {
     const jobsDir = path.join(dataDir, "jobs");
@@ -28,13 +28,13 @@ export class JobStore {
     return path.join(this.logsDir, `${jobId}.log`);
   }
 
-  async create(job: TranscodeJob): Promise<TranscodeJob> {
+  async create(job: VideoJob): Promise<VideoJob> {
     this.jobs.set(job.id, job);
     await this.persist();
     return job;
   }
 
-  async update(jobId: string, patch: Partial<TranscodeJob>): Promise<TranscodeJob | null> {
+  async update(jobId: string, patch: Partial<VideoJob>): Promise<VideoJob | null> {
     const current = this.jobs.get(jobId);
     if (!current) {
       return null;
@@ -45,11 +45,11 @@ export class JobStore {
     return next;
   }
 
-  get(jobId: string): TranscodeJob | null {
+  get(jobId: string): VideoJob | null {
     return this.jobs.get(jobId) ?? null;
   }
 
-  list(): TranscodeJob[] {
+  list(): VideoJob[] {
     return Array.from(this.jobs.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 

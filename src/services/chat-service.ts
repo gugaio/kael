@@ -21,10 +21,16 @@ export class ChatService {
       message: input.message,
       tooling: {
         startTranscode: (params) => this.jobs.startTranscode(params),
+        startConvertHls: (params) => this.jobs.startConvertHls(params),
+        startCaptureStream: (params) => this.jobs.startCaptureStream(params),
+        startProbeMedia: (params) => this.jobs.startProbeMedia(params),
         listJobs: () =>
-          this.jobs
-            .listJobs()
-            .map((job) => ({ id: job.id, status: job.status, outputPath: job.outputPath })),
+          this.jobs.listJobs().map((job) => ({
+            id: job.id,
+            status: job.status,
+            type: job.type,
+            output: job.output,
+          })),
       },
     });
 
