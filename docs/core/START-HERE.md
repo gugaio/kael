@@ -14,6 +14,13 @@ Indice rapido para humanos e onboarding inicial.
 - `docs/planning/PROJECT-STATUS.md`
 - `docs/architecture/README.md`
 
+## Estado atual das fases (resumo rapido)
+
+- Fase 1: concluida.
+- Fase 2: concluida (engine hibrida + tools de video).
+- Fase 3: em andamento (resiliencia), com retry/fallback/idempotency/context guard ja entregues.
+- Proximo incremento recomendado: reset controlado de sessao + observabilidade de turnos.
+
 ## Estudos e referencias tecnicas
 
 - `docs/research/study.md`

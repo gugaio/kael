@@ -102,6 +102,8 @@ Se a mesma chave for reutilizada com payload diferente, a API retorna `409`.
 - `KAEL_HOST` (default: `127.0.0.1`)
 - `KAEL_DATA_DIR` (default: `./.kael-data`)
 - `KAEL_ENGINE_MODE` (`simple`, `pi`, `hybrid`; default: `simple`)
+- `KAEL_CONTEXT_MAX_MESSAGES` (janela de contexto para engine; default: `24`)
+- `KAEL_CONTEXT_MAX_CHARS` (limite de caracteres da janela; default: `12000`)
 - `KAEL_PI_PROVIDER` (default: `openai`)
 - `KAEL_PI_TRANSPORT` (`pi_sdk`, `local_process` ou `openai_http`; default: `pi_sdk`)
 - `KAEL_PI_LOCAL_COMMAND` (default: `pi`)
@@ -130,6 +132,7 @@ Modos:
 
 Observacao: Kael agora carrega `.env` automaticamente no bootstrap da app.
 Observacao: no modo PI (`pi`/`hybrid`), Kael monta o `system prompt` com `docs/core/SOUL.md` automaticamente (ou `KAEL_SOUL_PATH`, se definido).
+Observacao: Kael aplica janela de contexto multi-turn antes de chamar PI (via `TurnOrchestrator`).
 
 ## Config global (~/.kael)
 

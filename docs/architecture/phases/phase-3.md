@@ -25,12 +25,17 @@ Adicionar resiliencia sem perder simplicidade: o sistema deve falhar de forma pr
   - `POST /jobs/capture`
   - `POST /jobs/probe`
 - Protecao de conflito de chave idempotente com payload divergente (`409`).
+- `TurnOrchestrator` para centralizar preparacao de turno antes da engine.
+- Context guard inicial por janela:
+  - limite de mensagens (`KAEL_CONTEXT_MAX_MESSAGES`)
+  - limite de caracteres (`KAEL_CONTEXT_MAX_CHARS`)
+- `PiEngineAdapter` agora recebe contexto recente no prompt (HTTP e SDK/local-process com prompt serializado).
 
 ## Pendencias desta fase
 
-- Guard de contexto antes da chamada ao provider.
 - Reset automatico de sessao em falhas irrecoveraveis.
 - Evoluir idempotency store para persistente (se necessario).
+- Adicionar resumos de contexto (alem de truncamento por janela) para preservar fatos relevantes.
 
 ## Design proposto
 

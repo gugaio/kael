@@ -130,7 +130,7 @@ Objetivos:
 Definition of Done (checklist):
 - [x] Retry utilitario com politicas configuraveis.
 - [x] Fallback classificado por tipo de erro.
-- [ ] Guard de contexto aplicado antes de chamada de modelo.
+- [x] Guard de contexto aplicado antes de chamada de modelo.
 - [ ] Reset automatico de sessao para falhas fatais.
 - [x] Dedupe/idempotency ativo nos endpoints criticos.
 
@@ -166,6 +166,32 @@ Definition of Done (checklist):
 - [ ] Politica de execucao segura documentada e aplicada.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-02-18 - Fase 3 (incremento): TurnOrchestrator + context guard multi-turn
+
+Resumo:
+- Introduzido `TurnOrchestrator` para centralizar preparacao de turnos antes da engine.
+- Contexto conversacional agora entra no PI com janela limitada por mensagens e caracteres.
+- `PiEngineAdapter` passou a receber historico recente (HTTP como mensagens; SDK/local-process como prompt serializado).
+
+Arquivos-chave:
+- `src/services/turn-orchestrator.ts`
+- `src/services/chat-service.ts`
+- `src/engine/types.ts`
+- `src/engine/pi-engine-adapter.ts`
+- `src/config.ts`
+- `src/global-config.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [ ] teste manual multi-turn (`/chat`) confirmando continuidade entre mensagens
+
+Pendencias:
+- Implementar reset automatico de sessao em falhas fatais.
+- Evoluir de truncamento de contexto para resumo de contexto.
+
+Proximo passo recomendado:
+- Iniciar proximo incremento com `session reset controlado` + logs estruturados de turno (`turnId`, `fallbackReason`, `retryCount`).
 
 ### 2026-02-18 - Bootstrap inicial do projeto
 

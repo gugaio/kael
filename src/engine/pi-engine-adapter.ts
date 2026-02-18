@@ -12,6 +12,43 @@ type PiAgentLike = {
   subscribe: (listener: (event: unknown) => void) => (() => void) | void;
 };
 
+function toProviderMessages(input: EngineTurnInput): Array<{ role: "user" | "assistant"; content: string }> {
+  const context = input.contextMessages ?? [];
+  const normalizedContext = context
+    .filter((item) => item.content.trim().length > 0)
+    .map((item) => ({
+      role: item.role,
+      content: item.content,
+    }));
+
+  return [
+    ...normalizedContext,
+    {
+      role: "user",
+      content: input.message,
+    },
+  ];
+}
+
+function buildPromptForSingleInputProvider(input: EngineTurnInput): string {
+  const context = input.contextMessages ?? [];
+  if (context.length === 0) {
+    return input.message;
+  }
+
+  const serializedContext = context
+    .map((item) => `[${item.role}] ${item.content}`)
+    .join("\n");
+
+  return [
+    "Contexto recente da conversa (ordem cronologica):",
+    serializedContext,
+    "",
+    "Mensagem atual do usuario:",
+    input.message,
+  ].join("\n");
+}
+
 function getAssistantTextFromHttpPayload(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -126,10 +163,7 @@ export class PiEngineAdapter implements AgentEngine {
                   role: "system",
                   content: this.cfg.systemPrompt,
                 },
-                {
-                  role: "user",
-                  content: input.message,
-                },
+                ...toProviderMessages(input),
               ],
             }),
           });
@@ -253,7 +287,8 @@ export class PiEngineAdapter implements AgentEngine {
             });
           });
 
-          process.stdin.write(`${input.message}\n`);
+          const prompt = buildPromptForSingleInputProvider(input);
+          process.stdin.write(`${prompt}\n`);
           process.stdin.end();
         });
       },
@@ -335,7 +370,8 @@ export class PiEngineAdapter implements AgentEngine {
             unsubscribe = unsub;
           }
 
-          agent.prompt(input.message).catch((error) => {
+          const prompt = buildPromptForSingleInputProvider(input);
+          agent.prompt(prompt).catch((error) => {
             finish(() => reject(normalizePiError(error)));
           });
         });

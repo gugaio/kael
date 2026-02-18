@@ -5,6 +5,7 @@ import { JobManager } from "./jobs/manager.js";
 import { JobStore } from "./jobs/store.js";
 import { SessionStore } from "./session/store.js";
 import { ChatService } from "./services/chat-service.js";
+import { TurnOrchestrator } from "./services/turn-orchestrator.js";
 import { LocalProcessRunner } from "./tools/system/process-runner.js";
 import { VideoJobService } from "./tools/video/video-job-service.js";
 
@@ -27,7 +28,11 @@ export async function createKaelApp(): Promise<KaelApp> {
   const video = new VideoJobService(jobStore, runner);
   const jobs = new JobManager(jobStore, video);
   const engine = createEngine(config);
-  const chat = new ChatService(sessions, jobs, engine);
+  const orchestrator = new TurnOrchestrator(sessions, engine, {
+    maxContextMessages: config.context.maxMessages,
+    maxContextChars: config.context.maxChars,
+  });
+  const chat = new ChatService(sessions, jobs, orchestrator);
 
   return {
     config,

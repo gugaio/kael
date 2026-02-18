@@ -9,6 +9,10 @@ export type KaelGlobalConfig = {
     port: number;
     dataDir: string;
     engineMode: "simple" | "pi" | "hybrid";
+    context: {
+      maxMessages: number;
+      maxChars: number;
+    };
     idempotency: {
       enabled: boolean;
       ttlMs: number;
@@ -79,6 +83,10 @@ export function buildDefaultGlobalConfig(kaelHome: string): KaelGlobalConfig {
       port: 3210,
       dataDir: withHomePlaceholder(dataDir),
       engineMode: "simple",
+      context: {
+        maxMessages: 24,
+        maxChars: 12000,
+      },
       idempotency: {
         enabled: true,
         ttlMs: 10 * 60 * 1000,

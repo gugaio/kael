@@ -34,6 +34,11 @@ export type EngineTooling = {
 export type EngineTurnInput = {
   sessionKey: string;
   message: string;
+  contextMessages?: Array<{
+    role: "user" | "assistant";
+    content: string;
+    createdAt: string;
+  }>;
   tooling: EngineTooling;
 };
 

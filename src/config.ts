@@ -32,6 +32,10 @@ export type KaelConfig = {
   host: string;
   dataDir: string;
   engineMode: EngineMode;
+  context: {
+    maxMessages: number;
+    maxChars: number;
+  };
   idempotency: {
     enabled: boolean;
     ttlMs: number;
@@ -128,6 +132,24 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
   const engineMode = parseEngineMode(
     process.env.KAEL_ENGINE_MODE ?? globalConfig?.defaults.engineMode,
   );
+
+  const defaultContextMessages = globalConfig?.defaults.context?.maxMessages ?? 24;
+  const contextMessagesRaw = Number(
+    process.env.KAEL_CONTEXT_MAX_MESSAGES ?? String(defaultContextMessages),
+  );
+  const maxContextMessages =
+    Number.isFinite(contextMessagesRaw) && contextMessagesRaw > 0
+      ? Math.floor(contextMessagesRaw)
+      : defaultContextMessages;
+
+  const defaultContextChars = globalConfig?.defaults.context?.maxChars ?? 12000;
+  const contextCharsRaw = Number(
+    process.env.KAEL_CONTEXT_MAX_CHARS ?? String(defaultContextChars),
+  );
+  const maxContextChars =
+    Number.isFinite(contextCharsRaw) && contextCharsRaw > 0
+      ? Math.floor(contextCharsRaw)
+      : defaultContextChars;
 
   const idempotencyEnabledRaw =
     process.env.KAEL_IDEMPOTENCY_ENABLED?.trim() ??
@@ -234,6 +256,10 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     host,
     dataDir,
     engineMode,
+    context: {
+      maxMessages: maxContextMessages,
+      maxChars: maxContextChars,
+    },
     idempotency: { enabled: idempotencyEnabled, ttlMs: idempotencyTtlMs },
     pi,
   };
