@@ -1,0 +1,24 @@
+{
+  "name": "kael",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Kael - super agente de video e automacao",
+  "scripts": {
+    "dev": "tsx src/cli/index.ts server",
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/cli/index.js server"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "fastify": "^4.29.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

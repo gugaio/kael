@@ -2,6 +2,9 @@
 
 Este arquivo registra nosso estudo continuo do OpenClaw, com foco em entender o proprio projeto em profundidade e evoluir com seguranca.
 
+O OpenClaw já teve o nome de Clawdbot, é a mesma coisa.
+O path do projeto é /home/gugaime/IA/openclaw/
+
 ## Objetivo do estudo
 
 1. Dominar resiliência e confiabilidade do runtime.
@@ -287,7 +290,7 @@ Este arquivo registra nosso estudo continuo do OpenClaw, com foco em entender o 
    - **Lock do gateway** (`src/infra/gateway-lock.ts:176`):
      - Arquivo: `~/.openclaw/state/locks/gateway.{hash}.lock` (hash do configPath)
      - Payload: `{ pid, createdAt, configPath, startTime (Linux) }`
-     - Aquisição: `fs.open(path, 'wx')` com timeout 5s, polling 100ms
+     - Aquisição: `fs.open(path, 'wx')` com t:imeout 5s, polling 100ms
      - Se `EEXIST`: valida PID vivo (Linux: `startTime` + `cmdline`), se dead → remove e tenta de novo
      - Liberação: cleanup no `finally` do `runGatewayLoop`
      - Exceções: `OPENCLAW_ALLOW_MULTI_GATEWAY=1` ou ambiente de teste
