@@ -73,12 +73,12 @@ export class PersistentScheduler {
       id: params.id,
       type: params.type,
       enabled: params.enabled,
-      schedule: {
-        kind: "interval" as const,
-        intervalMs: params.intervalMs,
-      },
       nextRunAt: new Date(now.getTime() + params.intervalMs).toISOString(),
     };
+
+    const nextRunAtChanged =
+      existing?.schedule.kind !== "interval" ||
+      existing.schedule.intervalMs !== params.intervalMs;
 
     const next: SchedulerJob = {
       ...base,
@@ -88,11 +88,9 @@ export class PersistentScheduler {
         intervalMs: params.intervalMs,
       },
       enabled: params.enabled,
-      nextRunAt:
-        existing?.schedule.kind !== "interval" ||
-        existing.schedule.intervalMs !== params.intervalMs
-          ? new Date(now.getTime() + params.intervalMs).toISOString()
-          : base.nextRunAt,
+      nextRunAt: nextRunAtChanged
+        ? new Date(now.getTime() + params.intervalMs).toISOString()
+        : base.nextRunAt,
     };
     this.jobs.set(next.id, next);
     await this.persist();
