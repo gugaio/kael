@@ -300,5 +300,88 @@ export async function startApiServer(): Promise<void> {
     return { ok: true, log };
   });
 
+  server.get("/schedules", async () => ({
+    ok: true,
+    schedules: app.automation.listSchedules(),
+  }));
+
+  server.get<{ Params: { scheduleId: string } }>("/schedules/:scheduleId", async (request, reply) => {
+    const schedule = app.automation.getSchedule(request.params.scheduleId);
+    if (!schedule) {
+      return reply.code(404).send({ ok: false, error: "schedule not found" });
+    }
+    return { ok: true, schedule };
+  });
+
+  server.post<{
+    Body: {
+      id?: string;
+      type?: string;
+      enabled?: boolean;
+      intervalMs?: number;
+      cronExpr?: string;
+    };
+  }>("/schedules", async (request, reply) => {
+    const id = request.body.id?.trim();
+    const type = request.body.type?.trim();
+    const enabled = request.body.enabled ?? true;
+    const intervalMs = request.body.intervalMs;
+    const cronExpr = request.body.cronExpr?.trim();
+
+    if (!id || !type) {
+      return reply.code(400).send({ ok: false, error: "id and type are required" });
+    }
+
+    if (intervalMs != null && cronExpr) {
+      return reply.code(400).send({ ok: false, error: "provide either intervalMs or cronExpr" });
+    }
+
+    try {
+      if (cronExpr) {
+        const schedule = await app.automation.upsertCronSchedule({
+          id,
+          type,
+          cronExpr,
+          enabled,
+        });
+        return { ok: true, schedule };
+      }
+
+      if (intervalMs == null || !Number.isFinite(intervalMs) || intervalMs <= 0) {
+        return reply
+          .code(400)
+          .send({ ok: false, error: "intervalMs must be a positive number when cronExpr is not provided" });
+      }
+
+      const schedule = await app.automation.upsertIntervalSchedule({
+        id,
+        type,
+        intervalMs: Math.floor(intervalMs),
+        enabled,
+      });
+      return { ok: true, schedule };
+    } catch (error) {
+      return reply
+        .code(400)
+        .send({ ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  server.post<{ Params: { scheduleId: string } }>("/schedules/:scheduleId/pause", async (request, reply) => {
+    const schedule = await app.automation.setScheduleEnabled(request.params.scheduleId, false);
+    if (!schedule) {
+      return reply.code(404).send({ ok: false, error: "schedule not found" });
+    }
+    return { ok: true, schedule };
+  });
+
+  server.post<{ Params: { scheduleId: string } }>("/schedules/:scheduleId/resume", async (request, reply) => {
+    const schedule = await app.automation.setScheduleEnabled(request.params.scheduleId, true);
+    if (!schedule) {
+      return reply.code(404).send({ ok: false, error: "schedule not found" });
+    }
+    return { ok: true, schedule };
+  });
+
   await server.listen({ host: app.config.host, port: app.config.port });
 }

@@ -8,6 +8,7 @@ Super agente para videos e automacao.
 - `docs/core/START-HERE.md`: indice rapido de onboarding.
 - `docs/planning/PROJECT-STATUS.md`: fases, entregas e checklist por commit.
 - `docs/architecture/README.md`: arquitetura incremental por fase.
+- `docs/how-jobs-and-heartbeat-work.md`: guia detalhado do ciclo de vida de jobs e heartbeat.
 
 ## Escopo atual
 
@@ -57,6 +58,19 @@ npx tsx src/cli/index.ts chat --message "/help"
 
 # listar jobs
 npx tsx src/cli/index.ts jobs
+
+# listar schedules
+npx tsx src/cli/index.ts schedules
+
+# criar/atualizar schedule por intervalo
+npx tsx src/cli/index.ts schedule-upsert --id heartbeat.main --type heartbeat --interval-ms 30000
+
+# criar/atualizar schedule por cron (5 campos)
+npx tsx src/cli/index.ts schedule-upsert --id heartbeat.cron --type heartbeat --cron "*/5 * * * *"
+
+# pausar/reativar schedule
+npx tsx src/cli/index.ts schedule-pause --id heartbeat.main
+npx tsx src/cli/index.ts schedule-resume --id heartbeat.main
 ```
 
 ## Comandos de chat (engine de comandos)
@@ -82,6 +96,11 @@ npx tsx src/cli/index.ts jobs
 - `GET /jobs`
 - `GET /jobs/:jobId`
 - `GET /jobs/:jobId/log`
+- `GET /schedules`
+- `GET /schedules/:scheduleId`
+- `POST /schedules`
+- `POST /schedules/:scheduleId/pause`
+- `POST /schedules/:scheduleId/resume`
 
 ### Idempotency (Fase 3)
 
@@ -132,6 +151,7 @@ Se no futuro for necessario reintroduzir transportes alternativos (processo loca
 Observacao: Kael agora carrega `.env` automaticamente no bootstrap da app.
 Observacao: no modo PI (`pi`/`hybrid`), Kael monta o `system prompt` com `docs/core/SOUL.md` automaticamente (ou `KAEL_SOUL_PATH`, se definido).
 Observacao: Kael aplica janela de contexto multi-turn antes de chamar PI (via `TurnOrchestrator`).
+Observacao: scheduler suporta `intervalMs` e cron expression simples (5 campos, com `*`, `*/n` e valores exatos).
 
 ## Config global (~/.kael)
 

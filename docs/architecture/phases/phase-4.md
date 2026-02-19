@@ -18,6 +18,20 @@ Adicionar autonomia operacional inicial com heartbeat produtivo e agendamento pe
   - monitora mudancas de status de jobs e registra notificacao relevante na sessao (`role: system`).
 - Integracao no bootstrap:
   - `src/app.ts` inicia scheduler + job `heartbeat.main`.
+- Scheduler com dois modos de agenda:
+  - intervalo em ms
+  - cron expression (5 campos)
+- API de gerenciamento de schedules:
+  - `GET /schedules`
+  - `GET /schedules/:scheduleId`
+  - `POST /schedules` (upsert interval/cron)
+  - `POST /schedules/:scheduleId/pause`
+  - `POST /schedules/:scheduleId/resume`
+- CLI de gerenciamento:
+  - `schedules`
+  - `schedule-upsert`
+  - `schedule-pause`
+  - `schedule-resume`
 
 ## Comportamento atual
 
@@ -29,9 +43,8 @@ Adicionar autonomia operacional inicial com heartbeat produtivo e agendamento pe
 
 ## Limites atuais
 
-- Scheduler atual e baseado em intervalo (nao cron expression ainda).
 - Notificacao e apenas em transcript de sessao (sem canais externos).
-- Sem API de CRUD de schedules ainda.
+- Parser cron intencionalmente simples (`*`, `*/n` e valor exato por campo).
 
 ## Proximos incrementos recomendados
 

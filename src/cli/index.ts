@@ -79,6 +79,89 @@ async function commandJobs(options: UrlOption): Promise<void> {
   }
 }
 
+async function commandSchedules(options: UrlOption): Promise<void> {
+  const url = await resolveUrl(options.url);
+  const response = await fetch(`${url}/schedules`);
+  const data = (await response.json()) as {
+    ok: boolean;
+    schedules?: Array<{
+      id: string;
+      type: string;
+      enabled: boolean;
+      nextRunAt: string;
+      schedule: { kind: "interval"; intervalMs: number } | { kind: "cron"; cronExpr: string };
+    }>;
+    error?: string;
+  };
+
+  if (!response.ok || !data.ok) {
+    throw new Error(data.error ?? `schedules failed with status ${response.status}`);
+  }
+
+  const schedules = data.schedules ?? [];
+  if (schedules.length === 0) {
+    console.log("Nenhum schedule encontrado.");
+    return;
+  }
+
+  for (const schedule of schedules) {
+    const scheduleText =
+      schedule.schedule.kind === "interval"
+        ? `interval=${schedule.schedule.intervalMs}ms`
+        : `cron="${schedule.schedule.cronExpr}"`;
+    console.log(
+      `${schedule.id} | ${schedule.type} | enabled=${schedule.enabled} | ${scheduleText} | next=${schedule.nextRunAt}`,
+    );
+  }
+}
+
+async function commandScheduleUpsert(
+  options: UrlOption & {
+    id: string;
+    type: string;
+    enabled?: boolean;
+    intervalMs?: string;
+    cron?: string;
+  },
+): Promise<void> {
+  const url = await resolveUrl(options.url);
+  const intervalMs = options.intervalMs ? Number(options.intervalMs) : undefined;
+  const cronExpr = options.cron?.trim();
+  const response = await fetch(`${url}/schedules`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      id: options.id,
+      type: options.type,
+      enabled: options.enabled ?? true,
+      intervalMs,
+      cronExpr,
+    }),
+  });
+  const data = (await response.json()) as { ok: boolean; schedule?: { id: string }; error?: string };
+  if (!response.ok || !data.ok) {
+    throw new Error(data.error ?? `schedule-upsert failed with status ${response.status}`);
+  }
+  console.log(`Schedule salvo: ${data.schedule?.id ?? options.id}`);
+}
+
+async function commandScheduleState(
+  options: UrlOption & {
+    id: string;
+  },
+  state: "pause" | "resume",
+): Promise<void> {
+  const url = await resolveUrl(options.url);
+  const response = await fetch(`${url}/schedules/${options.id}/${state}`, {
+    method: "POST",
+  });
+  const data = (await response.json()) as { ok: boolean; error?: string };
+  if (!response.ok || !data.ok) {
+    throw new Error(data.error ?? `schedule-${state} failed with status ${response.status}`);
+  }
+  console.log(`Schedule ${options.id} ${state === "pause" ? "pausado" : "reativado"}.`);
+}
+
 async function main(): Promise<void> {
   const program = new Command();
   program
@@ -117,6 +200,57 @@ async function main(): Promise<void> {
     .option("-u, --url <url>", "url base da API (ex: http://127.0.0.1:3210)")
     .action(async (options: UrlOption) => {
       await commandJobs(options);
+    });
+
+  program
+    .command("schedules")
+    .description("Lista schedules")
+    .option("-u, --url <url>", "url base da API (ex: http://127.0.0.1:3210)")
+    .action(async (options: UrlOption) => {
+      await commandSchedules(options);
+    });
+
+  program
+    .command("schedule-upsert")
+    .description("Cria/atualiza schedule (intervalo ou cron)")
+    .requiredOption("--id <id>", "id do schedule")
+    .requiredOption("--type <type>", "tipo do schedule (ex: heartbeat)")
+    .option("--interval-ms <ms>", "intervalo em ms")
+    .option("--cron <expr>", 'cron expression (5 campos, ex: "*/5 * * * *")')
+    .option("--enabled <true|false>", "habilitado", "true")
+    .option("-u, --url <url>", "url base da API (ex: http://127.0.0.1:3210)")
+    .action(
+      async (options: {
+        id: string;
+        type: string;
+        enabled?: string;
+        intervalMs?: string;
+        cron?: string;
+        url?: string;
+      }) => {
+        await commandScheduleUpsert({
+          ...options,
+          enabled: options.enabled?.trim().toLowerCase() !== "false",
+        });
+      },
+    );
+
+  program
+    .command("schedule-pause")
+    .description("Pausa um schedule")
+    .requiredOption("--id <id>", "id do schedule")
+    .option("-u, --url <url>", "url base da API (ex: http://127.0.0.1:3210)")
+    .action(async (options: { id: string; url?: string }) => {
+      await commandScheduleState(options, "pause");
+    });
+
+  program
+    .command("schedule-resume")
+    .description("Reativa um schedule")
+    .requiredOption("--id <id>", "id do schedule")
+    .option("-u, --url <url>", "url base da API (ex: http://127.0.0.1:3210)")
+    .action(async (options: { id: string; url?: string }) => {
+      await commandScheduleState(options, "resume");
     });
 
   if (process.argv.slice(2).length === 0) {

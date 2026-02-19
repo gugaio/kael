@@ -2,6 +2,7 @@ import "dotenv/config";
 import path from "node:path";
 import { HeartbeatRunner } from "./automation/heartbeat-runner.js";
 import { PersistentScheduler } from "./automation/persistent-scheduler.js";
+import { AutomationService } from "./automation/service.js";
 import { loadConfig, type KaelConfig } from "./config.js";
 import { createEngine } from "./engine/factory.js";
 import { JobManager } from "./jobs/manager.js";
@@ -17,6 +18,7 @@ export type KaelApp = {
   sessions: SessionStore;
   jobs: JobManager;
   chat: ChatService;
+  automation: AutomationService;
 };
 
 export async function createKaelApp(): Promise<KaelApp> {
@@ -36,33 +38,32 @@ export async function createKaelApp(): Promise<KaelApp> {
     maxContextChars: config.context.maxChars,
   });
   const chat = new ChatService(sessions, jobs, orchestrator);
-
-  if (config.automation.heartbeatEnabled) {
-    const heartbeat = new HeartbeatRunner(jobs, sessions);
-    const scheduler = new PersistentScheduler(
-      path.join(config.dataDir, "automation", "scheduler-jobs.json"),
-      config.automation.schedulerTickMs,
-      async ({ job }) => {
-        if (job.type !== "heartbeat") {
-          return;
-        }
-        await heartbeat.runOnce();
-      },
-    );
-    await scheduler.init();
-    await scheduler.upsertIntervalJob({
-      id: "heartbeat.main",
-      type: "heartbeat",
-      intervalMs: config.automation.heartbeatIntervalMs,
-      enabled: true,
-    });
-    scheduler.start();
-  }
+  const heartbeat = new HeartbeatRunner(jobs, sessions);
+  const scheduler = new PersistentScheduler(
+    path.join(config.dataDir, "automation", "scheduler-jobs.json"),
+    config.automation.schedulerTickMs,
+    async ({ job }) => {
+      if (job.type !== "heartbeat") {
+        return;
+      }
+      await heartbeat.runOnce();
+    },
+  );
+  await scheduler.init();
+  await scheduler.upsertIntervalJob({
+    id: "heartbeat.main",
+    type: "heartbeat",
+    intervalMs: config.automation.heartbeatIntervalMs,
+    enabled: config.automation.heartbeatEnabled,
+  });
+  scheduler.start();
+  const automation = new AutomationService(scheduler);
 
   return {
     config,
     sessions,
     jobs,
     chat,
+    automation,
   };
 }

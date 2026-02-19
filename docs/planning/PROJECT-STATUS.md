@@ -148,6 +148,8 @@ Definition of Done (checklist):
 - [x] Resposta silenciosa quando nao houver acao.
 - [x] Cron persistente com recuperacao apos restart.
 - [x] Monitoramento de jobs com notificacoes relevantes.
+- [x] API/CLI para listar e gerenciar schedules.
+- [x] Suporte inicial a cron expression para schedules.
 
 ### Fase 5 - Hardening e Observabilidade
 
@@ -166,6 +168,34 @@ Definition of Done (checklist):
 - [ ] Politica de execucao segura documentada e aplicada.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-02-19 - Fase 4 (incremento): API/CLI de schedules + cron expression
+
+Resumo:
+- Scheduler evoluido para dois tipos de agenda (`interval` e `cron`).
+- Adicionadas rotas de schedules para listagem, detalhe, upsert, pause e resume.
+- Adicionados comandos CLI para operar schedules sem `curl`.
+- Incluidos testes focados de `cron` e `PersistentScheduler`.
+
+Arquivos-chave:
+- `src/automation/cron.ts`
+- `src/automation/persistent-scheduler.ts`
+- `src/automation/service.ts`
+- `src/api/server.ts`
+- `src/cli/index.ts`
+- `src/automation/cron.test.ts`
+- `src/automation/persistent-scheduler.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/automation/cron.test.ts src/automation/persistent-scheduler.test.ts`
+
+Pendencias:
+- Expor operacoes de delete de schedule e execucao manual (`run-now`).
+- Evoluir parser cron para ranges/listas se necessario.
+
+Proximo passo recomendado:
+- Iniciar Fase 5 com logs estruturados de turno/job e testes de integracao HTTP.
 
 ### 2026-02-18 - Fase 4 (incremento): heartbeat + scheduler persistente
 

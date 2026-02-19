@@ -13,13 +13,14 @@ Indice rapido para humanos e onboarding inicial.
 - `docs/planning/AGENT-DEV-GUIDE.md`
 - `docs/planning/PROJECT-STATUS.md`
 - `docs/architecture/README.md`
+- `docs/how-jobs-and-heartbeat-work.md` (guia de jobs + heartbeat)
 
 ## Estado atual das fases (resumo rapido)
 
 - Fase 1: concluida.
 - Fase 2: concluida (engine hibrida + tools de video).
-- Fase 3: em andamento (resiliencia), com retry/fallback/idempotency/context guard ja entregues.
-- Proximo incremento recomendado: reset controlado de sessao + observabilidade de turnos.
+- Fase 3: concluida (resiliencia operacional).
+- Fase 4: em andamento (autonomia: heartbeat + scheduler persistente + schedules API/CLI).
 
 ## Estudos e referencias tecnicas
 
