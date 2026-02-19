@@ -59,6 +59,9 @@ npx tsx src/cli/index.ts chat --message "/help"
 # listar jobs
 npx tsx src/cli/index.ts jobs
 
+# cancelar job
+npx tsx src/cli/index.ts job-cancel --id <jobId>
+
 # listar schedules
 npx tsx src/cli/index.ts schedules
 
@@ -96,6 +99,7 @@ npx tsx src/cli/index.ts schedule-resume --id heartbeat.main
 - `GET /jobs`
 - `GET /jobs/:jobId`
 - `GET /jobs/:jobId/log`
+- `POST /jobs/:jobId/cancel`
 - `GET /schedules`
 - `GET /schedules/:scheduleId`
 - `POST /schedules`

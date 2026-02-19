@@ -59,6 +59,7 @@ export class JobStore {
       running: 0,
       succeeded: 0,
       failed: 0,
+      canceled: 0,
     };
     for (const job of this.jobs.values()) {
       counts[job.status] += 1;

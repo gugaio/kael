@@ -16,7 +16,7 @@ export type SessionEntry = {
   updatedAt: string;
 };
 
-export type JobStatus = "queued" | "running" | "succeeded" | "failed";
+export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "canceled";
 
 export type VideoJobType = "transcode" | "convert_hls" | "capture_stream" | "probe_media";
 

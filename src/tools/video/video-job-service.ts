@@ -25,6 +25,7 @@ type StartJobParams = {
 export class VideoJobService {
   private readonly queue: StartJobParams[] = [];
   private readonly activeJobs: Map<string, ChildProcessWithoutNullStreams> = new Map();
+  private readonly canceledJobs: Set<string> = new Set();
   private reservedSlots = 0;
 
   constructor(
@@ -182,6 +183,40 @@ export class VideoJobService {
     });
   }
 
+  async cancelJob(jobId: string): Promise<{ job: VideoJob | null; canceled: boolean }> {
+    const job = this.jobs.get(jobId);
+    if (!job) {
+      return { job: null, canceled: false };
+    }
+
+    const queuedIndex = this.queue.findIndex((item) => item.id === jobId);
+    if (queuedIndex >= 0) {
+      this.queue.splice(queuedIndex, 1);
+      const updated = await this.jobs.update(jobId, {
+        status: "canceled",
+        endedAt: new Date().toISOString(),
+        error: "job canceled by user",
+      });
+      return { job: updated ?? this.jobs.get(jobId), canceled: true };
+    }
+
+    const running = this.activeJobs.get(jobId);
+    if (!running) {
+      return { job: this.jobs.get(jobId), canceled: false };
+    }
+
+    this.canceledJobs.add(jobId);
+    running.kill("SIGTERM");
+    const forceHandle = setTimeout(() => {
+      if (!running.killed) {
+        running.kill("SIGKILL");
+      }
+    }, this.safety.killGraceMs);
+    forceHandle.unref();
+
+    return { job: this.jobs.get(jobId), canceled: true };
+  }
+
   private async startJob(params: Omit<StartJobParams, "id">): Promise<VideoJob> {
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
@@ -254,6 +289,7 @@ export class VideoJobService {
       process.on("error", async (error) => {
         clearTimeout(timeoutHandle);
         this.activeJobs.delete(params.id);
+        this.canceledJobs.delete(params.id);
         await this.jobs.update(params.id, {
           status: "failed",
           endedAt: new Date().toISOString(),
@@ -272,12 +308,16 @@ export class VideoJobService {
       process.on("close", async (code) => {
         clearTimeout(timeoutHandle);
         this.activeJobs.delete(params.id);
+        const canceled = this.canceledJobs.has(params.id);
+        this.canceledJobs.delete(params.id);
         await this.jobs.update(params.id, {
-          status: code === 0 && !timedOut ? "succeeded" : "failed",
+          status: canceled ? "canceled" : code === 0 && !timedOut ? "succeeded" : "failed",
           endedAt: new Date().toISOString(),
           exitCode: code,
           error:
-            code === 0 && !timedOut
+            canceled
+              ? "job canceled by user"
+              : code === 0 && !timedOut
               ? undefined
               : timedOut
                 ? `job timed out after ${String(this.safety.jobTimeoutMs)}ms`
@@ -290,6 +330,7 @@ export class VideoJobService {
           type: params.type,
           exitCode: code,
           timedOut,
+          canceled,
         });
         this.drainQueue();
       });

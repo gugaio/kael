@@ -223,6 +223,34 @@ Pendencias:
 Proximo passo recomendado:
 - Implementar endpoint/CLI de cancelamento de job e testes E2E de `/jobs/*`.
 
+### 2026-02-19 - Fase 5 (incremento): cancelamento manual de jobs (API + CLI)
+
+Resumo:
+- Endpoint `POST /jobs/:jobId/cancel` adicionado para cancelar jobs em fila ou em execucao.
+- CLI `job-cancel --id <jobId>` adicionada para operacao direta sem `curl`.
+- Introduzido status de job `canceled` para representar cancelamento manual de forma explicita.
+- Testes de runtime e integracao atualizados para fluxo de cancelamento.
+
+Arquivos-chave:
+- `src/tools/video/video-job-service.ts`
+- `src/jobs/manager.ts`
+- `src/api/server.ts`
+- `src/cli/index.ts`
+- `src/types.ts`
+- `src/tools/video/video-job-service.test.ts`
+- `src/api/server.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Expor motivo detalhado de cancelamento no contrato da API (manual x timeout).
+- Adicionar cancelamento em lote por sessao (opcional).
+
+Proximo passo recomendado:
+- Cobrir E2E completo de `/jobs/*` incluindo validacao de seguranca e cancelamento.
+
 ### 2026-02-19 - Fase 4.1 (hardening): contrato de erro, validacao de config e logs estruturados
 
 Resumo:

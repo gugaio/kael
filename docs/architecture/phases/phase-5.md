@@ -29,6 +29,10 @@ Evoluir robustez operacional com sinais de health reais e guardrails de seguranc
   - limite de concorrencia (`KAEL_MAX_CONCURRENT_JOBS`)
   - timeout de execucao (`KAEL_JOB_TIMEOUT_MS`)
   - cancelamento controlado com grace period (`KAEL_JOB_KILL_GRACE_MS`)
+- Cancelamento manual de jobs:
+  - endpoint `POST /jobs/:jobId/cancel`
+  - jobs em fila viram `canceled` imediatamente
+  - jobs em execucao recebem sinal de terminacao e finalizam como `canceled`
 - Health com metricas de runtime dos workers:
   - `metrics.runtimeJobs.activeJobs`
   - `metrics.runtimeJobs.queuedJobs`

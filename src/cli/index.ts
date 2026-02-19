@@ -103,6 +103,33 @@ async function commandJobs(options: UrlOption): Promise<void> {
   }
 }
 
+async function commandJobCancel(
+  options: UrlOption & {
+    id: string;
+  },
+): Promise<void> {
+  const url = await resolveUrl(options.url);
+  const response = await fetch(`${url}/jobs/${options.id}/cancel`, {
+    method: "POST",
+  });
+  const data = (await response.json()) as {
+    ok: boolean;
+    canceled?: boolean;
+    job?: { id: string; status: string };
+    error?: unknown;
+  };
+
+  if (!response.ok || !data.ok) {
+    throw new Error(extractApiErrorMessage(data) ?? `job-cancel failed with status ${response.status}`);
+  }
+
+  console.log(
+    data.canceled
+      ? `Job ${options.id} cancelado.`
+      : `Job ${options.id} nao estava cancelavel (status atual: ${data.job?.status ?? "unknown"}).`,
+  );
+}
+
 async function commandSchedules(options: UrlOption): Promise<void> {
   const url = await resolveUrl(options.url);
   const response = await fetch(`${url}/schedules`);
@@ -224,6 +251,15 @@ async function main(): Promise<void> {
     .option("-u, --url <url>", "url base da API (ex: http://127.0.0.1:3210)")
     .action(async (options: UrlOption) => {
       await commandJobs(options);
+    });
+
+  program
+    .command("job-cancel")
+    .description("Cancela job em fila ou em execucao")
+    .requiredOption("--id <id>", "id do job")
+    .option("-u, --url <url>", "url base da API (ex: http://127.0.0.1:3210)")
+    .action(async (options: { id: string; url?: string }) => {
+      await commandJobCancel(options);
     });
 
   program

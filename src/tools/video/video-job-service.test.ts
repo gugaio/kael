@@ -118,5 +118,46 @@ describe("VideoJobService runtime controls", () => {
     expect(store.get(job.id)?.status).toBe("failed");
     expect(store.get(job.id)?.error).toContain("timed out");
   });
-});
 
+  it("cancels queued and running jobs", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-video-"));
+    const input = path.join(root, "input.mp4");
+    await fs.writeFile(input, "x", "utf-8");
+
+    const store = new JobStore(root);
+    await store.init();
+    const runner = new FakeRunner();
+    const service = new VideoJobService(store, runner, {
+      safePathsEnabled: true,
+      allowedPaths: [root],
+      maxJobArgs: 24,
+      maxConcurrentJobs: 1,
+      jobTimeoutMs: 60_000,
+      killGraceMs: 10,
+    });
+
+    const running = await service.startTranscode({
+      sessionKey: "s1",
+      inputPath: input,
+      outputPath: path.join(root, "running.mp4"),
+    });
+    const queued = await service.startTranscode({
+      sessionKey: "s1",
+      inputPath: input,
+      outputPath: path.join(root, "queued.mp4"),
+    });
+    await sleep(10);
+
+    const queuedCancel = await service.cancelJob(queued.id);
+    expect(queuedCancel.canceled).toBe(true);
+    expect(store.get(queued.id)?.status).toBe("canceled");
+
+    const runningCancel = await service.cancelJob(running.id);
+    expect(runningCancel.canceled).toBe(true);
+    expect(runner.processes[0]?.killSignals).toContain("SIGTERM");
+
+    runner.processes[0]?.emitClose(null);
+    await sleep(10);
+    expect(store.get(running.id)?.status).toBe("canceled");
+  });
+});

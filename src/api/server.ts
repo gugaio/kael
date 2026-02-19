@@ -367,6 +367,18 @@ export function createApiServer(app: KaelApp): FastifyInstance {
     return { ok: true, log };
   });
 
+  server.post<{ Params: { jobId: string } }>("/jobs/:jobId/cancel", async (request) => {
+    const result = await app.jobs.cancelJob(request.params.jobId);
+    if (!result.job) {
+      throw new ApiError(404, "NOT_FOUND", "job not found");
+    }
+    return {
+      ok: true,
+      canceled: result.canceled,
+      job: result.job,
+    };
+  });
+
   server.get("/schedules", async () => ({
     ok: true,
     schedules: app.automation.listSchedules(),

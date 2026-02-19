@@ -55,6 +55,7 @@ function makeFakeApp(): KaelApp {
         running: 2,
         succeeded: 3,
         failed: 4,
+        canceled: 0,
       }),
       getRuntimeStats: () => ({
         activeJobs: 1,
@@ -67,6 +68,10 @@ function makeFakeApp(): KaelApp {
       startConvertHls: async () => ({ id: "j2" }),
       startCaptureStream: async () => ({ id: "j3" }),
       startProbeMedia: async () => ({ id: "j4" }),
+      cancelJob: async (jobId: string) => ({
+        job: { id: jobId, status: "canceled" },
+        canceled: true,
+      }),
     } as unknown as KaelApp["jobs"],
     chat: {
       handleMessage: async ({ message }: { message: string }) => {
@@ -251,6 +256,20 @@ describe("API integration", () => {
     expect(resume.statusCode).toBe(200);
     expect(resume.json().schedule.enabled).toBe(true);
 
+    await server.close();
+  });
+
+  it("cancels job through API", async () => {
+    const server = createApiServer(makeFakeApp());
+    const response = await server.inject({
+      method: "POST",
+      url: "/jobs/j123/cancel",
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.ok).toBe(true);
+    expect(body.canceled).toBe(true);
+    expect(body.job.id).toBe("j123");
     await server.close();
   });
 });

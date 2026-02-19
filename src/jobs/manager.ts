@@ -66,4 +66,8 @@ export class JobManager {
   }): Promise<VideoJob> {
     return this.video.startProbeMedia(params);
   }
+
+  async cancelJob(jobId: string): Promise<{ job: VideoJob | null; canceled: boolean }> {
+    return this.video.cancelJob(jobId);
+  }
 }
