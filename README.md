@@ -16,7 +16,7 @@ Super agente para videos e automacao.
 - Sessao persistente com transcript JSONL
 - Engine desacoplada com modos:
   - `simple` (comandos)
-  - `pi` (runtime PI local por processo)
+  - `pi` (runtime PI embutido via SDK)
   - `hybrid` (slash commands local + conversa via PI com fallback)
 - Jobs de video assíncronos:
   - `transcode`
@@ -115,6 +115,9 @@ Se a mesma chave for reutilizada com payload diferente, a API retorna `409`.
 - `KAEL_SOUL_PATH` (opcional; caminho explicito para `SOUL.md`)
 - `KAEL_IDEMPOTENCY_ENABLED` (default: `true`)
 - `KAEL_IDEMPOTENCY_TTL_MS` (default: `600000`)
+- `KAEL_HEARTBEAT_ENABLED` (default: `true`)
+- `KAEL_HEARTBEAT_INTERVAL_MS` (default: `30000`)
+- `KAEL_SCHEDULER_TICK_MS` (default: `1000`)
 
 ### Runtime do PI
 

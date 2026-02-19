@@ -17,6 +17,11 @@ export type KaelGlobalConfig = {
       enabled: boolean;
       ttlMs: number;
     };
+    automation: {
+      heartbeatEnabled: boolean;
+      heartbeatIntervalMs: number;
+      schedulerTickMs: number;
+    };
     pi: {
       provider: string;
       model: string;
@@ -84,6 +89,11 @@ export function buildDefaultGlobalConfig(kaelHome: string): KaelGlobalConfig {
       idempotency: {
         enabled: true,
         ttlMs: 10 * 60 * 1000,
+      },
+      automation: {
+        heartbeatEnabled: true,
+        heartbeatIntervalMs: 30000,
+        schedulerTickMs: 1000,
       },
       pi: {
         provider: "openai",

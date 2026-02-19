@@ -65,6 +65,27 @@ export class SessionStore {
     return limit > 0 ? messages.slice(-limit) : messages;
   }
 
+  async resetSession(sessionKey: string): Promise<SessionEntry> {
+    const index = await this.readIndex();
+    const now = new Date().toISOString();
+    const sessionId = crypto.randomUUID();
+    const transcriptPath = path.join(this.transcriptsDir, `${sessionId}.jsonl`);
+
+    const entry: SessionEntry = {
+      sessionKey,
+      sessionId,
+      transcriptPath,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await ensureDir(path.dirname(transcriptPath));
+    await fs.writeFile(transcriptPath, "", "utf-8");
+    index[sessionKey] = entry;
+    await writeJsonFile(this.indexPath, index);
+    return entry;
+  }
+
   private async getOrCreateSession(sessionKey: string): Promise<SessionEntry> {
     const index = await this.readIndex();
     const existing = index[sessionKey];

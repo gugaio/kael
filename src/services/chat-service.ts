@@ -1,8 +1,14 @@
 import type { EngineTooling } from "../engine/types.js";
+import { normalizePiError } from "../engine/pi-errors.js";
 import type { JobManager } from "../jobs/manager.js";
 import type { SessionStore } from "../session/store.js";
 import type { SessionMessage } from "../types.js";
 import { TurnOrchestrator } from "./turn-orchestrator.js";
+
+function shouldResetSessionOnEngineError(error: unknown): boolean {
+  const normalized = normalizePiError(error);
+  return normalized.code === "invalid_response" || normalized.code === "unknown";
+}
 
 export class ChatService {
   private readonly tooling: EngineTooling;
@@ -31,21 +37,43 @@ export class ChatService {
     sessionKey: string;
     message: string;
   }): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string }> {
-    const user = await this.sessions.appendMessage(input.sessionKey, "user", input.message);
+    let user = await this.sessions.appendMessage(input.sessionKey, "user", input.message);
 
-    const turn = await this.orchestrator.run({
-      sessionKey: input.sessionKey,
-      message: input.message,
-      tooling: this.tooling,
-    });
+    try {
+      const turn = await this.orchestrator.run({
+        sessionKey: input.sessionKey,
+        message: input.message,
+        tooling: this.tooling,
+      });
 
-    const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", turn.reply);
+      const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", turn.reply);
 
-    return {
-      user,
-      assistant,
-      reply: turn.reply,
-    };
+      return {
+        user,
+        assistant,
+        reply: turn.reply,
+      };
+    } catch (error) {
+      if (!shouldResetSessionOnEngineError(error)) {
+        throw error;
+      }
+
+      // Falha irrecuperavel: recria sessao e tenta novamente uma vez sem historico antigo.
+      await this.sessions.resetSession(input.sessionKey);
+      user = await this.sessions.appendMessage(input.sessionKey, "user", input.message);
+      const turn = await this.orchestrator.run({
+        sessionKey: input.sessionKey,
+        message: input.message,
+        tooling: this.tooling,
+      });
+      const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", turn.reply);
+
+      return {
+        user,
+        assistant,
+        reply: turn.reply,
+      };
+    }
   }
 
   async getHistory(sessionKey: string, limit = 50): Promise<SessionMessage[]> {

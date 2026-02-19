@@ -1,4 +1,7 @@
 import "dotenv/config";
+import path from "node:path";
+import { HeartbeatRunner } from "./automation/heartbeat-runner.js";
+import { PersistentScheduler } from "./automation/persistent-scheduler.js";
 import { loadConfig, type KaelConfig } from "./config.js";
 import { createEngine } from "./engine/factory.js";
 import { JobManager } from "./jobs/manager.js";
@@ -33,6 +36,28 @@ export async function createKaelApp(): Promise<KaelApp> {
     maxContextChars: config.context.maxChars,
   });
   const chat = new ChatService(sessions, jobs, orchestrator);
+
+  if (config.automation.heartbeatEnabled) {
+    const heartbeat = new HeartbeatRunner(jobs, sessions);
+    const scheduler = new PersistentScheduler(
+      path.join(config.dataDir, "automation", "scheduler-jobs.json"),
+      config.automation.schedulerTickMs,
+      async ({ job }) => {
+        if (job.type !== "heartbeat") {
+          return;
+        }
+        await heartbeat.runOnce();
+      },
+    );
+    await scheduler.init();
+    await scheduler.upsertIntervalJob({
+      id: "heartbeat.main",
+      type: "heartbeat",
+      intervalMs: config.automation.heartbeatIntervalMs,
+      enabled: true,
+    });
+    scheduler.start();
+  }
 
   return {
     config,

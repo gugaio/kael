@@ -33,6 +33,11 @@ export type KaelConfig = {
     enabled: boolean;
     ttlMs: number;
   };
+  automation: {
+    heartbeatEnabled: boolean;
+    heartbeatIntervalMs: number;
+    schedulerTickMs: number;
+  };
   pi: PiEngineConfig;
 };
 
@@ -138,6 +143,29 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       ? idempotencyTtlRaw
       : defaultIdempotencyTtlMs;
 
+  const heartbeatEnabledRaw =
+    process.env.KAEL_HEARTBEAT_ENABLED?.trim() ??
+    String(globalConfig?.defaults.automation?.heartbeatEnabled ?? true);
+  const heartbeatEnabled = heartbeatEnabledRaw.toLowerCase() !== "false";
+
+  const defaultHeartbeatIntervalMs = globalConfig?.defaults.automation?.heartbeatIntervalMs ?? 30000;
+  const heartbeatIntervalRaw = Number(
+    process.env.KAEL_HEARTBEAT_INTERVAL_MS ?? String(defaultHeartbeatIntervalMs),
+  );
+  const heartbeatIntervalMs =
+    Number.isFinite(heartbeatIntervalRaw) && heartbeatIntervalRaw > 0
+      ? Math.floor(heartbeatIntervalRaw)
+      : defaultHeartbeatIntervalMs;
+
+  const defaultSchedulerTickMs = globalConfig?.defaults.automation?.schedulerTickMs ?? 1000;
+  const schedulerTickRaw = Number(
+    process.env.KAEL_SCHEDULER_TICK_MS ?? String(defaultSchedulerTickMs),
+  );
+  const schedulerTickMs =
+    Number.isFinite(schedulerTickRaw) && schedulerTickRaw > 0
+      ? Math.floor(schedulerTickRaw)
+      : defaultSchedulerTickMs;
+
   const defaultTimeout = globalConfig?.defaults.pi.timeoutMs ?? 45000;
   const timeoutRaw = Number(process.env.KAEL_PI_TIMEOUT_MS ?? String(defaultTimeout));
   const timeoutMs = Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? timeoutRaw : defaultTimeout;
@@ -206,6 +234,11 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       maxChars: maxContextChars,
     },
     idempotency: { enabled: idempotencyEnabled, ttlMs: idempotencyTtlMs },
+    automation: {
+      heartbeatEnabled,
+      heartbeatIntervalMs,
+      schedulerTickMs,
+    },
     pi,
   };
 }

@@ -119,7 +119,7 @@ Definition of Done (checklist):
 
 ### Fase 3 - Resiliencia Operacional
 
-Status: **Em andamento**
+Status: **Concluida**
 
 Objetivos:
 - Retry com backoff + jitter.
@@ -131,12 +131,12 @@ Definition of Done (checklist):
 - [x] Retry utilitario com politicas configuraveis.
 - [x] Fallback classificado por tipo de erro.
 - [x] Guard de contexto aplicado antes de chamada de modelo.
-- [ ] Reset automatico de sessao para falhas fatais.
+- [x] Reset automatico de sessao para falhas fatais.
 - [x] Dedupe/idempotency ativo nos endpoints criticos.
 
 ### Fase 4 - Autonomia (Heartbeat + Cron)
 
-Status: **Planejada**
+Status: **Em andamento**
 
 Objetivos:
 - Heartbeat produtivo (nao so ACK).
@@ -144,10 +144,10 @@ Objetivos:
 - Notificacao de mudancas relevantes de jobs.
 
 Definition of Done (checklist):
-- [ ] Heartbeat executando em intervalo configuravel.
-- [ ] Resposta silenciosa quando nao houver acao.
-- [ ] Cron persistente com recuperacao apos restart.
-- [ ] Monitoramento de jobs com notificacoes relevantes.
+- [x] Heartbeat executando em intervalo configuravel.
+- [x] Resposta silenciosa quando nao houver acao.
+- [x] Cron persistente com recuperacao apos restart.
+- [x] Monitoramento de jobs com notificacoes relevantes.
 
 ### Fase 5 - Hardening e Observabilidade
 
@@ -166,6 +166,59 @@ Definition of Done (checklist):
 - [ ] Politica de execucao segura documentada e aplicada.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-02-18 - Fase 4 (incremento): heartbeat + scheduler persistente
+
+Resumo:
+- Implementado scheduler persistente com store JSON e tick configuravel.
+- Adicionado catch-up basico apos restart para jobs atrasados.
+- Criado `HeartbeatRunner` para monitorar mudancas de status de jobs.
+- Heartbeat agora notifica a sessao com mensagem de sistema quando job muda para `succeeded`/`failed`.
+- Integrado bootstrap automatico no app quando `KAEL_HEARTBEAT_ENABLED=true`.
+
+Arquivos-chave:
+- `src/automation/persistent-scheduler.ts`
+- `src/automation/heartbeat-runner.ts`
+- `src/app.ts`
+- `src/config.ts`
+- `src/global-config.ts`
+- `docs/architecture/phases/phase-4.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [ ] teste manual: iniciar servidor, rodar job e confirmar mensagem `[heartbeat]` na sessao
+
+Pendencias:
+- Evoluir scheduler de intervalo para cron expressions.
+- Expor API/CLI de gerenciamento de schedules.
+
+Proximo passo recomendado:
+- Iniciar Fase 5 com observabilidade (logs estruturados de turno/job) e testes de integracao.
+
+### 2026-02-18 - Fase 3 (incremento): reset automatico de sessao em falha fatal
+
+Resumo:
+- `SessionStore` ganhou operacao de reset por `sessionKey` com novo transcript.
+- `ChatService` passou a detectar falhas fatais classificadas e executar reset automatico.
+- Apos reset, o turno e reexecutado uma unica vez para recuperar o fluxo.
+- Docs de Fase 3 atualizadas para refletir entrega.
+
+Arquivos-chave:
+- `src/session/store.ts`
+- `src/services/chat-service.ts`
+- `docs/architecture/phases/phase-3.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [ ] `npm run check`
+- [ ] teste manual de `/chat` simulando falha fatal para validar reset/retry unico
+
+Pendencias:
+- Evoluir idempotency store para persistente (se necessario).
+- Adicionar resumo de contexto alem do truncamento por janela.
+
+Proximo passo recomendado:
+- Iniciar Fase 4 com heartbeat produtivo e scheduler cron persistente.
 
 ### 2026-02-18 - Simplificacao do runtime PI (SDK-only)
 

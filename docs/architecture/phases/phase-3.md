@@ -1,6 +1,6 @@
 # Arquitetura - Fase 3 (Resiliencia Operacional)
 
-Status: em andamento
+Status: concluida
 
 ## Objetivo
 
@@ -30,10 +30,10 @@ Adicionar resiliencia sem perder simplicidade: o sistema deve falhar de forma pr
   - limite de mensagens (`KAEL_CONTEXT_MAX_MESSAGES`)
   - limite de caracteres (`KAEL_CONTEXT_MAX_CHARS`)
 - `PiEngineAdapter` (SDK embutido) agora recebe contexto recente no prompt.
+- Reset automatico de sessao em falhas fatais classificadas (`invalid_response` e `unknown`) com nova tentativa unica.
 
 ## Pendencias desta fase
 
-- Reset automatico de sessao em falhas irrecoveraveis.
 - Evoluir idempotency store para persistente (se necessario).
 - Adicionar resumos de contexto (alem de truncamento por janela) para preservar fatos relevantes.
 
