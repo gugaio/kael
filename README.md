@@ -102,6 +102,25 @@ npx tsx src/cli/index.ts schedule-resume --id heartbeat.main
 - `POST /schedules/:scheduleId/pause`
 - `POST /schedules/:scheduleId/resume`
 
+### Contrato de erro (padronizado)
+
+Erros da API agora seguem o formato:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "status": 400,
+    "code": "BAD_REQUEST",
+    "message": "message is required",
+    "details": null,
+    "requestId": "req-1"
+  }
+}
+```
+
+Códigos atuais: `BAD_REQUEST`, `NOT_FOUND`, `IDEMPOTENCY_CONFLICT`, `INTERNAL_ERROR`.
+
 ### Idempotency (Fase 3)
 
 Para evitar duplicacao em retries de cliente, envie o header `x-idempotency-key` em:
@@ -152,6 +171,13 @@ Observacao: Kael agora carrega `.env` automaticamente no bootstrap da app.
 Observacao: no modo PI (`pi`/`hybrid`), Kael monta o `system prompt` com `docs/core/SOUL.md` automaticamente (ou `KAEL_SOUL_PATH`, se definido).
 Observacao: Kael aplica janela de contexto multi-turn antes de chamar PI (via `TurnOrchestrator`).
 Observacao: scheduler suporta `intervalMs` e cron expression simples (5 campos, com `*`, `*/n` e valores exatos).
+Observacao: `KAEL_ENGINE_MODE=pi|hybrid` exige `KAEL_PI_API_KEY`; configuracoes invalidas falham no startup com mensagem clara.
+
+## Logs e observabilidade
+
+- Logs em JSON no `stdout`.
+- Eventos HTTP incluem `requestId`, rota, status e duracao.
+- Eventos de scheduler incluem `scheduleId`, tipo, `durationMs` e status de execucao.
 
 ## Config global (~/.kael)
 

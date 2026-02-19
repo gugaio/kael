@@ -169,6 +169,33 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-02-19 - Fase 4.1 (hardening): contrato de erro, validacao de config e logs estruturados
+
+Resumo:
+- API padronizada com contrato unico de erro (`status`, `code`, `message`, `details`, `requestId`).
+- Validacao de configuracao no startup com falha rapida para casos invalidos.
+- Observabilidade inicial com logs JSON em `stdout` para requests HTTP e execucoes do scheduler.
+- Testes de integracao HTTP para `/chat` (incluindo idempotency) e `/schedules`.
+
+Arquivos-chave:
+- `src/api/server.ts`
+- `src/api/errors.ts`
+- `src/infra/logger.ts`
+- `src/config.ts`
+- `src/api/server.test.ts`
+- `src/config.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/api/server.test.ts src/config.test.ts src/automation/persistent-scheduler.test.ts`
+
+Pendencias:
+- Definir cobertura E2E de jobs (`/jobs/*`) com cenarios de erro reais.
+- Expandir `code` de erro para dominio de negocio (quando necessario).
+
+Proximo passo recomendado:
+- Avancar para observabilidade expandida (metricas + health com sinais operacionais).
+
 ### 2026-02-19 - Fase 4 (incremento): API/CLI de schedules + cron expression
 
 Resumo:

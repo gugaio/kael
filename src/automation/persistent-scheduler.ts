@@ -1,6 +1,7 @@
 import path from "node:path";
 import { computeNextCronRun, parseCronExpression } from "./cron.js";
 import { ensureDir, readJsonFile, writeJsonFile } from "../infra/fs.js";
+import { kaelLogger } from "../infra/logger.js";
 
 export type SchedulerJobSchedule =
   | {
@@ -187,12 +188,21 @@ export class PersistentScheduler {
       }
 
       const isCatchUp = now.getTime() > nextRunMs;
+      const startedAt = Date.now();
       try {
         await this.onRun({ job, now, isCatchUp });
-      } catch (error) {
-        console.error("[scheduler] job execution failed", {
-          jobId: job.id,
+        kaelLogger.info("scheduler.job.executed", {
+          scheduleId: job.id,
           type: job.type,
+          isCatchUp,
+          durationMs: Date.now() - startedAt,
+        });
+      } catch (error) {
+        kaelLogger.error("scheduler.job.failed", {
+          scheduleId: job.id,
+          type: job.type,
+          isCatchUp,
+          durationMs: Date.now() - startedAt,
           error: error instanceof Error ? error.message : String(error),
         });
       }

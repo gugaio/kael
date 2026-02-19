@@ -70,13 +70,14 @@ describe('retry', () => {
     const policy: RetryPolicy = { attempts: 5, baseDelayMs: 100, maxDelayMs: 1000, jitterMs: 0 };
     
     const promise = retry(operation, policy, () => true);
+    const rejection = expect(promise).rejects.toThrow('always fails');
     
     await vi.advanceTimersByTimeAsync(100);
     await vi.advanceTimersByTimeAsync(200);
     await vi.advanceTimersByTimeAsync(400);
     await vi.advanceTimersByTimeAsync(800);
     
-    await expect(promise).rejects.toThrow('always fails');
+    await rejection;
     expect(operation).toHaveBeenCalledTimes(5);
   });
 
@@ -132,11 +133,12 @@ describe('retry', () => {
     const policy: RetryPolicy = { attempts: 3, baseDelayMs: 100, maxDelayMs: 1000, jitterMs: 0 };
     
     const promise = retry(operation, policy, shouldRetry);
+    const rejection = expect(promise).rejects.toThrow('fail 2');
     
     await vi.advanceTimersByTimeAsync(100);
     await vi.advanceTimersByTimeAsync(200);
     
-    await expect(promise).rejects.toThrow('fail 2');
+    await rejection;
     
     expect(shouldRetry).toHaveBeenCalledTimes(2);
     expect(shouldRetry).toHaveBeenNthCalledWith(1, { attempt: 1, maxAttempts: 3, error: expect.any(Error) });
@@ -173,11 +175,12 @@ describe('retry', () => {
     const policy: RetryPolicy = { attempts: 3, baseDelayMs: 100, maxDelayMs: 1000, jitterMs: 0 };
     
     const promise = retry(operation, policy, () => true);
+    const rejection = expect(promise).rejects.toThrow('last error');
     
     await vi.advanceTimersByTimeAsync(100);
     await vi.advanceTimersByTimeAsync(200);
     
-    await expect(promise).rejects.toThrow('last error');
+    await rejection;
   });
 
   it('deve fazer retry quando shouldRetry retorna true na última tentativa', async () => {
@@ -188,11 +191,12 @@ describe('retry', () => {
     const policy: RetryPolicy = { attempts: 3, baseDelayMs: 100, maxDelayMs: 1000, jitterMs: 0 };
     
     const promise = retry(operation, policy, () => true);
+    const rejection = expect(promise).rejects.toThrow('fail 3');
     
     await vi.advanceTimersByTimeAsync(100);
     await vi.advanceTimersByTimeAsync(200);
     
-    await expect(promise).rejects.toThrow('fail 3');
+    await rejection;
     expect(operation).toHaveBeenCalledTimes(3);
   });
 });

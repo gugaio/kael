@@ -32,6 +32,14 @@ Adicionar autonomia operacional inicial com heartbeat produtivo e agendamento pe
   - `schedule-upsert`
   - `schedule-pause`
   - `schedule-resume`
+- Contrato padrao de erro HTTP:
+  - `ok=false` + `error.status/code/message/details/requestId`
+- Validacao de configuracao no startup:
+  - falha rapida para `engineMode` invalido
+  - falha rapida para `pi|hybrid` sem `KAEL_PI_API_KEY`
+- Logs estruturados em JSON:
+  - requests HTTP (`requestId`, rota, status, duracao)
+  - jobs do scheduler (`scheduleId`, tipo, duracao, erro quando houver)
 
 ## Comportamento atual
 
@@ -48,6 +56,6 @@ Adicionar autonomia operacional inicial com heartbeat produtivo e agendamento pe
 
 ## Proximos incrementos recomendados
 
-- Suportar cron expressions persistentes.
-- Expor endpoints/CLI para listar e gerenciar schedules.
-- Permitir rotas de notificacao (ex.: webhook/canal dedicado).
+- Evoluir parser cron para ranges/listas quando houver necessidade real.
+- Adicionar `DELETE /schedules/:id` e `run-now`.
+- Definir canal externo de notificacao (webhook/event stream).

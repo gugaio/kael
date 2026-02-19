@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { loadSoulPromptWithDeps } from './config.js';
+import { ConfigValidationError, loadConfig, loadSoulPromptWithDeps } from './config.js';
 
 describe('loadSoulPromptWithDeps', () => {
   it('deve carregar arquivo SOUL.md do caminho explicito quando existe', async () => {
@@ -201,5 +201,42 @@ describe('loadSoulPromptWithDeps', () => {
 
     expect(readFile).toHaveBeenCalledTimes(1);
     expect(result.source).toBe('/project/docs/core/SOUL.md');
+  });
+});
+
+describe('loadConfig validation', () => {
+  it('deve falhar quando engineMode=pi sem api key', async () => {
+    const previousMode = process.env.KAEL_ENGINE_MODE;
+    const previousKey = process.env.KAEL_PI_API_KEY;
+    try {
+      process.env.KAEL_ENGINE_MODE = 'pi';
+      process.env.KAEL_PI_API_KEY = '   ';
+      await expect(loadConfig('/tmp/kael-config-test')).rejects.toBeInstanceOf(ConfigValidationError);
+    } finally {
+      if (previousMode === undefined) {
+        delete process.env.KAEL_ENGINE_MODE;
+      } else {
+        process.env.KAEL_ENGINE_MODE = previousMode;
+      }
+      if (previousKey === undefined) {
+        delete process.env.KAEL_PI_API_KEY;
+      } else {
+        process.env.KAEL_PI_API_KEY = previousKey;
+      }
+    }
+  });
+
+  it('deve falhar com engineMode invalido', async () => {
+    const previousMode = process.env.KAEL_ENGINE_MODE;
+    try {
+      process.env.KAEL_ENGINE_MODE = 'invalid-mode';
+      await expect(loadConfig('/tmp/kael-config-test')).rejects.toBeInstanceOf(ConfigValidationError);
+    } finally {
+      if (previousMode === undefined) {
+        delete process.env.KAEL_ENGINE_MODE;
+      } else {
+        process.env.KAEL_ENGINE_MODE = previousMode;
+      }
+    }
   });
 });

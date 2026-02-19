@@ -41,6 +41,13 @@ export type KaelConfig = {
   pi: PiEngineConfig;
 };
 
+export class ConfigValidationError extends Error {
+  constructor(readonly issues: string[]) {
+    super(`Invalid Kael configuration: ${issues.join("; ")}`);
+    this.name = "ConfigValidationError";
+  }
+}
+
 const DEFAULT_KAEL_SYSTEM_PROMPT =
   "Voce e Kael, super agente local de video e automacao. Seja direto, tecnico e util. Use comandos slash para acionar jobs locais quando for apropriado.";
 
@@ -85,10 +92,46 @@ async function loadSoulPrompt(cwd: string): Promise<{ prompt: string; source?: s
 
 function parseEngineMode(raw: string | undefined): EngineMode {
   const value = raw?.trim().toLowerCase();
+  if (!value) {
+    return "simple";
+  }
   if (value === "pi" || value === "hybrid") {
     return value;
   }
-  return "simple";
+  if (value === "simple") {
+    return value;
+  }
+  throw new ConfigValidationError([
+    `KAEL_ENGINE_MODE inválido: "${raw}". Valores aceitos: simple, pi, hybrid`,
+  ]);
+}
+
+function validateConfig(config: KaelConfig): void {
+  const issues: string[] = [];
+
+  if ((config.engineMode === "pi" || config.engineMode === "hybrid") && !config.pi.apiKey) {
+    issues.push("KAEL_PI_API_KEY é obrigatório quando KAEL_ENGINE_MODE=pi|hybrid");
+  }
+
+  if (!config.host.trim()) {
+    issues.push("KAEL_HOST não pode ser vazio");
+  }
+
+  if (!Number.isFinite(config.port) || config.port <= 0) {
+    issues.push("KAEL_PORT deve ser um número positivo");
+  }
+
+  if (!Number.isFinite(config.automation.schedulerTickMs) || config.automation.schedulerTickMs <= 0) {
+    issues.push("KAEL_SCHEDULER_TICK_MS deve ser um número positivo");
+  }
+
+  if (!Number.isFinite(config.automation.heartbeatIntervalMs) || config.automation.heartbeatIntervalMs <= 0) {
+    issues.push("KAEL_HEARTBEAT_INTERVAL_MS deve ser um número positivo");
+  }
+
+  if (issues.length > 0) {
+    throw new ConfigValidationError(issues);
+  }
 }
 
 export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
@@ -224,7 +267,7 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     },
   };
 
-  return {
+  const config: KaelConfig = {
     port,
     host,
     dataDir,
@@ -241,4 +284,6 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     },
     pi,
   };
+  validateConfig(config);
+  return config;
 }

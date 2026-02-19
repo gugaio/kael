@@ -7,6 +7,30 @@ type UrlOption = {
   url?: string;
 };
 
+type ApiErrorShape = {
+  message?: string;
+};
+
+function extractApiErrorMessage(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const legacy = (data as { error?: unknown }).error;
+  if (typeof legacy === "string" && legacy.trim()) {
+    return legacy;
+  }
+
+  if (legacy && typeof legacy === "object") {
+    const message = (legacy as ApiErrorShape).message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
+  return null;
+}
+
 async function resolveUrl(explicit?: string): Promise<string> {
   if (explicit) {
     return explicit;
@@ -47,9 +71,9 @@ async function commandChat(message: string, options: ChatOptions): Promise<void>
     body: JSON.stringify({ sessionKey, message }),
   });
 
-  const data = (await response.json()) as { ok: boolean; reply?: string; error?: string };
+  const data = (await response.json()) as { ok: boolean; reply?: string; error?: unknown };
   if (!response.ok || !data.ok) {
-    throw new Error(data.error ?? `chat failed with status ${response.status}`);
+    throw new Error(extractApiErrorMessage(data) ?? `chat failed with status ${response.status}`);
   }
 
   console.log(data.reply ?? "");
@@ -61,11 +85,11 @@ async function commandJobs(options: UrlOption): Promise<void> {
   const data = (await response.json()) as {
     ok: boolean;
     jobs?: Array<{ id: string; status: string; type: string; output?: string }>;
-    error?: string;
+    error?: unknown;
   };
 
   if (!response.ok || !data.ok) {
-    throw new Error(data.error ?? `jobs failed with status ${response.status}`);
+    throw new Error(extractApiErrorMessage(data) ?? `jobs failed with status ${response.status}`);
   }
 
   const jobs = data.jobs ?? [];
@@ -91,11 +115,11 @@ async function commandSchedules(options: UrlOption): Promise<void> {
       nextRunAt: string;
       schedule: { kind: "interval"; intervalMs: number } | { kind: "cron"; cronExpr: string };
     }>;
-    error?: string;
+    error?: unknown;
   };
 
   if (!response.ok || !data.ok) {
-    throw new Error(data.error ?? `schedules failed with status ${response.status}`);
+    throw new Error(extractApiErrorMessage(data) ?? `schedules failed with status ${response.status}`);
   }
 
   const schedules = data.schedules ?? [];
@@ -138,9 +162,9 @@ async function commandScheduleUpsert(
       cronExpr,
     }),
   });
-  const data = (await response.json()) as { ok: boolean; schedule?: { id: string }; error?: string };
+  const data = (await response.json()) as { ok: boolean; schedule?: { id: string }; error?: unknown };
   if (!response.ok || !data.ok) {
-    throw new Error(data.error ?? `schedule-upsert failed with status ${response.status}`);
+    throw new Error(extractApiErrorMessage(data) ?? `schedule-upsert failed with status ${response.status}`);
   }
   console.log(`Schedule salvo: ${data.schedule?.id ?? options.id}`);
 }
@@ -155,9 +179,9 @@ async function commandScheduleState(
   const response = await fetch(`${url}/schedules/${options.id}/${state}`, {
     method: "POST",
   });
-  const data = (await response.json()) as { ok: boolean; error?: string };
+  const data = (await response.json()) as { ok: boolean; error?: unknown };
   if (!response.ok || !data.ok) {
-    throw new Error(data.error ?? `schedule-${state} failed with status ${response.status}`);
+    throw new Error(extractApiErrorMessage(data) ?? `schedule-${state} failed with status ${response.status}`);
   }
   console.log(`Schedule ${options.id} ${state === "pause" ? "pausado" : "reativado"}.`);
 }

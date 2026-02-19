@@ -1,10 +1,12 @@
-import Fastify from "fastify";
-import { createKaelApp } from "../app.js";
-import {
-  IdempotencyConflictError,
-  IdempotencyStore,
-  stableStringify,
-} from "../infra/idempotency-store.js";
+import Fastify, { type FastifyInstance } from "fastify";
+import { createKaelApp, type KaelApp } from "../app.js";
+import { IdempotencyConflictError, IdempotencyStore, stableStringify } from "../infra/idempotency-store.js";
+import { kaelLogger } from "../infra/logger.js";
+import { ApiError, asApiError, sendApiError } from "./errors.js";
+
+type RequestWithStart = {
+  _kaelStartNs?: bigint;
+};
 
 function readIdempotencyKey(headerValue: string | string[] | undefined): string | null {
   if (Array.isArray(headerValue)) {
@@ -12,6 +14,18 @@ function readIdempotencyKey(headerValue: string | string[] | undefined): string 
   }
   const value = headerValue?.trim();
   return value ? value : null;
+}
+
+function bodySessionKey(body: unknown): string | null {
+  if (!body || typeof body !== "object") {
+    return null;
+  }
+  const value = (body as { sessionKey?: unknown }).sessionKey;
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed || null;
 }
 
 async function withIdempotency<T>(params: {
@@ -33,10 +47,41 @@ async function withIdempotency<T>(params: {
   });
 }
 
-export async function startApiServer(): Promise<void> {
-  const app = await createKaelApp();
-  const server = Fastify({ logger: true });
+export function createApiServer(app: KaelApp): FastifyInstance {
+  const server = Fastify({ logger: false });
   const idempotency = new IdempotencyStore(app.config.idempotency.ttlMs);
+
+  server.addHook("onRequest", async (request) => {
+    (request as unknown as RequestWithStart)._kaelStartNs = process.hrtime.bigint();
+  });
+
+  server.addHook("onResponse", async (request, reply) => {
+    const startNs = (request as unknown as RequestWithStart)._kaelStartNs;
+    const durationMs =
+      typeof startNs === "bigint" ? Number((process.hrtime.bigint() - startNs) / BigInt(1_000_000)) : null;
+
+    kaelLogger.info("api.request", {
+      requestId: request.id,
+      method: request.method,
+      route: request.routerPath ?? request.url,
+      status: reply.statusCode,
+      durationMs,
+      sessionKey: bodySessionKey(request.body),
+    });
+  });
+
+  server.setErrorHandler(async (error, request, reply) => {
+    const apiError = asApiError(error);
+    kaelLogger.error("api.request.error", {
+      requestId: request.id,
+      method: request.method,
+      route: request.routerPath ?? request.url,
+      status: apiError.status,
+      code: apiError.code,
+      message: apiError.message,
+    });
+    return sendApiError(reply, request, apiError);
+  });
 
   server.get("/health", async () => ({
     ok: true,
@@ -55,7 +100,7 @@ export async function startApiServer(): Promise<void> {
     const includeMessages = request.query.includeMessages?.trim().toLowerCase() === "true";
 
     if (!message) {
-      return reply.code(400).send({ ok: false, error: "message is required" });
+      throw new ApiError(400, "BAD_REQUEST", "message is required");
     }
 
     const idempotencyKey = readIdempotencyKey(request.headers["x-idempotency-key"]);
@@ -92,7 +137,7 @@ export async function startApiServer(): Promise<void> {
       return value;
     } catch (error) {
       if (error instanceof IdempotencyConflictError) {
-        return reply.code(409).send({ ok: false, error: error.message });
+        throw new ApiError(409, "IDEMPOTENCY_CONFLICT", error.message);
       }
       throw error;
     }
@@ -121,7 +166,7 @@ export async function startApiServer(): Promise<void> {
     const outputPath = request.body.outputPath?.trim();
 
     if (!inputPath || !outputPath) {
-      return reply.code(400).send({ ok: false, error: "inputPath and outputPath are required" });
+      throw new ApiError(400, "BAD_REQUEST", "inputPath and outputPath are required");
     }
 
     const args = request.body.args;
@@ -144,7 +189,7 @@ export async function startApiServer(): Promise<void> {
       return value;
     } catch (error) {
       if (error instanceof IdempotencyConflictError) {
-        return reply.code(409).send({ ok: false, error: error.message });
+        throw new ApiError(409, "IDEMPOTENCY_CONFLICT", error.message);
       }
       throw error;
     }
@@ -163,7 +208,7 @@ export async function startApiServer(): Promise<void> {
     const outputPlaylistPath = request.body.outputPlaylistPath?.trim();
 
     if (!inputPath || !outputPlaylistPath) {
-      return reply.code(400).send({ ok: false, error: "inputPath and outputPlaylistPath are required" });
+      throw new ApiError(400, "BAD_REQUEST", "inputPath and outputPlaylistPath are required");
     }
 
     const segmentTime = request.body.segmentTime;
@@ -191,7 +236,7 @@ export async function startApiServer(): Promise<void> {
       return value;
     } catch (error) {
       if (error instanceof IdempotencyConflictError) {
-        return reply.code(409).send({ ok: false, error: error.message });
+        throw new ApiError(409, "IDEMPOTENCY_CONFLICT", error.message);
       }
       throw error;
     }
@@ -210,7 +255,7 @@ export async function startApiServer(): Promise<void> {
     const outputPath = request.body.outputPath?.trim();
 
     if (!streamUrl || !outputPath) {
-      return reply.code(400).send({ ok: false, error: "streamUrl and outputPath are required" });
+      throw new ApiError(400, "BAD_REQUEST", "streamUrl and outputPath are required");
     }
 
     const durationSeconds = request.body.durationSeconds;
@@ -238,7 +283,7 @@ export async function startApiServer(): Promise<void> {
       return value;
     } catch (error) {
       if (error instanceof IdempotencyConflictError) {
-        return reply.code(409).send({ ok: false, error: error.message });
+        throw new ApiError(409, "IDEMPOTENCY_CONFLICT", error.message);
       }
       throw error;
     }
@@ -254,7 +299,7 @@ export async function startApiServer(): Promise<void> {
     const inputPath = request.body.inputPath?.trim();
 
     if (!inputPath) {
-      return reply.code(400).send({ ok: false, error: "inputPath is required" });
+      throw new ApiError(400, "BAD_REQUEST", "inputPath is required");
     }
 
     const idempotencyKey = readIdempotencyKey(request.headers["x-idempotency-key"]);
@@ -276,7 +321,7 @@ export async function startApiServer(): Promise<void> {
       return value;
     } catch (error) {
       if (error instanceof IdempotencyConflictError) {
-        return reply.code(409).send({ ok: false, error: error.message });
+        throw new ApiError(409, "IDEMPOTENCY_CONFLICT", error.message);
       }
       throw error;
     }
@@ -284,18 +329,18 @@ export async function startApiServer(): Promise<void> {
 
   server.get("/jobs", async () => ({ ok: true, jobs: app.jobs.listJobs() }));
 
-  server.get<{ Params: { jobId: string } }>("/jobs/:jobId", async (request, reply) => {
+  server.get<{ Params: { jobId: string } }>("/jobs/:jobId", async (request) => {
     const job = app.jobs.getJob(request.params.jobId);
     if (!job) {
-      return reply.code(404).send({ ok: false, error: "job not found" });
+      throw new ApiError(404, "NOT_FOUND", "job not found");
     }
     return { ok: true, job };
   });
 
-  server.get<{ Params: { jobId: string } }>("/jobs/:jobId/log", async (request, reply) => {
+  server.get<{ Params: { jobId: string } }>("/jobs/:jobId/log", async (request) => {
     const log = await app.jobs.getJobLog(request.params.jobId);
     if (log === null) {
-      return reply.code(404).send({ ok: false, error: "job not found" });
+      throw new ApiError(404, "NOT_FOUND", "job not found");
     }
     return { ok: true, log };
   });
@@ -305,10 +350,10 @@ export async function startApiServer(): Promise<void> {
     schedules: app.automation.listSchedules(),
   }));
 
-  server.get<{ Params: { scheduleId: string } }>("/schedules/:scheduleId", async (request, reply) => {
+  server.get<{ Params: { scheduleId: string } }>("/schedules/:scheduleId", async (request) => {
     const schedule = app.automation.getSchedule(request.params.scheduleId);
     if (!schedule) {
-      return reply.code(404).send({ ok: false, error: "schedule not found" });
+      throw new ApiError(404, "NOT_FOUND", "schedule not found");
     }
     return { ok: true, schedule };
   });
@@ -321,7 +366,7 @@ export async function startApiServer(): Promise<void> {
       intervalMs?: number;
       cronExpr?: string;
     };
-  }>("/schedules", async (request, reply) => {
+  }>("/schedules", async (request) => {
     const id = request.body.id?.trim();
     const type = request.body.type?.trim();
     const enabled = request.body.enabled ?? true;
@@ -329,11 +374,11 @@ export async function startApiServer(): Promise<void> {
     const cronExpr = request.body.cronExpr?.trim();
 
     if (!id || !type) {
-      return reply.code(400).send({ ok: false, error: "id and type are required" });
+      throw new ApiError(400, "BAD_REQUEST", "id and type are required");
     }
 
     if (intervalMs != null && cronExpr) {
-      return reply.code(400).send({ ok: false, error: "provide either intervalMs or cronExpr" });
+      throw new ApiError(400, "BAD_REQUEST", "provide either intervalMs or cronExpr");
     }
 
     try {
@@ -348,9 +393,11 @@ export async function startApiServer(): Promise<void> {
       }
 
       if (intervalMs == null || !Number.isFinite(intervalMs) || intervalMs <= 0) {
-        return reply
-          .code(400)
-          .send({ ok: false, error: "intervalMs must be a positive number when cronExpr is not provided" });
+        throw new ApiError(
+          400,
+          "BAD_REQUEST",
+          "intervalMs must be a positive number when cronExpr is not provided",
+        );
       }
 
       const schedule = await app.automation.upsertIntervalSchedule({
@@ -361,27 +408,40 @@ export async function startApiServer(): Promise<void> {
       });
       return { ok: true, schedule };
     } catch (error) {
-      return reply
-        .code(400)
-        .send({ ok: false, error: error instanceof Error ? error.message : String(error) });
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError(400, "BAD_REQUEST", error instanceof Error ? error.message : String(error));
     }
   });
 
-  server.post<{ Params: { scheduleId: string } }>("/schedules/:scheduleId/pause", async (request, reply) => {
+  server.post<{ Params: { scheduleId: string } }>("/schedules/:scheduleId/pause", async (request) => {
     const schedule = await app.automation.setScheduleEnabled(request.params.scheduleId, false);
     if (!schedule) {
-      return reply.code(404).send({ ok: false, error: "schedule not found" });
+      throw new ApiError(404, "NOT_FOUND", "schedule not found");
     }
     return { ok: true, schedule };
   });
 
-  server.post<{ Params: { scheduleId: string } }>("/schedules/:scheduleId/resume", async (request, reply) => {
+  server.post<{ Params: { scheduleId: string } }>("/schedules/:scheduleId/resume", async (request) => {
     const schedule = await app.automation.setScheduleEnabled(request.params.scheduleId, true);
     if (!schedule) {
-      return reply.code(404).send({ ok: false, error: "schedule not found" });
+      throw new ApiError(404, "NOT_FOUND", "schedule not found");
     }
     return { ok: true, schedule };
   });
 
-  await server.listen({ host: app.config.host, port: app.config.port });
+  return server;
 }
+
+export async function startApiServer(): Promise<void> {
+  const app = await createKaelApp();
+  const server = createApiServer(app);
+  await server.listen({ host: app.config.host, port: app.config.port });
+  kaelLogger.info("api.server.started", {
+    host: app.config.host,
+    port: app.config.port,
+    engineMode: app.config.engineMode,
+  });
+}
+
