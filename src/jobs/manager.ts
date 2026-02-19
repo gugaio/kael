@@ -17,6 +17,10 @@ export class JobManager {
     return this.store.getStatusCounts();
   }
 
+  getRuntimeStats(): { activeJobs: number; queuedJobs: number; maxConcurrentJobs: number } {
+    return this.video.getRuntimeStats();
+  }
+
   getJob(jobId: string): VideoJob | null {
     return this.store.get(jobId);
   }

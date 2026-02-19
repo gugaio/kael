@@ -42,6 +42,9 @@ export type KaelConfig = {
     safePathsEnabled: boolean;
     allowedPaths: string[];
     maxJobArgs: number;
+    maxConcurrentJobs: number;
+    jobTimeoutMs: number;
+    killGraceMs: number;
   };
   pi: PiEngineConfig;
 };
@@ -142,6 +145,18 @@ function validateConfig(config: KaelConfig): void {
     issues.push("KAEL_MAX_JOB_ARGS deve ser um número positivo");
   }
 
+  if (!Number.isFinite(config.execution.maxConcurrentJobs) || config.execution.maxConcurrentJobs <= 0) {
+    issues.push("KAEL_MAX_CONCURRENT_JOBS deve ser um número positivo");
+  }
+
+  if (!Number.isFinite(config.execution.jobTimeoutMs) || config.execution.jobTimeoutMs <= 0) {
+    issues.push("KAEL_JOB_TIMEOUT_MS deve ser um número positivo");
+  }
+
+  if (!Number.isFinite(config.execution.killGraceMs) || config.execution.killGraceMs < 0) {
+    issues.push("KAEL_JOB_KILL_GRACE_MS deve ser zero ou positivo");
+  }
+
   if (issues.length > 0) {
     throw new ConfigValidationError(issues);
   }
@@ -236,6 +251,19 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
   const maxJobArgsRaw = Number(process.env.KAEL_MAX_JOB_ARGS ?? "24");
   const maxJobArgs = Number.isFinite(maxJobArgsRaw) && maxJobArgsRaw > 0 ? Math.floor(maxJobArgsRaw) : 24;
 
+  const maxConcurrentJobsRaw = Number(process.env.KAEL_MAX_CONCURRENT_JOBS ?? "2");
+  const maxConcurrentJobs =
+    Number.isFinite(maxConcurrentJobsRaw) && maxConcurrentJobsRaw > 0
+      ? Math.floor(maxConcurrentJobsRaw)
+      : 2;
+
+  const jobTimeoutRaw = Number(process.env.KAEL_JOB_TIMEOUT_MS ?? String(60 * 60 * 1000));
+  const jobTimeoutMs =
+    Number.isFinite(jobTimeoutRaw) && jobTimeoutRaw > 0 ? Math.floor(jobTimeoutRaw) : 60 * 60 * 1000;
+
+  const killGraceRaw = Number(process.env.KAEL_JOB_KILL_GRACE_MS ?? "3000");
+  const killGraceMs = Number.isFinite(killGraceRaw) && killGraceRaw >= 0 ? Math.floor(killGraceRaw) : 3000;
+
   const defaultTimeout = globalConfig?.defaults.pi.timeoutMs ?? 45000;
   const timeoutRaw = Number(process.env.KAEL_PI_TIMEOUT_MS ?? String(defaultTimeout));
   const timeoutMs = Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? timeoutRaw : defaultTimeout;
@@ -313,6 +341,9 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       safePathsEnabled,
       allowedPaths,
       maxJobArgs,
+      maxConcurrentJobs,
+      jobTimeoutMs,
+      killGraceMs,
     },
     pi,
   };

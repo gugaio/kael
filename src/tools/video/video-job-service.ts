@@ -1,7 +1,9 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import type { JobStore } from "../../jobs/store.js";
 import type { VideoJob, VideoJobType } from "../../types.js";
+import { kaelLogger } from "../../infra/logger.js";
 import type { ProcessRunner } from "../system/process-runner.js";
 import {
   validateExistingInputPath,
@@ -11,6 +13,7 @@ import {
 } from "./safety.js";
 
 type StartJobParams = {
+  id: string;
   type: VideoJobType;
   sessionKey: string;
   command: "ffmpeg" | "ffprobe";
@@ -20,6 +23,10 @@ type StartJobParams = {
 };
 
 export class VideoJobService {
+  private readonly queue: StartJobParams[] = [];
+  private readonly activeJobs: Map<string, ChildProcessWithoutNullStreams> = new Map();
+  private reservedSlots = 0;
+
   constructor(
     private readonly jobs: JobStore,
     private readonly runner: ProcessRunner,
@@ -27,8 +34,19 @@ export class VideoJobService {
       safePathsEnabled: boolean;
       allowedPaths: string[];
       maxJobArgs: number;
+      maxConcurrentJobs: number;
+      jobTimeoutMs: number;
+      killGraceMs: number;
     },
   ) {}
+
+  getRuntimeStats(): { activeJobs: number; queuedJobs: number; maxConcurrentJobs: number } {
+    return {
+      activeJobs: this.activeJobs.size + this.reservedSlots,
+      queuedJobs: this.queue.length,
+      maxConcurrentJobs: this.safety.maxConcurrentJobs,
+    };
+  }
 
   async startTranscode(params: {
     sessionKey: string;
@@ -164,12 +182,12 @@ export class VideoJobService {
     });
   }
 
-  private async startJob(params: StartJobParams): Promise<VideoJob> {
-    const jobId = crypto.randomUUID();
+  private async startJob(params: Omit<StartJobParams, "id">): Promise<VideoJob> {
+    const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
 
     const initial: VideoJob = {
-      id: jobId,
+      id,
       type: params.type,
       sessionKey: params.sessionKey,
       command: params.command,
@@ -178,49 +196,117 @@ export class VideoJobService {
       args: params.args,
       status: "queued",
       createdAt,
-      logPath: this.jobs.getLogPath(jobId),
+      logPath: this.jobs.getLogPath(id),
     };
 
     await this.jobs.create(initial);
-    await this.jobs.update(jobId, {
-      status: "running",
-      startedAt: new Date().toISOString(),
-    });
+    this.queue.push({ ...params, id });
+    this.drainQueue();
 
-    const { process } = this.runner.spawn(params.command, params.args);
-    const logStream = fs.createWriteStream(initial.logPath, { flags: "a" });
+    return initial;
+  }
 
-    process.stdout.on("data", (chunk) => {
-      logStream.write(chunk);
-    });
+  private drainQueue(): void {
+    while (this.activeJobs.size + this.reservedSlots < this.safety.maxConcurrentJobs) {
+      const next = this.queue.shift();
+      if (!next) {
+        return;
+      }
+      this.reservedSlots += 1;
+      void this.executeJob(next);
+    }
+  }
 
-    process.stderr.on("data", (chunk) => {
-      logStream.write(chunk);
-    });
+  private async executeJob(params: StartJobParams): Promise<void> {
+    try {
+      await this.jobs.update(params.id, {
+        status: "running",
+        startedAt: new Date().toISOString(),
+      });
 
-    process.on("error", async (error) => {
-      await this.jobs.update(jobId, {
+      const { process } = this.runner.spawn(params.command, params.args);
+      this.activeJobs.set(params.id, process);
+      this.reservedSlots = Math.max(0, this.reservedSlots - 1);
+      const logStream = fs.createWriteStream(this.jobs.getLogPath(params.id), { flags: "a" });
+
+      let timedOut = false;
+      const timeoutHandle = setTimeout(() => {
+        timedOut = true;
+        logStream.write(`\n[timeout] ${String(this.safety.jobTimeoutMs)}ms reached, sending SIGTERM\n`);
+        process.kill("SIGTERM");
+        const forceHandle = setTimeout(() => {
+          if (!process.killed) {
+            logStream.write("[timeout] process still alive, sending SIGKILL\n");
+            process.kill("SIGKILL");
+          }
+        }, this.safety.killGraceMs);
+        forceHandle.unref();
+      }, this.safety.jobTimeoutMs);
+      timeoutHandle.unref();
+
+      process.stdout.on("data", (chunk) => {
+        logStream.write(chunk);
+      });
+      process.stderr.on("data", (chunk) => {
+        logStream.write(chunk);
+      });
+
+      process.on("error", async (error) => {
+        clearTimeout(timeoutHandle);
+        this.activeJobs.delete(params.id);
+        await this.jobs.update(params.id, {
+          status: "failed",
+          endedAt: new Date().toISOString(),
+          error: error.message,
+        });
+        logStream.end(`\n[process-error] ${error.message}\n`);
+        kaelLogger.error("jobs.execution.failed", {
+          jobId: params.id,
+          type: params.type,
+          reason: "process_error",
+          message: error.message,
+        });
+        this.drainQueue();
+      });
+
+      process.on("close", async (code) => {
+        clearTimeout(timeoutHandle);
+        this.activeJobs.delete(params.id);
+        await this.jobs.update(params.id, {
+          status: code === 0 && !timedOut ? "succeeded" : "failed",
+          endedAt: new Date().toISOString(),
+          exitCode: code,
+          error:
+            code === 0 && !timedOut
+              ? undefined
+              : timedOut
+                ? `job timed out after ${String(this.safety.jobTimeoutMs)}ms`
+                : `${params.command} exited with code ${String(code)}`,
+        });
+        logStream.end(`\n[process-exit] code=${String(code)}\n`);
+
+        kaelLogger.info("jobs.execution.finished", {
+          jobId: params.id,
+          type: params.type,
+          exitCode: code,
+          timedOut,
+        });
+        this.drainQueue();
+      });
+    } catch (error) {
+      this.reservedSlots = Math.max(0, this.reservedSlots - 1);
+      await this.jobs.update(params.id, {
         status: "failed",
         endedAt: new Date().toISOString(),
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       });
-      logStream.end(`\n[process-error] ${error.message}\n`);
-    });
-
-    process.on("close", async (code) => {
-      await this.jobs.update(jobId, {
-        status: code === 0 ? "succeeded" : "failed",
-        endedAt: new Date().toISOString(),
-        exitCode: code,
-        error: code === 0 ? undefined : `${params.command} exited with code ${String(code)}`,
+      kaelLogger.error("jobs.execution.failed", {
+        jobId: params.id,
+        type: params.type,
+        reason: "setup_error",
+        message: error instanceof Error ? error.message : String(error),
       });
-      logStream.end(`\n[process-exit] code=${String(code)}\n`);
-    });
-
-    const current = this.jobs.get(jobId);
-    if (!current) {
-      throw new Error("Failed to create video job");
+      this.drainQueue();
     }
-    return current;
   }
 }

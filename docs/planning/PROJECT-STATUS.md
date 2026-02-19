@@ -197,6 +197,32 @@ Pendencias:
 Proximo passo recomendado:
 - Implementar controle de concorrencia e budget de runtime por job.
 
+### 2026-02-19 - Fase 5 (incremento): fila de execucao + timeout/cancelamento de jobs
+
+Resumo:
+- `VideoJobService` ganhou fila interna com semaforo de concorrencia.
+- Jobs agora respeitam limite global de workers concorrentes.
+- Timeout de execucao com cancelamento controlado (SIGTERM + grace + SIGKILL).
+- Health passou a expor metricas de runtime (`activeJobs`, `queuedJobs`, `maxConcurrentJobs`).
+
+Arquivos-chave:
+- `src/tools/video/video-job-service.ts`
+- `src/jobs/manager.ts`
+- `src/api/server.ts`
+- `src/config.ts`
+- `src/tools/video/video-job-service.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/tools/video/video-job-service.test.ts src/api/server.test.ts src/config.test.ts`
+
+Pendencias:
+- Tornar concorrencia e timeout configuraveis por tipo de job.
+- Expor cancelamento manual de job via API/CLI.
+
+Proximo passo recomendado:
+- Implementar endpoint/CLI de cancelamento de job e testes E2E de `/jobs/*`.
+
 ### 2026-02-19 - Fase 4.1 (hardening): contrato de erro, validacao de config e logs estruturados
 
 Resumo:

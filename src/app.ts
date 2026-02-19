@@ -34,6 +34,9 @@ export async function createKaelApp(): Promise<KaelApp> {
     safePathsEnabled: config.execution.safePathsEnabled,
     allowedPaths: config.execution.allowedPaths,
     maxJobArgs: config.execution.maxJobArgs,
+    maxConcurrentJobs: config.execution.maxConcurrentJobs,
+    jobTimeoutMs: config.execution.jobTimeoutMs,
+    killGraceMs: config.execution.killGraceMs,
   });
   const jobs = new JobManager(jobStore, video);
   const engine = createEngine(config);

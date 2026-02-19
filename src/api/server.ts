@@ -86,6 +86,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
   server.get("/health", async () => {
     const sessions = await app.sessions.countSessions();
     const jobsByStatus = app.jobs.getStatusCounts();
+    const runtimeJobs = app.jobs.getRuntimeStats();
     const schedules = app.automation.listSchedules();
     const enabledSchedules = schedules.filter((item) => item.enabled).length;
     const version = process.env.KAEL_VERSION?.trim() || process.env.npm_package_version || "0.1.0";
@@ -102,6 +103,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
         sessions,
         totalJobs: Object.values(jobsByStatus).reduce((sum, value) => sum + value, 0),
         jobsByStatus,
+        runtimeJobs,
         schedules: {
           total: schedules.length,
           enabled: enabledSchedules,

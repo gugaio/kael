@@ -32,6 +32,9 @@ function makeFakeApp(): KaelApp {
         safePathsEnabled: true,
         allowedPaths: ["/tmp"],
         maxJobArgs: 24,
+        maxConcurrentJobs: 2,
+        jobTimeoutMs: 60000,
+        killGraceMs: 3000,
       },
       pi: {
         enabled: true,
@@ -52,6 +55,11 @@ function makeFakeApp(): KaelApp {
         running: 2,
         succeeded: 3,
         failed: 4,
+      }),
+      getRuntimeStats: () => ({
+        activeJobs: 1,
+        queuedJobs: 2,
+        maxConcurrentJobs: 2,
       }),
       getJob: () => null,
       getJobLog: async () => null,
@@ -176,6 +184,7 @@ describe("API integration", () => {
     expect(body.metrics.sessions).toBe(2);
     expect(body.metrics.totalJobs).toBe(10);
     expect(body.metrics.jobsByStatus.failed).toBe(4);
+    expect(body.metrics.runtimeJobs.activeJobs).toBe(1);
     expect(body.metrics.schedules.total).toBeGreaterThan(0);
     await server.close();
   });

@@ -24,16 +24,26 @@ Evoluir robustez operacional com sinais de health reais e guardrails de seguranc
   - `KAEL_SAFE_PATHS_ENABLED`
   - `KAEL_ALLOWED_PATHS`
   - `KAEL_MAX_JOB_ARGS`
+- Runtime control para jobs:
+  - fila interna por capacidade
+  - limite de concorrencia (`KAEL_MAX_CONCURRENT_JOBS`)
+  - timeout de execucao (`KAEL_JOB_TIMEOUT_MS`)
+  - cancelamento controlado com grace period (`KAEL_JOB_KILL_GRACE_MS`)
+- Health com metricas de runtime dos workers:
+  - `metrics.runtimeJobs.activeJobs`
+  - `metrics.runtimeJobs.queuedJobs`
+  - `metrics.runtimeJobs.maxConcurrentJobs`
 
 ## Comportamento atual
 
 1. API responde health com snapshot objetivo do estado operacional.
 2. Jobs invalidos sao rejeitados antes de spawn do processo.
 3. Rotas de job retornam erro padrao de API quando validacao falha.
+4. Jobs entram em fila quando o limite de concorrencia e atingido.
+5. Jobs longos sao encerrados automaticamente ao ultrapassar timeout configurado.
 
 ## Proximos incrementos recomendados
 
-- Limites de concorrencia por tipo de job.
-- Timeout por tipo de job e cancelamento controlado.
+- Limites de concorrencia por tipo de job (atualmente o limite e global).
+- Timeout por tipo de job (atualmente o timeout e global).
 - Testes de integracao para `/jobs/*` cobrindo cenarios de falha de seguranca.
-

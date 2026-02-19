@@ -159,6 +159,9 @@ Se a mesma chave for reutilizada com payload diferente, a API retorna `409`.
 - `KAEL_SAFE_PATHS_ENABLED` (default: `true`)
 - `KAEL_ALLOWED_PATHS` (default: `<cwd>,<dataDir>,/tmp`)
 - `KAEL_MAX_JOB_ARGS` (default: `24`)
+- `KAEL_MAX_CONCURRENT_JOBS` (default: `2`)
+- `KAEL_JOB_TIMEOUT_MS` (default: `3600000`)
+- `KAEL_JOB_KILL_GRACE_MS` (default: `3000`)
 
 ### Runtime do PI
 
@@ -182,6 +185,7 @@ Observacao: `KAEL_ENGINE_MODE=pi|hybrid` exige `KAEL_PI_API_KEY`; configuracoes 
 - Eventos HTTP incluem `requestId`, rota, status e duracao.
 - Eventos de scheduler incluem `scheduleId`, tipo, `durationMs` e status de execucao.
 - `GET /health` inclui `uptimeSec` e metricas agregadas de sessoes/jobs/schedules.
+- `GET /health` inclui `metrics.runtimeJobs` (`activeJobs`, `queuedJobs`, `maxConcurrentJobs`).
 
 ## Seguranca de execucao (jobs)
 
@@ -189,6 +193,8 @@ Observacao: `KAEL_ENGINE_MODE=pi|hybrid` exige `KAEL_PI_API_KEY`; configuracoes 
 - Bloqueio de paths fora das roots permitidas (quando `KAEL_SAFE_PATHS_ENABLED=true`).
 - Validacao de stream URL (`http`, `https`, `rtsp`, `rtmp`, `udp`).
 - Limite de args custom e bloqueio de flags criticas em args de usuario (`-i`, `-y`).
+- Controle de concorrencia por fila interna (`KAEL_MAX_CONCURRENT_JOBS`).
+- Timeout por job com cancelamento controlado (`SIGTERM` seguido de `SIGKILL` apos grace period, se necessario).
 
 ## Config global (~/.kael)
 
