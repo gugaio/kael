@@ -38,6 +38,11 @@ export type KaelConfig = {
     heartbeatIntervalMs: number;
     schedulerTickMs: number;
   };
+  execution: {
+    safePathsEnabled: boolean;
+    allowedPaths: string[];
+    maxJobArgs: number;
+  };
   pi: PiEngineConfig;
 };
 
@@ -129,6 +134,14 @@ function validateConfig(config: KaelConfig): void {
     issues.push("KAEL_HEARTBEAT_INTERVAL_MS deve ser um número positivo");
   }
 
+  if (config.execution.safePathsEnabled && config.execution.allowedPaths.length === 0) {
+    issues.push("KAEL_ALLOWED_PATHS deve conter ao menos 1 caminho quando safe paths estiver habilitado");
+  }
+
+  if (!Number.isFinite(config.execution.maxJobArgs) || config.execution.maxJobArgs <= 0) {
+    issues.push("KAEL_MAX_JOB_ARGS deve ser um número positivo");
+  }
+
   if (issues.length > 0) {
     throw new ConfigValidationError(issues);
   }
@@ -209,6 +222,20 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       ? Math.floor(schedulerTickRaw)
       : defaultSchedulerTickMs;
 
+  const safePathsEnabledRaw = process.env.KAEL_SAFE_PATHS_ENABLED?.trim() ?? "true";
+  const safePathsEnabled = safePathsEnabledRaw.toLowerCase() !== "false";
+
+  const allowedPathsRaw =
+    process.env.KAEL_ALLOWED_PATHS?.trim() || [cwd, dataDir, "/tmp"].join(",");
+  const allowedPaths = allowedPathsRaw
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .map((value) => expandHome(value));
+
+  const maxJobArgsRaw = Number(process.env.KAEL_MAX_JOB_ARGS ?? "24");
+  const maxJobArgs = Number.isFinite(maxJobArgsRaw) && maxJobArgsRaw > 0 ? Math.floor(maxJobArgsRaw) : 24;
+
   const defaultTimeout = globalConfig?.defaults.pi.timeoutMs ?? 45000;
   const timeoutRaw = Number(process.env.KAEL_PI_TIMEOUT_MS ?? String(defaultTimeout));
   const timeoutMs = Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? timeoutRaw : defaultTimeout;
@@ -281,6 +308,11 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       heartbeatEnabled,
       heartbeatIntervalMs,
       schedulerTickMs,
+    },
+    execution: {
+      safePathsEnabled,
+      allowedPaths,
+      maxJobArgs,
     },
     pi,
   };

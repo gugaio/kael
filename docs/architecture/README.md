@@ -8,6 +8,7 @@ Esta pasta descreve a evolucao arquitetural do Kael de forma incremental.
 - `docs/architecture/phases/phase-2.md` - Engine hibrida + runtime de video expandido
 - `docs/architecture/phases/phase-3.md` - Resiliencia operacional
 - `docs/architecture/phases/phase-4.md` - Autonomia (heartbeat + scheduler persistente)
+- `docs/architecture/phases/phase-5.md` - Hardening e observabilidade operacional
 
 ## Como usar
 

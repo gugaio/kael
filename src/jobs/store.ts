@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { VideoJob } from "../types.js";
+import type { JobStatus, VideoJob } from "../types.js";
 import { ensureDir, readJsonFile, writeJsonFile } from "../infra/fs.js";
 
 type JobIndex = {
@@ -51,6 +51,19 @@ export class JobStore {
 
   list(): VideoJob[] {
     return Array.from(this.jobs.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  getStatusCounts(): Record<JobStatus, number> {
+    const counts: Record<JobStatus, number> = {
+      queued: 0,
+      running: 0,
+      succeeded: 0,
+      failed: 0,
+    };
+    for (const job of this.jobs.values()) {
+      counts[job.status] += 1;
+    }
+    return counts;
   }
 
   private async persist(): Promise<void> {

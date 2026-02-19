@@ -3,6 +3,12 @@ import fs from "node:fs";
 import type { JobStore } from "../../jobs/store.js";
 import type { VideoJob, VideoJobType } from "../../types.js";
 import type { ProcessRunner } from "../system/process-runner.js";
+import {
+  validateExistingInputPath,
+  validateOutputPath,
+  validateStreamUrl,
+  validateUserArgs,
+} from "./safety.js";
 
 type StartJobParams = {
   type: VideoJobType;
@@ -17,6 +23,11 @@ export class VideoJobService {
   constructor(
     private readonly jobs: JobStore,
     private readonly runner: ProcessRunner,
+    private readonly safety: {
+      safePathsEnabled: boolean;
+      allowedPaths: string[];
+      maxJobArgs: number;
+    },
   ) {}
 
   async startTranscode(params: {
@@ -25,7 +36,20 @@ export class VideoJobService {
     outputPath: string;
     args?: string[];
   }): Promise<VideoJob> {
-    const codecArgs = params.args ?? ["-c:v", "libx264", "-c:a", "aac"];
+    await validateExistingInputPath({
+      value: params.inputPath,
+      label: "inputPath",
+      allowedRoots: this.safety.allowedPaths,
+      safePathsEnabled: this.safety.safePathsEnabled,
+    });
+    validateOutputPath({
+      value: params.outputPath,
+      label: "outputPath",
+      allowedRoots: this.safety.allowedPaths,
+      safePathsEnabled: this.safety.safePathsEnabled,
+    });
+    const userArgs = validateUserArgs(params.args, this.safety.maxJobArgs);
+    const codecArgs = userArgs.length > 0 ? userArgs : ["-c:v", "libx264", "-c:a", "aac"];
     return this.startJob({
       type: "transcode",
       sessionKey: params.sessionKey,
@@ -42,6 +66,19 @@ export class VideoJobService {
     outputPlaylistPath: string;
     segmentTime?: number;
   }): Promise<VideoJob> {
+    await validateExistingInputPath({
+      value: params.inputPath,
+      label: "inputPath",
+      allowedRoots: this.safety.allowedPaths,
+      safePathsEnabled: this.safety.safePathsEnabled,
+    });
+    validateOutputPath({
+      value: params.outputPlaylistPath,
+      label: "outputPlaylistPath",
+      allowedRoots: this.safety.allowedPaths,
+      safePathsEnabled: this.safety.safePathsEnabled,
+    });
+
     const segmentTime = Number.isFinite(params.segmentTime) && (params.segmentTime ?? 0) > 0
       ? Math.floor(params.segmentTime ?? 10)
       : 10;
@@ -77,9 +114,17 @@ export class VideoJobService {
     outputPath: string;
     durationSeconds?: number;
   }): Promise<VideoJob> {
+    validateStreamUrl(params.streamUrl);
+    validateOutputPath({
+      value: params.outputPath,
+      label: "outputPath",
+      allowedRoots: this.safety.allowedPaths,
+      safePathsEnabled: this.safety.safePathsEnabled,
+    });
+
     const durationArgs =
       Number.isFinite(params.durationSeconds) && (params.durationSeconds ?? 0) > 0
-        ? ["-t", String(Math.floor(params.durationSeconds ?? 0))]
+        ? ["-t", String(Math.min(21600, Math.floor(params.durationSeconds ?? 0)))]
         : [];
 
     return this.startJob({
@@ -96,6 +141,12 @@ export class VideoJobService {
     sessionKey: string;
     inputPath: string;
   }): Promise<VideoJob> {
+    await validateExistingInputPath({
+      value: params.inputPath,
+      label: "inputPath",
+      allowedRoots: this.safety.allowedPaths,
+      safePathsEnabled: this.safety.safePathsEnabled,
+    });
     return this.startJob({
       type: "probe_media",
       sessionKey: params.sessionKey,

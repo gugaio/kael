@@ -30,7 +30,11 @@ export async function createKaelApp(): Promise<KaelApp> {
   await jobStore.init();
 
   const runner = new LocalProcessRunner();
-  const video = new VideoJobService(jobStore, runner);
+  const video = new VideoJobService(jobStore, runner, {
+    safePathsEnabled: config.execution.safePathsEnabled,
+    allowedPaths: config.execution.allowedPaths,
+    maxJobArgs: config.execution.maxJobArgs,
+  });
   const jobs = new JobManager(jobStore, video);
   const engine = createEngine(config);
   const orchestrator = new TurnOrchestrator(sessions, engine, {

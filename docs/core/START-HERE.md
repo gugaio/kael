@@ -20,7 +20,8 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 1: concluida.
 - Fase 2: concluida (engine hibrida + tools de video).
 - Fase 3: concluida (resiliencia operacional).
-- Fase 4: em andamento (autonomia: heartbeat + scheduler persistente + schedules API/CLI).
+- Fase 4: concluida (autonomia: heartbeat + scheduler persistente + schedules API/CLI).
+- Fase 5: em andamento (hardening: observabilidade + seguranca de execucao).
 
 ## Estudos e referencias tecnicas
 

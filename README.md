@@ -156,6 +156,9 @@ Se a mesma chave for reutilizada com payload diferente, a API retorna `409`.
 - `KAEL_HEARTBEAT_ENABLED` (default: `true`)
 - `KAEL_HEARTBEAT_INTERVAL_MS` (default: `30000`)
 - `KAEL_SCHEDULER_TICK_MS` (default: `1000`)
+- `KAEL_SAFE_PATHS_ENABLED` (default: `true`)
+- `KAEL_ALLOWED_PATHS` (default: `<cwd>,<dataDir>,/tmp`)
+- `KAEL_MAX_JOB_ARGS` (default: `24`)
 
 ### Runtime do PI
 
@@ -178,6 +181,14 @@ Observacao: `KAEL_ENGINE_MODE=pi|hybrid` exige `KAEL_PI_API_KEY`; configuracoes 
 - Logs em JSON no `stdout`.
 - Eventos HTTP incluem `requestId`, rota, status e duracao.
 - Eventos de scheduler incluem `scheduleId`, tipo, `durationMs` e status de execucao.
+- `GET /health` inclui `uptimeSec` e metricas agregadas de sessoes/jobs/schedules.
+
+## Seguranca de execucao (jobs)
+
+- Validacao de input/output path antes de spawn.
+- Bloqueio de paths fora das roots permitidas (quando `KAEL_SAFE_PATHS_ENABLED=true`).
+- Validacao de stream URL (`http`, `https`, `rtsp`, `rtmp`, `udp`).
+- Limite de args custom e bloqueio de flags criticas em args de usuario (`-i`, `-y`).
 
 ## Config global (~/.kael)
 

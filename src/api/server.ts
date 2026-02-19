@@ -83,13 +83,33 @@ export function createApiServer(app: KaelApp): FastifyInstance {
     return sendApiError(reply, request, apiError);
   });
 
-  server.get("/health", async () => ({
-    ok: true,
-    service: "kael",
-    now: new Date().toISOString(),
-    engineMode: app.config.engineMode,
-    piEnabled: app.config.pi.enabled,
-  }));
+  server.get("/health", async () => {
+    const sessions = await app.sessions.countSessions();
+    const jobsByStatus = app.jobs.getStatusCounts();
+    const schedules = app.automation.listSchedules();
+    const enabledSchedules = schedules.filter((item) => item.enabled).length;
+    const version = process.env.KAEL_VERSION?.trim() || process.env.npm_package_version || "0.1.0";
+
+    return {
+      ok: true,
+      service: "kael",
+      version,
+      now: new Date().toISOString(),
+      uptimeSec: Math.floor(process.uptime()),
+      engineMode: app.config.engineMode,
+      piEnabled: app.config.pi.enabled,
+      metrics: {
+        sessions,
+        totalJobs: Object.values(jobsByStatus).reduce((sum, value) => sum + value, 0),
+        jobsByStatus,
+        schedules: {
+          total: schedules.length,
+          enabled: enabledSchedules,
+          disabled: schedules.length - enabledSchedules,
+        },
+      },
+    };
+  });
 
   server.post<{
     Body: { sessionKey?: string; message?: string };
@@ -444,4 +464,3 @@ export async function startApiServer(): Promise<void> {
     engineMode: app.config.engineMode,
   });
 }
-

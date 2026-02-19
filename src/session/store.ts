@@ -86,6 +86,11 @@ export class SessionStore {
     return entry;
   }
 
+  async countSessions(): Promise<number> {
+    const index = await this.readIndex();
+    return Object.keys(index).length;
+  }
+
   private async getOrCreateSession(sessionKey: string): Promise<SessionEntry> {
     const index = await this.readIndex();
     const existing = index[sessionKey];

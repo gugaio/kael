@@ -28,6 +28,11 @@ function makeFakeApp(): KaelApp {
         heartbeatIntervalMs: 30_000,
         schedulerTickMs: 1_000,
       },
+      execution: {
+        safePathsEnabled: true,
+        allowedPaths: ["/tmp"],
+        maxJobArgs: 24,
+      },
       pi: {
         enabled: true,
         provider: "openai",
@@ -37,9 +42,17 @@ function makeFakeApp(): KaelApp {
         retry: { attempts: 2, baseDelayMs: 10, maxDelayMs: 50, jitterMs: 10 },
       },
     },
-    sessions: {} as KaelApp["sessions"],
+    sessions: {
+      countSessions: async () => 2,
+    } as unknown as KaelApp["sessions"],
     jobs: {
       listJobs: () => [],
+      getStatusCounts: () => ({
+        queued: 1,
+        running: 2,
+        succeeded: 3,
+        failed: 4,
+      }),
       getJob: () => null,
       getJobLog: async () => null,
       startTranscode: async () => ({ id: "j1" }),
@@ -144,6 +157,26 @@ describe("API integration", () => {
     expect(body.error.status).toBe(400);
     expect(typeof body.error.message).toBe("string");
     expect(typeof body.error.requestId).toBe("string");
+    await server.close();
+  });
+
+  it("returns enriched /health metrics", async () => {
+    const server = createApiServer(makeFakeApp());
+    const response = await server.inject({
+      method: "GET",
+      url: "/health",
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.ok).toBe(true);
+    expect(body.service).toBe("kael");
+    expect(typeof body.version).toBe("string");
+    expect(typeof body.uptimeSec).toBe("number");
+    expect(body.metrics.sessions).toBe(2);
+    expect(body.metrics.totalJobs).toBe(10);
+    expect(body.metrics.jobsByStatus.failed).toBe(4);
+    expect(body.metrics.schedules.total).toBeGreaterThan(0);
     await server.close();
   });
 

@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import type { VideoJob } from "../types.js";
+import type { JobStatus, VideoJob } from "../types.js";
 import type { JobStore } from "./store.js";
 import type { VideoJobService } from "../tools/video/video-job-service.js";
 
@@ -11,6 +11,10 @@ export class JobManager {
 
   listJobs(): VideoJob[] {
     return this.store.list();
+  }
+
+  getStatusCounts(): Record<JobStatus, number> {
+    return this.store.getStatusCounts();
   }
 
   getJob(jobId: string): VideoJob | null {

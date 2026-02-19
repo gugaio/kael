@@ -136,7 +136,7 @@ Definition of Done (checklist):
 
 ### Fase 4 - Autonomia (Heartbeat + Cron)
 
-Status: **Em andamento**
+Status: **Concluida**
 
 Objetivos:
 - Heartbeat produtivo (nao so ACK).
@@ -153,7 +153,7 @@ Definition of Done (checklist):
 
 ### Fase 5 - Hardening e Observabilidade
 
-Status: **Planejada**
+Status: **Em andamento**
 
 Objetivos:
 - Testes (unit/integration/e2e).
@@ -162,12 +162,40 @@ Objetivos:
 
 Definition of Done (checklist):
 - [ ] Suite minima de testes unitarios para stores/engine/jobs.
-- [ ] Testes de integracao de API (chat + jobs).
-- [ ] Logs estruturados com contexto de sessao/job.
-- [ ] Health endpoint com sinais operacionais.
-- [ ] Politica de execucao segura documentada e aplicada.
+- [x] Testes de integracao de API (chat + jobs).
+- [x] Logs estruturados com contexto de sessao/job.
+- [x] Health endpoint com sinais operacionais.
+- [x] Politica de execucao segura documentada e aplicada.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-02-19 - Fase 5 (incremento): health enriquecido + guardrails de execucao
+
+Resumo:
+- `GET /health` evoluido com metricas operacionais de sessoes, jobs e schedules.
+- Guardrails de seguranca para jobs de video (paths/URLs/args) com erro de validacao dedicado.
+- Config de seguranca adicionada com env vars para roots permitidos e limite de args.
+- Testes adicionados para safety e health.
+
+Arquivos-chave:
+- `src/tools/video/safety.ts`
+- `src/tools/video/video-job-service.ts`
+- `src/api/server.ts`
+- `src/jobs/store.ts`
+- `src/session/store.ts`
+- `src/tools/video/safety.test.ts`
+- `src/api/server.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Limite de concorrencia e timeout por tipo de job.
+- Testes de integracao HTTP focados em falha de seguranca nas rotas `/jobs/*`.
+
+Proximo passo recomendado:
+- Implementar controle de concorrencia e budget de runtime por job.
 
 ### 2026-02-19 - Fase 4.1 (hardening): contrato de erro, validacao de config e logs estruturados
 
