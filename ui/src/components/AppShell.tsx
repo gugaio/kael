@@ -17,7 +17,7 @@ export function AppShell(props: { children: ReactNode }): JSX.Element {
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-kael-muted">Kael Operator Console</p>
-              <h1 className="text-2xl font-bold">Kael UI</h1>
+              <h1 className="text-2xl font-bold">Kael</h1>
             </div>
             <nav className="flex flex-wrap gap-2">
               {navItems.map((item) => (

@@ -238,6 +238,29 @@ Pendencias:
 Proximo passo recomendado:
 - Fase 7: stream realtime de eventos (`/events/stream`) e log follow para jobs/processos.
 
+### 2026-02-20 - Fase 6.2: hardening de approvals/policy (staff pass)
+
+Resumo:
+- Policy de allowlist endurecida: bloqueio explicito de sintaxe shell avancada em `security=allowlist`.
+- `exec-approvals.json` com escrita atomica e lock para reduzir risco de corrida.
+- Novos testes de fluxo completo no `ShellToolService` (approve/deny com espera real de decisao).
+
+Arquivos-chave:
+- `src/tools/system/shell-approvals.ts`
+- `src/tools/system/shell-tool-service.ts`
+- `src/tools/system/shell-approvals.test.ts`
+- `src/tools/system/shell-tool-service.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Stream realtime (SSE/WebSocket) para reduzir polling de approvals/processos.
+
+Proximo passo recomendado:
+- Fase 7: `/events/stream` + log follow realtime.
+
 ### 2026-02-19 - UI-1 (bootstrap): base frontend ops-first em `ui/`
 
 Resumo:

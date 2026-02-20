@@ -202,13 +202,21 @@ export class ShellToolService {
       pending.status = "running";
       pending.outputTail = "";
       pending.endedAt = undefined;
-      return this.startProcess({
+      const started = this.startProcess({
         sessionKey: params.sessionKey,
         command,
         cwd,
         timeoutMs,
         existingSession: pending,
       });
+      if (params.background) {
+        return started;
+      }
+      const startedActive = this.active.get(started.id);
+      if (!startedActive) {
+        return started;
+      }
+      return startedActive.completion;
     }
 
     const session = this.startProcess({

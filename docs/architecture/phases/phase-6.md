@@ -29,6 +29,11 @@ Dar capacidade real de shell ao Kael no engine PI, com controle de processo e po
   - CLI: `approvals`, `approval-approve`, `approval-deny`
   - UI: painel de approvals no `Ops Overview` com botoes de approve/deny
   - `exec` passa a aguardar decisao manual por janela configuravel (`KAEL_EXEC_APPROVAL_WAIT_MS`)
+- Hardening de policy/infra:
+  - parser de allowlist mais conservador (bloqueia redirecionamento, subshell, operadores logicos e multiline em `allowlist`)
+  - escrita atomica de `exec-approvals.json` (`tmp + rename`)
+  - lock interno para serializar alteracoes e reduzir risco de corrida em read-modify-write
+  - testes de fluxo completo: `exec -> approval-pending -> approve/deny -> resultado final`
 
 ## Arquivos-chave
 

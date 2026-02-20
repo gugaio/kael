@@ -51,6 +51,14 @@ export type ExecApprovalStoreDefaults = {
 
 const DEFAULT_PENDING_TTL_MS = 10 * 60 * 1000;
 const MAX_APPROVAL_HISTORY = 300;
+const UNSUPPORTED_ALLOWLIST_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
+  { pattern: /&&|\|\|/, reason: "operadores logicos (&&, ||) nao sao permitidos em allowlist" },
+  { pattern: /[;<>()]/, reason: "encadeamento/subshell nao e permitido em allowlist" },
+  { pattern: /(^|[^\\])`/, reason: "backticks nao sao permitidos em allowlist" },
+  { pattern: /\$\(|\$\{/, reason: "substituicao de shell nao e permitida em allowlist" },
+  { pattern: /(^|[^\\])[<>]/, reason: "redirecionamento nao e permitido em allowlist" },
+  { pattern: /\r|\n/, reason: "multiline nao e permitido em allowlist" },
+];
 
 function normalizeAllowlist(allowlist: string[]): string[] {
   return Array.from(
@@ -146,7 +154,7 @@ export function extractCommandBins(command: string): string[] {
   }
 
   const segments = normalized
-    .split(/\|\||&&|\||;/g)
+    .split(/\|/g)
     .map((part) => part.trim())
     .filter((part) => part.length > 0);
 
@@ -165,24 +173,45 @@ export function extractCommandBins(command: string): string[] {
   return Array.from(new Set(bins));
 }
 
+function analyzeAllowlistCommand(command: string): { ok: true; bins: string[] } | { ok: false; reason: string } {
+  const normalized = command.trim();
+  if (!normalized) {
+    return { ok: false, reason: "comando vazio" };
+  }
+  for (const rule of UNSUPPORTED_ALLOWLIST_PATTERNS) {
+    if (rule.pattern.test(normalized)) {
+      return { ok: false, reason: rule.reason };
+    }
+  }
+  const bins = extractCommandBins(normalized);
+  if (bins.length === 0) {
+    return { ok: false, reason: "nao foi possivel identificar comando executavel" };
+  }
+  return { ok: true, bins };
+}
+
 function sortByCreatedDesc(entries: ExecApprovalEntry[]): ExecApprovalEntry[] {
   return [...entries].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
 
 export class ExecApprovalStore {
+  private lock: Promise<void> = Promise.resolve();
+
   constructor(
     private readonly filePath: string,
     private readonly defaults: ExecApprovalStoreDefaults,
   ) {}
 
   async init(): Promise<void> {
-    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
-    const current = await this.readCurrent();
-    await this.writeCurrent(current);
+    await this.withLock(async () => {
+      await fs.mkdir(path.dirname(this.filePath), { recursive: true });
+      const current = await this.readCurrentUnlocked();
+      await this.writeCurrentUnlocked(current);
+    });
   }
 
   async getPolicy(): Promise<ExecPolicy> {
-    const current = await this.readCurrent();
+    const current = await this.withLock(() => this.readCurrentUnlocked());
     return {
       security: current.security,
       ask: current.ask,
@@ -194,7 +223,7 @@ export class ExecApprovalStore {
     status?: ExecApprovalStatus | "open";
     limit?: number;
   }): Promise<ExecApprovalEntry[]> {
-    const current = await this.readCurrent();
+    const current = await this.withLock(() => this.readCurrentUnlocked());
     const limit = Number.isFinite(params?.limit) && (params?.limit ?? 0) > 0 ? Math.floor(params?.limit ?? 0) : 100;
 
     const filtered = current.pending.filter((entry) => {
@@ -211,32 +240,34 @@ export class ExecApprovalStore {
   }
 
   async resolveApproval(approvalId: string, decision: "approved" | "denied"): Promise<ExecApprovalEntry | null> {
-    const current = await this.readCurrent();
-    const idx = current.pending.findIndex((entry) => entry.id === approvalId);
-    if (idx < 0) {
-      return null;
-    }
+    return this.withLock(async () => {
+      const current = await this.readCurrentUnlocked();
+      const idx = current.pending.findIndex((entry) => entry.id === approvalId);
+      if (idx < 0) {
+        return null;
+      }
 
-    const target = current.pending[idx];
-    if (target.status !== "pending") {
-      return target;
-    }
+      const target = current.pending[idx];
+      if (target.status !== "pending") {
+        return target;
+      }
 
-    const decided: ExecApprovalEntry = {
-      ...target,
-      status: decision,
-      decidedAt: new Date().toISOString(),
-    };
+      const decided: ExecApprovalEntry = {
+        ...target,
+        status: decision,
+        decidedAt: new Date().toISOString(),
+      };
 
-    const nextEntries = [...current.pending];
-    nextEntries[idx] = decided;
-    await this.writeCurrent({
-      ...current,
-      pending: nextEntries.slice(-MAX_APPROVAL_HISTORY),
-      updatedAt: new Date().toISOString(),
+      const nextEntries = [...current.pending];
+      nextEntries[idx] = decided;
+      await this.writeCurrentUnlocked({
+        ...current,
+        pending: nextEntries.slice(-MAX_APPROVAL_HISTORY),
+        updatedAt: new Date().toISOString(),
+      });
+
+      return decided;
     });
-
-    return decided;
   }
 
   async waitForDecision(
@@ -248,7 +279,7 @@ export class ExecApprovalStore {
     const startedAt = Date.now();
 
     while (Date.now() - startedAt < timeoutMs) {
-      const current = await this.readCurrent();
+      const current = await this.withLock(() => this.readCurrentUnlocked());
       const entry = current.pending.find((item) => item.id === approvalId);
       if (!entry) {
         return {
@@ -284,65 +315,93 @@ export class ExecApprovalStore {
     askOverride?: ExecAsk;
     securityOverride?: ExecSecurity;
   }): Promise<ExecPendingDecision | null> {
-    const current = await this.readCurrent();
-    const security = params.securityOverride ?? current.security;
-    const ask = params.askOverride ?? current.ask;
-    const bins = extractCommandBins(params.command);
+    return this.withLock(async () => {
+      const current = await this.readCurrentUnlocked();
+      const security = params.securityOverride ?? current.security;
+      const ask = params.askOverride ?? current.ask;
+      const allowlistAnalysis = analyzeAllowlistCommand(params.command);
+      const bins = allowlistAnalysis.ok ? allowlistAnalysis.bins : [];
 
-    if (security === "deny") {
-      return { status: "denied", reason: "Exec bloqueado: security=deny" };
-    }
+      if (security === "deny") {
+        return { status: "denied", reason: "Exec bloqueado: security=deny" };
+      }
 
-    const allowedByAllowlist =
-      security === "full" || (bins.length > 0 && bins.every((bin) => current.allowlist.includes(bin)));
+      const allowedByAllowlist =
+        security === "full" ||
+        (allowlistAnalysis.ok && bins.every((bin) => current.allowlist.includes(bin)));
 
-    if (allowedByAllowlist && ask !== "always") {
-      return null;
-    }
+      const missingBins = bins.filter((bin) => !current.allowlist.includes(bin));
+      const allowlistReason = !allowlistAnalysis.ok
+        ? allowlistAnalysis.reason
+        : missingBins.length > 0
+          ? `comando fora da allowlist: ${missingBins.join(", ")}`
+          : "comando requer aprovacao por politica ask";
 
-    if (!allowedByAllowlist && ask === "off") {
-      return {
-        status: "denied",
-        reason: `Comando fora da allowlist: ${bins.join(", ") || "(sem comando identificavel)"}`,
+      if (allowedByAllowlist && ask !== "always") {
+        return null;
+      }
+
+      if (!allowedByAllowlist && ask === "off") {
+        return {
+          status: "denied",
+          reason: allowlistReason,
+        };
+      }
+
+      const approvalId = randomUUID();
+      const now = Date.now();
+      const pending: ExecApprovalEntry = {
+        id: approvalId,
+        command: params.command,
+        cwd: params.cwd,
+        createdAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + DEFAULT_PENDING_TTL_MS).toISOString(),
+        status: "pending",
       };
-    }
 
-    const approvalId = randomUUID();
-    const now = Date.now();
-    const pending: ExecApprovalEntry = {
-      id: approvalId,
-      command: params.command,
-      cwd: params.cwd,
-      createdAt: new Date(now).toISOString(),
-      expiresAt: new Date(now + DEFAULT_PENDING_TTL_MS).toISOString(),
-      status: "pending",
-    };
+      await this.writeCurrentUnlocked({
+        ...current,
+        pending: [...current.pending, pending].slice(-MAX_APPROVAL_HISTORY),
+        updatedAt: new Date().toISOString(),
+      });
 
-    await this.writeCurrent({
-      ...current,
-      pending: [...current.pending, pending].slice(-MAX_APPROVAL_HISTORY),
-      updatedAt: new Date().toISOString(),
+      return {
+        status: "approval-pending",
+        approvalId,
+        reason: `Comando requer aprovacao manual (exec-approvals): ${allowlistReason}.`,
+      };
     });
-
-    return {
-      status: "approval-pending",
-      approvalId,
-      reason: "Comando requer aprovacao manual (exec-approvals).",
-    };
   }
 
-  private async readCurrent(): Promise<ExecApprovalsFile> {
+  private async readCurrentUnlocked(): Promise<ExecApprovalsFile> {
     try {
       const raw = await fs.readFile(this.filePath, "utf-8");
       return sanitizeFile(JSON.parse(raw), this.defaults);
     } catch {
       const fallback = defaultFile(this.defaults);
-      await this.writeCurrent(fallback);
+      await this.writeCurrentUnlocked(fallback);
       return fallback;
     }
   }
 
-  private async writeCurrent(next: ExecApprovalsFile): Promise<void> {
-    await fs.writeFile(this.filePath, JSON.stringify(next, null, 2), "utf-8");
+  private async writeCurrentUnlocked(next: ExecApprovalsFile): Promise<void> {
+    const dir = path.dirname(this.filePath);
+    const tmpPath = path.join(dir, `${path.basename(this.filePath)}.tmp-${randomUUID()}`);
+    await fs.writeFile(tmpPath, JSON.stringify(next, null, 2), "utf-8");
+    await fs.rename(tmpPath, this.filePath);
+  }
+
+  private async withLock<T>(fn: () => Promise<T>): Promise<T> {
+    const previous = this.lock;
+    let release: () => void = () => {};
+    this.lock = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
   }
 }

@@ -30,8 +30,8 @@ afterEach(async () => {
 });
 
 describe("extractCommandBins", () => {
-  it("extrai bins de pipelines e comandos encadeados", () => {
-    expect(extractCommandBins("ls -la | grep foo && cat file.txt")).toEqual(["ls", "grep", "cat"]);
+  it("extrai bins de pipelines", () => {
+    expect(extractCommandBins("ls -la | grep foo | cat")).toEqual(["ls", "grep", "cat"]);
   });
 
   it("normaliza path para basename", () => {
@@ -75,6 +75,23 @@ describe("ExecApprovalStore", () => {
   it("full com ask=off permite qualquer comando", async () => {
     const { store } = await createStore({ security: "full", ask: "off" });
     const decision = await store.evaluateCommand({ command: "unknown_bin --x", cwd: "/tmp" });
+    expect(decision).toBeNull();
+  });
+
+  it("bloqueia sintaxe shell avancada em allowlist quando ask=off", async () => {
+    const { store } = await createStore({ security: "allowlist", ask: "off", allowlist: ["cat"] });
+    const decision = await store.evaluateCommand({ command: "cat a.txt; cat b.txt", cwd: "/tmp" });
+    expect(decision?.status).toBe("denied");
+    expect(decision?.reason).toContain("nao e permitido");
+  });
+
+  it("permite pipeline simples quando bins estao na allowlist", async () => {
+    const { store } = await createStore({
+      security: "allowlist",
+      ask: "off",
+      allowlist: ["cat", "grep"],
+    });
+    const decision = await store.evaluateCommand({ command: "cat a.txt | grep foo", cwd: "/tmp" });
     expect(decision).toBeNull();
   });
 
