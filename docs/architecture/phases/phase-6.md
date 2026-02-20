@@ -24,6 +24,11 @@ Dar capacidade real de shell ao Kael no engine PI, com controle de processo e po
   - modos `security`: `deny | allowlist | full`
   - modos `ask`: `off | on-miss | always`
   - comandos fora da allowlist podem gerar `approval-pending`
+- Fluxo completo de aprovacao manual:
+  - API: `GET /exec/approvals`, `POST /exec/approvals/:id/approve`, `POST /exec/approvals/:id/deny`
+  - CLI: `approvals`, `approval-approve`, `approval-deny`
+  - UI: painel de approvals no `Ops Overview` com botoes de approve/deny
+  - `exec` passa a aguardar decisao manual por janela configuravel (`KAEL_EXEC_APPROVAL_WAIT_MS`)
 
 ## Arquivos-chave
 
@@ -38,9 +43,9 @@ Dar capacidade real de shell ao Kael no engine PI, com controle de processo e po
 1. Kael em modo `pi`/`hybrid` pode executar comandos shell via tool calling.
 2. Jobs longos podem rodar em background e serem monitorados com `process poll`.
 3. Politica de seguranca e aprovacao e carregada da config/env e persistida no arquivo de approvals.
-4. Comandos negados/aprovacao pendente retornam status explicito para o agente orientar o usuario.
+4. Comandos pendentes podem ser aprovados/negados via API, CLI ou UI.
+5. O agente recebe resultado final (approved/denied/timeout) apos janela de espera de aprovacao.
 
 ## Limites atuais (intencionais)
 
 - Ainda sem stream realtime de logs por SSE/WebSocket (polling via `process`).
-- Ainda sem UX dedicada de aprovacao (fase futura); hoje a fonte de verdade e o arquivo `exec-approvals.json`.

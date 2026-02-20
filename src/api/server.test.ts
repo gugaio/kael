@@ -41,6 +41,7 @@ function makeFakeApp(): KaelApp {
         defaultTimeoutMs: 60_000,
         maxTimeoutMs: 900_000,
         maxOutputChars: 120_000,
+        approvalWaitMs: 120_000,
         security: "allowlist",
         ask: "on-miss",
         allowlist: ["ls", "cat"],
@@ -160,6 +161,10 @@ function makeFakeApp(): KaelApp {
         return next;
       },
     } as unknown as KaelApp["automation"],
+    shell: {
+      listApprovals: async () => [],
+      resolveApproval: async () => null,
+    } as unknown as KaelApp["shell"],
   };
 }
 
@@ -279,6 +284,48 @@ describe("API integration", () => {
     expect(body.ok).toBe(true);
     expect(body.canceled).toBe(true);
     expect(body.job.id).toBe("j123");
+    await server.close();
+  });
+
+  it("lists and resolves exec approvals through API", async () => {
+    const app = makeFakeApp();
+    app.shell = {
+      listApprovals: async () => [
+        {
+          id: "a1",
+          command: "rm -rf /tmp/x",
+          cwd: "/tmp",
+          createdAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          status: "pending",
+        },
+      ],
+      resolveApproval: async (id: string, decision: "approved" | "denied") => ({
+        id,
+        command: "rm -rf /tmp/x",
+        cwd: "/tmp",
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        status: decision,
+        decidedAt: new Date().toISOString(),
+      }),
+    } as unknown as KaelApp["shell"];
+    const server = createApiServer(app);
+
+    const listed = await server.inject({
+      method: "GET",
+      url: "/exec/approvals?status=open",
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().approvals.length).toBe(1);
+
+    const approved = await server.inject({
+      method: "POST",
+      url: "/exec/approvals/a1/approve",
+    });
+    expect(approved.statusCode).toBe(200);
+    expect(approved.json().approval.status).toBe("approved");
+
     await server.close();
   });
 });

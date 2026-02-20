@@ -4,6 +4,7 @@ import { kaelLogger } from "../../infra/logger.js";
 import { LocalProcessRunner } from "./process-runner.js";
 import {
   ExecApprovalStore,
+  type ExecApprovalEntry,
   type ExecAsk,
   type ExecSecurity,
 } from "./shell-approvals.js";
@@ -68,6 +69,7 @@ type ShellToolConfig = {
   defaultTimeoutMs: number;
   maxTimeoutMs: number;
   maxOutputChars: number;
+  approvalWaitMs: number;
   security: ExecSecurity;
   ask: ExecAsk;
   allowlist: string[];
@@ -105,6 +107,20 @@ export class ShellToolService {
 
   async init(): Promise<void> {
     await this.approvals.init();
+  }
+
+  async listApprovals(params?: {
+    status?: "pending" | "approved" | "denied" | "expired" | "open";
+    limit?: number;
+  }): Promise<ExecApprovalEntry[]> {
+    return this.approvals.listApprovals(params);
+  }
+
+  async resolveApproval(
+    approvalId: string,
+    decision: "approved" | "denied",
+  ): Promise<ExecApprovalEntry | null> {
+    return this.approvals.resolveApproval(approvalId, decision);
   }
 
   async exec(params: ExecCommandParams): Promise<ExecSession> {
@@ -150,7 +166,6 @@ export class ShellToolService {
         cwd,
         status: "approval-pending",
         startedAt: new Date().toISOString(),
-        endedAt: new Date().toISOString(),
         outputTail: decision.reason,
         approvalId: decision.approvalId,
       };
@@ -161,7 +176,39 @@ export class ShellToolService {
         cwd,
         approvalId: decision.approvalId,
       });
-      return pending;
+
+      const waitResult = await this.approvals.waitForDecision(decision.approvalId ?? "", {
+        timeoutMs: this.cfg.approvalWaitMs,
+      });
+
+      if (waitResult.status !== "approved") {
+        const deniedPending: ExecSession = {
+          ...pending,
+          status: "denied",
+          endedAt: new Date().toISOString(),
+          outputTail: waitResult.reason,
+        };
+        this.sessions.set(deniedPending.id, deniedPending);
+        kaelLogger.warn("shell.exec.approval_not_granted", {
+          sessionKey: params.sessionKey,
+          command,
+          cwd,
+          approvalId: decision.approvalId,
+          result: waitResult.status,
+        });
+        return deniedPending;
+      }
+
+      pending.status = "running";
+      pending.outputTail = "";
+      pending.endedAt = undefined;
+      return this.startProcess({
+        sessionKey: params.sessionKey,
+        command,
+        cwd,
+        timeoutMs,
+        existingSession: pending,
+      });
     }
 
     const session = this.startProcess({
@@ -249,8 +296,9 @@ export class ShellToolService {
     command: string;
     cwd: string;
     timeoutMs: number;
+    existingSession?: ExecSession;
   }): ExecSession {
-    const session: ExecSession = {
+    const session: ExecSession = params.existingSession ?? {
       id: randomUUID(),
       command: params.command,
       cwd: params.cwd,

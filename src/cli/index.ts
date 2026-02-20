@@ -213,6 +213,69 @@ async function commandScheduleState(
   console.log(`Schedule ${options.id} ${state === "pause" ? "pausado" : "reativado"}.`);
 }
 
+async function commandApprovalsList(
+  options: UrlOption & {
+    status?: string;
+    limit?: string;
+  },
+): Promise<void> {
+  const url = await resolveUrl(options.url);
+  const params = new URLSearchParams();
+  if (options.status?.trim()) {
+    params.set("status", options.status.trim());
+  }
+  if (options.limit?.trim()) {
+    params.set("limit", options.limit.trim());
+  }
+  const response = await fetch(`${url}/exec/approvals${params.size > 0 ? `?${params.toString()}` : ""}`);
+  const data = (await response.json()) as {
+    ok: boolean;
+    approvals?: Array<{
+      id: string;
+      status: string;
+      command: string;
+      cwd: string;
+      createdAt: string;
+      decidedAt?: string;
+    }>;
+    error?: unknown;
+  };
+  if (!response.ok || !data.ok) {
+    throw new Error(extractApiErrorMessage(data) ?? `approvals failed with status ${response.status}`);
+  }
+  const approvals = data.approvals ?? [];
+  if (approvals.length === 0) {
+    console.log("Nenhuma aprovacao encontrada.");
+    return;
+  }
+  for (const item of approvals) {
+    console.log(
+      `${item.id} | ${item.status} | ${item.command} | cwd=${item.cwd} | created=${item.createdAt}${
+        item.decidedAt ? ` | decided=${item.decidedAt}` : ""
+      }`,
+    );
+  }
+}
+
+async function commandApprovalDecision(
+  options: UrlOption & {
+    id: string;
+  },
+  decision: "approve" | "deny",
+): Promise<void> {
+  const url = await resolveUrl(options.url);
+  const response = await fetch(`${url}/exec/approvals/${options.id}/${decision}`, { method: "POST" });
+  const data = (await response.json()) as {
+    ok: boolean;
+    approval?: { id: string; status: string };
+    error?: unknown;
+  };
+  if (!response.ok || !data.ok) {
+    throw new Error(extractApiErrorMessage(data) ?? `approval-${decision} failed with status ${response.status}`);
+  }
+  console.log(`Approval ${data.approval?.id ?? options.id} => ${data.approval?.status ?? decision}`);
+}
+
 async function main(): Promise<void> {
   const program = new Command();
   program
@@ -311,6 +374,34 @@ async function main(): Promise<void> {
     .option("-u, --url <url>", "url base da API (ex: http://127.0.0.1:3210)")
     .action(async (options: { id: string; url?: string }) => {
       await commandScheduleState(options, "resume");
+    });
+
+  program
+    .command("approvals")
+    .description("Lista aprovacoes de exec (pendentes e historico)")
+    .option("--status <status>", "filtro: open|pending|approved|denied|expired")
+    .option("--limit <n>", "limite de linhas", "100")
+    .option("-u, --url <url>", "url base da API (ex: http://127.0.0.1:3210)")
+    .action(async (options: { status?: string; limit?: string; url?: string }) => {
+      await commandApprovalsList(options);
+    });
+
+  program
+    .command("approval-approve")
+    .description("Aprova uma solicitacao de exec")
+    .requiredOption("--id <id>", "id da aprovacao")
+    .option("-u, --url <url>", "url base da API (ex: http://127.0.0.1:3210)")
+    .action(async (options: { id: string; url?: string }) => {
+      await commandApprovalDecision(options, "approve");
+    });
+
+  program
+    .command("approval-deny")
+    .description("Nega uma solicitacao de exec")
+    .requiredOption("--id <id>", "id da aprovacao")
+    .option("-u, --url <url>", "url base da API (ex: http://127.0.0.1:3210)")
+    .action(async (options: { id: string; url?: string }) => {
+      await commandApprovalDecision(options, "deny");
     });
 
   if (process.argv.slice(2).length === 0) {

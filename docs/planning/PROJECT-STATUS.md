@@ -206,11 +206,37 @@ Checklist de validacao:
 - [x] `npm test`
 
 Pendencias:
-- UX dedicada de aprovacao (API/UI) para `approval-pending`.
 - Streaming realtime de output (SSE/WebSocket) para substituir polling em parte dos fluxos.
 
 Proximo passo recomendado:
 - Fase 7: UX operacional de approvals + stream de eventos/processos.
+
+### 2026-02-20 - Fase 6.1: approvals end-to-end (API + CLI + UI)
+
+Resumo:
+- Fechado fluxo de aprovacao manual: listagem, approve e deny via API.
+- `exec` passou a aguardar decisao manual por janela configuravel (`KAEL_EXEC_APPROVAL_WAIT_MS`) antes de concluir.
+- CLI ganhou comandos para operar approvals sem editar arquivo JSON.
+- UI `Ops` ganhou painel de approvals pendentes com acoes de `Approve`/`Deny`.
+- Prompt de tools ajustado para orientar uso de `process kill` antes de `exec kill`.
+
+Arquivos-chave:
+- `src/tools/system/shell-approvals.ts`
+- `src/tools/system/shell-tool-service.ts`
+- `src/api/server.ts`
+- `src/cli/index.ts`
+- `ui/src/pages/OpsPage.tsx`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+- [x] `npm run ui:check`
+
+Pendencias:
+- SSE/WebSocket para eventos de approvals/processos e menor latencia de atualizacao.
+
+Proximo passo recomendado:
+- Fase 7: stream realtime de eventos (`/events/stream`) e log follow para jobs/processos.
 
 ### 2026-02-19 - UI-1 (bootstrap): base frontend ops-first em `ui/`
 

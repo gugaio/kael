@@ -92,6 +92,15 @@ export type Job = z.infer<typeof JobSchema>;
 export type Schedule = z.infer<typeof ScheduleSchema>;
 export type Health = z.infer<typeof HealthSchema>;
 export type Message = z.infer<typeof MessagesSchema>["messages"][number];
+export type ExecApproval = {
+  id: string;
+  command: string;
+  cwd: string;
+  createdAt: string;
+  expiresAt: string;
+  status: "pending" | "approved" | "denied" | "expired";
+  decidedAt?: string;
+};
 
 export async function getHealth(): Promise<Health> {
   const response = await fetch("/api/health");
@@ -158,4 +167,41 @@ export async function postChat(sessionKey: string, message: string): Promise<{ r
   });
   const schema = z.object({ ok: z.boolean(), reply: z.string() });
   return parseJson(response, schema);
+}
+
+export async function getExecApprovals(status = "open"): Promise<ExecApproval[]> {
+  const query = new URLSearchParams({ status, limit: "50" });
+  const response = await fetch(`/api/exec/approvals?${query.toString()}`);
+  const schema = z.object({
+    ok: z.boolean(),
+    approvals: z.array(
+      z.object({
+        id: z.string(),
+        command: z.string(),
+        cwd: z.string(),
+        createdAt: z.string(),
+        expiresAt: z.string(),
+        status: z.enum(["pending", "approved", "denied", "expired"]),
+        decidedAt: z.string().optional(),
+      }),
+    ),
+  });
+  const data = await parseJson(response, schema);
+  return data.approvals;
+}
+
+export async function approveExecApproval(id: string): Promise<void> {
+  const response = await fetch(`/api/exec/approvals/${encodeURIComponent(id)}/approve`, {
+    method: "POST",
+  });
+  const schema = z.object({ ok: z.boolean() });
+  await parseJson(response, schema);
+}
+
+export async function denyExecApproval(id: string): Promise<void> {
+  const response = await fetch(`/api/exec/approvals/${encodeURIComponent(id)}/deny`, {
+    method: "POST",
+  });
+  const schema = z.object({ ok: z.boolean() });
+  await parseJson(response, schema);
 }

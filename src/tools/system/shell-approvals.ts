@@ -1,9 +1,10 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
 
 export type ExecSecurity = "deny" | "allowlist" | "full";
 export type ExecAsk = "off" | "on-miss" | "always";
+export type ExecApprovalStatus = "pending" | "approved" | "denied" | "expired";
 
 export type ExecApprovalEntry = {
   id: string;
@@ -11,7 +12,8 @@ export type ExecApprovalEntry = {
   cwd: string;
   createdAt: string;
   expiresAt: string;
-  status: "pending" | "approved" | "denied";
+  status: ExecApprovalStatus;
+  decidedAt?: string;
 };
 
 export type ExecApprovalsFile = {
@@ -19,6 +21,7 @@ export type ExecApprovalsFile = {
   security: ExecSecurity;
   ask: ExecAsk;
   allowlist: string[];
+  // Legacy key name kept for compatibility; now stores pending + decided entries.
   pending: ExecApprovalEntry[];
   updatedAt: string;
 };
@@ -35,6 +38,11 @@ export type ExecPendingDecision = {
   reason: string;
 };
 
+export type ExecApprovalWaitResult = {
+  status: "approved" | "denied" | "expired" | "timeout";
+  reason: string;
+};
+
 export type ExecApprovalStoreDefaults = {
   security: ExecSecurity;
   ask: ExecAsk;
@@ -42,6 +50,7 @@ export type ExecApprovalStoreDefaults = {
 };
 
 const DEFAULT_PENDING_TTL_MS = 10 * 60 * 1000;
+const MAX_APPROVAL_HISTORY = 300;
 
 function normalizeAllowlist(allowlist: string[]): string[] {
   return Array.from(
@@ -72,8 +81,31 @@ function isExecAsk(value: unknown): value is ExecAsk {
   return value === "off" || value === "on-miss" || value === "always";
 }
 
-function isPendingStatus(value: unknown): value is ExecApprovalEntry["status"] {
-  return value === "pending" || value === "approved" || value === "denied";
+function isApprovalStatus(value: unknown): value is ExecApprovalStatus {
+  return value === "pending" || value === "approved" || value === "denied" || value === "expired";
+}
+
+function normalizeApprovalEntries(raw: unknown): ExecApprovalEntry[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .filter((item): item is ExecApprovalEntry => {
+      if (!item || typeof item !== "object") {
+        return false;
+      }
+      const candidate = item as Partial<ExecApprovalEntry>;
+      return (
+        typeof candidate.id === "string" &&
+        typeof candidate.command === "string" &&
+        typeof candidate.cwd === "string" &&
+        typeof candidate.createdAt === "string" &&
+        typeof candidate.expiresAt === "string" &&
+        isApprovalStatus(candidate.status) &&
+        (candidate.decidedAt === undefined || typeof candidate.decidedAt === "string")
+      );
+    })
+    .slice(-MAX_APPROVAL_HISTORY);
 }
 
 function sanitizeFile(raw: unknown, defaults: ExecApprovalStoreDefaults): ExecApprovalsFile {
@@ -84,31 +116,25 @@ function sanitizeFile(raw: unknown, defaults: ExecApprovalStoreDefaults): ExecAp
   const typed = raw as Partial<ExecApprovalsFile>;
   const security = isExecSecurity(typed.security) ? typed.security : defaults.security;
   const ask = isExecAsk(typed.ask) ? typed.ask : defaults.ask;
-  const pending = Array.isArray(typed.pending)
-    ? typed.pending
-        .filter((item): item is ExecApprovalEntry => {
-          if (!item || typeof item !== "object") {
-            return false;
-          }
-          const candidate = item as Partial<ExecApprovalEntry>;
-          return (
-            typeof candidate.id === "string" &&
-            typeof candidate.command === "string" &&
-            typeof candidate.cwd === "string" &&
-            typeof candidate.createdAt === "string" &&
-            typeof candidate.expiresAt === "string" &&
-            isPendingStatus(candidate.status)
-          );
-        })
-        .filter((item) => Date.parse(item.expiresAt) > Date.now())
-    : [];
+
+  const now = Date.now();
+  const entries = normalizeApprovalEntries(typed.pending).map((entry) => {
+    if (entry.status === "pending" && Date.parse(entry.expiresAt) <= now) {
+      return {
+        ...entry,
+        status: "expired" as const,
+        decidedAt: new Date(now).toISOString(),
+      };
+    }
+    return entry;
+  });
 
   return {
     version: 1,
     security,
     ask,
     allowlist: normalizeAllowlist(Array.isArray(typed.allowlist) ? typed.allowlist : defaults.allowlist),
-    pending,
+    pending: entries,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -139,6 +165,10 @@ export function extractCommandBins(command: string): string[] {
   return Array.from(new Set(bins));
 }
 
+function sortByCreatedDesc(entries: ExecApprovalEntry[]): ExecApprovalEntry[] {
+  return [...entries].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+}
+
 export class ExecApprovalStore {
   constructor(
     private readonly filePath: string,
@@ -147,14 +177,8 @@ export class ExecApprovalStore {
 
   async init(): Promise<void> {
     await fs.mkdir(path.dirname(this.filePath), { recursive: true });
-    try {
-      const raw = await fs.readFile(this.filePath, "utf-8");
-      const parsed = sanitizeFile(JSON.parse(raw), this.defaults);
-      await fs.writeFile(this.filePath, JSON.stringify(parsed, null, 2), "utf-8");
-    } catch {
-      const initial = defaultFile(this.defaults);
-      await fs.writeFile(this.filePath, JSON.stringify(initial, null, 2), "utf-8");
-    }
+    const current = await this.readCurrent();
+    await this.writeCurrent(current);
   }
 
   async getPolicy(): Promise<ExecPolicy> {
@@ -163,6 +187,94 @@ export class ExecApprovalStore {
       security: current.security,
       ask: current.ask,
       allowlist: new Set(current.allowlist),
+    };
+  }
+
+  async listApprovals(params?: {
+    status?: ExecApprovalStatus | "open";
+    limit?: number;
+  }): Promise<ExecApprovalEntry[]> {
+    const current = await this.readCurrent();
+    const limit = Number.isFinite(params?.limit) && (params?.limit ?? 0) > 0 ? Math.floor(params?.limit ?? 0) : 100;
+
+    const filtered = current.pending.filter((entry) => {
+      if (!params?.status) {
+        return true;
+      }
+      if (params.status === "open") {
+        return entry.status === "pending";
+      }
+      return entry.status === params.status;
+    });
+
+    return sortByCreatedDesc(filtered).slice(0, limit);
+  }
+
+  async resolveApproval(approvalId: string, decision: "approved" | "denied"): Promise<ExecApprovalEntry | null> {
+    const current = await this.readCurrent();
+    const idx = current.pending.findIndex((entry) => entry.id === approvalId);
+    if (idx < 0) {
+      return null;
+    }
+
+    const target = current.pending[idx];
+    if (target.status !== "pending") {
+      return target;
+    }
+
+    const decided: ExecApprovalEntry = {
+      ...target,
+      status: decision,
+      decidedAt: new Date().toISOString(),
+    };
+
+    const nextEntries = [...current.pending];
+    nextEntries[idx] = decided;
+    await this.writeCurrent({
+      ...current,
+      pending: nextEntries.slice(-MAX_APPROVAL_HISTORY),
+      updatedAt: new Date().toISOString(),
+    });
+
+    return decided;
+  }
+
+  async waitForDecision(
+    approvalId: string,
+    params: { timeoutMs: number; pollMs?: number },
+  ): Promise<ExecApprovalWaitResult> {
+    const timeoutMs = Math.max(1, Math.floor(params.timeoutMs));
+    const pollMs = Math.max(50, Math.floor(params.pollMs ?? 700));
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const current = await this.readCurrent();
+      const entry = current.pending.find((item) => item.id === approvalId);
+      if (!entry) {
+        return {
+          status: "expired",
+          reason: "Solicitacao de aprovacao nao encontrada (possivel expiracao).",
+        };
+      }
+
+      if (entry.status === "approved") {
+        return { status: "approved", reason: "Comando aprovado manualmente." };
+      }
+      if (entry.status === "denied") {
+        return { status: "denied", reason: "Comando negado manualmente." };
+      }
+      if (entry.status === "expired") {
+        return { status: "expired", reason: "Solicitacao de aprovacao expirou." };
+      }
+
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, pollMs);
+      });
+    }
+
+    return {
+      status: "timeout",
+      reason: `Tempo limite aguardando aprovacao manual (${timeoutMs}ms).`,
     };
   }
 
@@ -206,12 +318,11 @@ export class ExecApprovalStore {
       status: "pending",
     };
 
-    const next: ExecApprovalsFile = {
+    await this.writeCurrent({
       ...current,
-      pending: [...current.pending.filter((item) => item.status === "pending"), pending],
+      pending: [...current.pending, pending].slice(-MAX_APPROVAL_HISTORY),
       updatedAt: new Date().toISOString(),
-    };
-    await this.writeCurrent(next);
+    });
 
     return {
       status: "approval-pending",
@@ -223,8 +334,7 @@ export class ExecApprovalStore {
   private async readCurrent(): Promise<ExecApprovalsFile> {
     try {
       const raw = await fs.readFile(this.filePath, "utf-8");
-      const parsed = sanitizeFile(JSON.parse(raw), this.defaults);
-      return parsed;
+      return sanitizeFile(JSON.parse(raw), this.defaults);
     } catch {
       const fallback = defaultFile(this.defaults);
       await this.writeCurrent(fallback);

@@ -94,6 +94,11 @@ npx tsx src/cli/index.ts schedule-upsert --id heartbeat.cron --type heartbeat --
 # pausar/reativar schedule
 npx tsx src/cli/index.ts schedule-pause --id heartbeat.main
 npx tsx src/cli/index.ts schedule-resume --id heartbeat.main
+
+# approvals de exec
+npx tsx src/cli/index.ts approvals --status open
+npx tsx src/cli/index.ts approval-approve --id <approvalId>
+npx tsx src/cli/index.ts approval-deny --id <approvalId>
 ```
 
 ## Comandos de chat (engine de comandos)
@@ -120,6 +125,9 @@ npx tsx src/cli/index.ts schedule-resume --id heartbeat.main
 - `GET /jobs/:jobId`
 - `GET /jobs/:jobId/log`
 - `POST /jobs/:jobId/cancel`
+- `GET /exec/approvals`
+- `POST /exec/approvals/:approvalId/approve`
+- `POST /exec/approvals/:approvalId/deny`
 - `GET /schedules`
 - `GET /schedules/:scheduleId`
 - `POST /schedules`
@@ -190,6 +198,7 @@ Se a mesma chave for reutilizada com payload diferente, a API retorna `409`.
 - `KAEL_EXEC_TIMEOUT_MS` (default: `60000`)
 - `KAEL_EXEC_MAX_TIMEOUT_MS` (default: `900000`)
 - `KAEL_EXEC_MAX_OUTPUT_CHARS` (default: `120000`)
+- `KAEL_EXEC_APPROVAL_WAIT_MS` (default: `120000`)
 - `KAEL_EXEC_SECURITY` (`deny`, `allowlist`, `full`; default: `allowlist`)
 - `KAEL_EXEC_ASK` (`off`, `on-miss`, `always`; default: `on-miss`)
 - `KAEL_EXEC_ALLOWLIST` (csv; default inclui `ls,cat,pwd,echo,grep,find,curl,ffmpeg,ffprobe,vlc`)

@@ -21,6 +21,7 @@ export type KaelApp = {
   jobs: JobManager;
   chat: ChatService;
   automation: AutomationService;
+  shell: ShellToolService;
 };
 
 export async function createKaelApp(): Promise<KaelApp> {
@@ -46,6 +47,7 @@ export async function createKaelApp(): Promise<KaelApp> {
     defaultTimeoutMs: config.shell.defaultTimeoutMs,
     maxTimeoutMs: config.shell.maxTimeoutMs,
     maxOutputChars: config.shell.maxOutputChars,
+    approvalWaitMs: config.shell.approvalWaitMs,
     security: config.shell.security,
     ask: config.shell.ask,
     allowlist: config.shell.allowlist,
@@ -85,5 +87,6 @@ export async function createKaelApp(): Promise<KaelApp> {
     jobs,
     chat,
     automation,
+    shell,
   };
 }

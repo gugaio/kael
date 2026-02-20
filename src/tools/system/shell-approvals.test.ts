@@ -77,4 +77,32 @@ describe("ExecApprovalStore", () => {
     const decision = await store.evaluateCommand({ command: "unknown_bin --x", cwd: "/tmp" });
     expect(decision).toBeNull();
   });
+
+  it("resolve aprovacao pendente como approved", async () => {
+    const { store } = await createStore({ ask: "on-miss" });
+    const decision = await store.evaluateCommand({ command: "rm -rf /tmp/x", cwd: "/tmp" });
+    expect(decision?.status).toBe("approval-pending");
+    const approvalId = decision?.approvalId;
+    expect(approvalId).toBeTruthy();
+
+    const resolved = await store.resolveApproval(approvalId ?? "", "approved");
+    expect(resolved?.status).toBe("approved");
+
+    const listed = await store.listApprovals({ status: "approved" });
+    expect(listed.length).toBe(1);
+    expect(listed[0].id).toBe(approvalId);
+  });
+
+  it("waitForDecision retorna denied quando aprovacao e negada", async () => {
+    const { store } = await createStore({ ask: "on-miss" });
+    const decision = await store.evaluateCommand({ command: "rm -rf /tmp/x", cwd: "/tmp" });
+    expect(decision?.status).toBe("approval-pending");
+    const approvalId = decision?.approvalId ?? "";
+
+    const wait = store.waitForDecision(approvalId, { timeoutMs: 5000, pollMs: 50 });
+    await store.resolveApproval(approvalId, "denied");
+    const result = await wait;
+
+    expect(result.status).toBe("denied");
+  });
 });

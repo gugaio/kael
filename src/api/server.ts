@@ -175,6 +175,55 @@ export function createApiServer(app: KaelApp): FastifyInstance {
     },
   );
 
+  server.get<{ Querystring: { status?: string; limit?: string } }>(
+    "/exec/approvals",
+    async (request) => {
+      const statusRaw = request.query.status?.trim().toLowerCase();
+      const status =
+        statusRaw === "open" ||
+        statusRaw === "pending" ||
+        statusRaw === "approved" ||
+        statusRaw === "denied" ||
+        statusRaw === "expired"
+          ? statusRaw
+          : undefined;
+      const parsedLimit = Number(request.query.limit ?? "100");
+      const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 100;
+      const approvals = await app.shell.listApprovals({ status, limit });
+      return { ok: true, approvals };
+    },
+  );
+
+  server.post<{ Params: { approvalId: string } }>(
+    "/exec/approvals/:approvalId/approve",
+    async (request) => {
+      const approvalId = request.params.approvalId?.trim();
+      if (!approvalId) {
+        throw new ApiError(400, "BAD_REQUEST", "approvalId is required");
+      }
+      const approval = await app.shell.resolveApproval(approvalId, "approved");
+      if (!approval) {
+        throw new ApiError(404, "NOT_FOUND", "approval not found");
+      }
+      return { ok: true, approval };
+    },
+  );
+
+  server.post<{ Params: { approvalId: string } }>(
+    "/exec/approvals/:approvalId/deny",
+    async (request) => {
+      const approvalId = request.params.approvalId?.trim();
+      if (!approvalId) {
+        throw new ApiError(400, "BAD_REQUEST", "approvalId is required");
+      }
+      const approval = await app.shell.resolveApproval(approvalId, "denied");
+      if (!approval) {
+        throw new ApiError(404, "NOT_FOUND", "approval not found");
+      }
+      return { ok: true, approval };
+    },
+  );
+
   server.post<{
     Body: {
       sessionKey?: string;

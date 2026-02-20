@@ -27,6 +27,7 @@ export type KaelGlobalConfig = {
       defaultTimeoutMs: number;
       maxTimeoutMs: number;
       maxOutputChars: number;
+      approvalWaitMs: number;
       security: "deny" | "allowlist" | "full";
       ask: "off" | "on-miss" | "always";
       allowlist: string[];
@@ -109,6 +110,7 @@ export function buildDefaultGlobalConfig(kaelHome: string): KaelGlobalConfig {
         defaultTimeoutMs: 60_000,
         maxTimeoutMs: 15 * 60_000,
         maxOutputChars: 120_000,
+        approvalWaitMs: 120_000,
         security: "allowlist",
         ask: "on-miss",
         allowlist: [

@@ -62,6 +62,7 @@ Escopo minimo:
 - [x] Schedules list + pause/resume.
 - [x] Chat sessions com envio de mensagem.
 - [x] Health badge e pagina de saude.
+- [x] Painel de approvals de exec no Ops (approve/deny).
 - [ ] Cards operacionais de job inline no chat.
 
 DoD:
@@ -101,6 +102,7 @@ DoD:
 ## Estado Atual (implementado no backend que a UI pode usar hoje)
 
 - API de chat, jobs, schedules, health.
+- API de approvals de exec (`/exec/approvals` + approve/deny).
 - Cancelamento manual de jobs (`POST /jobs/:jobId/cancel`).
 - Status operacional com observabilidade (`/health`, logs estruturados).
 - Concurrency, timeout e seguranca de execucao ja no core.
@@ -126,3 +128,4 @@ DoD:
 - 2026-02-19: Plataforma inicial sera Web responsivo / PWA-first.
 - 2026-02-19: Chat nao sera homepage; Ops Overview sera a entrada principal.
 - 2026-02-19: UI-1 iniciada em `ui/` com React + Vite + Tailwind + TanStack Query + React Router + Zod.
+- 2026-02-20: Ops ganhou painel de approvals de exec para fechar o ciclo de autorizacao manual.

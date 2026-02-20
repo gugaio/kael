@@ -89,6 +89,7 @@ async function createJobsServer(params: {
         defaultTimeoutMs: 60_000,
         maxTimeoutMs: 900_000,
         maxOutputChars: 120_000,
+        approvalWaitMs: 120_000,
         security: "allowlist",
         ask: "on-miss",
         allowlist: ["ls", "cat"],
@@ -137,6 +138,10 @@ async function createJobsServer(params: {
       },
       setScheduleEnabled: async () => null,
     } as unknown as KaelApp["automation"],
+    shell: {
+      listApprovals: async () => [],
+      resolveApproval: async () => null,
+    } as unknown as KaelApp["shell"],
   };
 
   return { server: createApiServer(app), jobs };

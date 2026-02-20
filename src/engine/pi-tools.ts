@@ -35,7 +35,7 @@ export function createPiShellTools(params: {
     name: "exec",
     label: "Exec",
     description:
-      "Executa comando shell local. Suporta background, timeout, policy de seguranca e aprovacao.",
+      "Executa comando shell local. Suporta background, timeout, policy de seguranca e aprovacao. Para encerrar sessoes iniciadas por exec, prefira a tool process com action=kill.",
     parameters: {
       type: "object",
       properties: {
@@ -88,7 +88,7 @@ export function createPiShellTools(params: {
     name: "process",
     label: "Process",
     description:
-      "Gerencia sessoes de execucao shell. Acoes: list, poll e kill. Use poll/list para acompanhar comandos em background.",
+      "Gerencia sessoes de execucao shell. Acoes: list, poll e kill. Use action=kill como primeira opcao para parar comandos iniciados por exec.",
     parameters: {
       type: "object",
       properties: {

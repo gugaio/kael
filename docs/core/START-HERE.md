@@ -24,6 +24,7 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 4: concluida (autonomia: heartbeat + scheduler persistente + schedules API/CLI).
 - Fase 5: concluida (hardening: observabilidade + seguranca de execucao de jobs).
 - Fase 6: concluida (shell tools no PI: `exec` + `process` + `exec-approvals`).
+- Fase 6.1: concluida (approvals end-to-end: API + CLI + UI).
 
 ## Estudos e referencias tecnicas
 

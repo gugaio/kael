@@ -52,6 +52,7 @@ export type KaelConfig = {
     defaultTimeoutMs: number;
     maxTimeoutMs: number;
     maxOutputChars: number;
+    approvalWaitMs: number;
     security: ExecSecurity;
     ask: ExecAsk;
     allowlist: string[];
@@ -177,6 +178,10 @@ function validateConfig(config: KaelConfig): void {
 
   if (!Number.isFinite(config.shell.maxOutputChars) || config.shell.maxOutputChars <= 0) {
     issues.push("KAEL_EXEC_MAX_OUTPUT_CHARS deve ser um número positivo");
+  }
+
+  if (!Number.isFinite(config.shell.approvalWaitMs) || config.shell.approvalWaitMs <= 0) {
+    issues.push("KAEL_EXEC_APPROVAL_WAIT_MS deve ser um número positivo");
   }
 
   if (!config.shell.workspaceRoot.trim()) {
@@ -313,6 +318,15 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       ? Math.floor(execMaxOutputRaw)
       : defaultExecMaxOutputChars;
 
+  const defaultExecApprovalWaitMs = globalConfig?.defaults.shell?.approvalWaitMs ?? 120_000;
+  const execApprovalWaitRaw = Number(
+    process.env.KAEL_EXEC_APPROVAL_WAIT_MS ?? String(defaultExecApprovalWaitMs),
+  );
+  const approvalWaitMs =
+    Number.isFinite(execApprovalWaitRaw) && execApprovalWaitRaw > 0
+      ? Math.floor(execApprovalWaitRaw)
+      : defaultExecApprovalWaitMs;
+
   const workspaceRoot = path.resolve(
     process.env.KAEL_EXEC_WORKSPACE_ROOT?.trim() || globalConfig?.defaults.shell?.workspaceRoot || cwd,
   );
@@ -431,6 +445,7 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       defaultTimeoutMs,
       maxTimeoutMs,
       maxOutputChars,
+      approvalWaitMs,
       security,
       ask,
       allowlist,
