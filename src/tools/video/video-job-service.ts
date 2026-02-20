@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import type { ChildProcessByStdio } from "node:child_process";
+import type { Readable, Writable } from "node:stream";
 import type { JobStore } from "../../jobs/store.js";
 import type { VideoJob, VideoJobType } from "../../types.js";
 import { kaelLogger } from "../../infra/logger.js";
@@ -24,7 +25,8 @@ type StartJobParams = {
 
 export class VideoJobService {
   private readonly queue: StartJobParams[] = [];
-  private readonly activeJobs: Map<string, ChildProcessWithoutNullStreams> = new Map();
+  private readonly activeJobs: Map<string, ChildProcessByStdio<Writable, Readable, Readable>> =
+    new Map();
   private readonly canceledJobs: Set<string> = new Set();
   private reservedSlots = 0;
 

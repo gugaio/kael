@@ -3,6 +3,7 @@ import { getModel } from "@mariozechner/pi-ai";
 import type { PiEngineConfig } from "../config.js";
 import { retry } from "../infra/retry.js";
 import { normalizePiError, PiEngineError } from "./pi-errors.js";
+import { createPiShellTools } from "./pi-tools.js";
 import type { AgentEngine, EngineTurnInput, EngineTurnOutput } from "./types.js";
 
 type PiAgentLike = {
@@ -69,8 +70,6 @@ function asSdkErrorMessage(event: unknown): string | null {
 }
 
 export class PiEngineAdapter implements AgentEngine {
-  private sdkAgent: PiAgentLike | null = null;
-
   constructor(private readonly cfg: PiEngineConfig) {}
 
   async runTurn(input: EngineTurnInput): Promise<EngineTurnOutput> {
@@ -84,7 +83,7 @@ export class PiEngineAdapter implements AgentEngine {
 
     return retry(
       async () => {
-        const agent = this.getOrCreateSdkAgent();
+        const agent = this.createSdkAgent(input);
 
         return new Promise<EngineTurnOutput>((resolve, reject) => {
           let settled = false;
@@ -160,18 +159,17 @@ export class PiEngineAdapter implements AgentEngine {
     );
   }
 
-  private getOrCreateSdkAgent(): PiAgentLike {
-    if (this.sdkAgent) {
-      return this.sdkAgent;
-    }
-
+  private createSdkAgent(input: EngineTurnInput): PiAgentLike {
     const model = getModel(this.cfg.provider as never, this.cfg.model);
     const agent = new Agent({
       initialState: {
         systemPrompt: this.cfg.systemPrompt,
         model,
         thinkingLevel: "minimal",
-        tools: [],
+        tools: createPiShellTools({
+          sessionKey: input.sessionKey,
+          tooling: input.tooling,
+        }),
         messages: [],
         isStreaming: false,
         streamMessage: null,
@@ -188,7 +186,6 @@ export class PiEngineAdapter implements AgentEngine {
       },
     }) as unknown as PiAgentLike;
 
-    this.sdkAgent = agent;
     return agent;
   }
 }

@@ -1,0 +1,80 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { ExecApprovalStore, extractCommandBins } from "./shell-approvals.js";
+
+const tempDirs: string[] = [];
+
+async function createStore(overrides?: {
+  security?: "deny" | "allowlist" | "full";
+  ask?: "off" | "on-miss" | "always";
+  allowlist?: string[];
+}) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-shell-approvals-"));
+  tempDirs.push(root);
+  const filePath = path.join(root, "exec-approvals.json");
+  const store = new ExecApprovalStore(filePath, {
+    security: overrides?.security ?? "allowlist",
+    ask: overrides?.ask ?? "on-miss",
+    allowlist: overrides?.allowlist ?? ["ls", "cat"],
+  });
+  await store.init();
+  return { store, filePath };
+}
+
+afterEach(async () => {
+  await Promise.all(
+    tempDirs.splice(0, tempDirs.length).map((dir) => fs.rm(dir, { recursive: true, force: true })),
+  );
+});
+
+describe("extractCommandBins", () => {
+  it("extrai bins de pipelines e comandos encadeados", () => {
+    expect(extractCommandBins("ls -la | grep foo && cat file.txt")).toEqual(["ls", "grep", "cat"]);
+  });
+
+  it("normaliza path para basename", () => {
+    expect(extractCommandBins("/usr/bin/ffmpeg -i in.mp4 out.mp4")).toEqual(["ffmpeg"]);
+  });
+});
+
+describe("ExecApprovalStore", () => {
+  it("permite comando em allowlist", async () => {
+    const { store } = await createStore();
+    const decision = await store.evaluateCommand({ command: "ls -la", cwd: "/tmp" });
+    expect(decision).toBeNull();
+  });
+
+  it("nega comando fora da allowlist quando ask=off", async () => {
+    const { store } = await createStore({ ask: "off" });
+    const decision = await store.evaluateCommand({ command: "rm -rf /tmp/x", cwd: "/tmp" });
+    expect(decision?.status).toBe("denied");
+  });
+
+  it("gera pendencia quando comando fora da allowlist e ask=on-miss", async () => {
+    const { store, filePath } = await createStore({ ask: "on-miss" });
+    const decision = await store.evaluateCommand({ command: "rm -rf /tmp/x", cwd: "/tmp" });
+    expect(decision?.status).toBe("approval-pending");
+    expect(decision?.approvalId).toBeTruthy();
+
+    const persisted = JSON.parse(await fs.readFile(filePath, "utf-8")) as {
+      pending: Array<{ id: string; command: string; status: string }>;
+    };
+    expect(persisted.pending.length).toBe(1);
+    expect(persisted.pending[0].command).toContain("rm -rf");
+    expect(persisted.pending[0].status).toBe("pending");
+  });
+
+  it("deny bloqueia tudo", async () => {
+    const { store } = await createStore({ security: "deny", ask: "off" });
+    const decision = await store.evaluateCommand({ command: "ls", cwd: "/tmp" });
+    expect(decision?.status).toBe("denied");
+  });
+
+  it("full com ask=off permite qualquer comando", async () => {
+    const { store } = await createStore({ security: "full", ask: "off" });
+    const decision = await store.evaluateCommand({ command: "unknown_bin --x", cwd: "/tmp" });
+    expect(decision).toBeNull();
+  });
+});

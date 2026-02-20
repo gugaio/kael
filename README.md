@@ -8,6 +8,7 @@ Super agente para videos e automacao.
 - `docs/core/START-HERE.md`: indice rapido de onboarding.
 - `docs/planning/PROJECT-STATUS.md`: fases, entregas e checklist por commit.
 - `docs/architecture/README.md`: arquitetura incremental por fase.
+- `docs/ui/UI-GUIDE.md`: guia oficial da UI (visao, fases, status e proximos passos).
 - `docs/how-jobs-and-heartbeat-work.md`: guia detalhado do ciclo de vida de jobs e heartbeat.
 
 ## Escopo atual
@@ -19,6 +20,10 @@ Super agente para videos e automacao.
   - `simple` (comandos)
   - `pi` (runtime PI embutido via SDK)
   - `hybrid` (slash commands local + conversa via PI com fallback)
+- Shell tools no PI:
+  - `exec` (comando shell com timeout/background)
+  - `process` (list/poll/kill de sessoes em background)
+  - policy e approvals persistidas em `~/.kael/exec-approvals.json`
 - Jobs de video assíncronos:
   - `transcode`
   - `convert_hls`
@@ -40,6 +45,21 @@ npm run dev
 ```
 
 Servidor padrao: `http://127.0.0.1:3210`
+
+## UI Web (UI-1)
+
+```bash
+# instalar deps do frontend
+npm --prefix ui install
+
+# subir backend (terminal 1)
+npm run dev
+
+# subir UI (terminal 2)
+npm run ui:dev
+```
+
+UI default: `http://127.0.0.1:5173` (proxy para API local em `/api`).
 
 ## Comandos CLI
 
@@ -166,6 +186,13 @@ Se a mesma chave for reutilizada com payload diferente, a API retorna `409`.
 - `KAEL_MAX_CONCURRENT_JOBS` (default: `2`)
 - `KAEL_JOB_TIMEOUT_MS` (default: `3600000`)
 - `KAEL_JOB_KILL_GRACE_MS` (default: `3000`)
+- `KAEL_EXEC_WORKSPACE_ROOT` (default: `<cwd>`)
+- `KAEL_EXEC_TIMEOUT_MS` (default: `60000`)
+- `KAEL_EXEC_MAX_TIMEOUT_MS` (default: `900000`)
+- `KAEL_EXEC_MAX_OUTPUT_CHARS` (default: `120000`)
+- `KAEL_EXEC_SECURITY` (`deny`, `allowlist`, `full`; default: `allowlist`)
+- `KAEL_EXEC_ASK` (`off`, `on-miss`, `always`; default: `on-miss`)
+- `KAEL_EXEC_ALLOWLIST` (csv; default inclui `ls,cat,pwd,echo,grep,find,curl,ffmpeg,ffprobe,vlc`)
 
 ### Runtime do PI
 
@@ -182,6 +209,7 @@ Observacao: no modo PI (`pi`/`hybrid`), Kael monta o `system prompt` com `docs/c
 Observacao: Kael aplica janela de contexto multi-turn antes de chamar PI (via `TurnOrchestrator`).
 Observacao: scheduler suporta `intervalMs` e cron expression simples (5 campos, com `*`, `*/n` e valores exatos).
 Observacao: `KAEL_ENGINE_MODE=pi|hybrid` exige `KAEL_PI_API_KEY`; configuracoes invalidas falham no startup com mensagem clara.
+Observacao: comandos shell fora da allowlist podem retornar `approval-pending`; o arquivo de controle fica em `~/.kael/exec-approvals.json`.
 
 ## Logs e observabilidade
 
@@ -199,6 +227,13 @@ Observacao: `KAEL_ENGINE_MODE=pi|hybrid` exige `KAEL_PI_API_KEY`; configuracoes 
 - Limite de args custom e bloqueio de flags criticas em args de usuario (`-i`, `-y`).
 - Controle de concorrencia por fila interna (`KAEL_MAX_CONCURRENT_JOBS`).
 - Timeout por job com cancelamento controlado (`SIGTERM` seguido de `SIGKILL` apos grace period, se necessario).
+
+## Cobertura de testes E2E (jobs)
+
+- `src/api/jobs.e2e.test.ts` cobre:
+  - validacao de seguranca (path fora da allowlist)
+  - timeout com falha e log de timeout
+  - cancelamento de job queued e running via API
 
 ## Config global (~/.kael)
 

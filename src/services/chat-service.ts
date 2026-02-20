@@ -2,6 +2,7 @@ import type { EngineTooling } from "../engine/types.js";
 import { normalizePiError } from "../engine/pi-errors.js";
 import type { JobManager } from "../jobs/manager.js";
 import type { SessionStore } from "../session/store.js";
+import type { ShellToolService } from "../tools/system/shell-tool-service.js";
 import type { SessionMessage } from "../types.js";
 import { TurnOrchestrator } from "./turn-orchestrator.js";
 
@@ -16,6 +17,7 @@ export class ChatService {
   constructor(
     private readonly sessions: SessionStore,
     private readonly jobs: JobManager,
+    private readonly shell: ShellToolService,
     private readonly orchestrator: TurnOrchestrator,
   ) {
     this.tooling = {
@@ -30,6 +32,8 @@ export class ChatService {
           type: job.type,
           output: job.output,
         })),
+      execCommand: (params) => this.shell.exec(params),
+      processCommand: (params) => this.shell.process(params),
     };
   }
 

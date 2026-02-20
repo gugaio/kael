@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-02-18**
+Ultima atualizacao: **2026-02-20**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -153,7 +153,7 @@ Definition of Done (checklist):
 
 ### Fase 5 - Hardening e Observabilidade
 
-Status: **Em andamento**
+Status: **Concluida**
 
 Objetivos:
 - Testes (unit/integration/e2e).
@@ -167,7 +167,102 @@ Definition of Done (checklist):
 - [x] Health endpoint com sinais operacionais.
 - [x] Politica de execucao segura documentada e aplicada.
 
+### Fase 6 - Shell Power no PI (exec/process + approvals)
+
+Status: **Concluida**
+
+Objetivos:
+- Dar capacidade real de shell para o Kael em `pi`/`hybrid`.
+- Permitir controle de processos em background (`list/poll/kill`).
+- Aplicar politica de seguranca e aprovacao persistida em `~/.kael`.
+
+Definition of Done (checklist):
+- [x] Tool `exec` integrada ao PI.
+- [x] Tool `process` integrada ao PI.
+- [x] Timeout + limite de output + `cwd` restrito ao workspace.
+- [x] Politica `deny|allowlist|full` e `ask=off|on-miss|always`.
+- [x] Persistencia de approvals em `~/.kael/exec-approvals.json`.
+- [x] Testes unitarios de policy/approvals.
+
 ## Registro de Atualizacoes por Commit
+
+### 2026-02-20 - Fase 6: shell tools no PI (exec/process)
+
+Resumo:
+- Implementado `ShellToolService` com execucao local de shell, timeout, background e gerenciamento de sessoes.
+- Integradas tools `exec` e `process` no `PiEngineAdapter`.
+- Implementado `ExecApprovalStore` com politica `security/ask`, allowlist e pendencias em `~/.kael/exec-approvals.json`.
+- Expandida configuracao (`KAEL_EXEC_*`) e defaults globais em `~/.kael/config.json`.
+
+Arquivos-chave:
+- `src/tools/system/shell-tool-service.ts`
+- `src/tools/system/shell-approvals.ts`
+- `src/engine/pi-tools.ts`
+- `src/engine/pi-engine-adapter.ts`
+- `src/config.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- UX dedicada de aprovacao (API/UI) para `approval-pending`.
+- Streaming realtime de output (SSE/WebSocket) para substituir polling em parte dos fluxos.
+
+Proximo passo recomendado:
+- Fase 7: UX operacional de approvals + stream de eventos/processos.
+
+### 2026-02-19 - UI-1 (bootstrap): base frontend ops-first em `ui/`
+
+Resumo:
+- Criado projeto frontend dedicado em `ui/` com React + Vite + Tailwind.
+- Navegacao inicial ops-first implementada (`Ops`, `Jobs`, `Schedules`, `Chat`, `Health`).
+- Integracao com API atual via proxy `/api` e polling com TanStack Query.
+- Base pronta para evoluir cards operacionais no chat e tempo real (SSE na UI-2).
+
+Arquivos-chave:
+- `ui/package.json`
+- `ui/src/App.tsx`
+- `ui/src/pages/OpsPage.tsx`
+- `ui/src/pages/JobsPage.tsx`
+- `ui/src/pages/JobDetailPage.tsx`
+- `ui/src/pages/SchedulesPage.tsx`
+- `ui/src/pages/ChatPage.tsx`
+- `ui/src/pages/HealthPage.tsx`
+- `ui/src/lib/api.ts`
+
+Checklist de validacao:
+- [ ] `npm --prefix ui install`
+- [ ] `npm run ui:check`
+- [ ] `npm run ui:dev` com backend ativo
+
+Pendencias:
+- Adicionar cards de job inline no chat.
+- Refinar UX de erro/loading e estados vazios com mais contexto.
+
+Proximo passo recomendado:
+- Implementar cards operacionais no chat e acao rapida de abrir job/schedule relacionado.
+
+### 2026-02-19 - UI governance: guia oficial da UI em docs
+
+Resumo:
+- Criado guia central da UI com visao ops-first, fases UI-0..UI-3 e checklist de atualizacao por commit.
+- Documento desenhado para onboarding rapido de novas instancias de agente.
+
+Arquivos-chave:
+- `docs/ui/UI-GUIDE.md`
+- `docs/core/START-HERE.md`
+- `README.md`
+
+Checklist de validacao:
+- [x] Documento versionado em `docs`.
+- [x] Referencias adicionadas no onboarding.
+
+Pendencias:
+- Iniciar implementacao da UI-1 (MVP operacional web).
+
+Proximo passo recomendado:
+- Criar base frontend da UI-1 com Ops Overview + Jobs.
 
 ### 2026-02-19 - Fase 5 (incremento): health enriquecido + guardrails de execucao
 
@@ -250,6 +345,29 @@ Pendencias:
 
 Proximo passo recomendado:
 - Cobrir E2E completo de `/jobs/*` incluindo validacao de seguranca e cancelamento.
+
+### 2026-02-19 - Fase 5 (incremento): E2E `/jobs/*` (seguranca, timeout, cancelamento)
+
+Resumo:
+- Suite E2E dedicada de jobs adicionada com app real de `JobStore + VideoJobService + JobManager`.
+- Cobertos cenarios ponta-a-ponta:
+  - rejeicao por path inseguro
+  - timeout de job com status `failed` e log com marcador de timeout
+  - cancelamento de job queued e running com status final `canceled`
+
+Arquivos-chave:
+- `src/api/jobs.e2e.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Adicionar asserts E2E de idempotency para `POST /jobs/*`.
+- Avaliar cenarios de concorrencia > 1 com multiplos tipos de job.
+
+Proximo passo recomendado:
+- Implementar retry/politica operacional por tipo de job (transcode, hls, capture, probe).
 
 ### 2026-02-19 - Fase 4.1 (hardening): contrato de erro, validacao de config e logs estruturados
 

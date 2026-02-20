@@ -36,6 +36,15 @@ function makeFakeApp(): KaelApp {
         jobTimeoutMs: 60000,
         killGraceMs: 3000,
       },
+      shell: {
+        workspaceRoot: "/tmp",
+        defaultTimeoutMs: 60_000,
+        maxTimeoutMs: 900_000,
+        maxOutputChars: 120_000,
+        security: "allowlist",
+        ask: "on-miss",
+        allowlist: ["ls", "cat"],
+      },
       pi: {
         enabled: true,
         provider: "openai",

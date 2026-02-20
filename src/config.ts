@@ -1,6 +1,7 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import { expandHome, loadGlobalConfig } from "./global-config.js";
+import type { ExecAsk, ExecSecurity } from "./tools/system/shell-approvals.js";
 
 export type EngineMode = "simple" | "pi" | "hybrid";
 
@@ -45,6 +46,15 @@ export type KaelConfig = {
     maxConcurrentJobs: number;
     jobTimeoutMs: number;
     killGraceMs: number;
+  };
+  shell: {
+    workspaceRoot: string;
+    defaultTimeoutMs: number;
+    maxTimeoutMs: number;
+    maxOutputChars: number;
+    security: ExecSecurity;
+    ask: ExecAsk;
+    allowlist: string[];
   };
   pi: PiEngineConfig;
 };
@@ -157,6 +167,22 @@ function validateConfig(config: KaelConfig): void {
     issues.push("KAEL_JOB_KILL_GRACE_MS deve ser zero ou positivo");
   }
 
+  if (!Number.isFinite(config.shell.defaultTimeoutMs) || config.shell.defaultTimeoutMs <= 0) {
+    issues.push("KAEL_EXEC_TIMEOUT_MS deve ser um número positivo");
+  }
+
+  if (!Number.isFinite(config.shell.maxTimeoutMs) || config.shell.maxTimeoutMs <= 0) {
+    issues.push("KAEL_EXEC_MAX_TIMEOUT_MS deve ser um número positivo");
+  }
+
+  if (!Number.isFinite(config.shell.maxOutputChars) || config.shell.maxOutputChars <= 0) {
+    issues.push("KAEL_EXEC_MAX_OUTPUT_CHARS deve ser um número positivo");
+  }
+
+  if (!config.shell.workspaceRoot.trim()) {
+    issues.push("KAEL_EXEC_WORKSPACE_ROOT nao pode ser vazio");
+  }
+
   if (issues.length > 0) {
     throw new ConfigValidationError(issues);
   }
@@ -264,6 +290,61 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
   const killGraceRaw = Number(process.env.KAEL_JOB_KILL_GRACE_MS ?? "3000");
   const killGraceMs = Number.isFinite(killGraceRaw) && killGraceRaw >= 0 ? Math.floor(killGraceRaw) : 3000;
 
+  const defaultExecTimeoutMs = globalConfig?.defaults.shell?.defaultTimeoutMs ?? 60_000;
+  const execTimeoutRaw = Number(process.env.KAEL_EXEC_TIMEOUT_MS ?? String(defaultExecTimeoutMs));
+  const defaultTimeoutMs =
+    Number.isFinite(execTimeoutRaw) && execTimeoutRaw > 0 ? Math.floor(execTimeoutRaw) : defaultExecTimeoutMs;
+
+  const defaultExecMaxTimeoutMs = globalConfig?.defaults.shell?.maxTimeoutMs ?? 15 * 60_000;
+  const execMaxTimeoutRaw = Number(
+    process.env.KAEL_EXEC_MAX_TIMEOUT_MS ?? String(defaultExecMaxTimeoutMs),
+  );
+  const maxTimeoutMs =
+    Number.isFinite(execMaxTimeoutRaw) && execMaxTimeoutRaw > 0
+      ? Math.floor(execMaxTimeoutRaw)
+      : defaultExecMaxTimeoutMs;
+
+  const defaultExecMaxOutputChars = globalConfig?.defaults.shell?.maxOutputChars ?? 120_000;
+  const execMaxOutputRaw = Number(
+    process.env.KAEL_EXEC_MAX_OUTPUT_CHARS ?? String(defaultExecMaxOutputChars),
+  );
+  const maxOutputChars =
+    Number.isFinite(execMaxOutputRaw) && execMaxOutputRaw > 0
+      ? Math.floor(execMaxOutputRaw)
+      : defaultExecMaxOutputChars;
+
+  const workspaceRoot = path.resolve(
+    process.env.KAEL_EXEC_WORKSPACE_ROOT?.trim() || globalConfig?.defaults.shell?.workspaceRoot || cwd,
+  );
+
+  const securityRaw =
+    process.env.KAEL_EXEC_SECURITY?.trim() || globalConfig?.defaults.shell?.security || "allowlist";
+  const security: ExecSecurity =
+    securityRaw === "deny" || securityRaw === "allowlist" || securityRaw === "full"
+      ? securityRaw
+      : "allowlist";
+
+  const askRaw = process.env.KAEL_EXEC_ASK?.trim() || globalConfig?.defaults.shell?.ask || "on-miss";
+  const ask: ExecAsk = askRaw === "off" || askRaw === "on-miss" || askRaw === "always" ? askRaw : "on-miss";
+
+  const defaultAllowlist = globalConfig?.defaults.shell?.allowlist ?? [
+    "ls",
+    "cat",
+    "pwd",
+    "echo",
+    "grep",
+    "find",
+    "curl",
+    "ffmpeg",
+    "ffprobe",
+    "vlc",
+  ];
+  const allowlistRaw = process.env.KAEL_EXEC_ALLOWLIST?.trim() || defaultAllowlist.join(",");
+  const allowlist = allowlistRaw
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => item.length > 0);
+
   const defaultTimeout = globalConfig?.defaults.pi.timeoutMs ?? 45000;
   const timeoutRaw = Number(process.env.KAEL_PI_TIMEOUT_MS ?? String(defaultTimeout));
   const timeoutMs = Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? timeoutRaw : defaultTimeout;
@@ -344,6 +425,15 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       maxConcurrentJobs,
       jobTimeoutMs,
       killGraceMs,
+    },
+    shell: {
+      workspaceRoot,
+      defaultTimeoutMs,
+      maxTimeoutMs,
+      maxOutputChars,
+      security,
+      ask,
+      allowlist,
     },
     pi,
   };

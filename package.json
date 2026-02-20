@@ -6,6 +6,10 @@
   "description": "Kael - super agente de video e automacao",
   "scripts": {
     "dev": "tsx src/cli/index.ts server",
+    "ui:install": "npm --prefix ui install",
+    "ui:dev": "npm --prefix ui run dev",
+    "ui:build": "npm --prefix ui run build",
+    "ui:check": "npm --prefix ui run check",
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/cli/index.js server",

@@ -13,6 +13,7 @@ Indice rapido para humanos e onboarding inicial.
 - `docs/planning/AGENT-DEV-GUIDE.md`
 - `docs/planning/PROJECT-STATUS.md`
 - `docs/architecture/README.md`
+- `docs/ui/UI-GUIDE.md`
 - `docs/how-jobs-and-heartbeat-work.md` (guia de jobs + heartbeat)
 
 ## Estado atual das fases (resumo rapido)
@@ -21,7 +22,8 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 2: concluida (engine hibrida + tools de video).
 - Fase 3: concluida (resiliencia operacional).
 - Fase 4: concluida (autonomia: heartbeat + scheduler persistente + schedules API/CLI).
-- Fase 5: em andamento (hardening: observabilidade + seguranca de execucao).
+- Fase 5: concluida (hardening: observabilidade + seguranca de execucao de jobs).
+- Fase 6: concluida (shell tools no PI: `exec` + `process` + `exec-approvals`).
 
 ## Estudos e referencias tecnicas
 

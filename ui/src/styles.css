@@ -1,0 +1,28 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-kael-bg text-kael-text font-sans antialiased;
+  margin: 0;
+  min-height: 100vh;
+  background-image:
+    radial-gradient(circle at 10% 10%, rgba(45, 212, 191, 0.2), transparent 40%),
+    radial-gradient(circle at 85% 5%, rgba(245, 158, 11, 0.16), transparent 38%),
+    linear-gradient(180deg, #081018 0%, #050b12 100%);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.kael-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #2a536d #0f1d2a;
+}
+

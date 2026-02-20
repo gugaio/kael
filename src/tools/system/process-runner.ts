@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import type { ChildProcessByStdio } from "node:child_process";
+import type { Readable, Writable } from "node:stream";
 
 export type SpawnOptions = {
   cwd?: string;
@@ -7,7 +8,7 @@ export type SpawnOptions = {
 };
 
 export type SpawnedProcess = {
-  process: ChildProcessWithoutNullStreams;
+  process: ChildProcessByStdio<Writable, Readable, Readable>;
 };
 
 export interface ProcessRunner {

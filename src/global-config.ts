@@ -22,6 +22,15 @@ export type KaelGlobalConfig = {
       heartbeatIntervalMs: number;
       schedulerTickMs: number;
     };
+    shell: {
+      workspaceRoot: string;
+      defaultTimeoutMs: number;
+      maxTimeoutMs: number;
+      maxOutputChars: number;
+      security: "deny" | "allowlist" | "full";
+      ask: "off" | "on-miss" | "always";
+      allowlist: string[];
+    };
     pi: {
       provider: string;
       model: string;
@@ -94,6 +103,26 @@ export function buildDefaultGlobalConfig(kaelHome: string): KaelGlobalConfig {
         heartbeatEnabled: true,
         heartbeatIntervalMs: 30000,
         schedulerTickMs: 1000,
+      },
+      shell: {
+        workspaceRoot: ".",
+        defaultTimeoutMs: 60_000,
+        maxTimeoutMs: 15 * 60_000,
+        maxOutputChars: 120_000,
+        security: "allowlist",
+        ask: "on-miss",
+        allowlist: [
+          "ls",
+          "cat",
+          "pwd",
+          "echo",
+          "grep",
+          "find",
+          "curl",
+          "ffmpeg",
+          "ffprobe",
+          "vlc",
+        ],
       },
       pi: {
         provider: "openai",

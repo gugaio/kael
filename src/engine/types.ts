@@ -29,6 +29,59 @@ export type EngineTooling = {
     type: string;
     output?: string;
   }[];
+  execCommand: (params: {
+    sessionKey: string;
+    command: string;
+    cwd?: string;
+    timeoutMs?: number;
+    background?: boolean;
+    security?: "deny" | "allowlist" | "full";
+    ask?: "off" | "on-miss" | "always";
+  }) => Promise<{
+    id: string;
+    command: string;
+    cwd: string;
+    status:
+      | "running"
+      | "completed"
+      | "failed"
+      | "canceled"
+      | "timed_out"
+      | "approval-pending"
+      | "denied";
+    startedAt: string;
+    endedAt?: string;
+    outputTail: string;
+    exitCode?: number | null;
+    approvalId?: string;
+  }>;
+  processCommand: (params: {
+    sessionKey: string;
+    action: "list" | "poll" | "kill";
+    sessionId?: string;
+  }) => Promise<{
+    ok: boolean;
+    action: "list" | "poll" | "kill";
+    message?: string;
+    sessions?: Array<{
+      id: string;
+      command: string;
+      cwd: string;
+      status: string;
+      startedAt: string;
+      endedAt?: string;
+      outputTail: string;
+    }>;
+    session?: {
+      id: string;
+      command: string;
+      cwd: string;
+      status: string;
+      startedAt: string;
+      endedAt?: string;
+      outputTail: string;
+    };
+  }>;
 };
 
 export type EngineTurnInput = {
