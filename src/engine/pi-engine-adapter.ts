@@ -4,6 +4,7 @@ import type { PiEngineConfig } from "../config.js";
 import { retry } from "../infra/retry.js";
 import { normalizePiError, PiEngineError } from "./pi-errors.js";
 import { createPiShellTools } from "./pi-tools.js";
+import { ToolLoopGuard } from "./tool-loop-guard.js";
 import type { AgentEngine, EngineTurnInput, EngineTurnOutput } from "./types.js";
 
 type PiAgentLike = {
@@ -70,6 +71,8 @@ function asSdkErrorMessage(event: unknown): string | null {
 }
 
 export class PiEngineAdapter implements AgentEngine {
+  private readonly loopGuard = new ToolLoopGuard();
+
   constructor(private readonly cfg: PiEngineConfig) {}
 
   async runTurn(input: EngineTurnInput): Promise<EngineTurnOutput> {
@@ -169,6 +172,7 @@ export class PiEngineAdapter implements AgentEngine {
         tools: createPiShellTools({
           sessionKey: input.sessionKey,
           tooling: input.tooling,
+          loopGuard: this.loopGuard,
         }),
         messages: [],
         isStreaming: false,

@@ -184,6 +184,20 @@ Definition of Done (checklist):
 - [x] Persistencia de approvals em `~/.kael/exec-approvals.json`.
 - [x] Testes unitarios de policy/approvals.
 
+### Fase 7 - Guardrails de Loop (exec/process)
+
+Status: **Em andamento**
+
+Objetivos:
+- Evitar loops de tool calling sem progresso em `exec` e `process`.
+- Reduzir custo e latencia em fluxos com polling/repeticao.
+
+Definition of Done (checklist):
+- [x] Detector de repeticao/no-progress no runtime PI.
+- [x] Bloqueio temporario com cooldown e mensagem explicita para o agente.
+- [x] Testes unitarios cobrindo bloqueio e casos de progresso.
+- [ ] Tuning de thresholds com telemetria real de uso.
+
 ## Registro de Atualizacoes por Commit
 
 ### 2026-02-20 - Fase 6: shell tools no PI (exec/process)
@@ -260,6 +274,30 @@ Pendencias:
 
 Proximo passo recomendado:
 - Fase 7: `/events/stream` + log follow realtime.
+
+### 2026-02-20 - Fase 7.0: loop detection para tools de shell
+
+Resumo:
+- Implementado `ToolLoopGuard` para detectar repeticao de chamadas `exec/process` sem progresso.
+- Integrado no fluxo de tools PI com bloqueio temporario (`cooldown`) e retorno estruturado (`blocked`, `reason`, `retryAfterMs`).
+- Cobertura inicial por testes unitarios validando: bloqueio por repeticao, nao bloqueio quando ha progresso e isolamento por sessao/tool.
+
+Arquivos-chave:
+- `src/engine/tool-loop-guard.ts`
+- `src/engine/tool-loop-guard.test.ts`
+- `src/engine/pi-tools.ts`
+- `src/engine/pi-engine-adapter.ts`
+- `docs/architecture/phases/phase-7.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Calibrar thresholds com feedback de uso real e logs.
+
+Proximo passo recomendado:
+- Fase 7.1: context guard + auto-compaction (item 2).
 
 ### 2026-02-19 - UI-1 (bootstrap): base frontend ops-first em `ui/`
 

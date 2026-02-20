@@ -1,5 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { EngineTooling } from "./types.js";
+import type { ToolLoopGuard } from "./tool-loop-guard.js";
 
 type TextBlock = {
   type: "text";
@@ -30,6 +31,7 @@ function formatSession(session: {
 export function createPiShellTools(params: {
   sessionKey: string;
   tooling: EngineTooling;
+  loopGuard?: ToolLoopGuard;
 }): AgentTool[] {
   const execTool: AgentTool = {
     name: "exec",
@@ -66,6 +68,23 @@ export function createPiShellTools(params: {
         security?: "deny" | "allowlist" | "full";
         ask?: "off" | "on-miss" | "always";
       };
+      const decision = params.loopGuard?.beforeCall({
+        sessionKey: params.sessionKey,
+        tool: "exec",
+        params: args,
+      });
+      if (decision && !decision.allowed) {
+        return {
+          content: textResult(
+            `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}`,
+          ),
+          details: {
+            blocked: true,
+            reason: decision.reason,
+            retryAfterMs: decision.retryAfterMs,
+          },
+        };
+      }
 
       const session = await params.tooling.execCommand({
         sessionKey: params.sessionKey,
@@ -75,6 +94,12 @@ export function createPiShellTools(params: {
         background: args.background,
         security: args.security,
         ask: args.ask,
+      });
+      params.loopGuard?.afterCall({
+        sessionKey: params.sessionKey,
+        tool: "exec",
+        params: args,
+        result: session,
       });
 
       return {
@@ -110,10 +135,33 @@ export function createPiShellTools(params: {
         action: "list" | "poll" | "kill";
         sessionId?: string;
       };
+      const decision = params.loopGuard?.beforeCall({
+        sessionKey: params.sessionKey,
+        tool: "process",
+        params: args,
+      });
+      if (decision && !decision.allowed) {
+        return {
+          content: textResult(
+            `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}`,
+          ),
+          details: {
+            blocked: true,
+            reason: decision.reason,
+            retryAfterMs: decision.retryAfterMs,
+          },
+        };
+      }
       const result = await params.tooling.processCommand({
         sessionKey: params.sessionKey,
         action: args.action,
         sessionId: args.sessionId,
+      });
+      params.loopGuard?.afterCall({
+        sessionKey: params.sessionKey,
+        tool: "process",
+        params: args,
+        result,
       });
 
       const text =
