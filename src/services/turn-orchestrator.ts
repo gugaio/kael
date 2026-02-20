@@ -1,5 +1,7 @@
 import type { AgentEngine, EngineTooling, EngineTurnInput, EngineTurnOutput } from "../engine/types.js";
+import { kaelLogger } from "../infra/logger.js";
 import type { SessionStore } from "../session/store.js";
+import type { SessionMessage } from "../types.js";
 
 type TurnOrchestratorConfig = {
   maxContextMessages: number;
@@ -14,8 +16,16 @@ type OrchestratedTurnInput = {
 
 type ContextMessage = NonNullable<EngineTurnInput["contextMessages"]>[number];
 
-function isConversationRole(role: string): role is "user" | "assistant" {
-  return role === "user" || role === "assistant";
+function isConversationRole(role: string): role is "user" | "assistant" | "system" {
+  return role === "user" || role === "assistant" || role === "system";
+}
+
+const COMPACTION_PREFIX = "[compaction]";
+
+function isUserOrAssistant(
+  message: SessionMessage,
+): message is SessionMessage & { role: "user" | "assistant" } {
+  return message.role === "user" || message.role === "assistant";
 }
 
 export class TurnOrchestrator {
@@ -26,6 +36,7 @@ export class TurnOrchestrator {
   ) {}
 
   async run(input: OrchestratedTurnInput): Promise<EngineTurnOutput> {
+    await this.maybeCompactContext(input.sessionKey, input.message);
     const contextMessages = await this.buildContextMessages(input.sessionKey, input.message);
 
     return this.engine.runTurn({
@@ -45,7 +56,8 @@ export class TurnOrchestrator {
     const conversational: ContextMessage[] = history
       .filter((message) => isConversationRole(message.role))
       .map((message) => ({
-        role: message.role === "assistant" ? "assistant" : "user",
+        role:
+          message.role === "assistant" ? "assistant" : message.role === "system" ? "system" : "user",
         content: message.content,
         createdAt: message.createdAt,
       }));
@@ -80,5 +92,72 @@ export class TurnOrchestrator {
     }
 
     return selected.reverse();
+  }
+
+  private async maybeCompactContext(sessionKey: string, currentMessage: string): Promise<void> {
+    const fetchLimit = Math.max(this.cfg.maxContextMessages * 12, this.cfg.maxContextMessages);
+    const history = await this.sessions.getMessages(sessionKey, fetchLimit);
+    const conversational = history.filter(isUserOrAssistant);
+    if (conversational.length === 0) {
+      return;
+    }
+
+    const trimmed = [...conversational];
+    const last = trimmed[trimmed.length - 1];
+    if (last?.role === "user" && last.content === currentMessage) {
+      trimmed.pop();
+    }
+
+    const hasRecentCompaction = history
+      .slice(-20)
+      .some((message) => message.role === "system" && message.content.startsWith(COMPACTION_PREFIX));
+    if (hasRecentCompaction) {
+      return;
+    }
+
+    const totalChars = trimmed.reduce((acc, item) => acc + item.content.length, 0);
+    const messageThreshold = Math.max(this.cfg.maxContextMessages * 3, this.cfg.maxContextMessages + 12);
+    const charsThreshold = Math.max(this.cfg.maxContextChars * 3, this.cfg.maxContextChars + 4000);
+    const shouldCompact = trimmed.length > messageThreshold || totalChars > charsThreshold;
+    if (!shouldCompact) {
+      return;
+    }
+
+    const keepRecent = Math.max(this.cfg.maxContextMessages, 12);
+    const older = trimmed.slice(0, Math.max(0, trimmed.length - keepRecent));
+    if (older.length < 6) {
+      return;
+    }
+
+    const summary = this.summarizeForCompaction(older);
+    await this.sessions.appendMessage(sessionKey, "system", `${COMPACTION_PREFIX}\n${summary}`);
+    kaelLogger.info("session.context.compacted", {
+      sessionKey,
+      summarizedMessages: older.length,
+      totalMessages: trimmed.length,
+      totalChars,
+    });
+  }
+
+  private summarizeForCompaction(messages: Array<{ role: "user" | "assistant"; content: string; createdAt: string }>): string {
+    const first = messages[0]?.createdAt ?? "";
+    const last = messages[messages.length - 1]?.createdAt ?? "";
+    const snippets = messages
+      .slice(-16)
+      .map((message) => {
+        const clean = message.content.replace(/\s+/g, " ").trim();
+        const clipped = clean.length > 180 ? `${clean.slice(0, 180)}...` : clean;
+        return `- ${message.role}: ${clipped}`;
+      })
+      .join("\n");
+
+    return [
+      "Resumo automatico de contexto antigo para preservar janela de tokens.",
+      `Janela resumida: ${first} -> ${last}`,
+      `Mensagens resumidas: ${messages.length}`,
+      "Trechos mais recentes da janela resumida:",
+      snippets,
+      "Use este resumo como contexto historico; priorize mensagens recentes fora da compaction.",
+    ].join("\n");
   }
 }

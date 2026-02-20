@@ -196,7 +196,8 @@ Definition of Done (checklist):
 - [x] Detector de repeticao/no-progress no runtime PI.
 - [x] Bloqueio temporario com cooldown e mensagem explicita para o agente.
 - [x] Testes unitarios cobrindo bloqueio e casos de progresso.
-- [ ] Tuning de thresholds com telemetria real de uso.
+- [x] Context guard com auto-compaction de historico antes de estourar contexto.
+- [ ] Tuning de thresholds e qualidade de resumo com telemetria real de uso.
 
 ## Registro de Atualizacoes por Commit
 
@@ -298,6 +299,30 @@ Pendencias:
 
 Proximo passo recomendado:
 - Fase 7.1: context guard + auto-compaction (item 2).
+
+### 2026-02-20 - Fase 7.1: context guard + auto-compaction
+
+Resumo:
+- Implementado guard de contexto no `TurnOrchestrator` para detectar crescimento excessivo de historico por mensagens/chars.
+- Adicionada auto-compaction com resumo persistido em mensagem `system` (`[compaction]`) para reduzir pressao de contexto.
+- Protecao contra compaction repetida em loop (nao compacta quando existe compaction recente na janela).
+- Contexto enviado ao engine passou a aceitar `role=system` para carregar resumo compactado.
+
+Arquivos-chave:
+- `src/services/turn-orchestrator.ts`
+- `src/services/turn-orchestrator.test.ts`
+- `src/engine/types.ts`
+- `docs/architecture/phases/phase-7.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Melhorar qualidade de resumo (hoje heuristico) e calibrar thresholds com telemetria.
+
+Proximo passo recomendado:
+- Fase 7.2: SSE de eventos/logs/lifecycle para UX realtime (item 3).
 
 ### 2026-02-19 - UI-1 (bootstrap): base frontend ops-first em `ui/`
 

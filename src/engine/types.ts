@@ -88,7 +88,7 @@ export type EngineTurnInput = {
   sessionKey: string;
   message: string;
   contextMessages?: Array<{
-    role: "user" | "assistant";
+    role: "user" | "assistant" | "system";
     content: string;
     createdAt: string;
   }>;
