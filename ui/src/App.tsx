@@ -5,6 +5,7 @@ import { HealthPage } from "./pages/HealthPage";
 import { JobDetailPage } from "./pages/JobDetailPage";
 import { JobsPage } from "./pages/JobsPage";
 import { OpsPage } from "./pages/OpsPage";
+import { PlansPage } from "./pages/PlansPage";
 import { SchedulesPage } from "./pages/SchedulesPage";
 
 export function App(): JSX.Element {
@@ -12,6 +13,7 @@ export function App(): JSX.Element {
     <AppShell>
       <Routes>
         <Route path="/" element={<OpsPage />} />
+        <Route path="/plans" element={<PlansPage />} />
         <Route path="/jobs" element={<JobsPage />} />
         <Route path="/jobs/:jobId" element={<JobDetailPage />} />
         <Route path="/schedules" element={<SchedulesPage />} />
@@ -22,4 +24,3 @@ export function App(): JSX.Element {
     </AppShell>
   );
 }
-

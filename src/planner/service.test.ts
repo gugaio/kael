@@ -220,4 +220,61 @@ describe("PlannerService", () => {
     const updated = planner.get(plan.id);
     expect(updated?.steps[0].status).toBe("failed");
   });
+
+  it("cancels whole plan and marks all steps as canceled", async () => {
+    const { planner } = await makePlanner();
+    const plan = await planner.create({
+      sessionKey: "s1",
+      title: "Cancelar plano",
+      steps: ["a", "b", "c"],
+    });
+    await planner.updateStep({
+      planId: plan.id,
+      stepIndex: 0,
+      status: "completed",
+    });
+
+    const canceled = await planner.cancelPlan({
+      planId: plan.id,
+      note: "cancelado no UI",
+    });
+    expect(canceled?.status).toBe("canceled");
+    expect(canceled?.steps.every((step) => step.status === "canceled")).toBe(true);
+  });
+
+  it("generates explicit shell steps from shell objective", async () => {
+    const { planner } = await makePlanner();
+    const plan = await planner.generate({
+      sessionKey: "s1",
+      objective:
+        "faz um ls no diretorio atual do projeto e depois um cat se existir um arquivo chamado package.json",
+      maxSteps: 8,
+    });
+
+    expect(plan.steps.some((step) => step.title.toLowerCase().includes("executar comando shell: ls"))).toBe(true);
+    expect(plan.steps.some((step) => step.title.toLowerCase().includes("executar comando shell: cat"))).toBe(true);
+  });
+
+  it("executes shell step without explicit command input when command is in step title", async () => {
+    const { planner } = await makePlanner();
+    const plan = await planner.create({
+      sessionKey: "s1",
+      title: "Shell plan",
+      steps: ["Executar comando shell: ls -la"],
+    });
+
+    const result = await planner.executeNext({
+      planId: plan.id,
+      runtime: {
+        execCommand: async ({ command }) => ({ id: "exec-123", status: command, command, cwd: "." }),
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("expected ok result");
+    }
+    expect(result.action).toBe("exec");
+    expect(result.execution?.status).toBe("ls -la");
+  });
 });

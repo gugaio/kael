@@ -58,17 +58,20 @@ Status: **Em andamento**
 
 Escopo minimo:
 - [x] Ops Overview com polling.
+- [x] Plans list + detail + execute-next + reconcile.
+- [x] Cancelamento de plano pela UI.
 - [x] Jobs list + detail + log tail + cancel.
 - [x] Schedules list + pause/resume.
 - [x] Chat sessions com envio de mensagem.
+- [x] Chat com sugestao contextual de plano + composer de geracao de plano.
 - [x] Health badge e pagina de saude.
 - [x] Painel de approvals de exec no Ops (approve/deny).
 - [ ] Cards operacionais de job inline no chat.
 
 DoD:
-- [ ] Usuario consegue criar/acompanhar/cancelar jobs sem CLI.
+- [x] Usuario consegue criar/acompanhar/cancelar jobs sem CLI.
 - [ ] Usuario consegue pausar/retomar schedules sem CLI.
-- [ ] Usuario consegue entender estado geral da operacao em uma tela.
+- [x] Usuario consegue entender estado geral da operacao em uma tela.
 - [ ] Experiencia funcional em desktop e mobile.
 
 ### UI-2 - Tempo Real e Diferenciacao

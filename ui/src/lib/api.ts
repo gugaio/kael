@@ -72,6 +72,40 @@ const MessagesSchema = z.object({
   ),
 });
 
+const PlanStepCheckpointSchema = z.object({
+  at: z.string(),
+  status: z.string(),
+  notes: z.string().optional(),
+});
+
+const PlanStepSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  status: z.string(),
+  notes: z.string().optional(),
+  updatedAt: z.string(),
+  checkpoints: z.array(PlanStepCheckpointSchema).optional(),
+  execution: z
+    .object({
+      kind: z.enum(["job", "exec"]),
+      refId: z.string(),
+      status: z.string(),
+      startedAt: z.string(),
+      command: z.string().optional(),
+    })
+    .optional(),
+});
+
+const PlanSchema = z.object({
+  id: z.string(),
+  sessionKey: z.string(),
+  title: z.string(),
+  status: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  steps: z.array(PlanStepSchema),
+});
+
 async function parseJson<T>(response: Response, schema: z.ZodSchema<T>): Promise<T> {
   const raw = await response.json();
   if (!response.ok) {
@@ -92,6 +126,7 @@ export type Job = z.infer<typeof JobSchema>;
 export type Schedule = z.infer<typeof ScheduleSchema>;
 export type Health = z.infer<typeof HealthSchema>;
 export type Message = z.infer<typeof MessagesSchema>["messages"][number];
+export type Plan = z.infer<typeof PlanSchema>;
 export type ExecApproval = {
   id: string;
   command: string;
@@ -157,6 +192,150 @@ export async function getSessionMessages(sessionKey: string): Promise<Message[]>
   const response = await fetch(`/api/sessions/${encodeURIComponent(sessionKey)}/messages?limit=80`);
   const data = await parseJson(response, MessagesSchema);
   return data.messages;
+}
+
+export async function getPlans(params?: {
+  sessionKey?: string;
+  status?: "active" | "completed" | "blocked" | "failed" | "canceled";
+  limit?: number;
+}): Promise<Plan[]> {
+  const query = new URLSearchParams();
+  if (params?.sessionKey?.trim()) {
+    query.set("sessionKey", params.sessionKey.trim());
+  }
+  if (params?.status?.trim()) {
+    query.set("status", params.status.trim());
+  }
+  if (params?.limit && Number.isFinite(params.limit)) {
+    query.set("limit", String(params.limit));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const response = await fetch(`/api/plans${suffix}`);
+  const schema = z.object({ ok: z.boolean(), plans: z.array(PlanSchema) });
+  const data = await parseJson(response, schema);
+  return data.plans;
+}
+
+export async function getPlan(planId: string): Promise<Plan> {
+  const response = await fetch(`/api/plans/${encodeURIComponent(planId)}`);
+  const schema = z.object({ ok: z.boolean(), plan: PlanSchema });
+  const data = await parseJson(response, schema);
+  return data.plan;
+}
+
+export async function generatePlan(params: {
+  sessionKey: string;
+  objective: string;
+  maxSteps?: number;
+}): Promise<Plan> {
+  const response = await fetch("/api/plans/generate", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      sessionKey: params.sessionKey,
+      objective: params.objective,
+      maxSteps: params.maxSteps,
+    }),
+  });
+  const schema = z.object({ ok: z.boolean(), plan: PlanSchema });
+  const data = await parseJson(response, schema);
+  return data.plan;
+}
+
+export async function executeNextPlanStep(params: {
+  planId: string;
+  sessionKey?: string;
+  inputs?: {
+    inputPath?: string;
+    outputPath?: string;
+    outputPlaylistPath?: string;
+    streamUrl?: string;
+    durationSeconds?: number;
+    segmentTime?: number;
+    args?: string[];
+    command?: string;
+    cwd?: string;
+    timeoutMs?: number;
+    background?: boolean;
+  };
+}): Promise<{
+  ok: boolean;
+  reason?: string;
+  message?: string;
+  stepIndex?: number;
+  action?: string;
+  execution?: {
+    kind: "job" | "exec";
+    refId: string;
+    status: string;
+    startedAt: string;
+    command?: string;
+  };
+  plan?: Plan;
+}> {
+  const response = await fetch(`/api/plans/${encodeURIComponent(params.planId)}/execute-next`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      sessionKey: params.sessionKey,
+      inputs: params.inputs,
+    }),
+  });
+  const schema = z.object({
+    ok: z.boolean(),
+    reason: z.string().optional(),
+    message: z.string().optional(),
+    stepIndex: z.number().optional(),
+    action: z.string().optional(),
+    execution: z
+      .object({
+        kind: z.enum(["job", "exec"]),
+        refId: z.string(),
+        status: z.string(),
+        startedAt: z.string(),
+        command: z.string().optional(),
+      })
+      .optional(),
+    plan: PlanSchema.optional(),
+  });
+  return parseJson(response, schema);
+}
+
+export async function reconcilePlans(params?: {
+  planId?: string;
+  limit?: number;
+}): Promise<{ scannedPlans: number; updatedPlans: number; updatedSteps: number }> {
+  const response = await fetch("/api/plans/reconcile", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      planId: params?.planId,
+      limit: params?.limit,
+    }),
+  });
+  const schema = z.object({
+    ok: z.boolean(),
+    scannedPlans: z.number(),
+    updatedPlans: z.number(),
+    updatedSteps: z.number(),
+  });
+  const data = await parseJson(response, schema);
+  return {
+    scannedPlans: data.scannedPlans,
+    updatedPlans: data.updatedPlans,
+    updatedSteps: data.updatedSteps,
+  };
+}
+
+export async function cancelPlan(planId: string, note?: string): Promise<Plan> {
+  const response = await fetch(`/api/plans/${encodeURIComponent(planId)}/cancel`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ note }),
+  });
+  const schema = z.object({ ok: z.boolean(), plan: PlanSchema });
+  const data = await parseJson(response, schema);
+  return data.plan;
 }
 
 export async function postChat(sessionKey: string, message: string): Promise<{ reply: string }> {

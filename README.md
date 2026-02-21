@@ -135,6 +135,7 @@ npx tsx src/cli/index.ts approval-deny --id <approvalId>
 - `POST /plans/generate`
 - `POST /plans/:planId/steps/:stepIndex`
 - `POST /plans/:planId/execute-next`
+- `POST /plans/:planId/cancel`
 - `POST /plans/reconcile`
 - `POST /jobs/transcode`
 - `POST /jobs/hls`

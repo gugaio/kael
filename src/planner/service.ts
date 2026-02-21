@@ -236,6 +236,48 @@ export class PlannerService {
     return next;
   }
 
+  async cancelPlan(params: { planId: string; note?: string }): Promise<ExecutionPlan | null> {
+    const current = this.plans.get(params.planId);
+    if (!current) {
+      return null;
+    }
+    const now = new Date().toISOString();
+    const note = params.note?.trim() || "Plano cancelado pelo operador.";
+    const steps = current.steps.map((step) => {
+      const checkpoints = [
+        ...(Array.isArray(step.checkpoints) ? step.checkpoints : []),
+        {
+          at: now,
+          status: "canceled" as const,
+          notes: note,
+        },
+      ];
+      return {
+        ...step,
+        status: "canceled" as const,
+        notes: mergeStepNotes(step.notes, note, now),
+        updatedAt: now,
+        checkpoints,
+        execution: step.execution
+          ? {
+              ...step.execution,
+              status: "canceled",
+            }
+          : undefined,
+      };
+    });
+
+    const next: ExecutionPlan = {
+      ...current,
+      steps,
+      status: "canceled",
+      updatedAt: now,
+    };
+    this.plans.set(next.id, next);
+    await this.persist();
+    return next;
+  }
+
   nextAction(planId: string): { stepIndex: number; step: PlanStep } | null {
     const plan = this.plans.get(planId);
     if (!plan) {
@@ -300,7 +342,11 @@ export class PlannerService {
     }
     const action = inferExecutionAction(next.step.title);
     const sessionKey = params.sessionKey?.trim() || plan.sessionKey;
-    const inputs = params.inputs ?? {};
+    const rawInputs = params.inputs ?? {};
+    const inputs: PlanExecutionInputs =
+      action === "exec" && !rawInputs.command
+        ? { ...rawInputs, command: extractShellCommandFromStepTitle(next.step.title) ?? undefined }
+        : rawInputs;
 
     if (action === "manual") {
       const updated = await this.updateStep({
@@ -543,7 +589,7 @@ function inferExecutionAction(stepTitleRaw: string): "probe" | "capture" | "tran
   if (has("hls", "playlist", "segment")) {
     return "hls";
   }
-  if (has("comando", "shell", "bash", "exec")) {
+  if (has("comando", "shell", "bash", "terminal")) {
     return "exec";
   }
   return "manual";
@@ -689,6 +735,18 @@ function deriveStepsFromObjective(objectiveRaw: string, maxStepsRaw?: number): s
 
   const has = (...tokens: string[]) => tokens.some((token) => objective.includes(token));
   const isVideoContext = has("video", "transcode", "hls", "stream", "ffmpeg", "vlc", "codec", "captura");
+  const shellCommands = extractShellCommandsFromObjective(objective);
+  const isShellContext =
+    shellCommands.length > 0 || has("bash", "shell", "terminal", "diretorio", "diretório");
+
+  if (isShellContext) {
+    const shellSteps = [
+      "Confirmar objetivo, escopo e seguranca dos comandos",
+      ...shellCommands.map((command) => `Executar comando shell: ${command}`),
+      "Validar saida dos comandos e consolidar resposta final",
+    ];
+    return shellSteps.slice(0, maxSteps);
+  }
 
   if (isVideoContext) {
     add("Validar caminhos e requisitos de ambiente");
@@ -720,4 +778,53 @@ function deriveStepsFromObjective(objectiveRaw: string, maxStepsRaw?: number): s
   }
 
   return steps.slice(0, maxSteps);
+}
+
+function extractShellCommandsFromObjective(objective: string): string[] {
+  const normalized = objective.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return [];
+  }
+  const parts = normalized
+    .split(/\b(?:depois|em seguida|then|e depois|;|,)\b/gi)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const commands: string[] = [];
+  for (const part of parts) {
+    const command = extractSingleShellCommand(part);
+    if (command && !commands.includes(command)) {
+      commands.push(command);
+    }
+  }
+  return commands.slice(0, 6);
+}
+
+function extractSingleShellCommand(text: string): string | null {
+  const quoted = text.match(/(?:comando\s+)?["'`](.+?)["'`]/i);
+  if (quoted?.[1]) {
+    return quoted[1].trim();
+  }
+  const patterns = [
+    /\b(ls(?:\s+[^\n,;]+)?)\b/i,
+    /\b(cat(?:\s+[^\n,;]+)?)\b/i,
+    /\b(pwd)\b/i,
+    /\b(find(?:\s+[^\n,;]+)?)\b/i,
+    /\b(grep(?:\s+[^\n,;]+)?)\b/i,
+    /\b(curl(?:\s+[^\n,;]+)?)\b/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+  return null;
+}
+
+function extractShellCommandFromStepTitle(stepTitle: string): string | null {
+  const match = stepTitle.match(/executar comando shell:\s*(.+)$/i);
+  if (!match?.[1]) {
+    return null;
+  }
+  return match[1].trim();
 }

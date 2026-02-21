@@ -337,6 +337,26 @@ export function createApiServer(app: KaelApp): FastifyInstance {
   });
 
   server.post<{
+    Params: { planId: string };
+    Body: {
+      note?: string;
+    };
+  }>("/plans/:planId/cancel", async (request) => {
+    const planId = request.params.planId?.trim();
+    if (!planId) {
+      throw new ApiError(400, "BAD_REQUEST", "planId is required");
+    }
+    const plan = await app.planner.cancelPlan({
+      planId,
+      note: request.body.note,
+    });
+    if (!plan) {
+      throw new ApiError(404, "NOT_FOUND", `plan ${planId} not found`);
+    }
+    return { ok: true, plan };
+  });
+
+  server.post<{
     Body: {
       planId?: string;
       limit?: number;

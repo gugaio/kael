@@ -175,6 +175,23 @@ function makeFakeApp(): KaelApp {
         updatedPlans: 1,
         updatedSteps: 1,
       }),
+      cancelPlan: async ({ planId }: { planId: string }) => ({
+        id: planId,
+        sessionKey: "s1",
+        title: "Plano fake",
+        status: "canceled",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        steps: [
+          {
+            id: "st-1",
+            title: "step",
+            status: "canceled",
+            updatedAt: new Date().toISOString(),
+            checkpoints: [{ at: new Date().toISOString(), status: "canceled" }],
+          },
+        ],
+      }),
     } as unknown as KaelApp["planner"],
     memory: {} as KaelApp["memory"],
     chat: {
@@ -435,6 +452,22 @@ describe("API integration", () => {
     expect(body.scannedPlans).toBe(2);
     expect(body.updatedPlans).toBe(1);
     expect(body.updatedSteps).toBe(1);
+    await server.close();
+  });
+
+  it("cancels plan through API", async () => {
+    const server = createApiServer(makeFakeApp());
+    const response = await server.inject({
+      method: "POST",
+      url: "/plans/plan-1/cancel",
+      payload: {
+        note: "cancelado pelo operador",
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.ok).toBe(true);
+    expect(body.plan.status).toBe("canceled");
     await server.close();
   });
 

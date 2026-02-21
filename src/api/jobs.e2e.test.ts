@@ -157,6 +157,19 @@ async function createJobsServer(params: {
         updatedPlans: 0,
         updatedSteps: 0,
       }),
+      cancelPlan: async ({
+        planId,
+      }: {
+        planId: string;
+      }) => ({
+        id: planId,
+        sessionKey: "s1",
+        title: "Plano",
+        status: "canceled",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        steps: [],
+      }),
     } as unknown as KaelApp["planner"],
     memory: {} as KaelApp["memory"],
     chat: {

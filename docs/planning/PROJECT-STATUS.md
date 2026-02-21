@@ -1035,3 +1035,81 @@ Pendencias:
 
 Proximo passo recomendado:
 - Fase 8.5: eventos/SSE para reduzir latencia de reconciliacao e alimentar UI em tempo real.
+
+### 2026-02-21 - UI-1 incremento: Plans operacionais na interface
+
+Resumo:
+- Adicionada aba/pagina `Plans` no frontend com lista e detalhe de planos.
+- Integrado consumo dos endpoints de planner (`GET /plans`, `GET /plans/:id`, `POST /plans/:id/execute-next`, `POST /plans/reconcile`).
+- UI agora mostra status dos steps, checkpoints e vinculo de execucao (`job/exec`) por step.
+- Acoes operacionais de plano disponiveis na UI: `Execute Next` e `Reconcile`.
+
+Arquivos-chave:
+- `ui/src/pages/PlansPage.tsx`
+- `ui/src/lib/api.ts`
+- `ui/src/App.tsx`
+- `ui/src/components/AppShell.tsx`
+- `ui/src/lib/format.ts`
+- `docs/ui/UI-GUIDE.md`
+
+Checklist de validacao:
+- [x] `npm --prefix ui run check`
+- [x] `npm --prefix ui run build`
+
+Pendencias:
+- Inputs de `execute-next` ainda em JSON livre (UX pode evoluir para formulario tipado).
+
+Proximo passo recomendado:
+- UI-2: stream/eventos (SSE) para reduzir dependencia de polling no acompanhamento de planos/jobs.
+
+### 2026-02-21 - UI-1 incremento: decisao de plano no Chat (opt-in com UX guiada)
+
+Resumo:
+- Chat ganhou sugestao contextual de planejamento para pedidos multi-etapa.
+- Implementado composer de plano no chat (objetivo + max steps) com geracao via `POST /plans/generate`.
+- Incluido card de "Plano da sessao" no Chat com status e atalho para a aba Plans.
+- Fluxo de decisao ficou explicito: enviar mensagem normal ou criar plano antes.
+
+Arquivos-chave:
+- `ui/src/pages/ChatPage.tsx`
+- `ui/src/lib/api.ts`
+- `docs/ui/UI-GUIDE.md`
+
+Checklist de validacao:
+- [x] `npm --prefix ui run check`
+- [x] `npm --prefix ui run build`
+
+Pendencias:
+- Sinal de recomendacao ainda usa heuristica local (sem classificacao pelo backend/LLM).
+
+Proximo passo recomendado:
+- UI-2: usar SSE/eventos para atualizar estado de plano/jobs em tempo real e reduzir polling.
+
+### 2026-02-21 - Planner/UI hardening: cancel plan + shell-plan fixes
+
+Resumo:
+- Adicionado cancelamento de plano end-to-end (`POST /plans/:planId/cancel` + botao `Cancel Plan` na UI).
+- `PlannerService` ganhou `cancelPlan()` para encerrar todas as etapas e marcar status final `canceled`.
+- Melhorada geracao de plano para objetivos shell (`ls/cat/...`) com steps explicitos de comando.
+- `execute-next` agora tenta inferir `command` automaticamente do titulo do step de shell quando input nao e enviado.
+
+Arquivos-chave:
+- `src/planner/service.ts`
+- `src/planner/service.test.ts`
+- `src/api/server.ts`
+- `src/api/server.test.ts`
+- `ui/src/lib/api.ts`
+- `ui/src/pages/PlansPage.tsx`
+- `README.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+- [x] `npm --prefix ui run check`
+- [x] `npm --prefix ui run build`
+
+Pendencias:
+- Planos antigos com steps genericos ainda podem exigir regeneracao para melhor UX de execucao shell.
+
+Proximo passo recomendado:
+- UI-2/SSE para atualizacao de plano e jobs em tempo real sem polling.
