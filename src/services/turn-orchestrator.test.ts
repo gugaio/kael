@@ -43,6 +43,14 @@ function createToolingStub(): EngineTooling {
       action: "list",
       sessions: [],
     }),
+    memorySearch: async () => [],
+    memoryGet: async () => ({
+      path: "MEMORY.md",
+      text: "",
+      startLine: 1,
+      endLine: 1,
+    }),
+    memoryWrite: async () => ({ path: "memory/2000-01-01.md" }),
   };
 }
 

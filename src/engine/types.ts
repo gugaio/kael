@@ -82,6 +82,32 @@ export type EngineTooling = {
       outputTail: string;
     };
   }>;
+  memorySearch: (params: {
+    query: string;
+    maxResults?: number;
+  }) => Promise<
+    Array<{
+      path: string;
+      startLine: number;
+      endLine: number;
+      snippet: string;
+      score: number;
+    }>
+  >;
+  memoryGet: (params: {
+    path: string;
+    from?: number;
+    lines?: number;
+  }) => Promise<{
+    path: string;
+    text: string;
+    startLine: number;
+    endLine: number;
+  }>;
+  memoryWrite: (params: {
+    content: string;
+    target?: "daily" | "long_term";
+  }) => Promise<{ path: string }>;
 };
 
 export type EngineTurnInput = {

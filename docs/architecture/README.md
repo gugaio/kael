@@ -11,6 +11,7 @@ Esta pasta descreve a evolucao arquitetural do Kael de forma incremental.
 - `docs/architecture/phases/phase-5.md` - Hardening e observabilidade operacional
 - `docs/architecture/phases/phase-6.md` - Shell tools no PI (exec/process + policy/approvals)
 - `docs/architecture/phases/phase-7.md` - Guardrails de loop para tools de shell
+- `docs/architecture/phases/phase-8.md` - Memoria operacional (memory_search/get/write)
 
 ## Como usar
 

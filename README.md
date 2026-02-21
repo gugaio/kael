@@ -24,6 +24,10 @@ Super agente para videos e automacao.
   - `exec` (comando shell com timeout/background)
   - `process` (list/poll/kill de sessoes em background)
   - policy e approvals persistidas em `~/.kael/exec-approvals.json`
+- Memoria operacional no PI:
+  - `memory_search` (busca em memoria markdown)
+  - `memory_get` (leitura de trecho por path/linhas)
+  - `memory_write` (persistencia daily/long_term)
 - Jobs de video assíncronos:
   - `transcode`
   - `convert_hls`
@@ -219,6 +223,7 @@ Observacao: Kael aplica janela de contexto multi-turn antes de chamar PI (via `T
 Observacao: scheduler suporta `intervalMs` e cron expression simples (5 campos, com `*`, `*/n` e valores exatos).
 Observacao: `KAEL_ENGINE_MODE=pi|hybrid` exige `KAEL_PI_API_KEY`; configuracoes invalidas falham no startup com mensagem clara.
 Observacao: comandos shell fora da allowlist podem retornar `approval-pending`; o arquivo de controle fica em `~/.kael/exec-approvals.json`.
+Observacao: memoria operacional e armazenada em `MEMORY.md` e `memory/YYYY-MM-DD.md` no `KAEL_EXEC_WORKSPACE_ROOT`.
 
 ## Logs e observabilidade
 

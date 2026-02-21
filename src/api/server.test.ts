@@ -83,6 +83,7 @@ function makeFakeApp(): KaelApp {
         canceled: true,
       }),
     } as unknown as KaelApp["jobs"],
+    memory: {} as KaelApp["memory"],
     chat: {
       handleMessage: async ({ message }: { message: string }) => {
         chatCallCount += 1;

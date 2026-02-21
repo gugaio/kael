@@ -8,6 +8,7 @@ import { createEngine } from "./engine/factory.js";
 import { resolveKaelHome } from "./global-config.js";
 import { JobManager } from "./jobs/manager.js";
 import { JobStore } from "./jobs/store.js";
+import { MemoryService } from "./memory/service.js";
 import { SessionStore } from "./session/store.js";
 import { ChatService } from "./services/chat-service.js";
 import { TurnOrchestrator } from "./services/turn-orchestrator.js";
@@ -19,6 +20,7 @@ export type KaelApp = {
   config: KaelConfig;
   sessions: SessionStore;
   jobs: JobManager;
+  memory: MemoryService;
   chat: ChatService;
   automation: AutomationService;
   shell: ShellToolService;
@@ -54,12 +56,18 @@ export async function createKaelApp(): Promise<KaelApp> {
     approvalsPath: path.join(resolveKaelHome(), "exec-approvals.json"),
   });
   await shell.init();
+  const memory = new MemoryService({
+    workspaceRoot: config.shell.workspaceRoot,
+    defaultMaxResults: 6,
+    maxSnippetChars: 1200,
+  });
+  await memory.init();
   const engine = createEngine(config);
   const orchestrator = new TurnOrchestrator(sessions, engine, {
     maxContextMessages: config.context.maxMessages,
     maxContextChars: config.context.maxChars,
   });
-  const chat = new ChatService(sessions, jobs, shell, orchestrator);
+  const chat = new ChatService(sessions, jobs, shell, memory, orchestrator);
   const heartbeat = new HeartbeatRunner(jobs, sessions);
   const scheduler = new PersistentScheduler(
     path.join(config.dataDir, "automation", "scheduler-jobs.json"),
@@ -85,6 +93,7 @@ export async function createKaelApp(): Promise<KaelApp> {
     config,
     sessions,
     jobs,
+    memory,
     chat,
     automation,
     shell,

@@ -199,6 +199,21 @@ Definition of Done (checklist):
 - [x] Context guard com auto-compaction de historico antes de estourar contexto.
 - [ ] Tuning de thresholds e qualidade de resumo com telemetria real de uso.
 
+### Fase 8 - Memoria Operacional (longo prazo)
+
+Status: **Em andamento**
+
+Objetivos:
+- Dar memoria persistente local ao Kael para fatos, preferencias e decisoes.
+- Expor ferramentas explicitas de recall/escrita para o PI.
+
+Definition of Done (checklist):
+- [x] Persistencia em `MEMORY.md` (duravel) e `memory/YYYY-MM-DD.md` (diaria).
+- [x] Tools `memory_search`, `memory_get` e `memory_write` integradas ao PI.
+- [x] Leitura restrita de memoria para paths permitidos.
+- [x] Testes unitarios de escrita, busca e seguranca de path.
+- [ ] Tuning de ranking/recencia e qualidade de snippets.
+
 ## Registro de Atualizacoes por Commit
 
 ### 2026-02-20 - Fase 6: shell tools no PI (exec/process)
@@ -323,6 +338,37 @@ Pendencias:
 
 Proximo passo recomendado:
 - Fase 7.2: SSE de eventos/logs/lifecycle para UX realtime (item 3).
+
+### 2026-02-20 - Fase 8.0: memoria operacional baseline
+
+Resumo:
+- Implementado `MemoryService` local-first com markdown como source-of-truth.
+- Adicionada separacao de memoria por horizonte:
+  - `MEMORY.md` para memoria de longo prazo;
+  - `memory/YYYY-MM-DD.md` para memoria diaria.
+- Integradas tools no PI:
+  - `memory_search` (snippets com path/linhas),
+  - `memory_get` (leitura segura),
+  - `memory_write` (persistencia explicita daily/long_term).
+- `memory_get` foi restringido a `MEMORY.md` e `memory/*.md` dentro do workspace.
+
+Arquivos-chave:
+- `src/memory/service.ts`
+- `src/memory/service.test.ts`
+- `src/engine/pi-tools.ts`
+- `src/services/chat-service.ts`
+- `src/app.ts`
+- `docs/architecture/phases/phase-8.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Melhorar ranking de busca com recencia e reduzir snippets redundantes.
+
+Proximo passo recomendado:
+- Fase 8.1: planner/executor explicito com estado de plano persistido.
 
 ### 2026-02-19 - UI-1 (bootstrap): base frontend ops-first em `ui/`
 

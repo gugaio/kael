@@ -107,6 +107,7 @@ async function createJobsServer(params: {
       countSessions: async () => 0,
     } as unknown as KaelApp["sessions"],
     jobs,
+    memory: {} as KaelApp["memory"],
     chat: {
       handleMessage: async () => ({
         reply: "ok",

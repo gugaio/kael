@@ -1,6 +1,7 @@
 import type { EngineTooling } from "../engine/types.js";
 import { normalizePiError } from "../engine/pi-errors.js";
 import type { JobManager } from "../jobs/manager.js";
+import type { MemoryService } from "../memory/service.js";
 import type { SessionStore } from "../session/store.js";
 import type { ShellToolService } from "../tools/system/shell-tool-service.js";
 import type { SessionMessage } from "../types.js";
@@ -18,6 +19,7 @@ export class ChatService {
     private readonly sessions: SessionStore,
     private readonly jobs: JobManager,
     private readonly shell: ShellToolService,
+    private readonly memory: MemoryService,
     private readonly orchestrator: TurnOrchestrator,
   ) {
     this.tooling = {
@@ -34,6 +36,9 @@ export class ChatService {
         })),
       execCommand: (params) => this.shell.exec(params),
       processCommand: (params) => this.shell.process(params),
+      memorySearch: ({ query, maxResults }) => this.memory.search(query, maxResults),
+      memoryGet: ({ path, from, lines }) => this.memory.get({ relPath: path, from, lines }),
+      memoryWrite: ({ content, target }) => this.memory.write({ content, target }),
     };
   }
 
