@@ -31,6 +31,7 @@ Super agente para videos e automacao.
 - Pesquisa web no PI:
   - `web_search` (Search API-first com fontes citadas)
   - `web_fetch` (fetch de URL com extracao de texto e cache TTL)
+  - `web_research` (search + fetch + resumo com evidencia e confianca)
 - Planner operacional no PI:
   - `plan_create`
   - `plan_generate`
@@ -235,6 +236,7 @@ Se a mesma chave for reutilizada com payload diferente, a API retorna `409`.
 - `KAEL_RESEARCH_TIMEOUT_MS` (default: `12000`)
 - `KAEL_RESEARCH_FETCH_MAX_CHARS` (default: `12000`)
 - `KAEL_RESEARCH_FETCH_CACHE_TTL_MS` (default: `600000`)
+- `KAEL_RESEARCH_FETCH_MAX_REDIRECTS` (default: `3`)
 
 ### Runtime do PI
 

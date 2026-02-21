@@ -60,6 +60,14 @@ function createToolingStub(): EngineTooling {
       fetchedAt: new Date().toISOString(),
       cached: false,
     }),
+    webResearch: async () => ({
+      query: "q",
+      summary: "s",
+      confidence: 0.7,
+      confidenceReason: "r",
+      evidence: [],
+      notes: [],
+    }),
     planCreate: async () => ({
       id: "p1",
       sessionKey: "s1",

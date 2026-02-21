@@ -232,10 +232,12 @@ Objetivos:
 Definition of Done (checklist):
 - [x] Tool `web_search` integrada ao PI.
 - [x] Tool `web_fetch` integrada ao PI.
+- [x] Tool `web_research` integrada ao PI.
 - [x] Provider API-first inicial (`tavily`) com contrato plugavel.
 - [x] Memoria de pesquisas por sessao em arquivo local.
 - [x] Cache de fetch por URL com TTL configuravel.
 - [x] Configuracao `KAEL_RESEARCH_*` documentada e validada no startup.
+- [x] Sumarizacao multi-fonte com evidencia e score de confianca.
 - [ ] Re-ranking avancado e deduplicacao semantica.
 - [ ] Suporte opcional a multiplos providers.
 
@@ -264,6 +266,53 @@ Pendencias:
 
 Proximo passo recomendado:
 - Fase 9.3: sumarizacao com citacoes robustas e score de confianca por evidencia.
+
+### 2026-02-21 - Fase 9.3: web_research (sintese multi-fonte com confianca)
+
+Resumo:
+- Criada tool `web_research` no PI para pipeline completo de pesquisa em uma chamada.
+- Implementado `ResearchService.research()` com `web_search + web_fetch(top N) + sintese`.
+- Adicionado retorno estruturado com `summary`, `evidence`, `confidence` e `confidenceReason`.
+- Mantida persistencia/caching da fase anterior para reduzir latencia em pesquisas repetidas.
+
+Arquivos-chave:
+- `src/research/service.ts`
+- `src/research/types.ts`
+- `src/engine/pi-tools.ts`
+- `src/engine/types.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Ajustar heuristica de confianca com sinais de recencia/autoridade.
+
+Proximo passo recomendado:
+- Fase 9.4: ranking de evidencia e confianca baseada em features de fonte/tempo.
+
+### 2026-02-21 - Fase 9.4 (item 1): SSRF guard em web_fetch
+
+Resumo:
+- Implementado guard de SSRF para `web_fetch` com bloqueio de localhost/faixas privadas.
+- Redirects passaram a ser manuais com revalidacao de destino a cada salto.
+- Adicionada configuracao `KAEL_RESEARCH_FETCH_MAX_REDIRECTS`.
+
+Arquivos-chave:
+- `src/research/ssrf-guard.ts`
+- `src/research/service.ts`
+- `src/config.ts`
+- `src/research/ssrf-guard.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Item 2: wrapping de conteudo externo nao confiavel (`web_search`/`web_fetch`).
+
+Proximo passo recomendado:
+- Implementar item 2 (external-content wrapping) antes de evoluir ranking/confianca.
 
 ### 2026-02-21 - Fase 9.1: web_search API-first (Tavily + memoria por sessao)
 

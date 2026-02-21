@@ -367,6 +367,68 @@ export function createPiShellTools(params: {
     },
   };
 
+  const webResearchTool: AgentTool = {
+    name: "web_research",
+    label: "Web Research",
+    description:
+      "Executa pesquisa completa (search + fetch de fontes) e retorna resumo com evidencias e nivel de confianca.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Pergunta/tema de pesquisa" },
+        maxResults: { type: "number", description: "Quantidade maxima de fontes de busca" },
+        fetchTop: { type: "number", description: "Quantidade de fontes para web_fetch automatico" },
+        fetchMaxChars: { type: "number", description: "Limite de texto por fonte fetched" },
+        recencyDays: { type: "number", description: "Recencia em dias (opcional)" },
+        domainsAllow: { type: "array", items: { type: "string" } },
+        domainsBlock: { type: "array", items: { type: "string" } },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const args = (rawParams ?? {}) as {
+        query: string;
+        maxResults?: number;
+        fetchTop?: number;
+        fetchMaxChars?: number;
+        recencyDays?: number;
+        domainsAllow?: string[];
+        domainsBlock?: string[];
+      };
+      const result = await params.tooling.webResearch({
+        sessionKey: params.sessionKey,
+        query: args.query,
+        maxResults: args.maxResults,
+        fetchTop: args.fetchTop,
+        fetchMaxChars: args.fetchMaxChars,
+        recencyDays: args.recencyDays,
+        domainsAllow: args.domainsAllow,
+        domainsBlock: args.domainsBlock,
+      });
+      const text = [
+        `confidence=${result.confidence}`,
+        `confidenceReason=${result.confidenceReason}`,
+        "",
+        "summary:",
+        result.summary,
+        "",
+        "evidence:",
+        ...result.evidence
+          .slice(0, 6)
+          .map(
+            (item, idx) =>
+              `${idx + 1}. ${item.source.title} | ${item.source.url}${item.fetch ? " | fetched=true" : ""}`,
+          ),
+        ...(result.notes.length > 0 ? ["", "notes:", ...result.notes.map((item) => `- ${item}`)] : []),
+      ].join("\n");
+      return {
+        content: textResult(text),
+        details: result,
+      };
+    },
+  };
+
   const planCreateTool: AgentTool = {
     name: "plan_create",
     label: "Plan Create",
@@ -637,6 +699,7 @@ export function createPiShellTools(params: {
     memoryWriteTool,
     webSearchTool,
     webFetchTool,
+    webResearchTool,
     planCreateTool,
     planGenerateTool,
     planListTool,

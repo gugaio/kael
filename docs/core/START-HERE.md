@@ -33,6 +33,7 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 8.4: concluida (reconciliacao automatica de steps com status final de `job/exec`).
 - Fase 9.1: concluida (research API-first com `web_search`, Tavily e memoria por sessao).
 - Fase 9.2: concluida (enriquecimento por URL com `web_fetch`, extracao de texto e cache TTL).
+- Fase 9.3: concluida (sintese multi-fonte com `web_research` e score de confianca).
 
 ## Estudos e referencias tecnicas
 

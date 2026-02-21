@@ -42,7 +42,22 @@ Adicionar capacidade de pesquisa web ao Kael com baixa complexidade operacional:
   - download HTTP/HTTPS;
   - extracao de texto limpo de HTML;
   - cache por URL em `dataDir/research/fetch-cache.json`;
-  - TTL configuravel para reduzir latencia/custo de repeticao.
+- TTL configuravel para reduzir latencia/custo de repeticao.
+
+## Fase 9.3 (sintese com evidencia)
+
+- Tool `web_research` adicionada ao PI.
+- Pipeline: `web_search` -> `web_fetch` (top N fontes) -> sintese textual.
+- Retorno inclui:
+  - `summary`;
+  - `evidence` por fonte (com/extrato fetched quando disponivel);
+  - `confidence` (0..1) e `confidenceReason`.
+
+## Fase 9.4 (item 1 - SSRF hardening)
+
+- `web_fetch` agora valida host/IP antes do request (bloqueia localhost e faixas privadas).
+- Redirects sao seguidos manualmente com revalidacao em cada salto.
+- Limite de redirects configuravel por `KAEL_RESEARCH_FETCH_MAX_REDIRECTS`.
 
 ## Configuracao
 
@@ -63,4 +78,4 @@ Adicionar capacidade de pesquisa web ao Kael com baixa complexidade operacional:
 
 ## Proximo passo recomendado
 
-Fase 9.3: sumarizacao/citacao cruzando multiplas fontes fetched com score de confianca.
+Fase 9.4: melhorar ranking de evidencia e heuristica de confianca com sinais de recencia/autoridade.

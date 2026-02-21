@@ -68,6 +68,7 @@ export type KaelConfig = {
     timeoutMs: number;
     fetchMaxChars: number;
     fetchCacheTtlMs: number;
+    fetchMaxRedirects: number;
   };
   pi: PiEngineConfig;
 };
@@ -229,6 +230,10 @@ function validateConfig(config: KaelConfig): void {
 
   if (!Number.isFinite(config.research.fetchCacheTtlMs) || config.research.fetchCacheTtlMs < 0) {
     issues.push("KAEL_RESEARCH_FETCH_CACHE_TTL_MS deve ser zero ou positivo");
+  }
+
+  if (!Number.isFinite(config.research.fetchMaxRedirects) || config.research.fetchMaxRedirects < 0) {
+    issues.push("KAEL_RESEARCH_FETCH_MAX_REDIRECTS deve ser zero ou positivo");
   }
 
   if (issues.length > 0) {
@@ -462,6 +467,14 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     Number.isFinite(researchFetchCacheTtlRaw) && researchFetchCacheTtlRaw >= 0
       ? Math.floor(researchFetchCacheTtlRaw)
       : 10 * 60 * 1000;
+  const researchFetchMaxRedirectsRaw = Number(
+    process.env.KAEL_RESEARCH_FETCH_MAX_REDIRECTS ??
+      String(globalConfig?.defaults.research?.fetchMaxRedirects ?? 3),
+  );
+  const researchFetchMaxRedirects =
+    Number.isFinite(researchFetchMaxRedirectsRaw) && researchFetchMaxRedirectsRaw >= 0
+      ? Math.floor(researchFetchMaxRedirectsRaw)
+      : 3;
   const researchApiKey = process.env.KAEL_RESEARCH_API_KEY?.trim();
 
   const defaultTimeout = globalConfig?.defaults.pi.timeoutMs ?? 45000;
@@ -566,6 +579,7 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       timeoutMs: researchTimeoutMs,
       fetchMaxChars: researchFetchMaxChars,
       fetchCacheTtlMs: researchFetchCacheTtlMs,
+      fetchMaxRedirects: researchFetchMaxRedirects,
     },
     pi,
   };

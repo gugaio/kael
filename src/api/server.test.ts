@@ -56,6 +56,7 @@ function makeFakeApp(): KaelApp {
         timeoutMs: 12_000,
         fetchMaxChars: 12_000,
         fetchCacheTtlMs: 600_000,
+        fetchMaxRedirects: 3,
       },
       pi: {
         enabled: true,

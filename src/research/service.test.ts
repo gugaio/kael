@@ -15,7 +15,8 @@ async function makeService(provider: SearchProvider, fetchImpl?: typeof fetch) {
     timeoutMs: 12000,
     fetchMaxChars: 2000,
     fetchCacheTtlMs: 60_000,
-  }, fetchImpl);
+    fetchMaxRedirects: 3,
+  }, fetchImpl, async () => [{ address: "93.184.216.34", family: 4 }]);
   return { service, dataDir };
 }
 
@@ -99,5 +100,40 @@ describe("ResearchService", () => {
     expect(first.content).toContain("Hello");
     expect(second.cached).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("builds multi-source synthesis with confidence", async () => {
+    const provider: SearchProvider = {
+      search: vi.fn(async () => ({
+        results: [
+          { title: "Source A", url: "https://a.example.com", snippet: "A snippet", score: 0.9 },
+          { title: "Source B", url: "https://b.example.com", snippet: "B snippet", score: 0.8 },
+        ],
+      })),
+    };
+    const fetchMock = vi
+      .fn(async (url: string | URL | Request) => {
+        const asString = String(url);
+        const body = asString.includes("a.example.com")
+          ? "<html><title>A</title><body>Evidence from source A</body></html>"
+          : "<html><title>B</title><body>Evidence from source B</body></html>";
+        return new Response(body, {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        });
+      }) as unknown as typeof fetch;
+    const { service } = await makeService(provider, fetchMock);
+
+    const result = await service.research({
+      sessionKey: "main",
+      query: "compare A and B",
+      maxResults: 2,
+      fetchTop: 2,
+    });
+
+    expect(result.summary).toContain("Evidencias principais");
+    expect(result.evidence.length).toBeGreaterThan(0);
+    expect(result.confidence).toBeGreaterThan(0.5);
+    expect(result.confidence).toBeLessThanOrEqual(1);
   });
 });

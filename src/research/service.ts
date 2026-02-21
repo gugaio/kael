@@ -1,9 +1,13 @@
 import path from "node:path";
 import { kaelLogger } from "../infra/logger.js";
 import { readJsonFile, writeJsonFile } from "../infra/fs.js";
+import { fetchWithSsrFGuard } from "./ssrf-guard.js";
+import type { HostLookup } from "./ssrf-guard.js";
 import type {
   SearchProvider,
   WebFetchResult,
+  WebResearchQuery,
+  WebResearchResult,
   WebSearchQuery,
   WebSearchResult,
   WebSource,
@@ -17,6 +21,7 @@ type ResearchServiceConfig = {
   timeoutMs: number;
   fetchMaxChars: number;
   fetchCacheTtlMs: number;
+  fetchMaxRedirects: number;
 };
 
 type ResearchMemoryEntry = {
@@ -144,6 +149,26 @@ function extractTitle(html: string): string | undefined {
   return text || undefined;
 }
 
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function computeConfidence(params: {
+  sourceCount: number;
+  fetchedCount: number;
+  avgSourceScore: number;
+}): { confidence: number; reason: string } {
+  const sourceFactor = Math.min(1, params.sourceCount / 5);
+  const fetchFactor = Math.min(1, params.fetchedCount / 3);
+  const scoreFactor = Math.max(0, Math.min(1, params.avgSourceScore / 1));
+  const confidence = round2(0.35 * sourceFactor + 0.4 * fetchFactor + 0.25 * scoreFactor);
+  const reason =
+    params.fetchedCount === 0
+      ? "Sem fetch de conteudo das fontes; confianca limitada a snippets."
+      : `Baseado em ${params.sourceCount} fontes (${params.fetchedCount} com conteudo extraido).`;
+  return { confidence, reason };
+}
+
 export class ResearchService {
   private readonly enabled: boolean;
   private readonly rootDir: string;
@@ -152,12 +177,14 @@ export class ResearchService {
   private readonly timeoutMs: number;
   private readonly fetchMaxChars: number;
   private readonly fetchCacheTtlMs: number;
+  private readonly fetchMaxRedirects: number;
   private readonly cachePath: string;
 
   constructor(
     private readonly provider: SearchProvider,
     cfg: ResearchServiceConfig,
     private readonly fetchImpl: typeof fetch = fetch,
+    private readonly hostLookup?: HostLookup,
   ) {
     this.rootDir = path.join(cfg.dataDir, "research");
     this.enabled = cfg.enabled;
@@ -166,6 +193,7 @@ export class ResearchService {
     this.timeoutMs = Math.max(1000, Math.floor(cfg.timeoutMs));
     this.fetchMaxChars = Math.max(500, Math.floor(cfg.fetchMaxChars));
     this.fetchCacheTtlMs = Math.max(0, Math.floor(cfg.fetchCacheTtlMs));
+    this.fetchMaxRedirects = Math.max(0, Math.floor(cfg.fetchMaxRedirects));
     this.cachePath = path.join(this.rootDir, "fetch-cache.json");
   }
 
@@ -266,15 +294,18 @@ export class ResearchService {
     }
 
     const startedAt = Date.now();
-    const response = await this.fetchImpl(parsed.toString(), {
-      method: "GET",
+    const guarded = await fetchWithSsrFGuard({
+      url: parsed.toString(),
+      fetchImpl: this.fetchImpl,
+      lookup: this.hostLookup,
+      timeoutMs: this.timeoutMs,
+      maxRedirects: this.fetchMaxRedirects,
       headers: {
         "user-agent": "KaelResearchBot/0.1 (+local-agent)",
         accept: "text/html, text/plain;q=0.9, */*;q=0.7",
       },
-      redirect: "follow",
-      signal: AbortSignal.timeout(this.timeoutMs),
     });
+    const response = guarded.response;
     if (!response.ok) {
       throw new Error(`web_fetch failed status=${response.status}`);
     }
@@ -286,7 +317,7 @@ export class ResearchService {
     const content = clip(cleaned, maxChars);
     const excerpt = clip(content, Math.min(300, maxChars));
     const fetchedAt = new Date().toISOString();
-    const finalUrl = response.url || parsed.toString();
+    const finalUrl = guarded.finalUrl || response.url || parsed.toString();
 
     const entry: WebFetchCacheEntry = {
       url: parsed.toString(),
@@ -318,6 +349,110 @@ export class ResearchService {
     return {
       ...entry,
       cached: false,
+    };
+  }
+
+  async research(params: { sessionKey: string } & WebResearchQuery): Promise<WebResearchResult> {
+    const query = params.query.trim();
+    if (!query) {
+      throw new Error("web_research query cannot be empty");
+    }
+
+    const search = await this.search({
+      sessionKey: params.sessionKey,
+      query,
+      maxResults: params.maxResults,
+      recencyDays: params.recencyDays,
+      domainsAllow: params.domainsAllow,
+      domainsBlock: params.domainsBlock,
+    });
+
+    const fetchTopRaw = params.fetchTop ?? 3;
+    const fetchTop = Math.max(0, Math.min(5, Math.floor(fetchTopRaw)));
+    const picked = search.sources.slice(0, fetchTop);
+    const evidence: WebResearchResult["evidence"] = [];
+    const notes = [...search.notes];
+
+    for (const source of search.sources) {
+      evidence.push({ source });
+    }
+    for (let idx = 0; idx < picked.length; idx += 1) {
+      const source = picked[idx];
+      if (!source) {
+        continue;
+      }
+      try {
+        const fetched = await this.fetchUrl({
+          sessionKey: params.sessionKey,
+          url: source.url,
+          maxChars: params.fetchMaxChars,
+        });
+        const target = evidence.find((item) => item.source.url === source.url);
+        if (target) {
+          target.fetch = {
+            title: fetched.title,
+            excerpt: fetched.excerpt,
+            contentChars: fetched.content.length,
+            cached: fetched.cached,
+          };
+        }
+      } catch (error) {
+        notes.push(
+          `Falha ao extrair ${source.url}: ${
+            error instanceof Error ? error.message : "erro desconhecido"
+          }`,
+        );
+      }
+    }
+
+    const fetchedCount = evidence.filter((item) => item.fetch).length;
+    const avgSourceScore =
+      search.sources.length > 0
+        ? search.sources.reduce((acc, item) => acc + item.score, 0) / search.sources.length
+        : 0;
+    const { confidence, reason } = computeConfidence({
+      sourceCount: search.sources.length,
+      fetchedCount,
+      avgSourceScore,
+    });
+
+    const bullets = evidence
+      .slice(0, 5)
+      .map((item, idx) => {
+        const base = `${idx + 1}. ${item.source.title} (${item.source.url})`;
+        if (item.fetch?.excerpt) {
+          return `${base}\n   - evidência: ${item.fetch.excerpt}`;
+        }
+        if (item.source.snippet) {
+          return `${base}\n   - snippet: ${item.source.snippet}`;
+        }
+        return base;
+      })
+      .join("\n");
+    const summary = [
+      `Pesquisa: "${query}"`,
+      "",
+      "Evidencias principais:",
+      bullets || "- sem evidencias",
+      "",
+      `Confianca: ${confidence} (${reason})`,
+    ].join("\n");
+
+    kaelLogger.info("research.synthesis.completed", {
+      sessionKey: params.sessionKey,
+      query,
+      sourceCount: search.sources.length,
+      fetchedCount,
+      confidence,
+    });
+
+    return {
+      query,
+      summary,
+      confidence,
+      confidenceReason: reason,
+      evidence,
+      notes,
     };
   }
 

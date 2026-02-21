@@ -6,6 +6,11 @@ export type WebSearchQuery = {
   domainsBlock?: string[];
 };
 
+export type WebResearchQuery = WebSearchQuery & {
+  fetchTop?: number;
+  fetchMaxChars?: number;
+};
+
 export type WebSource = {
   title: string;
   url: string;
@@ -29,6 +34,25 @@ export type WebFetchResult = {
   contentType?: string;
   fetchedAt: string;
   cached: boolean;
+};
+
+export type WebEvidenceItem = {
+  source: WebSource;
+  fetch?: {
+    title?: string;
+    excerpt: string;
+    contentChars: number;
+    cached: boolean;
+  };
+};
+
+export type WebResearchResult = {
+  query: string;
+  summary: string;
+  confidence: number;
+  confidenceReason: string;
+  evidence: WebEvidenceItem[];
+  notes: string[];
 };
 
 export type SearchProviderRequest = {
