@@ -124,7 +124,17 @@ export function ChatPage(): JSX.Element {
         />
       </Panel>
       <div className="min-w-0 lg:col-span-3">
-        <Panel title="Conversation">
+        <Panel
+          title="Conversation"
+          right={(
+            <Link
+              to="/chat/daily"
+              className="rounded border border-kael-border px-2 py-1 text-xs text-kael-muted hover:border-kael-accent/50 hover:text-kael-text"
+            >
+              Daily Chat UI
+            </Link>
+          )}
+        >
           {latestPlan && (
             <div className="mb-3 rounded-xl border border-kael-border bg-kael-panelSoft p-3">
               <div className="mb-1 flex items-center justify-between gap-2">
