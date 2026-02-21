@@ -306,6 +306,33 @@ export function createPiShellTools(params: {
     },
   };
 
+  const planGenerateTool: AgentTool = {
+    name: "plan_generate",
+    label: "Plan Generate",
+    description: "Gera automaticamente um plano executavel a partir de um objetivo.",
+    parameters: {
+      type: "object",
+      properties: {
+        objective: { type: "string", description: "Objetivo em linguagem natural" },
+        maxSteps: { type: "number", description: "Limite de etapas no plano" },
+      },
+      required: ["objective"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const args = (rawParams ?? {}) as { objective: string; maxSteps?: number };
+      const plan = await params.tooling.planGenerate({
+        sessionKey: params.sessionKey,
+        objective: args.objective,
+        maxSteps: args.maxSteps,
+      });
+      return {
+        content: textResult(`planId=${plan.id}\nstatus=${plan.status}\nsteps=${plan.steps.length}`),
+        details: plan,
+      };
+    },
+  };
+
   const planListTool: AgentTool = {
     name: "plan_list",
     label: "Plan List",
@@ -426,6 +453,7 @@ export function createPiShellTools(params: {
     memoryGetTool,
     memoryWriteTool,
     planCreateTool,
+    planGenerateTool,
     planListTool,
     planUpdateStepTool,
     planNextTool,

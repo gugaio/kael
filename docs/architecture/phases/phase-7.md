@@ -16,7 +16,7 @@ Entregas:
   - injeta resumo persistido como mensagem `system` (`[compaction] ...`);
   - evita compaction repetida em loop (verifica compaction recente);
   - inclui mensagem de compaction no contexto enviado ao engine.
-- Testes unitarios da compaction (`src/services/turn-orchestrator.test.ts`).
+- Testes unitarios da compaction (`src/chat/turn-orchestrator.test.ts`).
 
 Decisoes:
 - Escopo inicial limitado a `exec` e `process` (alto risco de loop e custo).

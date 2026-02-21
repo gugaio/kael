@@ -127,6 +127,21 @@ async function createJobsServer(params: {
         updatedAt: new Date().toISOString(),
         steps: [],
       }),
+      generate: async ({
+        sessionKey,
+        objective,
+      }: {
+        sessionKey: string;
+        objective: string;
+      }) => ({
+        id: "plan-generated",
+        sessionKey,
+        title: `Plano: ${objective}`,
+        status: "active",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        steps: [],
+      }),
       updateStep: async () => null,
       appendStep: async () => null,
       nextAction: () => null,

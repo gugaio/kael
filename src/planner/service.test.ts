@@ -51,6 +51,7 @@ describe("PlannerService", () => {
       status: "completed",
     });
     expect(p2?.status).toBe("completed");
+    expect(p2?.steps[1].checkpoints.length).toBeGreaterThanOrEqual(2);
   });
 
   it("returns next action from pending/in_progress steps", async () => {
@@ -91,5 +92,21 @@ describe("PlannerService", () => {
       status: "canceled",
     });
     expect(updated?.status).toBe("canceled");
+  });
+
+  it("generates plan from objective with derived steps", async () => {
+    const { planner } = await makePlanner();
+    const plan = await planner.generate({
+      sessionKey: "s1",
+      objective: "capturar stream, transcodar para mp4 e gerar hls agendado",
+      maxSteps: 10,
+    });
+
+    expect(plan.steps.length).toBeGreaterThanOrEqual(5);
+    expect(plan.title.toLowerCase()).toContain("capturar stream");
+    expect(plan.steps.some((step) => step.title.toLowerCase().includes("captura"))).toBe(true);
+    expect(plan.steps.some((step) => step.title.toLowerCase().includes("transcode"))).toBe(true);
+    expect(plan.steps.some((step) => step.title.toLowerCase().includes("hls"))).toBe(true);
+    expect(plan.steps.some((step) => step.title.toLowerCase().includes("schedule"))).toBe(true);
   });
 });

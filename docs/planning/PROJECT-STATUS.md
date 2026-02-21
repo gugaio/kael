@@ -213,6 +213,8 @@ Definition of Done (checklist):
 - [x] Leitura restrita de memoria para paths permitidos.
 - [x] Testes unitarios de escrita, busca e seguranca de path.
 - [x] Planner/executor baseline com plano persistido e tools de plano no PI.
+- [x] Planner inteligente inicial com `plan_generate` (objetivo -> plano heuristico).
+- [x] Checkpoints por etapa no planner (historico de transicoes + notas acumuladas).
 - [ ] Tuning de ranking/recencia e qualidade de snippets.
 - [ ] Planner inteligente (auto-refino/checkpoints) para execucao multi-etapa.
 
@@ -351,8 +353,8 @@ Resumo:
 - Contexto enviado ao engine passou a aceitar `role=system` para carregar resumo compactado.
 
 Arquivos-chave:
-- `src/services/turn-orchestrator.ts`
-- `src/services/turn-orchestrator.test.ts`
+- `src/chat/turn-orchestrator.ts`
+- `src/chat/turn-orchestrator.test.ts`
 - `src/engine/types.ts`
 - `docs/architecture/phases/phase-7.md`
 
@@ -383,7 +385,7 @@ Arquivos-chave:
 - `src/memory/service.ts`
 - `src/memory/service.test.ts`
 - `src/engine/pi-tools.ts`
-- `src/services/chat-service.ts`
+- `src/chat/service.ts`
 - `src/app.ts`
 - `docs/architecture/phases/phase-8.md`
 
@@ -647,7 +649,7 @@ Resumo:
 
 Arquivos-chave:
 - `src/session/store.ts`
-- `src/services/chat-service.ts`
+- `src/chat/service.ts`
 - `docs/architecture/phases/phase-3.md`
 - `docs/planning/PROJECT-STATUS.md`
 
@@ -696,8 +698,8 @@ Resumo:
 - `PiEngineAdapter` passou a receber historico recente (HTTP como mensagens; SDK/local-process como prompt serializado).
 
 Arquivos-chave:
-- `src/services/turn-orchestrator.ts`
-- `src/services/chat-service.ts`
+- `src/chat/turn-orchestrator.ts`
+- `src/chat/service.ts`
 - `src/engine/types.ts`
 - `src/engine/pi-engine-adapter.ts`
 - `src/config.ts`
@@ -924,3 +926,55 @@ Pendencias:
 
 Proximo passo recomendado:
 - Iniciar Fase 3 no codigo e manter `docs/architecture/phases/phase-3.md` sincronizado durante a implementacao.
+
+### 2026-02-21 - Refactor estrutural: service layer por dominio (`src/chat`)
+
+Resumo:
+- Migrado `ChatService` de `src/services/chat-service.ts` para `src/chat/service.ts`.
+- Migrado `TurnOrchestrator` e teste para `src/chat/turn-orchestrator.ts` e `src/chat/turn-orchestrator.test.ts`.
+- Atualizados imports da aplicacao e referencias em docs para remover caminhos antigos em `src/services`.
+- Formalizada convencao `feature-first` em `docs/architecture/README.md`.
+
+Arquivos-chave:
+- `src/chat/service.ts`
+- `src/chat/turn-orchestrator.ts`
+- `src/chat/turn-orchestrator.test.ts`
+- `src/app.ts`
+- `docs/architecture/README.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Continuar migracoes futuras para padrao por dominio quando novos modulos surgirem.
+
+Proximo passo recomendado:
+- Seguir Fase 8.2 (execucao assistida de planos com acoplamento planner + jobs).
+
+### 2026-02-21 - Fase 8.2: planner inteligente inicial (goal -> plan + checkpoints)
+
+Resumo:
+- Adicionado `PlannerService.generate()` para gerar plano persistido a partir de objetivo em linguagem natural.
+- Cada etapa passou a manter checkpoints de transicao (`status`, `at`, `notes`) e acumulacao de notas com timestamp.
+- Exposta nova tool de PI `plan_generate` para criacao de plano por objetivo durante a conversa.
+- Exposto endpoint `POST /plans/generate` para uso por UI/API clients.
+
+Arquivos-chave:
+- `src/planner/service.ts`
+- `src/planner/service.test.ts`
+- `src/engine/pi-tools.ts`
+- `src/engine/types.ts`
+- `src/chat/service.ts`
+- `src/api/server.ts`
+- `src/api/server.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Executor assistido de plano ainda nao vincula step automaticamente a job/process session.
+
+Proximo passo recomendado:
+- Fase 8.3: executar step com acoplamento ao runtime (`jobs`/`exec`) e atualizar checkpoints automaticamente.

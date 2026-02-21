@@ -228,6 +228,28 @@ export function createApiServer(app: KaelApp): FastifyInstance {
   });
 
   server.post<{
+    Body: {
+      sessionKey?: string;
+      objective?: string;
+      maxSteps?: number;
+    };
+  }>("/plans/generate", async (request) => {
+    const sessionKey = request.body.sessionKey?.trim() || "main";
+    const objective = request.body.objective?.trim();
+    if (!objective) {
+      throw new ApiError(400, "BAD_REQUEST", "objective is required");
+    }
+    const maxStepsRaw = Number(request.body.maxSteps);
+    const maxSteps = Number.isFinite(maxStepsRaw) && maxStepsRaw > 0 ? Math.floor(maxStepsRaw) : undefined;
+    const plan = await app.planner.generate({
+      sessionKey,
+      objective,
+      maxSteps,
+    });
+    return { ok: true, plan };
+  });
+
+  server.post<{
     Params: { planId: string; stepIndex: string };
     Body: {
       status?: string;

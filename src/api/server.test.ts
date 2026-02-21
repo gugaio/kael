@@ -108,6 +108,29 @@ function makeFakeApp(): KaelApp {
           updatedAt: new Date().toISOString(),
         })),
       }),
+      generate: async ({
+        sessionKey,
+        objective,
+      }: {
+        sessionKey: string;
+        objective: string;
+      }) => ({
+        id: "plan-generated",
+        sessionKey,
+        title: `Plano: ${objective}`,
+        status: "active",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        steps: [
+          {
+            id: "st-1",
+            title: "Confirmar objetivo e entradas/saidas esperadas",
+            status: "pending",
+            updatedAt: new Date().toISOString(),
+            checkpoints: [{ at: new Date().toISOString(), status: "pending" }],
+          },
+        ],
+      }),
       updateStep: async () => null,
       appendStep: async () => null,
       nextAction: () => null,
@@ -314,6 +337,24 @@ describe("API integration", () => {
     expect(body.ok).toBe(true);
     expect(body.canceled).toBe(true);
     expect(body.job.id).toBe("j123");
+    await server.close();
+  });
+
+  it("generates plan through API", async () => {
+    const server = createApiServer(makeFakeApp());
+    const response = await server.inject({
+      method: "POST",
+      url: "/plans/generate",
+      payload: {
+        sessionKey: "s1",
+        objective: "transcodar e gerar hls",
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.ok).toBe(true);
+    expect(body.plan.id).toBe("plan-generated");
+    expect(body.plan.title.toLowerCase()).toContain("transcodar");
     await server.close();
   });
 

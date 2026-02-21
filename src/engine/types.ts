@@ -127,6 +127,25 @@ export type EngineTooling = {
       updatedAt: string;
     }>;
   }>;
+  planGenerate: (params: {
+    sessionKey: string;
+    objective: string;
+    maxSteps?: number;
+  }) => Promise<{
+    id: string;
+    sessionKey: string;
+    title: string;
+    status: "active" | "completed" | "blocked" | "failed" | "canceled";
+    createdAt: string;
+    updatedAt: string;
+    steps: Array<{
+      id: string;
+      title: string;
+      status: "pending" | "in_progress" | "completed" | "blocked" | "failed" | "canceled";
+      notes?: string;
+      updatedAt: string;
+    }>;
+  }>;
   planList: (params: {
     sessionKey?: string;
     status?: "active" | "completed" | "blocked" | "failed" | "canceled";

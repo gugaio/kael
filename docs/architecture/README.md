@@ -13,9 +13,16 @@ Esta pasta descreve a evolucao arquitetural do Kael de forma incremental.
 - `docs/architecture/phases/phase-7.md` - Guardrails de loop para tools de shell
 - `docs/architecture/phases/phase-8.md` - Memoria operacional (memory_search/get/write)
 - `docs/architecture/phases/phase-8.1.md` - Planner/executor baseline com estado persistido de planos
+- `docs/architecture/phases/phase-8.2.md` - Planner inteligente inicial (geracao por objetivo + checkpoints)
 
 ## Como usar
 
 1. Ler da fase menor para a maior.
 2. Tratar cada fase como baseline para a proxima.
 3. Atualizar o documento da fase sempre que houver mudanca estrutural relevante.
+
+## Convencao de Estrutura
+
+- Padrao atual: `feature-first` por dominio (ex.: `src/chat`, `src/planner`, `src/memory`).
+- Arquivos de dominio devem ficar juntos (`service`, `store`, `types`, `tests` quando aplicavel).
+- Evitar pasta `src/services` generica; usar apenas para utilitarios realmente cross-domain.

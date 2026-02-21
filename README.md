@@ -30,6 +30,7 @@ Super agente para videos e automacao.
   - `memory_write` (persistencia daily/long_term)
 - Planner operacional no PI:
   - `plan_create`
+  - `plan_generate`
   - `plan_list`
   - `plan_update_step`
   - `plan_next`
@@ -129,6 +130,7 @@ npx tsx src/cli/index.ts approval-deny --id <approvalId>
 - `GET /plans`
 - `GET /plans/:planId`
 - `POST /plans`
+- `POST /plans/generate`
 - `POST /plans/:planId/steps/:stepIndex`
 - `POST /jobs/transcode`
 - `POST /jobs/hls`

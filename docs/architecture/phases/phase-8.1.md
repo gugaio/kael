@@ -33,9 +33,9 @@ Arquivos-chave:
 - `src/planner/service.test.ts`
 - `src/engine/types.ts`
 - `src/engine/pi-tools.ts`
-- `src/services/chat-service.ts`
+- `src/chat/service.ts`
 - `src/app.ts`
 - `src/api/server.ts`
 
 Proximo passo:
-- Fase 8.2: planner inteligente (geracao/refino de plano a partir de objetivo + checkpoints de execucao).
+- Fase 8.3: executor assistido (vincular steps com jobs/processos e atualizar checkpoints automaticamente).

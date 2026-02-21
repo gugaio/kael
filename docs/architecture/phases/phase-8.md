@@ -23,7 +23,7 @@ Entregas:
 Arquivos-chave:
 - `src/memory/service.ts`
 - `src/engine/pi-tools.ts`
-- `src/services/chat-service.ts`
+- `src/chat/service.ts`
 - `src/app.ts`
 - `src/memory/service.test.ts`
 

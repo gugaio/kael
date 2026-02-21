@@ -42,6 +42,8 @@ export class ChatService {
       memoryGet: ({ path, from, lines }) => this.memory.get({ relPath: path, from, lines }),
       memoryWrite: ({ content, target }) => this.memory.write({ content, target }),
       planCreate: ({ sessionKey, title, steps }) => this.planner.create({ sessionKey, title, steps }),
+      planGenerate: ({ sessionKey, objective, maxSteps }) =>
+        this.planner.generate({ sessionKey, objective, maxSteps }),
       planList: ({ sessionKey, status, limit }) => this.planner.list({ sessionKey, status, limit }),
       planUpdateStep: ({ planId, stepIndex, status, notes }) =>
         this.planner.updateStep({ planId, stepIndex, status, notes }),
