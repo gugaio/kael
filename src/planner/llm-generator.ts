@@ -202,7 +202,7 @@ export class LlmPlanGenerator {
           "Modo planner estruturado: responda apenas JSON valido sem comentarios.",
         ].join("\n\n"),
         model,
-        thinkingLevel: "minimal",
+        thinkingLevel: "low",
         tools: [],
         messages: [],
         isStreaming: false,

@@ -161,7 +161,7 @@ Objetivos:
 - Politicas de seguranca de execucao.
 
 Definition of Done (checklist):
-- [ ] Suite minima de testes unitarios para stores/engine/jobs.
+- [x] Suite minima de testes unitarios para stores/engine/jobs.
 - [x] Testes de integracao de API (chat + jobs).
 - [x] Logs estruturados com contexto de sessao/job.
 - [x] Health endpoint com sinais operacionais.
@@ -243,6 +243,32 @@ Definition of Done (checklist):
 - [ ] Suporte opcional a multiplos providers.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-02-21 - Observabilidade PI: diagnostico de resposta vazia (OpenClaw-inspired)
+
+Resumo:
+- Propagado `requestId` de `/chat` ate o engine para correlacao fim-a-fim em logs.
+- Adicionada telemetria de turno PI por tentativa (`started/completed/timeout/prompt_failed/agent_end_error/empty_content`).
+- Em caso de `Pi SDK returned empty content`, agora gravamos dump estruturado com shape de mensagens/eventos.
+- Configurado dump local em `dataDir/debug/pi-failures/<turnId>.json` para analise forense sem depender de stacktrace opaco.
+
+Arquivos-chave:
+- `src/api/server.ts`
+- `src/chat/service.ts`
+- `src/chat/turn-orchestrator.ts`
+- `src/engine/types.ts`
+- `src/engine/pi-engine-adapter.ts`
+- `src/engine/factory.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Expor `lastPiFailure` no `/health` (resumo do ultimo dump) para triagem mais rapida em operacao.
+
+Proximo passo recomendado:
+- Capturar e logar status/body sanitizado de erro do provider dentro do adapter para separar falha de modelo, quota e parsing.
 
 ### 2026-02-21 - Fase 9.2: web_fetch + extracao + cache TTL
 

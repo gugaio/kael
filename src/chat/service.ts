@@ -138,6 +138,7 @@ export class ChatService {
   async handleMessage(input: {
     sessionKey: string;
     message: string;
+    requestId?: string;
   }): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string }> {
     let user = await this.sessions.appendMessage(input.sessionKey, "user", input.message);
 
@@ -145,6 +146,7 @@ export class ChatService {
       const turn = await this.orchestrator.run({
         sessionKey: input.sessionKey,
         message: input.message,
+        requestId: input.requestId,
         tooling: this.tooling,
       });
 
@@ -166,6 +168,7 @@ export class ChatService {
       const turn = await this.orchestrator.run({
         sessionKey: input.sessionKey,
         message: input.message,
+        requestId: input.requestId,
         tooling: this.tooling,
       });
       const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", turn.reply);

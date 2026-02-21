@@ -331,7 +331,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
         idempotencyKey,
         signature: stableStringify({ sessionKey, message, includeMessages }),
         execute: async () => {
-          const result = await app.chat.handleMessage({ sessionKey, message });
+          const result = await app.chat.handleMessage({ sessionKey, message, requestId: request.id });
           const response: {
             ok: true;
             sessionKey: string;

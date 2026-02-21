@@ -11,6 +11,7 @@ type TurnOrchestratorConfig = {
 type OrchestratedTurnInput = {
   sessionKey: string;
   message: string;
+  requestId?: string;
   tooling: EngineTooling;
 };
 
@@ -42,6 +43,7 @@ export class TurnOrchestrator {
     return this.engine.runTurn({
       sessionKey: input.sessionKey,
       message: input.message,
+      requestId: input.requestId,
       contextMessages,
       tooling: input.tooling,
     });

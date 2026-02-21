@@ -293,6 +293,7 @@ export type EngineTooling = {
 export type EngineTurnInput = {
   sessionKey: string;
   message: string;
+  requestId?: string;
   contextMessages?: Array<{
     role: "user" | "assistant" | "system";
     content: string;

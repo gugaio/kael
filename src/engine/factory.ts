@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { KaelConfig } from "../config.js";
 import { shouldFallbackOnPiError } from "./pi-errors.js";
 import type { AgentEngine } from "./types.js";
@@ -12,7 +13,10 @@ export function createEngine(config: KaelConfig): AgentEngine {
     return simple;
   }
 
-  const pi = new PiEngineAdapter(config.pi);
+  const pi = new PiEngineAdapter(config.pi, {
+    dumpEnabled: true,
+    failureDumpDir: path.join(config.dataDir, "debug", "pi-failures"),
+  });
 
   if (config.engineMode === "pi") {
     return pi;
