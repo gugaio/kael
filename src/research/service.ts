@@ -3,6 +3,7 @@ import { kaelLogger } from "../infra/logger.js";
 import { readJsonFile, writeJsonFile } from "../infra/fs.js";
 import { fetchWithSsrFGuard } from "./ssrf-guard.js";
 import type { HostLookup } from "./ssrf-guard.js";
+import { wrapExternalContent } from "../security/external-content.js";
 import type {
   SearchProvider,
   WebFetchResult,
@@ -96,6 +97,20 @@ function dedupeSources(input: WebSource[]): WebSource[] {
     output.push(source);
   }
   return output;
+}
+
+function wrapWebSearchText(value: string | undefined): string | undefined {
+  if (!value || !value.trim()) {
+    return value;
+  }
+  return wrapExternalContent(value, { source: "web_search", includeWarning: false });
+}
+
+function wrapWebFetchText(value: string | undefined): string | undefined {
+  if (!value || !value.trim()) {
+    return value;
+  }
+  return wrapExternalContent(value, { source: "web_fetch", includeWarning: false });
 }
 
 function buildFallbackAnswer(query: string, sources: WebSource[]): string {
@@ -233,10 +248,20 @@ export class ResearchService {
         ? providerResult.answer.trim()
         : buildFallbackAnswer(query, deduped);
 
+    const wrappedSources = deduped.map((item) => ({
+      ...item,
+      title: wrapWebSearchText(item.title) ?? item.title,
+      snippet: wrapWebSearchText(item.snippet),
+    }));
     const result: WebSearchResult = {
-      answer,
-      sources: deduped,
+      answer: wrapWebSearchText(answer) ?? answer,
+      sources: wrappedSources,
       notes,
+      externalContent: {
+        untrusted: true,
+        source: "web_search",
+        wrapped: true,
+      },
     };
 
     await this.persistEntry(params.sessionKey, query, result);
@@ -289,6 +314,11 @@ export class ResearchService {
           content: clip(cached.content, maxChars),
           excerpt: clip(cached.excerpt, Math.min(300, maxChars)),
           cached: true,
+          externalContent: {
+            untrusted: true,
+            source: "web_fetch",
+            wrapped: true,
+          },
         };
       }
     }
@@ -322,9 +352,9 @@ export class ResearchService {
     const entry: WebFetchCacheEntry = {
       url: parsed.toString(),
       finalUrl,
-      title,
-      content,
-      excerpt,
+      title: wrapWebFetchText(title),
+      content: wrapWebFetchText(content) ?? content,
+      excerpt: wrapWebFetchText(excerpt) ?? excerpt,
       contentType,
       fetchedAt,
     };
@@ -349,6 +379,11 @@ export class ResearchService {
     return {
       ...entry,
       cached: false,
+      externalContent: {
+        untrusted: true,
+        source: "web_fetch",
+        wrapped: true,
+      },
     };
   }
 

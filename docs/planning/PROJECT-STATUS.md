@@ -314,6 +314,30 @@ Pendencias:
 Proximo passo recomendado:
 - Implementar item 2 (external-content wrapping) antes de evoluir ranking/confianca.
 
+### 2026-02-21 - Fase 9.4 (item 2): wrapping de conteudo externo
+
+Resumo:
+- Criado wrapper de conteudo externo em `src/security/external-content.ts`.
+- Aplicado wrapping em campos textuais de `web_search` (`answer`, `title`, `snippet`).
+- Aplicado wrapping em campos textuais de `web_fetch` (`title`, `content`, `excerpt`).
+- URLs (`url`, `finalUrl`) permanecem brutas para manter tool chaining seguro e funcional.
+
+Arquivos-chave:
+- `src/security/external-content.ts`
+- `src/research/service.ts`
+- `src/research/types.ts`
+- `src/research/service.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Item 3: limite de bytes de resposta + warning de truncamento no fetch.
+
+Proximo passo recomendado:
+- Implementar item 3 para controlar custo/latencia/contexto de respostas web grandes.
+
 ### 2026-02-21 - Fase 9.1: web_search API-first (Tavily + memoria por sessao)
 
 Resumo:

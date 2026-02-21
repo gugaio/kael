@@ -23,6 +23,11 @@ export type WebSearchResult = {
   answer: string;
   sources: WebSource[];
   notes: string[];
+  externalContent?: {
+    untrusted: true;
+    source: "web_search";
+    wrapped: true;
+  };
 };
 
 export type WebFetchResult = {
@@ -34,6 +39,11 @@ export type WebFetchResult = {
   contentType?: string;
   fetchedAt: string;
   cached: boolean;
+  externalContent?: {
+    untrusted: true;
+    source: "web_fetch";
+    wrapped: true;
+  };
 };
 
 export type WebEvidenceItem = {

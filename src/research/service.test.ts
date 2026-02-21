@@ -41,6 +41,9 @@ describe("ResearchService", () => {
 
     expect(result.answer).toContain("Resumo pronto");
     expect(result.sources).toHaveLength(2);
+    expect(result.answer).toContain("EXTERNAL_UNTRUSTED_CONTENT");
+    expect(result.sources[0]?.url).toBe("https://example.com/a");
+    expect(result.sources[0]?.title).toContain("EXTERNAL_UNTRUSTED_CONTENT");
 
     const memoryPath = path.join(dataDir, "research", "main.json");
     const raw = await fs.readFile(memoryPath, "utf-8");
@@ -96,8 +99,9 @@ describe("ResearchService", () => {
     });
 
     expect(first.cached).toBe(false);
-    expect(first.title).toBe("Example");
+    expect(first.title).toContain("Example");
     expect(first.content).toContain("Hello");
+    expect(first.content).toContain("EXTERNAL_UNTRUSTED_CONTENT");
     expect(second.cached).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
