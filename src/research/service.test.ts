@@ -16,6 +16,7 @@ async function makeService(provider: SearchProvider, fetchImpl?: typeof fetch) {
     fetchMaxChars: 2000,
     fetchCacheTtlMs: 60_000,
     fetchMaxRedirects: 3,
+    fetchMaxResponseBytes: 2_000_000,
   }, fetchImpl, async () => [{ address: "93.184.216.34", family: 4 }]);
   return { service, dataDir };
 }
@@ -139,5 +140,42 @@ describe("ResearchService", () => {
     expect(result.evidence.length).toBeGreaterThan(0);
     expect(result.confidence).toBeGreaterThan(0.5);
     expect(result.confidence).toBeLessThanOrEqual(1);
+  });
+
+  it("adds warning when response body is truncated by max bytes", async () => {
+    const provider: SearchProvider = {
+      search: vi.fn(async () => ({ results: [] })),
+    };
+    const longText = "A".repeat(80_000);
+    const fetchMock = vi.fn(async () =>
+      new Response(longText, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    ) as unknown as typeof fetch;
+    const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "kael-research-"));
+    const service = new ResearchService(
+      provider,
+      {
+        enabled: true,
+        dataDir,
+        defaultMaxResults: 4,
+        maxResultsLimit: 8,
+        timeoutMs: 12000,
+        fetchMaxChars: 40_000,
+        fetchCacheTtlMs: 60_000,
+        fetchMaxRedirects: 3,
+        fetchMaxResponseBytes: 32_000,
+      },
+      fetchMock,
+      async () => [{ address: "93.184.216.34", family: 4 }],
+    );
+
+    const result = await service.fetchUrl({
+      sessionKey: "s1",
+      url: "https://example.com/big",
+    });
+    expect(result.warning).toContain("truncated");
+    expect(result.content.length).toBeGreaterThan(0);
   });
 });

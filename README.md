@@ -237,6 +237,7 @@ Se a mesma chave for reutilizada com payload diferente, a API retorna `409`.
 - `KAEL_RESEARCH_FETCH_MAX_CHARS` (default: `12000`)
 - `KAEL_RESEARCH_FETCH_CACHE_TTL_MS` (default: `600000`)
 - `KAEL_RESEARCH_FETCH_MAX_REDIRECTS` (default: `3`)
+- `KAEL_RESEARCH_FETCH_MAX_RESPONSE_BYTES` (default: `2000000`)
 
 ### Runtime do PI
 

@@ -23,6 +23,7 @@ type ResearchServiceConfig = {
   fetchMaxChars: number;
   fetchCacheTtlMs: number;
   fetchMaxRedirects: number;
+  fetchMaxResponseBytes: number;
 };
 
 type ResearchMemoryEntry = {
@@ -48,6 +49,7 @@ type WebFetchCacheEntry = {
   excerpt: string;
   contentType?: string;
   fetchedAt: string;
+  warning?: string;
 };
 
 type WebFetchCacheFile = {
@@ -164,6 +166,73 @@ function extractTitle(html: string): string | undefined {
   return text || undefined;
 }
 
+type ReadResponseTextResult = {
+  text: string;
+  truncated: boolean;
+  bytesRead: number;
+};
+
+async function readResponseTextLimited(res: Response, maxBytes: number): Promise<ReadResponseTextResult> {
+  const body = (res as unknown as { body?: unknown }).body;
+  if (
+    body &&
+    typeof body === "object" &&
+    "getReader" in body &&
+    typeof (body as { getReader: () => unknown }).getReader === "function"
+  ) {
+    const reader = (body as ReadableStream<Uint8Array>).getReader();
+    const decoder = new TextDecoder();
+    let bytesRead = 0;
+    let truncated = false;
+    const parts: string[] = [];
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          break;
+        }
+        if (!value || value.byteLength === 0) {
+          continue;
+        }
+        let chunk = value;
+        if (bytesRead + chunk.byteLength > maxBytes) {
+          const remaining = Math.max(0, maxBytes - bytesRead);
+          if (remaining <= 0) {
+            truncated = true;
+            break;
+          }
+          chunk = chunk.subarray(0, remaining);
+          truncated = true;
+        }
+        bytesRead += chunk.byteLength;
+        parts.push(decoder.decode(chunk, { stream: true }));
+        if (truncated || bytesRead >= maxBytes) {
+          truncated = true;
+          break;
+        }
+      }
+    } finally {
+      if (truncated) {
+        try {
+          await reader.cancel();
+        } catch {
+          // ignore
+        }
+      }
+    }
+    parts.push(decoder.decode());
+    return { text: parts.join(""), truncated, bytesRead };
+  }
+
+  const raw = await res.text();
+  const encoded = new TextEncoder().encode(raw);
+  if (encoded.byteLength <= maxBytes) {
+    return { text: raw, truncated: false, bytesRead: encoded.byteLength };
+  }
+  const clipped = encoded.slice(0, maxBytes);
+  return { text: new TextDecoder().decode(clipped), truncated: true, bytesRead: maxBytes };
+}
+
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -193,6 +262,7 @@ export class ResearchService {
   private readonly fetchMaxChars: number;
   private readonly fetchCacheTtlMs: number;
   private readonly fetchMaxRedirects: number;
+  private readonly fetchMaxResponseBytes: number;
   private readonly cachePath: string;
 
   constructor(
@@ -209,6 +279,7 @@ export class ResearchService {
     this.fetchMaxChars = Math.max(500, Math.floor(cfg.fetchMaxChars));
     this.fetchCacheTtlMs = Math.max(0, Math.floor(cfg.fetchCacheTtlMs));
     this.fetchMaxRedirects = Math.max(0, Math.floor(cfg.fetchMaxRedirects));
+    this.fetchMaxResponseBytes = Math.max(32_000, Math.floor(cfg.fetchMaxResponseBytes));
     this.cachePath = path.join(this.rootDir, "fetch-cache.json");
   }
 
@@ -340,7 +411,11 @@ export class ResearchService {
       throw new Error(`web_fetch failed status=${response.status}`);
     }
     const contentType = response.headers.get("content-type") ?? undefined;
-    const raw = await response.text();
+    const bodyResult = await readResponseTextLimited(response, this.fetchMaxResponseBytes);
+    const raw = bodyResult.text;
+    const warning = bodyResult.truncated
+      ? `Response body truncated after ${this.fetchMaxResponseBytes} bytes.`
+      : undefined;
     const htmlLike = (contentType ?? "").toLowerCase().includes("html") || raw.includes("<html");
     const title = htmlLike ? extractTitle(raw) : undefined;
     const cleaned = htmlLike ? stripHtml(raw) : raw.replace(/\s+/g, " ").trim();
@@ -357,6 +432,7 @@ export class ResearchService {
       excerpt: wrapWebFetchText(excerpt) ?? excerpt,
       contentType,
       fetchedAt,
+      warning,
     };
     const nextEntries = {
       ...cache.entries,
@@ -384,6 +460,7 @@ export class ResearchService {
         source: "web_fetch",
         wrapped: true,
       },
+      warning,
     };
   }
 

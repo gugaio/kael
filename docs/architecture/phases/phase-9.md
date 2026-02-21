@@ -59,6 +59,12 @@ Adicionar capacidade de pesquisa web ao Kael com baixa complexidade operacional:
 - Redirects sao seguidos manualmente com revalidacao em cada salto.
 - Limite de redirects configuravel por `KAEL_RESEARCH_FETCH_MAX_REDIRECTS`.
 
+## Fase 9.4 (item 3 - response cap + warning)
+
+- `web_fetch` agora limita bytes lidos da resposta HTTP (`fetchMaxResponseBytes`).
+- Quando truncado, retorna `warning` explicito para o agente/operador.
+- Ajuda a controlar latencia, memoria e uso de contexto em paginas grandes.
+
 ## Configuracao
 
 - `KAEL_RESEARCH_ENABLED`

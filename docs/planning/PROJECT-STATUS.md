@@ -338,6 +338,29 @@ Pendencias:
 Proximo passo recomendado:
 - Implementar item 3 para controlar custo/latencia/contexto de respostas web grandes.
 
+### 2026-02-21 - Fase 9.4 (item 3): limite de resposta + warning
+
+Resumo:
+- Implementado limite de bytes lidos em `web_fetch` (`fetchMaxResponseBytes`).
+- Adicionado `warning` quando resposta e truncada por limite de bytes.
+- Mantido truncamento adicional por `maxChars` para controle final de payload.
+
+Arquivos-chave:
+- `src/research/service.ts`
+- `src/research/types.ts`
+- `src/config.ts`
+- `src/research/service.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Item 4: extracao mais robusta de conteudo principal (Readability/fallback).
+
+Proximo passo recomendado:
+- Implementar item 4 para melhorar qualidade semantica da evidencia.
+
 ### 2026-02-21 - Fase 9.1: web_search API-first (Tavily + memoria por sessao)
 
 Resumo:

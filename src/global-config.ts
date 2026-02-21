@@ -43,6 +43,7 @@ export type KaelGlobalConfig = {
       fetchMaxChars: number;
       fetchCacheTtlMs: number;
       fetchMaxRedirects: number;
+      fetchMaxResponseBytes: number;
     };
     pi: {
       provider: string;
@@ -149,6 +150,7 @@ export function buildDefaultGlobalConfig(kaelHome: string): KaelGlobalConfig {
         fetchMaxChars: 12000,
         fetchCacheTtlMs: 10 * 60 * 1000,
         fetchMaxRedirects: 3,
+        fetchMaxResponseBytes: 2_000_000,
       },
       pi: {
         provider: "openai",

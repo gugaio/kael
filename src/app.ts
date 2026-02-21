@@ -80,6 +80,7 @@ export async function createKaelApp(): Promise<KaelApp> {
     fetchMaxChars: config.research.fetchMaxChars,
     fetchCacheTtlMs: config.research.fetchCacheTtlMs,
     fetchMaxRedirects: config.research.fetchMaxRedirects,
+    fetchMaxResponseBytes: config.research.fetchMaxResponseBytes,
   });
   const llmPlanner = new LlmPlanGenerator(config.pi);
   const planner = new PlannerService(config.dataDir, {

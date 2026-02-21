@@ -39,6 +39,7 @@ export type WebFetchResult = {
   contentType?: string;
   fetchedAt: string;
   cached: boolean;
+  warning?: string;
   externalContent?: {
     untrusted: true;
     source: "web_fetch";
