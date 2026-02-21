@@ -14,6 +14,7 @@ Esta pasta descreve a evolucao arquitetural do Kael de forma incremental.
 - `docs/architecture/phases/phase-8.md` - Memoria operacional (memory_search/get/write)
 - `docs/architecture/phases/phase-8.1.md` - Planner/executor baseline com estado persistido de planos
 - `docs/architecture/phases/phase-8.2.md` - Planner inteligente inicial (geracao por objetivo + checkpoints)
+- `docs/architecture/phases/phase-8.3.md` - Executor assistido (`plan_execute_next`) com vinculo a jobs/exec
 
 ## Como usar
 

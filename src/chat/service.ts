@@ -48,6 +48,18 @@ export class ChatService {
       planUpdateStep: ({ planId, stepIndex, status, notes }) =>
         this.planner.updateStep({ planId, stepIndex, status, notes }),
       planNextAction: ({ planId }) => this.planner.nextAction(planId),
+      planExecuteNext: ({ planId, inputs }) =>
+        this.planner.executeNext({
+          planId,
+          inputs,
+          runtime: {
+            startProbeMedia: (args) => this.jobs.startProbeMedia(args),
+            startCaptureStream: (args) => this.jobs.startCaptureStream(args),
+            startTranscode: (args) => this.jobs.startTranscode(args),
+            startConvertHls: (args) => this.jobs.startConvertHls(args),
+            execCommand: (args) => this.shell.exec(args),
+          },
+        }),
     };
   }
 

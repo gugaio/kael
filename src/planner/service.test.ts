@@ -109,4 +109,59 @@ describe("PlannerService", () => {
     expect(plan.steps.some((step) => step.title.toLowerCase().includes("hls"))).toBe(true);
     expect(plan.steps.some((step) => step.title.toLowerCase().includes("schedule"))).toBe(true);
   });
+
+  it("executes next step and links runtime execution id", async () => {
+    const { planner } = await makePlanner();
+    const plan = await planner.create({
+      sessionKey: "s1",
+      title: "Pipeline",
+      steps: ["Executar transcode com preset seguro e monitorar logs"],
+    });
+
+    const result = await planner.executeNext({
+      planId: plan.id,
+      inputs: {
+        inputPath: "/tmp/in.mp4",
+        outputPath: "/tmp/out.mp4",
+      },
+      runtime: {
+        startTranscode: async () => ({ id: "job-123", status: "queued" }),
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("expected ok result");
+    }
+    expect(result.action).toBe("transcode");
+    expect(result.execution?.refId).toBe("job-123");
+    expect(result.plan.steps[0].status).toBe("in_progress");
+    expect(result.plan.steps[0].execution?.refId).toBe("job-123");
+  });
+
+  it("blocks next step when required input is missing", async () => {
+    const { planner } = await makePlanner();
+    const plan = await planner.create({
+      sessionKey: "s1",
+      title: "Pipeline",
+      steps: ["Gerar HLS (playlist + segmentos) e validar reproducao"],
+    });
+
+    const result = await planner.executeNext({
+      planId: plan.id,
+      inputs: {
+        inputPath: "/tmp/in.mp4",
+      },
+      runtime: {
+        startConvertHls: async () => ({ id: "job-hls", status: "queued" }),
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("expected blocked result");
+    }
+    expect(result.reason).toBe("missing_input");
+    expect(result.plan?.steps[0].status).toBe("blocked");
+  });
 });

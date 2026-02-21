@@ -446,6 +446,74 @@ export function createPiShellTools(params: {
     },
   };
 
+  const planExecuteNextTool: AgentTool = {
+    name: "plan_execute_next",
+    label: "Plan Execute Next",
+    description:
+      "Executa o proximo passo pending/in_progress do plano usando runtime local (jobs/exec).",
+    parameters: {
+      type: "object",
+      properties: {
+        planId: { type: "string" },
+        inputs: {
+          type: "object",
+          properties: {
+            inputPath: { type: "string" },
+            outputPath: { type: "string" },
+            outputPlaylistPath: { type: "string" },
+            streamUrl: { type: "string" },
+            durationSeconds: { type: "number" },
+            segmentTime: { type: "number" },
+            args: { type: "array", items: { type: "string" } },
+            command: { type: "string" },
+            cwd: { type: "string" },
+            timeoutMs: { type: "number" },
+            background: { type: "boolean" },
+          },
+          additionalProperties: false,
+        },
+      },
+      required: ["planId"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const args = (rawParams ?? {}) as {
+        planId: string;
+        inputs?: {
+          inputPath?: string;
+          outputPath?: string;
+          outputPlaylistPath?: string;
+          streamUrl?: string;
+          durationSeconds?: number;
+          segmentTime?: number;
+          args?: string[];
+          command?: string;
+          cwd?: string;
+          timeoutMs?: number;
+          background?: boolean;
+        };
+      };
+      const result = await params.tooling.planExecuteNext({
+        planId: args.planId,
+        inputs: args.inputs,
+      });
+      const text = [
+        `ok=${result.ok}`,
+        result.reason ? `reason=${result.reason}` : "",
+        result.action ? `action=${result.action}` : "",
+        result.stepIndex !== undefined ? `stepIndex=${result.stepIndex}` : "",
+        result.execution ? `execution=${result.execution.kind}:${result.execution.refId}` : "",
+        result.message ? `message=${result.message}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+      return {
+        content: textResult(text),
+        details: result,
+      };
+    },
+  };
+
   return [
     execTool,
     processTool,
@@ -457,5 +525,6 @@ export function createPiShellTools(params: {
     planListTool,
     planUpdateStepTool,
     planNextTool,
+    planExecuteNextTool,
   ];
 }

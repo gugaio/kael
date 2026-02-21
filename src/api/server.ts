@@ -290,6 +290,52 @@ export function createApiServer(app: KaelApp): FastifyInstance {
     return { ok: true, plan };
   });
 
+  server.post<{
+    Params: { planId: string };
+    Body: {
+      sessionKey?: string;
+      inputs?: {
+        inputPath?: string;
+        outputPath?: string;
+        outputPlaylistPath?: string;
+        streamUrl?: string;
+        durationSeconds?: number;
+        segmentTime?: number;
+        args?: string[];
+        command?: string;
+        cwd?: string;
+        timeoutMs?: number;
+        background?: boolean;
+      };
+    };
+  }>("/plans/:planId/execute-next", async (request) => {
+    const planId = request.params.planId?.trim();
+    if (!planId) {
+      throw new ApiError(400, "BAD_REQUEST", "planId is required");
+    }
+    const result = await app.planner.executeNext({
+      planId,
+      sessionKey: request.body.sessionKey?.trim(),
+      inputs: request.body.inputs,
+      runtime: {
+        startProbeMedia: (args) => app.jobs.startProbeMedia(args),
+        startCaptureStream: (args) => app.jobs.startCaptureStream(args),
+        startTranscode: (args) => app.jobs.startTranscode(args),
+        startConvertHls: (args) => app.jobs.startConvertHls(args),
+        execCommand: (args) =>
+          app.shell.exec({
+            sessionKey: args.sessionKey,
+            command: args.command,
+            cwd: args.cwd,
+            timeoutMs: args.timeoutMs,
+            background: args.background,
+          }),
+      },
+    });
+
+    return result;
+  });
+
   server.get<{ Querystring: { status?: string; limit?: string } }>(
     "/exec/approvals",
     async (request) => {

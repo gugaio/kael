@@ -134,6 +134,40 @@ function makeFakeApp(): KaelApp {
       updateStep: async () => null,
       appendStep: async () => null,
       nextAction: () => null,
+      executeNext: async ({ planId }: { planId: string }) => ({
+        ok: true,
+        plan: {
+          id: planId,
+          sessionKey: "s1",
+          title: "Plano fake",
+          status: "active",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          steps: [
+            {
+              id: "st-1",
+              title: "Executar transcode",
+              status: "in_progress",
+              updatedAt: new Date().toISOString(),
+              checkpoints: [{ at: new Date().toISOString(), status: "in_progress" }],
+              execution: {
+                kind: "job",
+                refId: "job-xyz",
+                status: "queued",
+                startedAt: new Date().toISOString(),
+              },
+            },
+          ],
+        },
+        stepIndex: 0,
+        action: "transcode",
+        execution: {
+          kind: "job",
+          refId: "job-xyz",
+          status: "queued",
+          startedAt: new Date().toISOString(),
+        },
+      }),
     } as unknown as KaelApp["planner"],
     memory: {} as KaelApp["memory"],
     chat: {
@@ -355,6 +389,27 @@ describe("API integration", () => {
     expect(body.ok).toBe(true);
     expect(body.plan.id).toBe("plan-generated");
     expect(body.plan.title.toLowerCase()).toContain("transcodar");
+    await server.close();
+  });
+
+  it("executes next plan step through API", async () => {
+    const server = createApiServer(makeFakeApp());
+    const response = await server.inject({
+      method: "POST",
+      url: "/plans/plan-1/execute-next",
+      payload: {
+        sessionKey: "s1",
+        inputs: {
+          inputPath: "/tmp/in.mp4",
+          outputPath: "/tmp/out.mp4",
+        },
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.ok).toBe(true);
+    expect(body.action).toBe("transcode");
+    expect(body.execution.refId).toBe("job-xyz");
     await server.close();
   });
 

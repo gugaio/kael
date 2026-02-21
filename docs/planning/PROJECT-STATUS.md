@@ -215,8 +215,9 @@ Definition of Done (checklist):
 - [x] Planner/executor baseline com plano persistido e tools de plano no PI.
 - [x] Planner inteligente inicial com `plan_generate` (objetivo -> plano heuristico).
 - [x] Checkpoints por etapa no planner (historico de transicoes + notas acumuladas).
+- [x] Executor assistido (`plan_execute_next`) com vinculo de step para `job/exec`.
 - [ ] Tuning de ranking/recencia e qualidade de snippets.
-- [ ] Planner inteligente (auto-refino/checkpoints) para execucao multi-etapa.
+- [ ] Reconciliacao automatica de estado (fechar step quando `job/exec` terminar).
 
 ## Registro de Atualizacoes por Commit
 
@@ -978,3 +979,31 @@ Pendencias:
 
 Proximo passo recomendado:
 - Fase 8.3: executar step com acoplamento ao runtime (`jobs`/`exec`) e atualizar checkpoints automaticamente.
+
+### 2026-02-21 - Fase 8.3: executor assistido de plano (jobs/exec)
+
+Resumo:
+- Implementado `PlannerService.executeNext()` para executar o proximo step (`pending/in_progress`) com heuristica de acao (`probe`, `capture`, `transcode`, `hls`, `exec`, `manual`).
+- Steps passaram a guardar `execution` (vinculo operacional com `jobId` ou `exec sessionId`) e checkpoint/notas da tentativa.
+- Adicionada normalizacao de planos legados no `init()` para garantir `checkpoints` em registros antigos.
+- Exposta tool PI `plan_execute_next`.
+- Exposto endpoint `POST /plans/:planId/execute-next`.
+
+Arquivos-chave:
+- `src/planner/service.ts`
+- `src/planner/service.test.ts`
+- `src/engine/pi-tools.ts`
+- `src/engine/types.ts`
+- `src/chat/service.ts`
+- `src/api/server.ts`
+- `src/api/server.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Ainda nao ha reconciliacao automatica para atualizar o step quando `job/exec` termina.
+
+Proximo passo recomendado:
+- Fase 8.4: reconciliacao automatica de estado entre runtime (`jobs`/`exec`) e status do step.

@@ -32,4 +32,4 @@ Arquivos-chave:
 - `src/api/server.test.ts`
 
 Proximo passo:
-- Fase 8.3: executor assistido de plano (vincular step com jobs/shell run e fechamento automatico de checkpoints).
+- Fase 8.4: reconciliacao automatica de estado (fechar step quando `job/exec` terminar).

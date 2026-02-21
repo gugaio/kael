@@ -18,6 +18,13 @@ export type PlanStep = {
   notes?: string;
   updatedAt: string;
   checkpoints: PlanStepCheckpoint[];
+  execution?: {
+    kind: "job" | "exec";
+    refId: string;
+    status: string;
+    startedAt: string;
+    command?: string;
+  };
 };
 
 export type ExecutionPlan = {
@@ -34,6 +41,43 @@ type PlannerStore = {
   plans: Record<string, ExecutionPlan>;
 };
 
+export type PlanExecutionInputs = {
+  inputPath?: string;
+  outputPath?: string;
+  outputPlaylistPath?: string;
+  streamUrl?: string;
+  durationSeconds?: number;
+  segmentTime?: number;
+  args?: string[];
+  command?: string;
+  cwd?: string;
+  timeoutMs?: number;
+  background?: boolean;
+};
+
+export type PlanExecuteNextResult =
+  | {
+      ok: true;
+      plan: ExecutionPlan;
+      stepIndex: number;
+      action: "probe" | "capture" | "transcode" | "hls" | "exec" | "manual";
+      execution?: PlanStep["execution"];
+      reason?: string;
+    }
+  | {
+      ok: false;
+      reason:
+        | "plan_not_found"
+        | "no_next_step"
+        | "missing_input"
+        | "runtime_not_available"
+        | "execution_failed";
+      message: string;
+      plan?: ExecutionPlan;
+      stepIndex?: number;
+      action?: "probe" | "capture" | "transcode" | "hls" | "exec" | "manual";
+    };
+
 export class PlannerService {
   private readonly plansPath: string;
   private plans = new Map<string, ExecutionPlan>();
@@ -45,7 +89,10 @@ export class PlannerService {
   async init(): Promise<void> {
     await ensureDir(path.dirname(this.plansPath));
     const loaded = await readJsonFile<PlannerStore>(this.plansPath, { plans: {} });
-    this.plans = new Map(Object.entries(loaded.plans));
+    const normalized = Object.fromEntries(
+      Object.entries(loaded.plans).map(([id, plan]) => [id, normalizePlan(plan)]),
+    );
+    this.plans = new Map(Object.entries(normalized));
     await this.persist();
   }
 
@@ -110,6 +157,7 @@ export class PlannerService {
     stepIndex: number;
     status: PlanStepStatus;
     notes?: string;
+    execution?: PlanStep["execution"];
   }): Promise<ExecutionPlan | null> {
     const current = this.plans.get(params.planId);
     if (!current) {
@@ -137,6 +185,7 @@ export class PlannerService {
       notes: mergeStepNotes(step.notes, note, now),
       updatedAt: now,
       checkpoints,
+      execution: params.execution ?? step.execution,
     };
 
     const next: ExecutionPlan = {
@@ -193,6 +242,211 @@ export class PlannerService {
     return { stepIndex: index, step: plan.steps[index] };
   }
 
+  async executeNext(params: {
+    planId: string;
+    sessionKey?: string;
+    inputs?: PlanExecutionInputs;
+    runtime: {
+      startProbeMedia?: (args: { sessionKey: string; inputPath: string }) => Promise<{ id: string; status: string }>;
+      startCaptureStream?: (args: {
+        sessionKey: string;
+        streamUrl: string;
+        outputPath: string;
+        durationSeconds?: number;
+      }) => Promise<{ id: string; status: string }>;
+      startTranscode?: (args: {
+        sessionKey: string;
+        inputPath: string;
+        outputPath: string;
+        args?: string[];
+      }) => Promise<{ id: string; status: string }>;
+      startConvertHls?: (args: {
+        sessionKey: string;
+        inputPath: string;
+        outputPlaylistPath: string;
+        segmentTime?: number;
+      }) => Promise<{ id: string; status: string }>;
+      execCommand?: (args: {
+        sessionKey: string;
+        command: string;
+        cwd?: string;
+        timeoutMs?: number;
+        background?: boolean;
+      }) => Promise<{ id: string; status: string; command: string; cwd: string }>;
+    };
+  }): Promise<PlanExecuteNextResult> {
+    const plan = this.get(params.planId);
+    if (!plan) {
+      return {
+        ok: false,
+        reason: "plan_not_found",
+        message: `plan ${params.planId} not found`,
+      };
+    }
+    const next = this.nextAction(params.planId);
+    if (!next) {
+      return {
+        ok: false,
+        reason: "no_next_step",
+        message: "plan has no pending/in_progress step",
+        plan,
+      };
+    }
+    const action = inferExecutionAction(next.step.title);
+    const sessionKey = params.sessionKey?.trim() || plan.sessionKey;
+    const inputs = params.inputs ?? {};
+
+    if (action === "manual") {
+      const updated = await this.updateStep({
+        planId: plan.id,
+        stepIndex: next.stepIndex,
+        status: "completed",
+        notes: "Executor: etapa manual concluida automaticamente.",
+      });
+      return {
+        ok: true,
+        plan: updated ?? plan,
+        stepIndex: next.stepIndex,
+        action,
+        reason: "manual_step_completed",
+      };
+    }
+
+    const missing = requiredInputForAction(action, inputs);
+    if (missing) {
+      const updated = await this.updateStep({
+        planId: plan.id,
+        stepIndex: next.stepIndex,
+        status: "blocked",
+        notes: `Executor: faltando input obrigatorio (${missing}) para acao ${action}.`,
+      });
+      return {
+        ok: false,
+        reason: "missing_input",
+        message: `missing input: ${missing}`,
+        plan: updated ?? plan,
+        stepIndex: next.stepIndex,
+        action,
+      };
+    }
+
+    try {
+      let execution: PlanStep["execution"] | undefined;
+      if (action === "probe") {
+        if (!params.runtime.startProbeMedia) {
+          return runtimeNotAvailable(action, plan, next.stepIndex);
+        }
+        const job = await params.runtime.startProbeMedia({
+          sessionKey,
+          inputPath: inputs.inputPath ?? "",
+        });
+        execution = {
+          kind: "job",
+          refId: job.id,
+          status: job.status,
+          startedAt: new Date().toISOString(),
+        };
+      } else if (action === "capture") {
+        if (!params.runtime.startCaptureStream) {
+          return runtimeNotAvailable(action, plan, next.stepIndex);
+        }
+        const job = await params.runtime.startCaptureStream({
+          sessionKey,
+          streamUrl: inputs.streamUrl ?? "",
+          outputPath: inputs.outputPath ?? "",
+          durationSeconds: inputs.durationSeconds,
+        });
+        execution = {
+          kind: "job",
+          refId: job.id,
+          status: job.status,
+          startedAt: new Date().toISOString(),
+        };
+      } else if (action === "transcode") {
+        if (!params.runtime.startTranscode) {
+          return runtimeNotAvailable(action, plan, next.stepIndex);
+        }
+        const job = await params.runtime.startTranscode({
+          sessionKey,
+          inputPath: inputs.inputPath ?? "",
+          outputPath: inputs.outputPath ?? "",
+          args: inputs.args,
+        });
+        execution = {
+          kind: "job",
+          refId: job.id,
+          status: job.status,
+          startedAt: new Date().toISOString(),
+        };
+      } else if (action === "hls") {
+        if (!params.runtime.startConvertHls) {
+          return runtimeNotAvailable(action, plan, next.stepIndex);
+        }
+        const job = await params.runtime.startConvertHls({
+          sessionKey,
+          inputPath: inputs.inputPath ?? "",
+          outputPlaylistPath: inputs.outputPlaylistPath ?? "",
+          segmentTime: inputs.segmentTime,
+        });
+        execution = {
+          kind: "job",
+          refId: job.id,
+          status: job.status,
+          startedAt: new Date().toISOString(),
+        };
+      } else {
+        if (!params.runtime.execCommand) {
+          return runtimeNotAvailable(action, plan, next.stepIndex);
+        }
+        const exec = await params.runtime.execCommand({
+          sessionKey,
+          command: inputs.command ?? "",
+          cwd: inputs.cwd,
+          timeoutMs: inputs.timeoutMs,
+          background: inputs.background,
+        });
+        execution = {
+          kind: "exec",
+          refId: exec.id,
+          status: exec.status,
+          command: exec.command,
+          startedAt: new Date().toISOString(),
+        };
+      }
+
+      const updated = await this.updateStep({
+        planId: plan.id,
+        stepIndex: next.stepIndex,
+        status: "in_progress",
+        notes: `Executor: acao ${action} disparada.`,
+        execution,
+      });
+      return {
+        ok: true,
+        plan: updated ?? plan,
+        stepIndex: next.stepIndex,
+        action,
+        execution,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const updated = await this.updateStep({
+        planId: plan.id,
+        stepIndex: next.stepIndex,
+        status: "failed",
+        notes: `Executor: falha ao disparar ${action}: ${message}`,
+      });
+      return {
+        ok: false,
+        reason: "execution_failed",
+        message,
+        plan: updated ?? plan,
+        stepIndex: next.stepIndex,
+        action,
+      };
+    }
+  }
+
   private async persist(): Promise<void> {
     await writeJsonFile(this.plansPath, {
       plans: Object.fromEntries(this.plans.entries()),
@@ -217,6 +471,91 @@ function derivePlanStatus(steps: PlanStep[]): PlanStatus {
     return "completed";
   }
   return "active";
+}
+
+function inferExecutionAction(stepTitleRaw: string): "probe" | "capture" | "transcode" | "hls" | "exec" | "manual" {
+  const stepTitle = stepTitleRaw.toLowerCase();
+  const has = (...tokens: string[]) => tokens.some((token) => stepTitle.includes(token));
+  if (has("probe", "inspec", "metadata", "metadado")) {
+    return "probe";
+  }
+  if (has("captura", "capture", "stream", "ingest")) {
+    return "capture";
+  }
+  if (has("transcode", "transcod", "encode", "converter")) {
+    return "transcode";
+  }
+  if (has("hls", "playlist", "segment")) {
+    return "hls";
+  }
+  if (has("comando", "shell", "bash", "exec")) {
+    return "exec";
+  }
+  return "manual";
+}
+
+function requiredInputForAction(
+  action: "probe" | "capture" | "transcode" | "hls" | "exec" | "manual",
+  inputs: PlanExecutionInputs,
+): string | null {
+  if (action === "manual") {
+    return null;
+  }
+  if (action === "probe") {
+    return inputs.inputPath ? null : "inputPath";
+  }
+  if (action === "capture") {
+    if (!inputs.streamUrl) {
+      return "streamUrl";
+    }
+    return inputs.outputPath ? null : "outputPath";
+  }
+  if (action === "transcode") {
+    if (!inputs.inputPath) {
+      return "inputPath";
+    }
+    return inputs.outputPath ? null : "outputPath";
+  }
+  if (action === "hls") {
+    if (!inputs.inputPath) {
+      return "inputPath";
+    }
+    return inputs.outputPlaylistPath ? null : "outputPlaylistPath";
+  }
+  return inputs.command ? null : "command";
+}
+
+function runtimeNotAvailable(
+  action: "probe" | "capture" | "transcode" | "hls" | "exec" | "manual",
+  plan: ExecutionPlan,
+  stepIndex: number,
+): PlanExecuteNextResult {
+  return {
+    ok: false,
+    reason: "runtime_not_available",
+    message: `runtime callback for action ${action} is not available`,
+    plan,
+    stepIndex,
+    action,
+  };
+}
+
+function normalizePlan(plan: ExecutionPlan): ExecutionPlan {
+  const steps = plan.steps.map((step) => {
+    const checkpoints =
+      Array.isArray(step.checkpoints) && step.checkpoints.length > 0
+        ? step.checkpoints
+        : [{ at: step.updatedAt || plan.updatedAt || plan.createdAt, status: step.status }];
+    return {
+      ...step,
+      checkpoints,
+    };
+  });
+  return {
+    ...plan,
+    steps,
+    status: derivePlanStatus(steps),
+  };
 }
 
 function mergeStepNotes(existing: string | undefined, next: string | undefined, nowIso: string): string | undefined {

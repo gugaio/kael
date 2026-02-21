@@ -195,6 +195,50 @@ export type EngineTooling = {
       updatedAt: string;
     };
   } | null;
+  planExecuteNext: (params: {
+    planId: string;
+    inputs?: {
+      inputPath?: string;
+      outputPath?: string;
+      outputPlaylistPath?: string;
+      streamUrl?: string;
+      durationSeconds?: number;
+      segmentTime?: number;
+      args?: string[];
+      command?: string;
+      cwd?: string;
+      timeoutMs?: number;
+      background?: boolean;
+    };
+  }) => Promise<{
+    ok: boolean;
+    reason?: string;
+    message?: string;
+    stepIndex?: number;
+    action?: "probe" | "capture" | "transcode" | "hls" | "exec" | "manual";
+    plan?: {
+      id: string;
+      sessionKey: string;
+      title: string;
+      status: "active" | "completed" | "blocked" | "failed" | "canceled";
+      createdAt: string;
+      updatedAt: string;
+      steps: Array<{
+        id: string;
+        title: string;
+        status: "pending" | "in_progress" | "completed" | "blocked" | "failed" | "canceled";
+        notes?: string;
+        updatedAt: string;
+      }>;
+    };
+    execution?: {
+      kind: "job" | "exec";
+      refId: string;
+      status: string;
+      startedAt: string;
+      command?: string;
+    };
+  }>;
 };
 
 export type EngineTurnInput = {

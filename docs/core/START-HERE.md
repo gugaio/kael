@@ -29,6 +29,7 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 8.0: concluida (memoria operacional com `memory_search/get/write`).
 - Fase 8.1: concluida (planner/executor baseline com planos persistidos).
 - Fase 8.2: concluida (planner inteligente inicial com `plan_generate` e checkpoints por etapa).
+- Fase 8.3: concluida (executor assistido com `plan_execute_next` e vinculo de execucao no step).
 
 ## Estudos e referencias tecnicas
 

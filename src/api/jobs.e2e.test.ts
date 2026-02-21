@@ -145,6 +145,11 @@ async function createJobsServer(params: {
       updateStep: async () => null,
       appendStep: async () => null,
       nextAction: () => null,
+      executeNext: async () => ({
+        ok: false,
+        reason: "no_next_step",
+        message: "no step",
+      }),
     } as unknown as KaelApp["planner"],
     memory: {} as KaelApp["memory"],
     chat: {

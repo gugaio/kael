@@ -34,6 +34,7 @@ Super agente para videos e automacao.
   - `plan_list`
   - `plan_update_step`
   - `plan_next`
+  - `plan_execute_next`
 - Jobs de video assíncronos:
   - `transcode`
   - `convert_hls`
@@ -132,6 +133,7 @@ npx tsx src/cli/index.ts approval-deny --id <approvalId>
 - `POST /plans`
 - `POST /plans/generate`
 - `POST /plans/:planId/steps/:stepIndex`
+- `POST /plans/:planId/execute-next`
 - `POST /jobs/transcode`
 - `POST /jobs/hls`
 - `POST /jobs/capture`
