@@ -158,6 +158,34 @@ export class ChatService {
         reply: turn.reply,
       };
     } catch (error) {
+      const normalized = normalizePiError(error);
+      if (normalized.code === "timeout") {
+        const sessions = await this.shell.process({
+          sessionKey: input.sessionKey,
+          action: "list",
+        });
+        const recent = (sessions.sessions ?? []).slice(-3);
+        const lines = recent.map((item) => {
+          const exit = item.exitCode == null ? "n/a" : String(item.exitCode);
+          return `- ${item.status} (exit=${exit}) :: ${item.command}`;
+        });
+        const reply = [
+          "A execucao demorou demais e foi interrompida para evitar loop de ferramentas.",
+          normalized.message ? `Motivo: ${normalized.message}` : "",
+          lines.length > 0 ? "Ultimas execucoes shell observadas:" : "",
+          ...lines,
+          "Se quiser, posso continuar de forma mais objetiva com um comando por vez.",
+        ]
+          .filter(Boolean)
+          .join("\n");
+        const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", reply);
+        return {
+          user,
+          assistant,
+          reply,
+        };
+      }
+
       if (!shouldResetSessionOnEngineError(error)) {
         throw error;
       }

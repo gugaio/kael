@@ -333,6 +333,39 @@ describe("PlannerService", () => {
     expect(result.execution?.status).toBe("ls -la");
   });
 
+  it("auto-exports shell vars referenced by inline python os.environ.get", async () => {
+    const { planner } = await makePlanner();
+    const command =
+      "MANIFEST_URL='https://example.com/a.m3u8'\n" +
+      "FIRST_REF='seg-1.ts'\n" +
+      "python3 - <<'PY'\n" +
+      "import os\n" +
+      "print(os.environ.get('MANIFEST_URL'))\n" +
+      "print(os.environ.get('FIRST_REF'))\n" +
+      "PY";
+    const plan = await planner.create({
+      sessionKey: "s1",
+      title: "Shell env export",
+      steps: ["Executar comando shell: true"],
+    });
+
+    let observedCommand = "";
+    const result = await planner.executeNext({
+      planId: plan.id,
+      inputs: { command },
+      runtime: {
+        execCommand: async ({ command: cmd }) => {
+          observedCommand = cmd;
+          return { id: "exec-123", status: "running", command: cmd, cwd: "." };
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(observedCommand.startsWith("export MANIFEST_URL\nexport FIRST_REF\n")).toBe(true);
+    expect(observedCommand).toContain("os.environ.get('MANIFEST_URL')");
+  });
+
   it("blocks generic step with missing command input", async () => {
     const { planner } = await makePlanner();
     const plan = await planner.create({

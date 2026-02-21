@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { kaelLogger } from "../../infra/logger.js";
 import { LocalProcessRunner } from "./process-runner.js";
@@ -76,6 +77,11 @@ type ShellToolConfig = {
   approvalsPath: string;
 };
 
+type ResolvedShell = {
+  command: "bash" | "sh";
+  args: string[];
+};
+
 function clampTimeout(value: number | undefined, fallback: number, max: number): number {
   if (!Number.isFinite(value) || !value || value <= 0) {
     return fallback;
@@ -91,11 +97,19 @@ function appendWithCap(current: string, chunk: string, maxChars: number): string
   return next.slice(next.length - maxChars);
 }
 
+function tailSnippet(value: string, maxChars = 280): string {
+  if (!value) {
+    return "";
+  }
+  return value.length <= maxChars ? value : value.slice(value.length - maxChars);
+}
+
 export class ShellToolService {
   private readonly runner = new LocalProcessRunner();
   private readonly sessions = new Map<string, ExecSession>();
   private readonly active = new Map<string, ActiveProcess>();
   private readonly approvals: ExecApprovalStore;
+  private shellChoice: ResolvedShell | null = null;
 
   constructor(private readonly cfg: ShellToolConfig) {
     this.approvals = new ExecApprovalStore(cfg.approvalsPath, {
@@ -131,6 +145,27 @@ export class ShellToolService {
 
     const cwd = this.resolveCwd(params.cwd);
     const timeoutMs = clampTimeout(params.timeoutMs, this.cfg.defaultTimeoutMs, this.cfg.maxTimeoutMs);
+    const preflightError = this.preflightCommand(command, cwd);
+    if (preflightError) {
+      const failed: ExecSession = {
+        id: randomUUID(),
+        command,
+        cwd,
+        status: "failed",
+        startedAt: new Date().toISOString(),
+        endedAt: new Date().toISOString(),
+        outputTail: `[preflight] ${preflightError}`,
+        exitCode: 2,
+      };
+      this.sessions.set(failed.id, failed);
+      kaelLogger.warn("shell.exec.preflight_failed", {
+        sessionKey: params.sessionKey,
+        command,
+        cwd,
+        reason: preflightError,
+      });
+      return failed;
+    }
 
     const decision = await this.approvals.evaluateCommand({
       command,
@@ -175,6 +210,7 @@ export class ShellToolService {
         command,
         cwd,
         approvalId: decision.approvalId,
+        reason: decision.reason,
       });
 
       const waitResult = await this.approvals.waitForDecision(decision.approvalId ?? "", {
@@ -195,6 +231,7 @@ export class ShellToolService {
           cwd,
           approvalId: decision.approvalId,
           result: waitResult.status,
+          reason: waitResult.reason,
         });
         return deniedPending;
       }
@@ -317,7 +354,8 @@ export class ShellToolService {
 
     this.sessions.set(session.id, session);
 
-    const child = this.runner.spawn("sh", ["-lc", params.command], { cwd: params.cwd });
+    const shell = this.resolveShell();
+    const child = this.runner.spawn(shell.command, [...shell.args, params.command], { cwd: params.cwd });
 
     kaelLogger.info("shell.exec.started", {
       sessionKey: params.sessionKey,
@@ -349,6 +387,7 @@ export class ShellToolService {
           command: finalSession.command,
           status: finalSession.status,
           exitCode: finalSession.exitCode ?? null,
+          outputTail: finalSession.status === "completed" ? undefined : tailSnippet(finalSession.outputTail),
           durationMs:
             Date.parse(finalSession.endedAt ?? endedAt) - Date.parse(finalSession.startedAt),
         });
@@ -455,5 +494,54 @@ export class ShellToolService {
     }
 
     throw new Error(`cwd fora do workspace permitido: ${normalizedResolved}`);
+  }
+
+  private preflightCommand(command: string, cwd: string): string | null {
+    try {
+      const shell = this.resolveShell();
+      const check = spawnSync(shell.command, ["-n", ...shell.args, command], {
+        cwd,
+        encoding: "utf8",
+        timeout: 2000,
+        maxBuffer: 64 * 1024,
+      });
+      if (check.error) {
+        const code = (check.error as NodeJS.ErrnoException).code;
+        if (code === "EPERM" || code === "EACCES" || code === "ENOSYS") {
+          // Ambiente restrito (tests/sandbox): nao bloquear execucao por indisponibilidade do validador.
+          return null;
+        }
+        return `falha no preflight: ${check.error.message}`;
+      }
+      if ((check.status ?? 0) !== 0) {
+        const stderr = String(check.stderr ?? "").trim();
+        const stdout = String(check.stdout ?? "").trim();
+        const details = stderr || stdout || `${shell.command} -n retornou ${check.status}`;
+        return `sintaxe shell invalida: ${details}`;
+      }
+      return null;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return `preflight exception: ${message}`;
+    }
+  }
+
+  private resolveShell(): ResolvedShell {
+    if (this.shellChoice) {
+      return this.shellChoice;
+    }
+
+    const bashCheck = spawnSync("bash", ["-lc", "true"], {
+      encoding: "utf8",
+      timeout: 1000,
+      stdio: "ignore",
+    });
+    if (!bashCheck.error && (bashCheck.status ?? 1) === 0) {
+      this.shellChoice = { command: "bash", args: ["-lc"] };
+      return this.shellChoice;
+    }
+
+    this.shellChoice = { command: "sh", args: ["-lc"] };
+    return this.shellChoice;
   }
 }

@@ -255,7 +255,27 @@ export class PiEngineAdapter implements AgentEngine {
       async () => {
         attempt += 1;
         const attemptStartedAtMs = Date.now();
-        const agent = this.createSdkAgent(input);
+        const attemptStats = {
+          toolCalls: 0,
+          blockedCalls: 0,
+          lastBlockedReason: "",
+        };
+        const agent = this.createSdkAgent(input, {
+          turnId,
+          attempt,
+          onToolEvent: (event) => {
+            if (event.phase === "start") {
+              attemptStats.toolCalls += 1;
+              return;
+            }
+            if (event.blocked) {
+              attemptStats.blockedCalls += 1;
+              if (event.reason) {
+                attemptStats.lastBlockedReason = event.reason;
+              }
+            }
+          },
+        });
 
         return new Promise<EngineTurnOutput>((resolve, reject) => {
           let settled = false;
@@ -286,6 +306,7 @@ export class PiEngineAdapter implements AgentEngine {
           const timeout = setTimeout(() => {
             finish(() => {
               agent.abort();
+              const timedOutWithTools = attemptStats.toolCalls > 0;
               kaelLogger.warn("pi.turn.timeout", {
                 turnId,
                 requestId: input.requestId ?? null,
@@ -293,13 +314,18 @@ export class PiEngineAdapter implements AgentEngine {
                 provider: this.cfg.provider,
                 model: this.cfg.model,
                 attempt,
+                toolCalls: attemptStats.toolCalls,
+                blockedCalls: attemptStats.blockedCalls,
+                blockedReason: attemptStats.lastBlockedReason || null,
                 durationMs: Date.now() - attemptStartedAtMs,
               });
               reject(
                 new PiEngineError({
-                  message: "Pi SDK call timed out",
+                  message: timedOutWithTools
+                    ? `Pi SDK call timed out after ${attemptStats.toolCalls} tool calls`
+                    : "Pi SDK call timed out",
                   code: "timeout",
-                  retryable: true,
+                  retryable: !timedOutWithTools,
                 }),
               );
             });
@@ -411,7 +437,20 @@ export class PiEngineAdapter implements AgentEngine {
     );
   }
 
-  private createSdkAgent(input: EngineTurnInput): PiAgentLike {
+  private createSdkAgent(
+    input: EngineTurnInput,
+    trace: {
+      turnId: string;
+      attempt: number;
+      onToolEvent: (event: {
+        phase: "start" | "end";
+        tool: string;
+        status?: string;
+        blocked?: boolean;
+        reason?: string;
+      }) => void;
+    },
+  ): PiAgentLike {
     const model = getModel(this.cfg.provider as never, this.cfg.model);
     if (!model) {
       throw new PiEngineError({
@@ -429,6 +468,17 @@ export class PiEngineAdapter implements AgentEngine {
           sessionKey: input.sessionKey,
           tooling: input.tooling,
           loopGuard: this.loopGuard,
+          trace: {
+            turnId: trace.turnId,
+            attempt: trace.attempt,
+            requestId: input.requestId,
+            goal: input.message,
+          },
+          budget: {
+            maxToolCalls: 12,
+            maxExecCalls: 6,
+          },
+          onToolEvent: trace.onToolEvent,
         }),
         messages: [],
         isStreaming: false,

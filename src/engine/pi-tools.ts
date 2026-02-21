@@ -1,4 +1,5 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
+import { kaelLogger } from "../infra/logger.js";
 import type { EngineTooling } from "./types.js";
 import type { ToolLoopGuard } from "./tool-loop-guard.js";
 
@@ -32,7 +33,88 @@ export function createPiShellTools(params: {
   sessionKey: string;
   tooling: EngineTooling;
   loopGuard?: ToolLoopGuard;
+  trace?: {
+    turnId: string;
+    attempt: number;
+    requestId?: string;
+    goal?: string;
+  };
+  budget?: {
+    maxToolCalls?: number;
+    maxExecCalls?: number;
+  };
+  onToolEvent?: (event: {
+    phase: "start" | "end";
+    tool: string;
+    status?: string;
+    blocked?: boolean;
+    reason?: string;
+  }) => void;
 }): AgentTool[] {
+  let toolCalls = 0;
+  let execCalls = 0;
+  const maxToolCalls = Math.max(1, Math.floor(params.budget?.maxToolCalls ?? 12));
+  const maxExecCalls = Math.max(1, Math.floor(params.budget?.maxExecCalls ?? 6));
+
+  const inferIntent = (tool: "exec" | "process", rawParams: unknown): string => {
+    if (tool === "process") {
+      const action =
+        rawParams && typeof rawParams === "object" ? String((rawParams as { action?: unknown }).action ?? "") : "";
+      return action ? `process:${action}` : "process:unknown";
+    }
+    const command =
+      rawParams && typeof rawParams === "object"
+        ? String((rawParams as { command?: unknown }).command ?? "").toLowerCase()
+        : "";
+    if (!command) return "exec:unknown";
+    if (command.includes("ffprobe")) return "exec:media_probe";
+    if (command.includes("ffmpeg")) return "exec:media_transform";
+    if (command.includes("curl") || command.includes("wget")) return "exec:network_fetch";
+    if (command.includes("python") || command.includes("node")) return "exec:script_run";
+    if (command.includes("ls") || command.includes("cat") || command.includes("find")) return "exec:file_inspect";
+    return "exec:generic";
+  };
+
+  const logToolStart = (tool: "exec" | "process", rawParams: unknown): string => {
+    const intent = inferIntent(tool, rawParams);
+    kaelLogger.info("pi.tool.call.started", {
+      turnId: params.trace?.turnId ?? null,
+      attempt: params.trace?.attempt ?? null,
+      requestId: params.trace?.requestId ?? null,
+      sessionKey: params.sessionKey,
+      tool,
+      intent,
+      goal: params.trace?.goal ? params.trace.goal.slice(0, 180) : null,
+    });
+    params.onToolEvent?.({ phase: "start", tool });
+    return intent;
+  };
+
+  const logToolEnd = (
+    tool: "exec" | "process",
+    intent: string,
+    result: unknown,
+    startedAtMs: number,
+  ): void => {
+    const typed = (result ?? {}) as { status?: unknown; blocked?: unknown; reason?: unknown };
+    const status = typeof typed.status === "string" ? typed.status : "unknown";
+    const blocked = typed.blocked === true;
+    const reason = typeof typed.reason === "string" ? typed.reason : undefined;
+    kaelLogger.info("pi.tool.call.finished", {
+      turnId: params.trace?.turnId ?? null,
+      attempt: params.trace?.attempt ?? null,
+      requestId: params.trace?.requestId ?? null,
+      sessionKey: params.sessionKey,
+      tool,
+      intent,
+      status,
+      blocked,
+      reason,
+      durationMs: Date.now() - startedAtMs,
+    });
+    params.onToolEvent?.({ phase: "end", tool, status, blocked, reason });
+  };
+
   const execTool: AgentTool = {
     name: "exec",
     label: "Exec",
@@ -60,6 +142,25 @@ export function createPiShellTools(params: {
       additionalProperties: false,
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
+      if (toolCalls >= maxToolCalls) {
+        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+        params.onToolEvent?.({ phase: "end", tool: "exec", status: "blocked", blocked: true, reason });
+        return {
+          content: textResult(`blocked=true\nreason=${reason}`),
+          details: { blocked: true, reason, status: "blocked" },
+        };
+      }
+      if (execCalls >= maxExecCalls) {
+        const reason = `exec_call_budget_exceeded:${execCalls}/${maxExecCalls}`;
+        params.onToolEvent?.({ phase: "end", tool: "exec", status: "blocked", blocked: true, reason });
+        return {
+          content: textResult(`blocked=true\nreason=${reason}`),
+          details: { blocked: true, reason, status: "blocked" },
+        };
+      }
+      toolCalls += 1;
+      execCalls += 1;
+      const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as {
         command: string;
         cwd?: string;
@@ -68,13 +169,14 @@ export function createPiShellTools(params: {
         security?: "deny" | "allowlist" | "full";
         ask?: "off" | "on-miss" | "always";
       };
+      const intent = logToolStart("exec", args);
       const decision = params.loopGuard?.beforeCall({
         sessionKey: params.sessionKey,
         tool: "exec",
         params: args,
       });
       if (decision && !decision.allowed) {
-        return {
+        const blockedResult = {
           content: textResult(
             `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}`,
           ),
@@ -84,6 +186,8 @@ export function createPiShellTools(params: {
             retryAfterMs: decision.retryAfterMs,
           },
         };
+        logToolEnd("exec", intent, blockedResult.details, startedAtMs);
+        return blockedResult;
       }
 
       const session = await params.tooling.execCommand({
@@ -102,10 +206,12 @@ export function createPiShellTools(params: {
         result: session,
       });
 
-      return {
+      const result = {
         content: textResult(formatSession(session)),
         details: session,
       };
+      logToolEnd("exec", intent, session, startedAtMs);
+      return result;
     },
   };
 
@@ -131,17 +237,28 @@ export function createPiShellTools(params: {
       additionalProperties: false,
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
+      if (toolCalls >= maxToolCalls) {
+        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+        params.onToolEvent?.({ phase: "end", tool: "process", status: "blocked", blocked: true, reason });
+        return {
+          content: textResult(`blocked=true\nreason=${reason}`),
+          details: { blocked: true, reason, status: "blocked" },
+        };
+      }
+      toolCalls += 1;
+      const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as {
         action: "list" | "poll" | "kill";
         sessionId?: string;
       };
+      const intent = logToolStart("process", args);
       const decision = params.loopGuard?.beforeCall({
         sessionKey: params.sessionKey,
         tool: "process",
         params: args,
       });
       if (decision && !decision.allowed) {
-        return {
+        const blockedResult = {
           content: textResult(
             `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}`,
           ),
@@ -151,6 +268,8 @@ export function createPiShellTools(params: {
             retryAfterMs: decision.retryAfterMs,
           },
         };
+        logToolEnd("process", intent, blockedResult.details, startedAtMs);
+        return blockedResult;
       }
       const result = await params.tooling.processCommand({
         sessionKey: params.sessionKey,
@@ -175,10 +294,12 @@ export function createPiShellTools(params: {
               .filter(Boolean)
               .join("\n");
 
-      return {
+      const toolResult = {
         content: textResult(text),
         details: result,
       };
+      logToolEnd("process", intent, result, startedAtMs);
+      return toolResult;
     },
   };
 

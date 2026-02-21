@@ -506,9 +506,10 @@ export class PlannerService {
         if (!params.runtime.execCommand) {
           return runtimeNotAvailable(action, plan, next.stepIndex);
         }
+        const normalizedCommand = normalizePlannerExecCommand(inputs.command ?? "");
         const exec = await params.runtime.execCommand({
           sessionKey,
-          command: inputs.command ?? "",
+          command: normalizedCommand,
           cwd: inputs.cwd,
           timeoutMs: inputs.timeoutMs,
           background: inputs.background,
@@ -837,4 +838,51 @@ function extractShellCommandFromStepTitle(stepTitle: string): string | null {
     return null;
   }
   return match[1].trim();
+}
+
+function normalizePlannerExecCommand(command: string): string {
+  const raw = command.trim();
+  if (!raw) {
+    return raw;
+  }
+
+  // Common failure mode in generated shell:
+  // - command defines VAR=...
+  // - then inline Python reads os.environ.get("VAR")
+  // Without export, Python sees None.
+  if (!/python\d*\s+-\s+<<['"]?PY['"]?/i.test(raw) && !/os\.environ\.get\(/i.test(raw)) {
+    return raw;
+  }
+
+  const envRefs = new Set<string>();
+  for (const match of raw.matchAll(/os\.environ\.get\(\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]\s*\)/g)) {
+    if (match[1]) {
+      envRefs.add(match[1]);
+    }
+  }
+  if (envRefs.size === 0) {
+    return raw;
+  }
+
+  const assigned = new Set<string>();
+  for (const match of raw.matchAll(/^\s*([A-Za-z_][A-Za-z0-9_]*)=/gm)) {
+    if (match[1]) {
+      assigned.add(match[1]);
+    }
+  }
+
+  const alreadyExported = new Set<string>();
+  for (const match of raw.matchAll(/^\s*export\s+([A-Za-z_][A-Za-z0-9_]*)/gm)) {
+    if (match[1]) {
+      alreadyExported.add(match[1]);
+    }
+  }
+
+  const needed = [...envRefs].filter((name) => assigned.has(name) && !alreadyExported.has(name));
+  if (needed.length === 0) {
+    return raw;
+  }
+
+  const exportBlock = needed.map((name) => `export ${name}`).join("\n");
+  return `${exportBlock}\n${raw}`;
 }
