@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { ChatPage } from "./pages/ChatPage";
 import { DailyChatPage } from "./pages/DailyChatPage";
+import { ExecSessionsPage } from "./pages/ExecSessionsPage";
 import { HealthPage } from "./pages/HealthPage";
 import { JobDetailPage } from "./pages/JobDetailPage";
 import { JobsPage } from "./pages/JobsPage";
@@ -22,6 +23,7 @@ export function App(): JSX.Element {
               <Route path="/plans" element={<PlansPage />} />
               <Route path="/jobs" element={<JobsPage />} />
               <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+              <Route path="/exec" element={<ExecSessionsPage />} />
               <Route path="/schedules" element={<SchedulesPage />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/health" element={<HealthPage />} />

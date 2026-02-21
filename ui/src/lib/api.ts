@@ -156,6 +156,20 @@ export type ExecApproval = {
   decidedAt?: string;
 };
 
+export type ExecSession = {
+  id: string;
+  command: string;
+  cwd: string;
+  status: string;
+  startedAt: string;
+  endedAt?: string;
+  exitCode?: number | null;
+  timedOut?: boolean;
+  outputTail: string;
+  approvalId?: string;
+  failureCode?: string;
+};
+
 export async function getHealth(): Promise<Health> {
   const response = await fetch("/api/health");
   return parseJson(response, HealthSchema);
@@ -402,4 +416,67 @@ export async function denyExecApproval(id: string): Promise<void> {
   });
   const schema = z.object({ ok: z.boolean() });
   await parseJson(response, schema);
+}
+
+export async function getExecSessions(params?: {
+  status?: string;
+  limit?: number;
+}): Promise<ExecSession[]> {
+  const query = new URLSearchParams();
+  if (params?.status?.trim()) {
+    query.set("status", params.status.trim());
+  }
+  query.set("limit", String(params?.limit ?? 100));
+  const response = await fetch(`/api/exec/sessions?${query.toString()}`);
+  const schema = z.object({
+    ok: z.boolean(),
+    sessions: z.array(
+      z.object({
+        id: z.string(),
+        command: z.string(),
+        cwd: z.string(),
+        status: z.string(),
+        startedAt: z.string(),
+        endedAt: z.string().optional(),
+        exitCode: z.number().nullable().optional(),
+        timedOut: z.boolean().optional(),
+        outputTail: z.string(),
+        approvalId: z.string().optional(),
+        failureCode: z.string().optional(),
+      }),
+    ),
+  });
+  const data = await parseJson(response, schema);
+  return data.sessions;
+}
+
+export async function getExecSessionLog(params: {
+  sessionId: string;
+  offset?: number;
+  limit?: number;
+}): Promise<{ session: ExecSession; output: string; page: string }> {
+  const query = new URLSearchParams({
+    offset: String(params.offset ?? 0),
+    limit: String(params.limit ?? 12000),
+  });
+  const response = await fetch(`/api/exec/sessions/${encodeURIComponent(params.sessionId)}/log?${query.toString()}`);
+  const schema = z.object({
+    ok: z.boolean(),
+    session: z.object({
+      id: z.string(),
+      command: z.string(),
+      cwd: z.string(),
+      status: z.string(),
+      startedAt: z.string(),
+      endedAt: z.string().optional(),
+      exitCode: z.number().nullable().optional(),
+      timedOut: z.boolean().optional(),
+      outputTail: z.string(),
+      approvalId: z.string().optional(),
+      failureCode: z.string().optional(),
+    }),
+    output: z.string(),
+    page: z.string(),
+  });
+  return parseJson(response, schema);
 }

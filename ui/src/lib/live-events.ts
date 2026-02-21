@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-type LiveResource = "health" | "jobs" | "schedules" | "plans" | "approvals";
+type LiveResource = "health" | "jobs" | "schedules" | "plans" | "approvals" | "exec_sessions";
 
 type LiveSyncEvent = {
   type: "sync";
@@ -13,6 +13,7 @@ type LiveSyncEvent = {
     plans: number;
     schedules: number;
     approvals: number;
+    execSessions: number;
   };
 };
 
@@ -46,6 +47,11 @@ function invalidateByResource(params: {
   if (resource === "plans") {
     void queryClient.invalidateQueries({ queryKey: ["plans"] });
     void queryClient.invalidateQueries({ queryKey: ["plan"] });
+    return;
+  }
+  if (resource === "exec_sessions") {
+    void queryClient.invalidateQueries({ queryKey: ["exec-sessions"] });
+    void queryClient.invalidateQueries({ queryKey: ["exec-session-log"] });
     return;
   }
   void queryClient.invalidateQueries({ queryKey: ["exec-approvals-open"] });
@@ -108,6 +114,7 @@ export function useLiveEvents(): LiveStatus {
         queryClient.invalidateQueries({ queryKey: ["plans"] }),
         queryClient.invalidateQueries({ queryKey: ["schedules"] }),
         queryClient.invalidateQueries({ queryKey: ["exec-approvals-open"] }),
+        queryClient.invalidateQueries({ queryKey: ["exec-sessions"] }),
       ]);
     }, 7_000);
     return () => {

@@ -8,7 +8,7 @@ type RequestWithStart = {
   _kaelStartNs?: bigint;
 };
 
-type LiveResource = "health" | "jobs" | "schedules" | "plans" | "approvals";
+type LiveResource = "health" | "jobs" | "schedules" | "plans" | "approvals" | "exec_sessions";
 
 type LiveSyncEvent = {
   type: "sync";
@@ -20,6 +20,7 @@ type LiveSyncEvent = {
     plans: number;
     schedules: number;
     approvals: number;
+    execSessions: number;
   };
 };
 
@@ -37,6 +38,11 @@ async function buildLiveState(app: KaelApp): Promise<{
   const plans = app.planner.list({ limit: 100 });
   const schedules = app.automation.listSchedules();
   const approvals = await app.shell.listApprovals({ status: "open", limit: 100 });
+  const execSessionsResult = await app.shell.process({
+    sessionKey: "api.events",
+    action: "list",
+  });
+  const execSessions = execSessionsResult.ok ? execSessionsResult.sessions ?? [] : [];
   const sessions = await app.sessions.countSessions();
   const jobsByStatus = app.jobs.getStatusCounts();
   const runtimeJobs = app.jobs.getRuntimeStats();
@@ -89,6 +95,16 @@ async function buildLiveState(app: KaelApp): Promise<{
       decidedAt: approval.decidedAt ?? null,
     })),
   );
+  const execSessionsSignature = stableStringify(
+    execSessions.map((session) => ({
+      id: session.id,
+      status: session.status,
+      startedAt: session.startedAt,
+      endedAt: session.endedAt ?? null,
+      failureCode: session.failureCode ?? "none",
+      approvalId: session.approvalId ?? null,
+    })),
+  );
 
   return {
     signatures: {
@@ -97,12 +113,14 @@ async function buildLiveState(app: KaelApp): Promise<{
       schedules: schedulesSignature,
       plans: plansSignature,
       approvals: approvalsSignature,
+      exec_sessions: execSessionsSignature,
     },
     summary: {
       jobs: jobs.length,
       plans: plans.length,
       schedules: schedules.length,
       approvals: approvals.length,
+      execSessions: execSessions.length,
     },
   };
 }
@@ -265,7 +283,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
       });
     };
 
-    writeSync(["health", "jobs", "schedules", "plans", "approvals"], previous.summary);
+    writeSync(["health", "jobs", "schedules", "plans", "approvals", "exec_sessions"], previous.summary);
 
     const syncTimer = setInterval(() => {
       void (async () => {
@@ -641,6 +659,61 @@ export function createApiServer(app: KaelApp): FastifyInstance {
         throw new ApiError(404, "NOT_FOUND", "approval not found");
       }
       return { ok: true, approval };
+    },
+  );
+
+  server.get<{ Querystring: { status?: string; limit?: string } }>(
+    "/exec/sessions",
+    async (request) => {
+      const list = await app.shell.process({
+        sessionKey: "api.exec.sessions",
+        action: "list",
+      });
+      if (!list.ok) {
+        throw new ApiError(500, "INTERNAL_ERROR", list.message ?? "failed to list exec sessions");
+      }
+
+      const status = request.query.status?.trim().toLowerCase();
+      const parsedLimit = Number(request.query.limit ?? "100");
+      const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.floor(parsedLimit) : 100;
+      const filtered =
+        status && status !== "all"
+          ? (list.sessions ?? []).filter((session) => session.status.toLowerCase() === status)
+          : list.sessions ?? [];
+      return { ok: true, sessions: filtered.slice(0, limit) };
+    },
+  );
+
+  server.get<{ Params: { sessionId: string }; Querystring: { offset?: string; limit?: string } }>(
+    "/exec/sessions/:sessionId/log",
+    async (request) => {
+      const sessionId = request.params.sessionId?.trim();
+      if (!sessionId) {
+        throw new ApiError(400, "BAD_REQUEST", "sessionId is required");
+      }
+      const offsetRaw = Number(request.query.offset ?? "0");
+      const limitRaw = Number(request.query.limit ?? "8000");
+      const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0;
+      const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : 8000;
+
+      const result = await app.shell.process({
+        sessionKey: "api.exec.sessions",
+        action: "log",
+        sessionId,
+        offset,
+        limit,
+      });
+
+      if (!result.ok || !result.session) {
+        throw new ApiError(404, "NOT_FOUND", result.message ?? "session not found");
+      }
+
+      return {
+        ok: true,
+        session: result.session,
+        output: result.output ?? "",
+        page: result.message ?? "",
+      };
     },
   );
 
