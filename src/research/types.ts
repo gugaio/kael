@@ -54,6 +54,17 @@ export type WebEvidenceItem = {
     excerpt: string;
     contentChars: number;
     cached: boolean;
+    warning?: string;
+  };
+  ranking: {
+    score: number;
+    components: {
+      relevance: number;
+      sourceQuality: number;
+      recency: number;
+      fetchQuality: number;
+      diversityBonus: number;
+    };
   };
 };
 

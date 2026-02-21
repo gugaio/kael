@@ -238,7 +238,8 @@ Definition of Done (checklist):
 - [x] Cache de fetch por URL com TTL configuravel.
 - [x] Configuracao `KAEL_RESEARCH_*` documentada e validada no startup.
 - [x] Sumarizacao multi-fonte com evidencia e score de confianca.
-- [ ] Re-ranking avancado e deduplicacao semantica.
+- [x] Ranking de evidencia (relevancia, fonte, recencia, fetch, diversidade).
+- [ ] Deduplicacao semantica.
 - [ ] Suporte opcional a multiplos providers.
 
 ## Registro de Atualizacoes por Commit
@@ -360,6 +361,27 @@ Pendencias:
 
 Proximo passo recomendado:
 - Implementar item 4 para melhorar qualidade semantica da evidencia.
+
+### 2026-02-21 - Fase 9.4 (item 4): extracao principal de HTML
+
+Resumo:
+- Melhorada extracao de `web_fetch` para priorizar conteudo principal em HTML.
+- Heuristica implementada: remove blocos de ruido e seleciona melhor candidato entre `article/main/div/section` com sinais de conteudo.
+- Mantido fallback seguro para `body` e, por ultimo, limpeza completa do HTML.
+
+Arquivos-chave:
+- `src/research/service.ts`
+- `src/research/service.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Refinar ranking de evidencia/confianca com sinais de recencia/autoridade de dominio.
+
+Proximo passo recomendado:
+- Fase 9.5: ranking de evidencia + confianca mais calibrada.
 
 ### 2026-02-21 - Fase 9.1: web_search API-first (Tavily + memoria por sessao)
 

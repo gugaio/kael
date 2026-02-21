@@ -138,8 +138,61 @@ describe("ResearchService", () => {
 
     expect(result.summary).toContain("Evidencias principais");
     expect(result.evidence.length).toBeGreaterThan(0);
-    expect(result.confidence).toBeGreaterThan(0.5);
+    expect(result.evidence[0]?.ranking.score).toBeGreaterThan(0);
+    expect(result.confidence).toBeGreaterThan(0.4);
     expect(result.confidence).toBeLessThanOrEqual(1);
+  });
+
+  it("ranks evidence by relevance/recency/fetch quality", async () => {
+    const now = new Date().toISOString();
+    const oldDate = new Date(Date.now() - 1000 * 60 * 60 * 24 * 800).toISOString();
+    const provider: SearchProvider = {
+      search: vi.fn(async () => ({
+        results: [
+          {
+            title: "Kael roadmap 2026 update",
+            url: "https://updates.example.com/kael-roadmap",
+            snippet: "Latest roadmap details",
+            score: 0.8,
+            publishedAt: now,
+          },
+          {
+            title: "Generic article",
+            url: "http://misc.example.net/post",
+            snippet: "old note",
+            score: 0.4,
+            publishedAt: oldDate,
+          },
+        ],
+      })),
+    };
+    const fetchMock = vi
+      .fn(async (url: string | URL | Request) => {
+        const asString = String(url);
+        if (asString.includes("kael-roadmap")) {
+          return new Response("<html><body>Kael roadmap latest milestones and release steps.</body></html>", {
+            status: 200,
+            headers: { "content-type": "text/html" },
+          });
+        }
+        return new Response("<html><body>short</body></html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        });
+      }) as unknown as typeof fetch;
+    const { service } = await makeService(provider, fetchMock);
+
+    const result = await service.research({
+      sessionKey: "main",
+      query: "kael roadmap release",
+      maxResults: 2,
+      fetchTop: 1,
+    });
+
+    expect(result.evidence[0]?.source.url).toContain("kael-roadmap");
+    expect(result.evidence[0]?.ranking.components.relevance).toBeGreaterThan(
+      result.evidence[1]?.ranking.components.relevance ?? 0,
+    );
   });
 
   it("adds warning when response body is truncated by max bytes", async () => {
@@ -177,5 +230,42 @@ describe("ResearchService", () => {
     });
     expect(result.warning).toContain("truncated");
     expect(result.content.length).toBeGreaterThan(0);
+  });
+
+  it("extracts main readable content from noisy html", async () => {
+    const provider: SearchProvider = {
+      search: vi.fn(async () => ({ results: [] })),
+    };
+    const html = `
+      <html>
+        <head><title>News</title></head>
+        <body>
+          <header>Brand</header>
+          <nav>Home | About | Contact</nav>
+          <article>
+            <h1>Important update</h1>
+            <p>This is the main story with useful details for the user.</p>
+            <p>It should be preferred over navigation and footer noise.</p>
+          </article>
+          <footer>Copyright 2026</footer>
+        </body>
+      </html>
+    `;
+    const fetchMock = vi.fn(async () =>
+      new Response(html, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      }),
+    ) as unknown as typeof fetch;
+    const { service } = await makeService(provider, fetchMock);
+
+    const result = await service.fetchUrl({
+      sessionKey: "s1",
+      url: "https://example.com/news",
+    });
+
+    expect(result.content).toContain("Important update");
+    expect(result.content).toContain("main story with useful details");
+    expect(result.content).not.toContain("Home | About | Contact");
   });
 });

@@ -150,6 +150,76 @@ function stripHtml(input: string): string {
     .trim();
 }
 
+function extractByTag(html: string, tag: string): string[] {
+  const out: string[] = [];
+  const regex = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi");
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(html)) !== null) {
+    const raw = match[1] ?? "";
+    const text = stripHtml(raw);
+    if (text) {
+      out.push(text);
+    }
+  }
+  return out;
+}
+
+function extractLikelyContentDivs(html: string): string[] {
+  const out: string[] = [];
+  const regex =
+    /<(section|div)\b[^>]*(?:id|class)=["'][^"']*(content|article|main|post|entry|body)[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(html)) !== null) {
+    const raw = match[3] ?? "";
+    const text = stripHtml(raw);
+    if (text) {
+      out.push(text);
+    }
+  }
+  return out;
+}
+
+function removeNoiseBlocks(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
+    .replace(/<header[\s\S]*?<\/header>/gi, " ")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
+    .replace(/<aside[\s\S]*?<\/aside>/gi, " ")
+    .replace(/<form[\s\S]*?<\/form>/gi, " ");
+}
+
+function pickBestCandidate(candidates: string[]): string | undefined {
+  if (candidates.length === 0) {
+    return undefined;
+  }
+  const ranked = [...candidates]
+    .map((item) => item.replace(/\s+/g, " ").trim())
+    .filter((item) => item.length > 0)
+    .sort((a, b) => b.length - a.length);
+  return ranked[0];
+}
+
+function extractReadableHtmlText(html: string): string {
+  const withoutNoise = removeNoiseBlocks(html);
+  const candidates = [
+    ...extractByTag(withoutNoise, "article"),
+    ...extractByTag(withoutNoise, "main"),
+    ...extractLikelyContentDivs(withoutNoise),
+  ];
+  const best = pickBestCandidate(candidates);
+  if (best && best.length >= 120) {
+    return best;
+  }
+  const bodyMatch = withoutNoise.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
+  if (bodyMatch?.[1]) {
+    return stripHtml(bodyMatch[1]);
+  }
+  return stripHtml(withoutNoise);
+}
+
 function clip(input: string, maxChars: number): string {
   if (input.length <= maxChars) {
     return input;
@@ -237,19 +307,178 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(1, value));
+}
+
+function tokenize(input: string): string[] {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/gi, " ")
+    .split(/\s+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 3);
+}
+
+function scoreRelevance(query: string, source: WebSource): number {
+  const terms = Array.from(new Set(tokenize(query)));
+  if (terms.length === 0) {
+    return clamp01(source.score);
+  }
+  const haystack = `${source.title ?? ""} ${source.snippet ?? ""} ${source.url}`.toLowerCase();
+  let hits = 0;
+  for (const term of terms) {
+    if (haystack.includes(term)) {
+      hits += 1;
+    }
+  }
+  return clamp01(hits / terms.length);
+}
+
+function scoreSourceQuality(source: WebSource): number {
+  const providerScore = clamp01(source.score);
+  let domainScore = 0.45;
+  try {
+    const parsed = new URL(source.url);
+    if (parsed.protocol === "https:") {
+      domainScore += 0.15;
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (host.endsWith(".gov") || host.endsWith(".edu") || host.endsWith(".org") || host.endsWith(".mil")) {
+      domainScore += 0.2;
+    }
+    if (/\d/.test(host)) {
+      domainScore -= 0.05;
+    }
+  } catch {
+    domainScore -= 0.15;
+  }
+  return clamp01(providerScore * 0.5 + clamp01(domainScore) * 0.5);
+}
+
+function scoreRecency(publishedAt: string | undefined): number {
+  if (!publishedAt) {
+    return 0.45;
+  }
+  const timestamp = Date.parse(publishedAt);
+  if (!Number.isFinite(timestamp)) {
+    return 0.35;
+  }
+  const ageDays = (Date.now() - timestamp) / (24 * 60 * 60 * 1000);
+  if (!Number.isFinite(ageDays)) {
+    return 0.35;
+  }
+  if (ageDays <= 7) {
+    return 1;
+  }
+  if (ageDays <= 30) {
+    return 0.85;
+  }
+  if (ageDays <= 90) {
+    return 0.7;
+  }
+  if (ageDays <= 365) {
+    return 0.5;
+  }
+  if (ageDays <= 365 * 3) {
+    return 0.3;
+  }
+  return 0.15;
+}
+
+function scoreFetchQuality(fetchInfo: {
+  excerpt?: string;
+  contentChars?: number;
+  cached?: boolean;
+  warning?: string;
+} | undefined): number {
+  if (!fetchInfo) {
+    return 0.35;
+  }
+  let score = 0.25;
+  if ((fetchInfo.excerpt ?? "").trim().length > 0) {
+    score += 0.25;
+  }
+  score += Math.min(0.45, Math.max(0, (fetchInfo.contentChars ?? 0) / 2000));
+  if (fetchInfo.cached) {
+    score += 0.05;
+  }
+  if (fetchInfo.warning) {
+    score -= 0.3;
+  }
+  return clamp01(score);
+}
+
+function scoreDiversityBonus(domain: string, domainCounts: Map<string, number>): number {
+  const count = domainCounts.get(domain) ?? 0;
+  if (count <= 1) {
+    return 0.05;
+  }
+  if (count === 2) {
+    return 0.02;
+  }
+  return 0;
+}
+
+function rankEvidence(query: string, evidence: WebResearchResult["evidence"]): WebResearchResult["evidence"] {
+  const domainCounts = new Map<string, number>();
+  for (const item of evidence) {
+    const domain = normalizeDomain(item.source.url);
+    if (!domain) {
+      continue;
+    }
+    domainCounts.set(domain, (domainCounts.get(domain) ?? 0) + 1);
+  }
+
+  return evidence
+    .map((item) => {
+      const relevance = scoreRelevance(query, item.source);
+      const sourceQuality = scoreSourceQuality(item.source);
+      const recency = scoreRecency(item.source.publishedAt);
+      const fetchQuality = scoreFetchQuality(item.fetch);
+      const diversityBonus = scoreDiversityBonus(normalizeDomain(item.source.url), domainCounts);
+      const score = clamp01(
+        0.35 * relevance +
+          0.25 * sourceQuality +
+          0.2 * recency +
+          0.2 * fetchQuality +
+          diversityBonus,
+      );
+      return {
+        ...item,
+        ranking: {
+          score: round2(score),
+          components: {
+            relevance: round2(relevance),
+            sourceQuality: round2(sourceQuality),
+            recency: round2(recency),
+            fetchQuality: round2(fetchQuality),
+            diversityBonus: round2(diversityBonus),
+          },
+        },
+      };
+    })
+    .sort((a, b) => b.ranking.score - a.ranking.score);
+}
+
 function computeConfidence(params: {
-  sourceCount: number;
+  evidence: WebResearchResult["evidence"];
   fetchedCount: number;
-  avgSourceScore: number;
+  uniqueDomainCount: number;
 }): { confidence: number; reason: string } {
-  const sourceFactor = Math.min(1, params.sourceCount / 5);
+  const sourceFactor = Math.min(1, params.evidence.length / 5);
   const fetchFactor = Math.min(1, params.fetchedCount / 3);
-  const scoreFactor = Math.max(0, Math.min(1, params.avgSourceScore / 1));
-  const confidence = round2(0.35 * sourceFactor + 0.4 * fetchFactor + 0.25 * scoreFactor);
-  const reason =
-    params.fetchedCount === 0
-      ? "Sem fetch de conteudo das fontes; confianca limitada a snippets."
-      : `Baseado em ${params.sourceCount} fontes (${params.fetchedCount} com conteudo extraido).`;
+  const diversityFactor = Math.min(1, params.uniqueDomainCount / 4);
+  const topScores = params.evidence.slice(0, 5).map((item) => item.ranking.score);
+  const avgRankScore =
+    topScores.length > 0 ? topScores.reduce((acc, value) => acc + value, 0) / topScores.length : 0;
+  const confidence = round2(
+    clamp01(0.2 * sourceFactor + 0.2 * fetchFactor + 0.2 * diversityFactor + 0.4 * avgRankScore),
+  );
+  const reason = `Ranking medio ${round2(avgRankScore)} em ${params.evidence.length} fontes (${params.fetchedCount} com conteudo extraido, ${params.uniqueDomainCount} dominios distintos).`;
   return { confidence, reason };
 }
 
@@ -418,7 +647,7 @@ export class ResearchService {
       : undefined;
     const htmlLike = (contentType ?? "").toLowerCase().includes("html") || raw.includes("<html");
     const title = htmlLike ? extractTitle(raw) : undefined;
-    const cleaned = htmlLike ? stripHtml(raw) : raw.replace(/\s+/g, " ").trim();
+    const cleaned = htmlLike ? extractReadableHtmlText(raw) : raw.replace(/\s+/g, " ").trim();
     const content = clip(cleaned, maxChars);
     const excerpt = clip(content, Math.min(300, maxChars));
     const fetchedAt = new Date().toISOString();
@@ -481,13 +710,27 @@ export class ResearchService {
 
     const fetchTopRaw = params.fetchTop ?? 3;
     const fetchTop = Math.max(0, Math.min(5, Math.floor(fetchTopRaw)));
-    const picked = search.sources.slice(0, fetchTop);
-    const evidence: WebResearchResult["evidence"] = [];
+    let evidence: WebResearchResult["evidence"] = [];
     const notes = [...search.notes];
 
     for (const source of search.sources) {
-      evidence.push({ source });
+      evidence.push({
+        source,
+        ranking: {
+          score: 0,
+          components: {
+            relevance: 0,
+            sourceQuality: 0,
+            recency: 0,
+            fetchQuality: 0,
+            diversityBonus: 0,
+          },
+        },
+      });
     }
+    evidence = rankEvidence(query, evidence);
+    const picked = evidence.slice(0, fetchTop).map((item) => item.source);
+
     for (let idx = 0; idx < picked.length; idx += 1) {
       const source = picked[idx];
       if (!source) {
@@ -506,6 +749,7 @@ export class ResearchService {
             excerpt: fetched.excerpt,
             contentChars: fetched.content.length,
             cached: fetched.cached,
+            warning: fetched.warning,
           };
         }
       } catch (error) {
@@ -516,16 +760,14 @@ export class ResearchService {
         );
       }
     }
+    evidence = rankEvidence(query, evidence);
 
     const fetchedCount = evidence.filter((item) => item.fetch).length;
-    const avgSourceScore =
-      search.sources.length > 0
-        ? search.sources.reduce((acc, item) => acc + item.score, 0) / search.sources.length
-        : 0;
+    const uniqueDomainCount = new Set(evidence.map((item) => normalizeDomain(item.source.url)).filter(Boolean)).size;
     const { confidence, reason } = computeConfidence({
-      sourceCount: search.sources.length,
+      evidence,
       fetchedCount,
-      avgSourceScore,
+      uniqueDomainCount,
     });
 
     const bullets = evidence

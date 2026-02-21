@@ -65,6 +65,28 @@ Adicionar capacidade de pesquisa web ao Kael com baixa complexidade operacional:
 - Quando truncado, retorna `warning` explicito para o agente/operador.
 - Ajuda a controlar latencia, memoria e uso de contexto em paginas grandes.
 
+## Fase 9.4 (item 4 - extracao de conteudo principal)
+
+- Extracao HTML evoluida com heuristica de "main content":
+  - remove blocos de ruido (`nav`, `header`, `footer`, `aside`, etc.);
+  - prioriza candidatos em `<article>`, `<main>` e div/section com classes/ids de conteudo;
+  - fallback para `<body>` quando necessario.
+- Objetivo: aumentar qualidade semantica da evidencia no `web_fetch`/`web_research`.
+
+## Fase 9.4 (item 5 - ranking de evidencia)
+
+- `web_research` agora aplica ranking composto por:
+  - relevancia ao query;
+  - qualidade da fonte (score do provider + heuristica de dominio);
+  - recencia (`publishedAt`);
+  - qualidade do fetch (conteudo extraido, warning, cache);
+  - bonus de diversidade de dominio.
+- O pipeline agora faz duas passagens:
+  1. ranking preliminar para escolher `fetchTop`;
+  2. ranking final apos enriquecimento de fetch.
+- Cada item de `evidence` retorna `ranking.score` e `ranking.components`.
+- `confidence` passou a usar media do ranking + cobertura de fontes/fetch + diversidade.
+
 ## Configuracao
 
 - `KAEL_RESEARCH_ENABLED`
@@ -84,4 +106,4 @@ Adicionar capacidade de pesquisa web ao Kael com baixa complexidade operacional:
 
 ## Proximo passo recomendado
 
-Fase 9.4: melhorar ranking de evidencia e heuristica de confianca com sinais de recencia/autoridade.
+Fase 9.5: deduplicacao semantica (similaridade de snippets/conteudo) e suporte multi-provider com fallback.
