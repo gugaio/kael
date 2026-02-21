@@ -216,8 +216,9 @@ Definition of Done (checklist):
 - [x] Planner inteligente inicial com `plan_generate` (objetivo -> plano heuristico).
 - [x] Checkpoints por etapa no planner (historico de transicoes + notas acumuladas).
 - [x] Executor assistido (`plan_execute_next`) com vinculo de step para `job/exec`.
+- [x] Reconciliacao automatica (`planner.reconcile`) sincronizando step com status final de runtime.
 - [ ] Tuning de ranking/recencia e qualidade de snippets.
-- [ ] Reconciliacao automatica de estado (fechar step quando `job/exec` terminar).
+- [ ] Reduzir latencia de reconciliacao com stream/eventos (SSE) em vez de polling.
 
 ## Registro de Atualizacoes por Commit
 
@@ -1007,3 +1008,30 @@ Pendencias:
 
 Proximo passo recomendado:
 - Fase 8.4: reconciliacao automatica de estado entre runtime (`jobs`/`exec`) e status do step.
+
+### 2026-02-21 - Fase 8.4: reconciliacao automatica de steps (job/exec)
+
+Resumo:
+- Implementado `PlannerService.reconcile()` para fechar steps `in_progress` com base no estado final de `job`/`exec` associado.
+- `createKaelApp()` agora agenda job persistente `planner.reconcile` no `PersistentScheduler`.
+- Configuracao adicionada para reconciler (`KAEL_PLANNER_RECONCILE_ENABLED`, `KAEL_PLANNER_RECONCILE_INTERVAL_MS`).
+- Expostos gatilhos operacionais: API `POST /plans/reconcile` e tool PI `plan_reconcile`.
+
+Arquivos-chave:
+- `src/planner/service.ts`
+- `src/planner/service.test.ts`
+- `src/app.ts`
+- `src/config.ts`
+- `src/global-config.ts`
+- `src/api/server.ts`
+- `src/engine/pi-tools.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Atualizacao de step ainda depende de polling do reconciler (latencia do intervalo).
+
+Proximo passo recomendado:
+- Fase 8.5: eventos/SSE para reduzir latencia de reconciliacao e alimentar UI em tempo real.

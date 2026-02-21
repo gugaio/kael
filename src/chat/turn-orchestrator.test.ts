@@ -73,6 +73,7 @@ function createToolingStub(): EngineTooling {
     planUpdateStep: async () => null,
     planNextAction: () => null,
     planExecuteNext: async () => ({ ok: false, reason: "no_next_step", message: "none" }),
+    planReconcile: async () => ({ scannedPlans: 0, updatedPlans: 0, updatedSteps: 0 }),
   };
 }
 

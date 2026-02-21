@@ -26,6 +26,8 @@ function makeFakeApp(): KaelApp {
       automation: {
         heartbeatEnabled: true,
         heartbeatIntervalMs: 30_000,
+        plannerReconcileEnabled: true,
+        plannerReconcileIntervalMs: 5_000,
         schedulerTickMs: 1_000,
       },
       execution: {
@@ -167,6 +169,11 @@ function makeFakeApp(): KaelApp {
           status: "queued",
           startedAt: new Date().toISOString(),
         },
+      }),
+      reconcile: async () => ({
+        scannedPlans: 2,
+        updatedPlans: 1,
+        updatedSteps: 1,
       }),
     } as unknown as KaelApp["planner"],
     memory: {} as KaelApp["memory"],
@@ -410,6 +417,24 @@ describe("API integration", () => {
     expect(body.ok).toBe(true);
     expect(body.action).toBe("transcode");
     expect(body.execution.refId).toBe("job-xyz");
+    await server.close();
+  });
+
+  it("reconciles plans through API", async () => {
+    const server = createApiServer(makeFakeApp());
+    const response = await server.inject({
+      method: "POST",
+      url: "/plans/reconcile",
+      payload: {
+        limit: 50,
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.ok).toBe(true);
+    expect(body.scannedPlans).toBe(2);
+    expect(body.updatedPlans).toBe(1);
+    expect(body.updatedSteps).toBe(1);
     await server.close();
   });
 

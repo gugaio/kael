@@ -164,4 +164,60 @@ describe("PlannerService", () => {
     expect(result.reason).toBe("missing_input");
     expect(result.plan?.steps[0].status).toBe("blocked");
   });
+
+  it("reconciles in_progress job step to completed", async () => {
+    const { planner } = await makePlanner();
+    const plan = await planner.create({
+      sessionKey: "s1",
+      title: "Pipeline",
+      steps: ["Executar transcode com preset seguro e monitorar logs"],
+    });
+    await planner.executeNext({
+      planId: plan.id,
+      inputs: {
+        inputPath: "/tmp/in.mp4",
+        outputPath: "/tmp/out.mp4",
+      },
+      runtime: {
+        startTranscode: async () => ({ id: "job-123", status: "running" }),
+      },
+    });
+
+    const rec = await planner.reconcile({
+      runtime: {
+        getJob: async (jobId: string) => (jobId === "job-123" ? { status: "succeeded" } : null),
+      },
+    });
+    expect(rec.updatedSteps).toBe(1);
+    const updated = planner.get(plan.id);
+    expect(updated?.steps[0].status).toBe("completed");
+  });
+
+  it("reconciles in_progress exec step to failed", async () => {
+    const { planner } = await makePlanner();
+    const plan = await planner.create({
+      sessionKey: "s1",
+      title: "Shell",
+      steps: ["Executar comando shell de validacao"],
+    });
+    await planner.executeNext({
+      planId: plan.id,
+      inputs: {
+        command: "false",
+      },
+      runtime: {
+        execCommand: async () => ({ id: "exec-1", status: "running", command: "false", cwd: "." }),
+      },
+    });
+
+    const rec = await planner.reconcile({
+      runtime: {
+        pollExec: async (sessionId: string) =>
+          sessionId === "exec-1" ? { status: "failed", message: "exit 1" } : null,
+      },
+    });
+    expect(rec.updatedSteps).toBe(1);
+    const updated = planner.get(plan.id);
+    expect(updated?.steps[0].status).toBe("failed");
+  });
 });

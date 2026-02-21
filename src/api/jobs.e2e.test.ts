@@ -74,6 +74,8 @@ async function createJobsServer(params: {
       automation: {
         heartbeatEnabled: true,
         heartbeatIntervalMs: 30_000,
+        plannerReconcileEnabled: true,
+        plannerReconcileIntervalMs: 5_000,
         schedulerTickMs: 1_000,
       },
       execution: {
@@ -149,6 +151,11 @@ async function createJobsServer(params: {
         ok: false,
         reason: "no_next_step",
         message: "no step",
+      }),
+      reconcile: async () => ({
+        scannedPlans: 0,
+        updatedPlans: 0,
+        updatedSteps: 0,
       }),
     } as unknown as KaelApp["planner"],
     memory: {} as KaelApp["memory"],

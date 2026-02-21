@@ -20,6 +20,8 @@ export type KaelGlobalConfig = {
     automation: {
       heartbeatEnabled: boolean;
       heartbeatIntervalMs: number;
+      plannerReconcileEnabled: boolean;
+      plannerReconcileIntervalMs: number;
       schedulerTickMs: number;
     };
     shell: {
@@ -103,6 +105,8 @@ export function buildDefaultGlobalConfig(kaelHome: string): KaelGlobalConfig {
       automation: {
         heartbeatEnabled: true,
         heartbeatIntervalMs: 30000,
+        plannerReconcileEnabled: true,
+        plannerReconcileIntervalMs: 5000,
         schedulerTickMs: 1000,
       },
       shell: {

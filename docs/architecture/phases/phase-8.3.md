@@ -33,4 +33,4 @@ Arquivos-chave:
 - `src/api/server.test.ts`
 
 Proximo passo:
-- Fase 8.4: reconciliacao automatica de estado (sincronizar status do step com status final de `job/exec`).
+- Fase 8.5: reduzir polling com stream/eventos (SSE) para update de plano em baixa latencia.

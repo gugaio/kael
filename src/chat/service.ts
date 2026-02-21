@@ -60,6 +60,37 @@ export class ChatService {
             execCommand: (args) => this.shell.exec(args),
           },
         }),
+      planReconcile: ({ planId, limit }) =>
+        this.planner.reconcile({
+          planId,
+          limit,
+          runtime: {
+            getJob: async (jobId) => {
+              const found = this.jobs.getJob(jobId);
+              if (!found) {
+                return null;
+              }
+              return {
+                status: found.status,
+                error: found.error,
+              };
+            },
+            pollExec: async (sessionId) => {
+              const result = await this.shell.process({
+                sessionKey: "planner.reconcile",
+                action: "poll",
+                sessionId,
+              });
+              if (!result.ok || !result.session) {
+                return null;
+              }
+              return {
+                status: result.session.status,
+                message: result.message,
+              };
+            },
+          },
+        }),
     };
   }
 

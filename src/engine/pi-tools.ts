@@ -514,6 +514,33 @@ export function createPiShellTools(params: {
     },
   };
 
+  const planReconcileTool: AgentTool = {
+    name: "plan_reconcile",
+    label: "Plan Reconcile",
+    description: "Reconcilia steps em andamento com status final de jobs/exec.",
+    parameters: {
+      type: "object",
+      properties: {
+        planId: { type: "string" },
+        limit: { type: "number" },
+      },
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const args = (rawParams ?? {}) as { planId?: string; limit?: number };
+      const result = await params.tooling.planReconcile({
+        planId: args.planId,
+        limit: args.limit,
+      });
+      return {
+        content: textResult(
+          `scannedPlans=${result.scannedPlans}\nupdatedPlans=${result.updatedPlans}\nupdatedSteps=${result.updatedSteps}`,
+        ),
+        details: result,
+      };
+    },
+  };
+
   return [
     execTool,
     processTool,
@@ -526,5 +553,6 @@ export function createPiShellTools(params: {
     planUpdateStepTool,
     planNextTool,
     planExecuteNextTool,
+    planReconcileTool,
   ];
 }

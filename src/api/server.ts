@@ -336,6 +336,48 @@ export function createApiServer(app: KaelApp): FastifyInstance {
     return result;
   });
 
+  server.post<{
+    Body: {
+      planId?: string;
+      limit?: number;
+    };
+  }>("/plans/reconcile", async (request) => {
+    const planId = request.body.planId?.trim();
+    const limitRaw = Number(request.body.limit);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : undefined;
+    const result = await app.planner.reconcile({
+      planId,
+      limit,
+      runtime: {
+        getJob: async (jobId: string) => {
+          const found = app.jobs.getJob(jobId);
+          if (!found) {
+            return null;
+          }
+          return {
+            status: found.status,
+            error: found.error,
+          };
+        },
+        pollExec: async (sessionId: string) => {
+          const poll = await app.shell.process({
+            sessionKey: "planner.reconcile",
+            action: "poll",
+            sessionId,
+          });
+          if (!poll.ok || !poll.session) {
+            return null;
+          }
+          return {
+            status: poll.session.status,
+            message: poll.message,
+          };
+        },
+      },
+    });
+    return { ok: true, ...result };
+  });
+
   server.get<{ Querystring: { status?: string; limit?: string } }>(
     "/exec/approvals",
     async (request) => {

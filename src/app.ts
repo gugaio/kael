@@ -77,10 +77,41 @@ export async function createKaelApp(): Promise<KaelApp> {
     path.join(config.dataDir, "automation", "scheduler-jobs.json"),
     config.automation.schedulerTickMs,
     async ({ job }) => {
-      if (job.type !== "heartbeat") {
+      if (job.type === "heartbeat") {
+        await heartbeat.runOnce();
         return;
       }
-      await heartbeat.runOnce();
+      if (job.type === "planner_reconcile") {
+        await planner.reconcile({
+          limit: 200,
+          runtime: {
+            getJob: async (jobId: string) => {
+              const found = jobs.getJob(jobId);
+              if (!found) {
+                return null;
+              }
+              return {
+                status: found.status,
+                error: found.error,
+              };
+            },
+            pollExec: async (sessionId: string) => {
+              const result = await shell.process({
+                sessionKey: "planner.reconcile",
+                action: "poll",
+                sessionId,
+              });
+              if (!result.ok || !result.session) {
+                return null;
+              }
+              return {
+                status: result.session.status,
+                message: result.message,
+              };
+            },
+          },
+        });
+      }
     },
   );
   await scheduler.init();
@@ -89,6 +120,12 @@ export async function createKaelApp(): Promise<KaelApp> {
     type: "heartbeat",
     intervalMs: config.automation.heartbeatIntervalMs,
     enabled: config.automation.heartbeatEnabled,
+  });
+  await scheduler.upsertIntervalJob({
+    id: "planner.reconcile",
+    type: "planner_reconcile",
+    intervalMs: config.automation.plannerReconcileIntervalMs,
+    enabled: config.automation.plannerReconcileEnabled,
   });
   scheduler.start();
   const automation = new AutomationService(scheduler);

@@ -37,6 +37,8 @@ export type KaelConfig = {
   automation: {
     heartbeatEnabled: boolean;
     heartbeatIntervalMs: number;
+    plannerReconcileEnabled: boolean;
+    plannerReconcileIntervalMs: number;
     schedulerTickMs: number;
   };
   execution: {
@@ -146,6 +148,13 @@ function validateConfig(config: KaelConfig): void {
 
   if (!Number.isFinite(config.automation.heartbeatIntervalMs) || config.automation.heartbeatIntervalMs <= 0) {
     issues.push("KAEL_HEARTBEAT_INTERVAL_MS deve ser um número positivo");
+  }
+
+  if (
+    !Number.isFinite(config.automation.plannerReconcileIntervalMs) ||
+    config.automation.plannerReconcileIntervalMs <= 0
+  ) {
+    issues.push("KAEL_PLANNER_RECONCILE_INTERVAL_MS deve ser um número positivo");
   }
 
   if (config.execution.safePathsEnabled && config.execution.allowedPaths.length === 0) {
@@ -267,6 +276,21 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     Number.isFinite(schedulerTickRaw) && schedulerTickRaw > 0
       ? Math.floor(schedulerTickRaw)
       : defaultSchedulerTickMs;
+
+  const plannerReconcileEnabledRaw =
+    process.env.KAEL_PLANNER_RECONCILE_ENABLED?.trim() ??
+    String(globalConfig?.defaults.automation?.plannerReconcileEnabled ?? true);
+  const plannerReconcileEnabled = plannerReconcileEnabledRaw.toLowerCase() !== "false";
+
+  const defaultPlannerReconcileIntervalMs =
+    globalConfig?.defaults.automation?.plannerReconcileIntervalMs ?? 5000;
+  const plannerReconcileIntervalRaw = Number(
+    process.env.KAEL_PLANNER_RECONCILE_INTERVAL_MS ?? String(defaultPlannerReconcileIntervalMs),
+  );
+  const plannerReconcileIntervalMs =
+    Number.isFinite(plannerReconcileIntervalRaw) && plannerReconcileIntervalRaw > 0
+      ? Math.floor(plannerReconcileIntervalRaw)
+      : defaultPlannerReconcileIntervalMs;
 
   const safePathsEnabledRaw = process.env.KAEL_SAFE_PATHS_ENABLED?.trim() ?? "true";
   const safePathsEnabled = safePathsEnabledRaw.toLowerCase() !== "false";
@@ -430,6 +454,8 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     automation: {
       heartbeatEnabled,
       heartbeatIntervalMs,
+      plannerReconcileEnabled,
+      plannerReconcileIntervalMs,
       schedulerTickMs,
     },
     execution: {

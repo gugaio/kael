@@ -35,6 +35,7 @@ Super agente para videos e automacao.
   - `plan_update_step`
   - `plan_next`
   - `plan_execute_next`
+  - `plan_reconcile`
 - Jobs de video assíncronos:
   - `transcode`
   - `convert_hls`
@@ -134,6 +135,7 @@ npx tsx src/cli/index.ts approval-deny --id <approvalId>
 - `POST /plans/generate`
 - `POST /plans/:planId/steps/:stepIndex`
 - `POST /plans/:planId/execute-next`
+- `POST /plans/reconcile`
 - `POST /jobs/transcode`
 - `POST /jobs/hls`
 - `POST /jobs/capture`
@@ -204,6 +206,8 @@ Se a mesma chave for reutilizada com payload diferente, a API retorna `409`.
 - `KAEL_IDEMPOTENCY_TTL_MS` (default: `600000`)
 - `KAEL_HEARTBEAT_ENABLED` (default: `true`)
 - `KAEL_HEARTBEAT_INTERVAL_MS` (default: `30000`)
+- `KAEL_PLANNER_RECONCILE_ENABLED` (default: `true`)
+- `KAEL_PLANNER_RECONCILE_INTERVAL_MS` (default: `5000`)
 - `KAEL_SCHEDULER_TICK_MS` (default: `1000`)
 - `KAEL_SAFE_PATHS_ENABLED` (default: `true`)
 - `KAEL_ALLOWED_PATHS` (default: `<cwd>,<dataDir>,/tmp`)

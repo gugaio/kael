@@ -78,6 +78,12 @@ export type PlanExecuteNextResult =
       action?: "probe" | "capture" | "transcode" | "hls" | "exec" | "manual";
     };
 
+export type PlanReconcileResult = {
+  scannedPlans: number;
+  updatedPlans: number;
+  updatedSteps: number;
+};
+
 export class PlannerService {
   private readonly plansPath: string;
   private plans = new Map<string, ExecutionPlan>();
@@ -447,6 +453,55 @@ export class PlannerService {
     }
   }
 
+  async reconcile(params: {
+    planId?: string;
+    limit?: number;
+    runtime: {
+      getJob?: (jobId: string) => Promise<{ status: string; error?: string } | null>;
+      pollExec?: (sessionId: string) => Promise<{ status: string; message?: string } | null>;
+    };
+  }): Promise<PlanReconcileResult> {
+    const plans = params.planId
+      ? [this.get(params.planId)].filter((value): value is ExecutionPlan => value !== null)
+      : this.list({ status: "active", limit: params.limit ?? 100 });
+
+    let updatedSteps = 0;
+    const touchedPlanIds = new Set<string>();
+
+    for (const plan of plans) {
+      for (let stepIndex = 0; stepIndex < plan.steps.length; stepIndex += 1) {
+        const step = plan.steps[stepIndex];
+        if (step.status !== "in_progress" || !step.execution) {
+          continue;
+        }
+
+        const resolution = await resolveExecutionStatus(step.execution, params.runtime);
+        if (!resolution) {
+          continue;
+        }
+
+        await this.updateStep({
+          planId: plan.id,
+          stepIndex,
+          status: resolution.status,
+          notes: `Reconciler: execucao ${step.execution.kind}:${step.execution.refId} finalizou com ${resolution.observedStatus}.`,
+          execution: {
+            ...step.execution,
+            status: resolution.observedStatus,
+          },
+        });
+        updatedSteps += 1;
+        touchedPlanIds.add(plan.id);
+      }
+    }
+
+    return {
+      scannedPlans: plans.length,
+      updatedPlans: touchedPlanIds.size,
+      updatedSteps,
+    };
+  }
+
   private async persist(): Promise<void> {
     await writeJsonFile(this.plansPath, {
       plans: Object.fromEntries(this.plans.entries()),
@@ -556,6 +611,56 @@ function normalizePlan(plan: ExecutionPlan): ExecutionPlan {
     steps,
     status: derivePlanStatus(steps),
   };
+}
+
+async function resolveExecutionStatus(
+  execution: NonNullable<PlanStep["execution"]>,
+  runtime: {
+    getJob?: (jobId: string) => Promise<{ status: string; error?: string } | null>;
+    pollExec?: (sessionId: string) => Promise<{ status: string; message?: string } | null>;
+  },
+): Promise<{ status: PlanStepStatus; observedStatus: string } | null> {
+  if (execution.kind === "job") {
+    if (!runtime.getJob) {
+      return null;
+    }
+    const job = await runtime.getJob(execution.refId);
+    if (!job) {
+      return null;
+    }
+    if (job.status === "succeeded") {
+      return { status: "completed", observedStatus: job.status };
+    }
+    if (job.status === "failed") {
+      return { status: "failed", observedStatus: job.status };
+    }
+    if (job.status === "canceled") {
+      return { status: "canceled", observedStatus: job.status };
+    }
+    return null;
+  }
+
+  if (!runtime.pollExec) {
+    return null;
+  }
+  const exec = await runtime.pollExec(execution.refId);
+  if (!exec) {
+    return null;
+  }
+  if (exec.status === "completed") {
+    return { status: "completed", observedStatus: exec.status };
+  }
+  if (
+    exec.status === "failed" ||
+    exec.status === "timed_out" ||
+    exec.status === "denied"
+  ) {
+    return { status: "failed", observedStatus: exec.status };
+  }
+  if (exec.status === "canceled") {
+    return { status: "canceled", observedStatus: exec.status };
+  }
+  return null;
 }
 
 function mergeStepNotes(existing: string | undefined, next: string | undefined, nowIso: string): string | undefined {

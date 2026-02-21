@@ -239,6 +239,11 @@ export type EngineTooling = {
       command?: string;
     };
   }>;
+  planReconcile: (params: { planId?: string; limit?: number }) => Promise<{
+    scannedPlans: number;
+    updatedPlans: number;
+    updatedSteps: number;
+  }>;
 };
 
 export type EngineTurnInput = {
