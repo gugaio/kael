@@ -109,6 +109,26 @@ export type EngineTooling = {
     content: string;
     target?: "daily" | "long_term";
   }) => Promise<{ path: string }>;
+  workspaceSearch: (params: {
+    query: string;
+    maxResults?: number;
+  }) => Promise<
+    Array<{
+      path: string;
+      line: number;
+      snippet: string;
+    }>
+  >;
+  workspaceRead: (params: {
+    path: string;
+    from?: number;
+    lines?: number;
+  }) => Promise<{
+    path: string;
+    text: string;
+    startLine: number;
+    endLine: number;
+  }>;
   webSearch: (params: {
     sessionKey: string;
     query: string;

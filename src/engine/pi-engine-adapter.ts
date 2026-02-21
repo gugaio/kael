@@ -13,9 +13,38 @@ type PiAgentLike = {
   subscribe: (listener: (event: unknown) => void) => (() => void) | void;
 };
 
+function isSelfKnowledgeQuestion(message: string): boolean {
+  const text = message.toLowerCase();
+  const tokens = [
+    "framework",
+    "agentic",
+    "loop",
+    "arquitetura",
+    "stack",
+    "pi-agent-core",
+    "fastify",
+    "como voce funciona",
+    "internamente",
+    "qual engine",
+    "que agente code",
+    "seu codigo",
+    "seus arquivos",
+  ];
+  return tokens.some((token) => text.includes(token));
+}
+
 function buildPrompt(input: EngineTurnInput): string {
   const context = input.contextMessages ?? [];
   if (context.length === 0) {
+    if (isSelfKnowledgeQuestion(input.message)) {
+      return [
+        "Pergunta sobre o proprio Kael detectada.",
+        "Antes de responder, investigue o workspace com workspace_search e workspace_read e responda com evidencias (arquivo:linha).",
+        "",
+        "Mensagem atual do usuario:",
+        input.message,
+      ].join("\n");
+    }
     return input.message;
   }
 
@@ -28,6 +57,13 @@ function buildPrompt(input: EngineTurnInput): string {
     "Contexto recente da conversa (ordem cronologica):",
     serializedContext,
     "",
+    ...(isSelfKnowledgeQuestion(input.message)
+      ? [
+          "Pergunta sobre o proprio Kael detectada.",
+          "Antes de responder, investigue o workspace com workspace_search e workspace_read e responda com evidencias (arquivo:linha).",
+          "",
+        ]
+      : []),
     "Instrucao critica: responda a MENSAGEM ATUAL do usuario. Nao continue tarefas antigas sem pedido explicito.",
     "",
     "Mensagem atual do usuario:",

@@ -16,6 +16,7 @@ import { ResearchService } from "./research/service.js";
 import { SessionStore } from "./session/store.js";
 import { ChatService } from "./chat/service.js";
 import { TurnOrchestrator } from "./chat/turn-orchestrator.js";
+import { WorkspaceInspector } from "./workspace/inspector.js";
 import { LocalProcessRunner } from "./tools/system/process-runner.js";
 import { ShellToolService } from "./tools/system/shell-tool-service.js";
 import { VideoJobService } from "./tools/video/video-job-service.js";
@@ -68,6 +69,11 @@ export async function createKaelApp(): Promise<KaelApp> {
     maxSnippetChars: 1200,
   });
   await memory.init();
+  const workspace = new WorkspaceInspector({
+    workspaceRoot: config.shell.workspaceRoot,
+    maxFileChars: 100_000,
+    maxSearchResults: 12,
+  });
   const searchProvider = config.research.enabled && config.research.apiKey
     ? new TavilySearchProvider(config.research.apiKey)
     : new DisabledSearchProvider();
@@ -92,7 +98,7 @@ export async function createKaelApp(): Promise<KaelApp> {
     maxContextMessages: config.context.maxMessages,
     maxContextChars: config.context.maxChars,
   });
-  const chat = new ChatService(sessions, jobs, shell, memory, research, planner, orchestrator);
+  const chat = new ChatService(sessions, jobs, shell, memory, workspace, research, planner, orchestrator);
   const heartbeat = new HeartbeatRunner(jobs, sessions);
   const scheduler = new PersistentScheduler(
     path.join(config.dataDir, "automation", "scheduler-jobs.json"),

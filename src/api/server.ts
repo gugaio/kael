@@ -173,6 +173,10 @@ export function createApiServer(app: KaelApp): FastifyInstance {
   server.setErrorHandler(async (error, request, reply) => {
     const apiError = asApiError(error);
     const route = request.routeOptions?.url ?? request.url;
+    const cause =
+      apiError.details && typeof apiError.details === "object" && "cause" in apiError.details
+        ? (apiError.details as { cause?: unknown }).cause
+        : undefined;
     kaelLogger.error("api.request.error", {
       requestId: request.id,
       method: request.method,
@@ -180,6 +184,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
       status: apiError.status,
       code: apiError.code,
       message: apiError.message,
+      ...(cause !== undefined ? { cause } : {}),
     });
     return sendApiError(reply, request, apiError);
   });

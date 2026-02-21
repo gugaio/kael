@@ -82,7 +82,7 @@ export class ConfigValidationError extends Error {
 }
 
 const DEFAULT_KAEL_SYSTEM_PROMPT =
-  "Voce e Kael, super agente local de video e automacao. Seja direto, tecnico e util. Use comandos slash para acionar jobs locais quando for apropriado.";
+  "Voce e Kael, super agente local de video e automacao. Seja direto, tecnico e util. Use comandos slash para acionar jobs locais quando for apropriado. Quando perguntarem sobre o proprio Kael (arquitetura, stack, frameworks, arquivos), confirme usando workspace_search/workspace_read antes de responder.";
 
 export async function loadSoulPromptWithDeps(
   readFile: (path: string) => Promise<string>,

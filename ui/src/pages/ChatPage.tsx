@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Panel } from "../components/Panel";
 import { generatePlan, getPlans, getSessionMessages, postChat, type Plan } from "../lib/api";
@@ -41,6 +41,7 @@ export function ChatPage(): JSX.Element {
   const [planHintDismissed, setPlanHintDismissed] = useState(false);
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const messages = useQuery({
     queryKey: ["session-messages", sessionKey],
@@ -106,6 +107,10 @@ export function ChatPage(): JSX.Element {
   const latestPlan: Plan | undefined = (plans.data ?? [])
     .slice()
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages.data?.length, pendingUserMessage, send.isPending]);
 
   return (
     <div className="grid min-w-0 gap-4 lg:grid-cols-4">
@@ -184,6 +189,7 @@ export function ChatPage(): JSX.Element {
               </>
             )}
             {(messages.data ?? []).length === 0 && <p className="text-sm text-kael-muted">No messages yet.</p>}
+            <div ref={messagesEndRef} />
           </div>
           {sendError && <p className="mb-3 text-xs text-rose-200">{sendError}</p>}
           {planSuggestionVisible && (

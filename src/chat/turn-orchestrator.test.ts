@@ -51,6 +51,13 @@ function createToolingStub(): EngineTooling {
       endLine: 1,
     }),
     memoryWrite: async () => ({ path: "memory/2000-01-01.md" }),
+    workspaceSearch: async () => [],
+    workspaceRead: async () => ({
+      path: "README.md",
+      text: "",
+      startLine: 1,
+      endLine: 1,
+    }),
     webSearch: async () => ({ answer: "ok", sources: [], notes: [] }),
     webFetch: async () => ({
       url: "https://example.com",

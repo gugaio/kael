@@ -7,6 +7,7 @@ import type { ResearchService } from "../research/service.js";
 import type { SessionStore } from "../session/store.js";
 import type { ShellToolService } from "../tools/system/shell-tool-service.js";
 import type { SessionMessage } from "../types.js";
+import type { WorkspaceInspector } from "../workspace/inspector.js";
 import { TurnOrchestrator } from "./turn-orchestrator.js";
 
 function shouldResetSessionOnEngineError(error: unknown): boolean {
@@ -22,6 +23,7 @@ export class ChatService {
     private readonly jobs: JobManager,
     private readonly shell: ShellToolService,
     private readonly memory: MemoryService,
+    private readonly workspace: WorkspaceInspector,
     private readonly research: ResearchService,
     private readonly planner: PlannerService,
     private readonly orchestrator: TurnOrchestrator,
@@ -43,6 +45,8 @@ export class ChatService {
       memorySearch: ({ query, maxResults }) => this.memory.search(query, maxResults),
       memoryGet: ({ path, from, lines }) => this.memory.get({ relPath: path, from, lines }),
       memoryWrite: ({ content, target }) => this.memory.write({ content, target }),
+      workspaceSearch: ({ query, maxResults }) => this.workspace.search({ query, maxResults }),
+      workspaceRead: ({ path, from, lines }) => this.workspace.read({ relPath: path, from, lines }),
       webSearch: ({ sessionKey, query, maxResults, recencyDays, domainsAllow, domainsBlock }) =>
         this.research.search({
           sessionKey,
