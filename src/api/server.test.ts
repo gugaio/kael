@@ -83,6 +83,35 @@ function makeFakeApp(): KaelApp {
         canceled: true,
       }),
     } as unknown as KaelApp["jobs"],
+    planner: {
+      list: () => [],
+      get: () => null,
+      create: async ({
+        sessionKey,
+        title,
+        steps,
+      }: {
+        sessionKey: string;
+        title: string;
+        steps: string[];
+      }) => ({
+        id: "plan-1",
+        sessionKey,
+        title,
+        status: steps.length > 0 ? "active" : "completed",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        steps: steps.map((step: string, idx: number) => ({
+          id: `st-${idx}`,
+          title: step,
+          status: "pending",
+          updatedAt: new Date().toISOString(),
+        })),
+      }),
+      updateStep: async () => null,
+      appendStep: async () => null,
+      nextAction: () => null,
+    } as unknown as KaelApp["planner"],
     memory: {} as KaelApp["memory"],
     chat: {
       handleMessage: async ({ message }: { message: string }) => {

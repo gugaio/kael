@@ -107,6 +107,30 @@ async function createJobsServer(params: {
       countSessions: async () => 0,
     } as unknown as KaelApp["sessions"],
     jobs,
+    planner: {
+      list: () => [],
+      get: () => null,
+      create: async ({
+        sessionKey,
+        title,
+        steps,
+      }: {
+        sessionKey: string;
+        title: string;
+        steps: string[];
+      }) => ({
+        id: "plan-1",
+        sessionKey,
+        title,
+        status: steps.length > 0 ? "active" : "completed",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        steps: [],
+      }),
+      updateStep: async () => null,
+      appendStep: async () => null,
+      nextAction: () => null,
+    } as unknown as KaelApp["planner"],
     memory: {} as KaelApp["memory"],
     chat: {
       handleMessage: async () => ({

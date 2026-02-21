@@ -108,6 +108,74 @@ export type EngineTooling = {
     content: string;
     target?: "daily" | "long_term";
   }) => Promise<{ path: string }>;
+  planCreate: (params: {
+    sessionKey: string;
+    title: string;
+    steps: string[];
+  }) => Promise<{
+    id: string;
+    sessionKey: string;
+    title: string;
+    status: "active" | "completed" | "blocked" | "failed" | "canceled";
+    createdAt: string;
+    updatedAt: string;
+    steps: Array<{
+      id: string;
+      title: string;
+      status: "pending" | "in_progress" | "completed" | "blocked" | "failed" | "canceled";
+      notes?: string;
+      updatedAt: string;
+    }>;
+  }>;
+  planList: (params: {
+    sessionKey?: string;
+    status?: "active" | "completed" | "blocked" | "failed" | "canceled";
+    limit?: number;
+  }) => Array<{
+    id: string;
+    sessionKey: string;
+    title: string;
+    status: "active" | "completed" | "blocked" | "failed" | "canceled";
+    createdAt: string;
+    updatedAt: string;
+    steps: Array<{
+      id: string;
+      title: string;
+      status: "pending" | "in_progress" | "completed" | "blocked" | "failed" | "canceled";
+      notes?: string;
+      updatedAt: string;
+    }>;
+  }>;
+  planUpdateStep: (params: {
+    planId: string;
+    stepIndex: number;
+    status: "pending" | "in_progress" | "completed" | "blocked" | "failed" | "canceled";
+    notes?: string;
+  }) => Promise<{
+    id: string;
+    sessionKey: string;
+    title: string;
+    status: "active" | "completed" | "blocked" | "failed" | "canceled";
+    createdAt: string;
+    updatedAt: string;
+    steps: Array<{
+      id: string;
+      title: string;
+      status: "pending" | "in_progress" | "completed" | "blocked" | "failed" | "canceled";
+      notes?: string;
+      updatedAt: string;
+    }>;
+  } | null>;
+  planNextAction: (params: { planId: string }) => {
+    stepIndex: number;
+    step: {
+      id: string;
+      title: string;
+      status: "pending" | "in_progress" | "completed" | "blocked" | "failed" | "canceled";
+      notes?: string;
+      updatedAt: string;
+    };
+  } | null;
 };
 
 export type EngineTurnInput = {

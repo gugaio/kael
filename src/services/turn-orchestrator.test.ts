@@ -51,6 +51,18 @@ function createToolingStub(): EngineTooling {
       endLine: 1,
     }),
     memoryWrite: async () => ({ path: "memory/2000-01-01.md" }),
+    planCreate: async () => ({
+      id: "p1",
+      sessionKey: "s1",
+      title: "plan",
+      status: "active",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      steps: [],
+    }),
+    planList: () => [],
+    planUpdateStep: async () => null,
+    planNextAction: () => null,
   };
 }
 

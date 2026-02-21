@@ -279,5 +279,155 @@ export function createPiShellTools(params: {
     },
   };
 
-  return [execTool, processTool, memorySearchTool, memoryGetTool, memoryWriteTool];
+  const planCreateTool: AgentTool = {
+    name: "plan_create",
+    label: "Plan Create",
+    description: "Cria um plano persistente com passos executaveis para a sessao atual.",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Titulo do plano" },
+        steps: { type: "array", items: { type: "string" }, description: "Lista de passos" },
+      },
+      required: ["title", "steps"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const args = (rawParams ?? {}) as { title: string; steps: string[] };
+      const plan = await params.tooling.planCreate({
+        sessionKey: params.sessionKey,
+        title: args.title,
+        steps: Array.isArray(args.steps) ? args.steps : [],
+      });
+      return {
+        content: textResult(`planId=${plan.id}\nstatus=${plan.status}\nsteps=${plan.steps.length}`),
+        details: plan,
+      };
+    },
+  };
+
+  const planListTool: AgentTool = {
+    name: "plan_list",
+    label: "Plan List",
+    description: "Lista planos por sessao/status.",
+    parameters: {
+      type: "object",
+      properties: {
+        status: {
+          type: "string",
+          enum: ["active", "completed", "blocked", "failed", "canceled"],
+        },
+        limit: { type: "number" },
+      },
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const args = (rawParams ?? {}) as {
+        status?: "active" | "completed" | "blocked" | "failed" | "canceled";
+        limit?: number;
+      };
+      const plans = params.tooling.planList({
+        sessionKey: params.sessionKey,
+        status: args.status,
+        limit: args.limit,
+      });
+      const text =
+        plans.length === 0
+          ? "plans=0"
+          : [
+              `plans=${plans.length}`,
+              ...plans.map((plan) => `${plan.id} | ${plan.status} | ${plan.title} | steps=${plan.steps.length}`),
+            ].join("\n");
+      return {
+        content: textResult(text),
+        details: { plans },
+      };
+    },
+  };
+
+  const planUpdateStepTool: AgentTool = {
+    name: "plan_update_step",
+    label: "Plan Update Step",
+    description: "Atualiza status de um passo do plano.",
+    parameters: {
+      type: "object",
+      properties: {
+        planId: { type: "string" },
+        stepIndex: { type: "number" },
+        status: {
+          type: "string",
+          enum: ["pending", "in_progress", "completed", "blocked", "failed", "canceled"],
+        },
+        notes: { type: "string" },
+      },
+      required: ["planId", "stepIndex", "status"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const args = (rawParams ?? {}) as {
+        planId: string;
+        stepIndex: number;
+        status: "pending" | "in_progress" | "completed" | "blocked" | "failed" | "canceled";
+        notes?: string;
+      };
+      const updated = await params.tooling.planUpdateStep({
+        planId: args.planId,
+        stepIndex: Math.floor(args.stepIndex),
+        status: args.status,
+        notes: args.notes,
+      });
+      if (!updated) {
+        return {
+          content: textResult("ok=false\nreason=plan_or_step_not_found"),
+          details: { ok: false },
+        };
+      }
+      return {
+        content: textResult(`ok=true\nplanId=${updated.id}\nplanStatus=${updated.status}`),
+        details: updated,
+      };
+    },
+  };
+
+  const planNextTool: AgentTool = {
+    name: "plan_next",
+    label: "Plan Next",
+    description: "Retorna o proximo passo executavel (pending/in_progress).",
+    parameters: {
+      type: "object",
+      properties: {
+        planId: { type: "string" },
+      },
+      required: ["planId"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const args = (rawParams ?? {}) as { planId: string };
+      const next = params.tooling.planNextAction({ planId: args.planId });
+      if (!next) {
+        return {
+          content: textResult("next=none"),
+          details: { next: null },
+        };
+      }
+      return {
+        content: textResult(
+          `stepIndex=${next.stepIndex}\nstatus=${next.step.status}\ntitle=${next.step.title}`,
+        ),
+        details: next,
+      };
+    },
+  };
+
+  return [
+    execTool,
+    processTool,
+    memorySearchTool,
+    memoryGetTool,
+    memoryWriteTool,
+    planCreateTool,
+    planListTool,
+    planUpdateStepTool,
+    planNextTool,
+  ];
 }

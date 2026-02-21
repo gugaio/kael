@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-02-20**
+Ultima atualizacao: **2026-02-21**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -186,7 +186,7 @@ Definition of Done (checklist):
 
 ### Fase 7 - Guardrails de Loop (exec/process)
 
-Status: **Em andamento**
+Status: **Concluida**
 
 Objetivos:
 - Evitar loops de tool calling sem progresso em `exec` e `process`.
@@ -212,9 +212,36 @@ Definition of Done (checklist):
 - [x] Tools `memory_search`, `memory_get` e `memory_write` integradas ao PI.
 - [x] Leitura restrita de memoria para paths permitidos.
 - [x] Testes unitarios de escrita, busca e seguranca de path.
+- [x] Planner/executor baseline com plano persistido e tools de plano no PI.
 - [ ] Tuning de ranking/recencia e qualidade de snippets.
+- [ ] Planner inteligente (auto-refino/checkpoints) para execucao multi-etapa.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-02-21 - Fase 8.1: planner/executor baseline (plano persistido)
+
+Resumo:
+- Implementado `PlannerService` com persistencia local em `plans/plans.json`.
+- Integradas tools de plano no PI: `plan_create`, `plan_list`, `plan_update_step`, `plan_next`.
+- Expostos endpoints HTTP de planos (`GET/POST /plans`, `GET /plans/:planId`, `POST /plans/:planId/steps/:stepIndex`).
+- Ajustada derivacao de status para preservar `canceled` quando todas as etapas forem canceladas.
+
+Arquivos-chave:
+- `src/planner/service.ts`
+- `src/planner/service.test.ts`
+- `src/engine/pi-tools.ts`
+- `src/api/server.ts`
+- `docs/architecture/phases/phase-8.1.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Explicar ao PI quando abrir/atualizar plano automaticamente (heuristica inicial).
+
+Proximo passo recomendado:
+- Fase 8.2: planner inteligente com checkpoints por execucao e notas de progresso.
 
 ### 2026-02-20 - Fase 6: shell tools no PI (exec/process)
 

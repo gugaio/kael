@@ -28,6 +28,11 @@ Super agente para videos e automacao.
   - `memory_search` (busca em memoria markdown)
   - `memory_get` (leitura de trecho por path/linhas)
   - `memory_write` (persistencia daily/long_term)
+- Planner operacional no PI:
+  - `plan_create`
+  - `plan_list`
+  - `plan_update_step`
+  - `plan_next`
 - Jobs de video assíncronos:
   - `transcode`
   - `convert_hls`
@@ -121,6 +126,10 @@ npx tsx src/cli/index.ts approval-deny --id <approvalId>
 - `GET /health`
 - `POST /chat` (opcional: `?includeMessages=true` para incluir objetos `user` e `assistant`)
 - `GET /sessions/:sessionKey/messages`
+- `GET /plans`
+- `GET /plans/:planId`
+- `POST /plans`
+- `POST /plans/:planId/steps/:stepIndex`
 - `POST /jobs/transcode`
 - `POST /jobs/hls`
 - `POST /jobs/capture`

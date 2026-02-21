@@ -25,6 +25,9 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 5: concluida (hardening: observabilidade + seguranca de execucao de jobs).
 - Fase 6: concluida (shell tools no PI: `exec` + `process` + `exec-approvals`).
 - Fase 6.1: concluida (approvals end-to-end: API + CLI + UI).
+- Fase 7: concluida (guardrails de loop + compaction de contexto).
+- Fase 8.0: concluida (memoria operacional com `memory_search/get/write`).
+- Fase 8.1: concluida (planner/executor baseline com planos persistidos).
 
 ## Estudos e referencias tecnicas
 

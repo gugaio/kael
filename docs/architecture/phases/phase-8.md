@@ -1,6 +1,6 @@
 # Arquitetura - Fase 8 (Memoria Operacional)
 
-Status: em andamento (item 1)
+Status: concluida (item 1)
 
 Objetivo:
 - Dar memoria de longo prazo util ao Kael com persistencia local simples e explicita.
@@ -28,4 +28,4 @@ Arquivos-chave:
 - `src/memory/service.test.ts`
 
 Proximo passo:
-- Evoluir busca para heuristica mais robusta (ranking e recencia) e iniciar planner/executor explicito.
+- Fase 8.1: planner/executor explicito com estado persistido de plano.

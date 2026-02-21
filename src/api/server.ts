@@ -175,6 +175,99 @@ export function createApiServer(app: KaelApp): FastifyInstance {
     },
   );
 
+  server.get<{
+    Querystring: {
+      sessionKey?: string;
+      status?: string;
+      limit?: string;
+    };
+  }>("/plans", async (request) => {
+    const statusRaw = request.query.status?.trim().toLowerCase();
+    const status =
+      statusRaw === "active" ||
+      statusRaw === "completed" ||
+      statusRaw === "blocked" ||
+      statusRaw === "failed" ||
+      statusRaw === "canceled"
+        ? statusRaw
+        : undefined;
+    const parsedLimit = Number(request.query.limit ?? "50");
+    const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 50;
+    const plans = app.planner.list({
+      sessionKey: request.query.sessionKey?.trim(),
+      status,
+      limit,
+    });
+    return { ok: true, plans };
+  });
+
+  server.get<{ Params: { planId: string } }>("/plans/:planId", async (request) => {
+    const planId = request.params.planId?.trim();
+    if (!planId) {
+      throw new ApiError(400, "BAD_REQUEST", "planId is required");
+    }
+    const plan = app.planner.get(planId);
+    if (!plan) {
+      throw new ApiError(404, "NOT_FOUND", `plan ${planId} not found`);
+    }
+    return { ok: true, plan };
+  });
+
+  server.post<{
+    Body: {
+      sessionKey?: string;
+      title?: string;
+      steps?: string[];
+    };
+  }>("/plans", async (request) => {
+    const sessionKey = request.body.sessionKey?.trim() || "main";
+    const title = request.body.title?.trim() || "Plano de execucao";
+    const steps = Array.isArray(request.body.steps) ? request.body.steps : [];
+    const plan = await app.planner.create({ sessionKey, title, steps });
+    return { ok: true, plan };
+  });
+
+  server.post<{
+    Params: { planId: string; stepIndex: string };
+    Body: {
+      status?: string;
+      notes?: string;
+    };
+  }>("/plans/:planId/steps/:stepIndex", async (request) => {
+    const planId = request.params.planId?.trim();
+    const stepIndex = Number(request.params.stepIndex);
+    const statusRaw = request.body.status?.trim().toLowerCase();
+    const status =
+      statusRaw === "pending" ||
+      statusRaw === "in_progress" ||
+      statusRaw === "completed" ||
+      statusRaw === "blocked" ||
+      statusRaw === "failed" ||
+      statusRaw === "canceled"
+        ? statusRaw
+        : null;
+    if (!planId) {
+      throw new ApiError(400, "BAD_REQUEST", "planId is required");
+    }
+    if (!Number.isFinite(stepIndex) || stepIndex < 0) {
+      throw new ApiError(400, "BAD_REQUEST", "stepIndex must be a non-negative number");
+    }
+    if (!status) {
+      throw new ApiError(400, "BAD_REQUEST", "valid step status is required");
+    }
+
+    const plan = await app.planner.updateStep({
+      planId,
+      stepIndex: Math.floor(stepIndex),
+      status,
+      notes: request.body.notes,
+    });
+    if (!plan) {
+      throw new ApiError(404, "NOT_FOUND", "plan/step not found");
+    }
+    return { ok: true, plan };
+  });
+
   server.get<{ Querystring: { status?: string; limit?: string } }>(
     "/exec/approvals",
     async (request) => {
