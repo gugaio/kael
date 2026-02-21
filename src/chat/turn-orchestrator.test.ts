@@ -52,6 +52,14 @@ function createToolingStub(): EngineTooling {
     }),
     memoryWrite: async () => ({ path: "memory/2000-01-01.md" }),
     webSearch: async () => ({ answer: "ok", sources: [], notes: [] }),
+    webFetch: async () => ({
+      url: "https://example.com",
+      finalUrl: "https://example.com",
+      content: "ok",
+      excerpt: "ok",
+      fetchedAt: new Date().toISOString(),
+      cached: false,
+    }),
     planCreate: async () => ({
       id: "p1",
       sessionKey: "s1",

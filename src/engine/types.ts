@@ -1,5 +1,5 @@
 import type { VideoJob } from "../types.js";
-import type { WebSearchResult } from "../research/types.js";
+import type { WebFetchResult, WebSearchResult } from "../research/types.js";
 
 export type EngineTooling = {
   startTranscode: (params: {
@@ -117,6 +117,11 @@ export type EngineTooling = {
     domainsAllow?: string[];
     domainsBlock?: string[];
   }) => Promise<WebSearchResult>;
+  webFetch: (params: {
+    sessionKey: string;
+    url: string;
+    maxChars?: number;
+  }) => Promise<WebFetchResult>;
   planCreate: (params: {
     sessionKey: string;
     title: string;

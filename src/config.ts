@@ -66,6 +66,8 @@ export type KaelConfig = {
     defaultMaxResults: number;
     maxResultsLimit: number;
     timeoutMs: number;
+    fetchMaxChars: number;
+    fetchCacheTtlMs: number;
   };
   pi: PiEngineConfig;
 };
@@ -219,6 +221,14 @@ function validateConfig(config: KaelConfig): void {
 
   if (!Number.isFinite(config.research.timeoutMs) || config.research.timeoutMs <= 0) {
     issues.push("KAEL_RESEARCH_TIMEOUT_MS deve ser um numero positivo");
+  }
+
+  if (!Number.isFinite(config.research.fetchMaxChars) || config.research.fetchMaxChars <= 0) {
+    issues.push("KAEL_RESEARCH_FETCH_MAX_CHARS deve ser um numero positivo");
+  }
+
+  if (!Number.isFinite(config.research.fetchCacheTtlMs) || config.research.fetchCacheTtlMs < 0) {
+    issues.push("KAEL_RESEARCH_FETCH_CACHE_TTL_MS deve ser zero ou positivo");
   }
 
   if (issues.length > 0) {
@@ -436,6 +446,22 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
   );
   const researchTimeoutMs =
     Number.isFinite(researchTimeoutRaw) && researchTimeoutRaw > 0 ? Math.floor(researchTimeoutRaw) : 12000;
+  const researchFetchMaxCharsRaw = Number(
+    process.env.KAEL_RESEARCH_FETCH_MAX_CHARS ??
+      String(globalConfig?.defaults.research?.fetchMaxChars ?? 12000),
+  );
+  const researchFetchMaxChars =
+    Number.isFinite(researchFetchMaxCharsRaw) && researchFetchMaxCharsRaw > 0
+      ? Math.floor(researchFetchMaxCharsRaw)
+      : 12000;
+  const researchFetchCacheTtlRaw = Number(
+    process.env.KAEL_RESEARCH_FETCH_CACHE_TTL_MS ??
+      String(globalConfig?.defaults.research?.fetchCacheTtlMs ?? 10 * 60 * 1000),
+  );
+  const researchFetchCacheTtlMs =
+    Number.isFinite(researchFetchCacheTtlRaw) && researchFetchCacheTtlRaw >= 0
+      ? Math.floor(researchFetchCacheTtlRaw)
+      : 10 * 60 * 1000;
   const researchApiKey = process.env.KAEL_RESEARCH_API_KEY?.trim();
 
   const defaultTimeout = globalConfig?.defaults.pi.timeoutMs ?? 45000;
@@ -538,6 +564,8 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       defaultMaxResults: researchMax,
       maxResultsLimit: researchMaxLimit,
       timeoutMs: researchTimeoutMs,
+      fetchMaxChars: researchFetchMaxChars,
+      fetchCacheTtlMs: researchFetchCacheTtlMs,
     },
     pi,
   };

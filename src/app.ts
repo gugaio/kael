@@ -72,10 +72,13 @@ export async function createKaelApp(): Promise<KaelApp> {
     ? new TavilySearchProvider(config.research.apiKey)
     : new DisabledSearchProvider();
   const research = new ResearchService(searchProvider, {
+    enabled: config.research.enabled,
     dataDir: config.dataDir,
     defaultMaxResults: config.research.defaultMaxResults,
     maxResultsLimit: config.research.maxResultsLimit,
     timeoutMs: config.research.timeoutMs,
+    fetchMaxChars: config.research.fetchMaxChars,
+    fetchCacheTtlMs: config.research.fetchCacheTtlMs,
   });
   const llmPlanner = new LlmPlanGenerator(config.pi);
   const planner = new PlannerService(config.dataDir, {

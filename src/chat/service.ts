@@ -52,6 +52,12 @@ export class ChatService {
           domainsAllow,
           domainsBlock,
         }),
+      webFetch: ({ sessionKey, url, maxChars }) =>
+        this.research.fetchUrl({
+          sessionKey,
+          url,
+          maxChars,
+        }),
       planCreate: ({ sessionKey, title, steps }) => this.planner.create({ sessionKey, title, steps }),
       planGenerate: ({ sessionKey, objective, maxSteps }) =>
         this.planner.generate({ sessionKey, objective, maxSteps }),

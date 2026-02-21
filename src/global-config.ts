@@ -40,6 +40,8 @@ export type KaelGlobalConfig = {
       maxResults: number;
       maxResultsLimit: number;
       timeoutMs: number;
+      fetchMaxChars: number;
+      fetchCacheTtlMs: number;
     };
     pi: {
       provider: string;
@@ -143,6 +145,8 @@ export function buildDefaultGlobalConfig(kaelHome: string): KaelGlobalConfig {
         maxResults: 5,
         maxResultsLimit: 10,
         timeoutMs: 12000,
+        fetchMaxChars: 12000,
+        fetchCacheTtlMs: 10 * 60 * 1000,
       },
       pi: {
         provider: "openai",

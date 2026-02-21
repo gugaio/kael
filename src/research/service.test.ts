@@ -5,14 +5,17 @@ import { describe, expect, it, vi } from "vitest";
 import { ResearchService } from "./service.js";
 import type { SearchProvider } from "./types.js";
 
-async function makeService(provider: SearchProvider) {
+async function makeService(provider: SearchProvider, fetchImpl?: typeof fetch) {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "kael-research-"));
   const service = new ResearchService(provider, {
+    enabled: true,
     dataDir,
     defaultMaxResults: 4,
     maxResultsLimit: 8,
     timeoutMs: 12000,
-  });
+    fetchMaxChars: 2000,
+    fetchCacheTtlMs: 60_000,
+  }, fetchImpl);
   return { service, dataDir };
 }
 
@@ -66,5 +69,35 @@ describe("ResearchService", () => {
     expect(result.sources).toHaveLength(1);
     expect(result.sources[0]?.url).toContain("allowed.com");
     expect(result.notes.join(" ")).toContain("domainsBlock");
+  });
+
+  it("fetches url content and reuses cache inside ttl", async () => {
+    const provider: SearchProvider = {
+      search: vi.fn(async () => ({ results: [] })),
+    };
+    const fetchMock = vi.fn(async () =>
+      new Response("<html><head><title>Example</title></head><body><h1>Hello</h1><p>World</p></body></html>", {
+        status: 200,
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+        },
+      }),
+    ) as unknown as typeof fetch;
+    const { service } = await makeService(provider, fetchMock);
+
+    const first = await service.fetchUrl({
+      sessionKey: "s1",
+      url: "https://example.com/page",
+    });
+    const second = await service.fetchUrl({
+      sessionKey: "s1",
+      url: "https://example.com/page",
+    });
+
+    expect(first.cached).toBe(false);
+    expect(first.title).toBe("Example");
+    expect(first.content).toContain("Hello");
+    expect(second.cached).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

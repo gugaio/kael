@@ -35,6 +35,15 @@ Adicionar capacidade de pesquisa web ao Kael com baixa complexidade operacional:
 5. Service persiste entrada no historico da sessao.
 6. Tool retorna resultado estruturado para o agente.
 
+## Fase 9.2 (enriquecimento por URL)
+
+- Tool `web_fetch` adicionada ao PI.
+- `ResearchService.fetchUrl()` com:
+  - download HTTP/HTTPS;
+  - extracao de texto limpo de HTML;
+  - cache por URL em `dataDir/research/fetch-cache.json`;
+  - TTL configuravel para reduzir latencia/custo de repeticao.
+
 ## Configuracao
 
 - `KAEL_RESEARCH_ENABLED`
@@ -43,14 +52,15 @@ Adicionar capacidade de pesquisa web ao Kael com baixa complexidade operacional:
 - `KAEL_RESEARCH_MAX_RESULTS`
 - `KAEL_RESEARCH_MAX_RESULTS_LIMIT`
 - `KAEL_RESEARCH_TIMEOUT_MS`
+- `KAEL_RESEARCH_FETCH_MAX_CHARS`
+- `KAEL_RESEARCH_FETCH_CACHE_TTL_MS`
 
 ## Limitacoes desta fase
 
 - Sem Playwright/browser control.
 - Sem re-ranking semantico avancado.
-- Sem fetch aprofundado por URL (usa somente resultado da Search API).
+- Extracao HTML ainda simplificada (regex), sem parser DOM dedicado.
 
 ## Proximo passo recomendado
 
-Fase 9.2: enrich de fontes com fetch por URL e sumarizacao com citacoes mais fortes.
-
+Fase 9.3: sumarizacao/citacao cruzando multiplas fontes fetched com score de confianca.

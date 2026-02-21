@@ -231,13 +231,39 @@ Objetivos:
 
 Definition of Done (checklist):
 - [x] Tool `web_search` integrada ao PI.
+- [x] Tool `web_fetch` integrada ao PI.
 - [x] Provider API-first inicial (`tavily`) com contrato plugavel.
 - [x] Memoria de pesquisas por sessao em arquivo local.
+- [x] Cache de fetch por URL com TTL configuravel.
 - [x] Configuracao `KAEL_RESEARCH_*` documentada e validada no startup.
 - [ ] Re-ranking avancado e deduplicacao semantica.
 - [ ] Suporte opcional a multiplos providers.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-02-21 - Fase 9.2: web_fetch + extracao + cache TTL
+
+Resumo:
+- Integrada tool `web_fetch` ao PI para aprofundar fontes retornadas por `web_search`.
+- Implementado `ResearchService.fetchUrl()` com extracao de texto e titulo a partir de HTML.
+- Adicionado cache por URL em `dataDir/research/fetch-cache.json` com TTL configuravel.
+- Expandida configuracao com `KAEL_RESEARCH_FETCH_MAX_CHARS` e `KAEL_RESEARCH_FETCH_CACHE_TTL_MS`.
+
+Arquivos-chave:
+- `src/research/service.ts`
+- `src/engine/pi-tools.ts`
+- `src/config.ts`
+- `src/research/service.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Sumarizacao/citacao multi-fonte usando conteudo fetched.
+
+Proximo passo recomendado:
+- Fase 9.3: sumarizacao com citacoes robustas e score de confianca por evidencia.
 
 ### 2026-02-21 - Fase 9.1: web_search API-first (Tavily + memoria por sessao)
 
@@ -254,15 +280,15 @@ Arquivos-chave:
 - `src/config.ts`
 
 Checklist de validacao:
-- [ ] `npm run check`
-- [ ] `npm test`
+- [x] `npm run check`
+- [x] `npm test`
 
 Pendencias:
 - Re-ranking de fontes por autoridade/recencia.
 - Cache compartilhado entre sessoes.
 
 Proximo passo recomendado:
-- Fase 9.2: fetch/sumarizacao de conteudo por URL com citacoes mais robustas.
+- Fase 9.3: sumarizacao/citacao de conteudo fetched com ranking de evidencia.
 
 ### 2026-02-21 - Fase 8.1: planner/executor baseline (plano persistido)
 

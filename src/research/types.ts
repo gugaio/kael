@@ -20,6 +20,17 @@ export type WebSearchResult = {
   notes: string[];
 };
 
+export type WebFetchResult = {
+  url: string;
+  finalUrl: string;
+  title?: string;
+  content: string;
+  excerpt: string;
+  contentType?: string;
+  fetchedAt: string;
+  cached: boolean;
+};
+
 export type SearchProviderRequest = {
   query: string;
   maxResults: number;
@@ -36,4 +47,3 @@ export type SearchProviderResponse = {
 export type SearchProvider = {
   search: (request: SearchProviderRequest) => Promise<SearchProviderResponse>;
 };
-

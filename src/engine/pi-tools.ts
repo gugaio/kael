@@ -328,6 +328,45 @@ export function createPiShellTools(params: {
     },
   };
 
+  const webFetchTool: AgentTool = {
+    name: "web_fetch",
+    label: "Web Fetch",
+    description:
+      "Baixa uma URL e extrai texto limpo para leitura resumida. Use para aprofundar uma fonte do web_search.",
+    parameters: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "URL http/https para extrair conteudo" },
+        maxChars: { type: "number", description: "Limite maximo de caracteres de conteudo" },
+      },
+      required: ["url"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const args = (rawParams ?? {}) as { url: string; maxChars?: number };
+      const result = await params.tooling.webFetch({
+        sessionKey: params.sessionKey,
+        url: args.url,
+        maxChars: args.maxChars,
+      });
+      const text = [
+        `url=${result.url}`,
+        `finalUrl=${result.finalUrl}`,
+        `cached=${result.cached}`,
+        result.title ? `title=${result.title}` : "",
+        result.contentType ? `contentType=${result.contentType}` : "",
+        "excerpt:",
+        result.excerpt,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      return {
+        content: textResult(text),
+        details: result,
+      };
+    },
+  };
+
   const planCreateTool: AgentTool = {
     name: "plan_create",
     label: "Plan Create",
@@ -597,6 +636,7 @@ export function createPiShellTools(params: {
     memoryGetTool,
     memoryWriteTool,
     webSearchTool,
+    webFetchTool,
     planCreateTool,
     planGenerateTool,
     planListTool,

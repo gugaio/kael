@@ -54,6 +54,8 @@ function makeFakeApp(): KaelApp {
         defaultMaxResults: 5,
         maxResultsLimit: 10,
         timeoutMs: 12_000,
+        fetchMaxChars: 12_000,
+        fetchCacheTtlMs: 600_000,
       },
       pi: {
         enabled: true,
