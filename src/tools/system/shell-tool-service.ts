@@ -19,6 +19,17 @@ export type ExecStatus =
   | "approval-pending"
   | "denied";
 
+export type ExecFailureCode =
+  | "none"
+  | "approval_denied"
+  | "allowlist_miss"
+  | "syntax_error"
+  | "process_error"
+  | "timeout_overall"
+  | "timeout_no_output"
+  | "signal"
+  | "non_zero_exit";
+
 export type ExecSession = {
   id: string;
   command: string;
@@ -30,6 +41,7 @@ export type ExecSession = {
   timedOut?: boolean;
   outputTail: string;
   approvalId?: string;
+  failureCode?: ExecFailureCode;
 };
 
 type ActiveProcess = {
@@ -49,12 +61,14 @@ export type ExecCommandParams = {
   ask?: ExecAsk;
 };
 
-export type ProcessAction = "list" | "poll" | "kill";
+export type ProcessAction = "list" | "poll" | "kill" | "log" | "remove";
 
 export type ProcessCommandParams = {
   sessionKey: string;
   action: ProcessAction;
   sessionId?: string;
+  offset?: number;
+  limit?: number;
 };
 
 export type ProcessCommandResult = {
@@ -62,12 +76,14 @@ export type ProcessCommandResult = {
   action: ProcessAction;
   sessions?: ExecSession[];
   session?: ExecSession;
+  output?: string;
   message?: string;
 };
 
 type ShellToolConfig = {
   workspaceRoot: string;
   defaultTimeoutMs: number;
+  noOutputTimeoutMs: number;
   maxTimeoutMs: number;
   maxOutputChars: number;
   approvalWaitMs: number;
@@ -156,6 +172,7 @@ export class ShellToolService {
         endedAt: new Date().toISOString(),
         outputTail: `[preflight] ${preflightError}`,
         exitCode: 2,
+        failureCode: "syntax_error",
       };
       this.sessions.set(failed.id, failed);
       kaelLogger.warn("shell.exec.preflight_failed", {
@@ -183,6 +200,9 @@ export class ShellToolService {
         startedAt: new Date().toISOString(),
         endedAt: new Date().toISOString(),
         outputTail: decision.reason,
+        failureCode: decision.reason.toLowerCase().includes("allowlist")
+          ? "allowlist_miss"
+          : "approval_denied",
       };
       this.sessions.set(denied.id, denied);
       kaelLogger.warn("shell.exec.denied", {
@@ -223,6 +243,7 @@ export class ShellToolService {
           status: "denied",
           endedAt: new Date().toISOString(),
           outputTail: waitResult.reason,
+          failureCode: "approval_denied",
         };
         this.sessions.set(deniedPending.id, deniedPending);
         kaelLogger.warn("shell.exec.approval_not_granted", {
@@ -280,7 +301,9 @@ export class ShellToolService {
       return {
         ok: true,
         action: "list",
-        sessions: Array.from(this.sessions.values()).slice(-25),
+        sessions: Array.from(this.sessions.values())
+          .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
+          .slice(0, 50),
       };
     }
 
@@ -288,7 +311,7 @@ export class ShellToolService {
       return {
         ok: false,
         action: params.action,
-        message: "sessionId e obrigatorio para poll/kill",
+        message: "sessionId e obrigatorio para poll/kill/log/remove",
       };
     }
 
@@ -306,6 +329,35 @@ export class ShellToolService {
         ok: true,
         action: "poll",
         session,
+      };
+    }
+
+    if (params.action === "log") {
+      const total = session.outputTail.length;
+      const offset = Number.isFinite(params.offset) ? Math.max(0, Math.floor(params.offset ?? 0)) : 0;
+      const limit = Number.isFinite(params.limit) ? Math.max(1, Math.floor(params.limit ?? 4000)) : 4000;
+      const end = Math.min(total, offset + limit);
+      return {
+        ok: true,
+        action: "log",
+        session,
+        output: session.outputTail.slice(offset, end),
+        message: `offset=${offset} end=${end} total=${total}`,
+      };
+    }
+
+    if (params.action === "remove") {
+      const activeSession = this.active.get(params.sessionId);
+      if (activeSession) {
+        activeSession.killRequested = true;
+        activeSession.process.kill("SIGTERM");
+      }
+      this.active.delete(params.sessionId);
+      this.sessions.delete(params.sessionId);
+      return {
+        ok: true,
+        action: "remove",
+        message: `session ${params.sessionId} removida`,
       };
     }
 
@@ -350,6 +402,7 @@ export class ShellToolService {
       status: "running",
       startedAt: new Date().toISOString(),
       outputTail: "",
+      failureCode: "none",
     };
 
     this.sessions.set(session.id, session);
@@ -365,6 +418,10 @@ export class ShellToolService {
       timeoutMs: params.timeoutMs,
     });
 
+    let active!: ActiveProcess;
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    let noOutputTimeoutHandle: ReturnType<typeof setInterval> | undefined;
+    let lastOutputAtMs = Date.now();
     const completion = new Promise<ExecSession>((resolve) => {
       let settled = false;
       const finish = (next: Partial<ExecSession>): void => {
@@ -372,7 +429,12 @@ export class ShellToolService {
           return;
         }
         settled = true;
-        clearTimeout(timeout);
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+        }
+        if (noOutputTimeoutHandle) {
+          clearInterval(noOutputTimeoutHandle);
+        }
         const endedAt = new Date().toISOString();
         const finalSession: ExecSession = {
           ...session,
@@ -387,6 +449,7 @@ export class ShellToolService {
           command: finalSession.command,
           status: finalSession.status,
           exitCode: finalSession.exitCode ?? null,
+          failureCode: finalSession.failureCode ?? "none",
           outputTail: finalSession.status === "completed" ? undefined : tailSnippet(finalSession.outputTail),
           durationMs:
             Date.parse(finalSession.endedAt ?? endedAt) - Date.parse(finalSession.startedAt),
@@ -400,6 +463,7 @@ export class ShellToolService {
           String(chunk),
           this.cfg.maxOutputChars,
         );
+        lastOutputAtMs = Date.now();
         this.sessions.set(session.id, { ...session });
       });
 
@@ -409,6 +473,7 @@ export class ShellToolService {
           String(chunk),
           this.cfg.maxOutputChars,
         );
+        lastOutputAtMs = Date.now();
         this.sessions.set(session.id, { ...session });
       });
 
@@ -416,6 +481,7 @@ export class ShellToolService {
         finish({
           status: "failed",
           exitCode: null,
+          failureCode: "process_error",
           outputTail: appendWithCap(
             session.outputTail,
             `\n[process-error] ${error.message}\n`,
@@ -430,6 +496,7 @@ export class ShellToolService {
             status: "timed_out",
             exitCode: code,
             timedOut: true,
+            failureCode: session.failureCode ?? "timeout_overall",
             outputTail: session.outputTail,
           });
           return;
@@ -439,6 +506,7 @@ export class ShellToolService {
           finish({
             status: "canceled",
             exitCode: code,
+            failureCode: "none",
             outputTail: session.outputTail,
           });
           return;
@@ -447,13 +515,20 @@ export class ShellToolService {
         finish({
           status: code === 0 ? "completed" : "failed",
           exitCode: code,
+          failureCode:
+            code === 0
+              ? "none"
+              : child.process.signalCode
+                ? "signal"
+                : "non_zero_exit",
           outputTail: session.outputTail,
         });
       });
 
-      const timeout = setTimeout(() => {
+      timeoutHandle = setTimeout(() => {
         session.status = "timed_out";
         session.timedOut = true;
+        session.failureCode = "timeout_overall";
         session.outputTail = appendWithCap(
           session.outputTail,
           `\n[timeout] processo excedeu ${params.timeoutMs}ms\n`,
@@ -466,9 +541,28 @@ export class ShellToolService {
           }
         }, 1500);
       }, params.timeoutMs);
+
+      noOutputTimeoutHandle = setInterval(() => {
+        if (session.status !== "running") {
+          return;
+        }
+        const idleMs = Date.now() - lastOutputAtMs;
+        if (idleMs < this.cfg.noOutputTimeoutMs) {
+          return;
+        }
+        session.status = "timed_out";
+        session.timedOut = true;
+        session.failureCode = "timeout_no_output";
+        session.outputTail = appendWithCap(
+          session.outputTail,
+          `\n[timeout] processo sem output por ${this.cfg.noOutputTimeoutMs}ms\n`,
+          this.cfg.maxOutputChars,
+        );
+        child.process.kill("SIGTERM");
+      }, Math.min(this.cfg.noOutputTimeoutMs, 2_000));
     });
 
-    const active: ActiveProcess = {
+    active = {
       session,
       killRequested: false,
       process: child.process,
@@ -541,7 +635,7 @@ export class ShellToolService {
       return this.shellChoice;
     }
 
-    this.shellChoice = { command: "sh", args: ["-lc"] };
+    this.shellChoice = { command: "sh", args: ["-c"] };
     return this.shellChoice;
   }
 }

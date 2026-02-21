@@ -53,16 +53,29 @@ export type EngineTooling = {
     startedAt: string;
     endedAt?: string;
     outputTail: string;
+    failureCode?:
+      | "none"
+      | "approval_denied"
+      | "allowlist_miss"
+      | "syntax_error"
+      | "process_error"
+      | "timeout_overall"
+      | "timeout_no_output"
+      | "signal"
+      | "non_zero_exit";
     exitCode?: number | null;
     approvalId?: string;
   }>;
   processCommand: (params: {
     sessionKey: string;
-    action: "list" | "poll" | "kill";
+    action: "list" | "poll" | "kill" | "log" | "remove";
     sessionId?: string;
+    offset?: number;
+    limit?: number;
   }) => Promise<{
     ok: boolean;
-    action: "list" | "poll" | "kill";
+    action: "list" | "poll" | "kill" | "log" | "remove";
+    output?: string;
     message?: string;
     sessions?: Array<{
       id: string;
@@ -72,6 +85,7 @@ export type EngineTooling = {
       startedAt: string;
       endedAt?: string;
       outputTail: string;
+      failureCode?: string;
     }>;
     session?: {
       id: string;
@@ -81,6 +95,7 @@ export type EngineTooling = {
       startedAt: string;
       endedAt?: string;
       outputTail: string;
+      failureCode?: string;
     };
   }>;
   memorySearch: (params: {

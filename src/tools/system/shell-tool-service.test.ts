@@ -18,6 +18,7 @@ async function createService(overrides?: {
   const service = new ShellToolService({
     workspaceRoot: root,
     defaultTimeoutMs: 5_000,
+    noOutputTimeoutMs: 5_000,
     maxTimeoutMs: 20_000,
     maxOutputChars: 20_000,
     approvalWaitMs: overrides?.approvalWaitMs ?? 4_000,

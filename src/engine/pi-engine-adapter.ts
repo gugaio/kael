@@ -50,6 +50,28 @@ function isSelfKnowledgeQuestion(message: string): boolean {
   return tokens.some((token) => text.includes(token));
 }
 
+function isOperationalExecutionRequest(message: string): boolean {
+  const text = message.toLowerCase();
+  const tokens = [
+    "executa",
+    "execute",
+    "roda",
+    "rodar",
+    "abre",
+    "abrir",
+    "toca",
+    "tocar",
+    "use o vlc",
+    "usa o vlc",
+    "run ",
+    "shell",
+    "bash",
+    "ffprobe",
+    "ffmpeg",
+  ];
+  return tokens.some((token) => text.includes(token));
+}
+
 function buildPrompt(input: EngineTurnInput): string {
   const context = input.contextMessages ?? [];
   if (context.length === 0) {
@@ -82,6 +104,12 @@ function buildPrompt(input: EngineTurnInput): string {
         ]
       : []),
     "Instrucao critica: responda a MENSAGEM ATUAL do usuario. Nao continue tarefas antigas sem pedido explicito.",
+    ...(isOperationalExecutionRequest(input.message)
+      ? [
+          "Instrucao operacional: o usuario pediu acao real. Use tools (exec/process) para executar e validar.",
+          "Nao responda apenas com comando textual ou slash command sem executar.",
+        ]
+      : []),
     "",
     "Mensagem atual do usuario:",
     input.message,

@@ -81,14 +81,6 @@ function defaultFile(defaults: ExecApprovalStoreDefaults): ExecApprovalsFile {
   };
 }
 
-function isExecSecurity(value: unknown): value is ExecSecurity {
-  return value === "deny" || value === "allowlist" || value === "full";
-}
-
-function isExecAsk(value: unknown): value is ExecAsk {
-  return value === "off" || value === "on-miss" || value === "always";
-}
-
 function isApprovalStatus(value: unknown): value is ExecApprovalStatus {
   return value === "pending" || value === "approved" || value === "denied" || value === "expired";
 }
@@ -122,8 +114,9 @@ function sanitizeFile(raw: unknown, defaults: ExecApprovalStoreDefaults): ExecAp
   }
 
   const typed = raw as Partial<ExecApprovalsFile>;
-  const security = isExecSecurity(typed.security) ? typed.security : defaults.security;
-  const ask = isExecAsk(typed.ask) ? typed.ask : defaults.ask;
+  // Policy must come from current runtime config (.env/global config), not from stale persisted file.
+  const security = defaults.security;
+  const ask = defaults.ask;
 
   const now = Date.now();
   const entries = normalizeApprovalEntries(typed.pending).map((entry) => {
@@ -141,7 +134,7 @@ function sanitizeFile(raw: unknown, defaults: ExecApprovalStoreDefaults): ExecAp
     version: 1,
     security,
     ask,
-    allowlist: normalizeAllowlist(Array.isArray(typed.allowlist) ? typed.allowlist : defaults.allowlist),
+    allowlist: normalizeAllowlist(defaults.allowlist),
     pending: entries,
     updatedAt: new Date().toISOString(),
   };

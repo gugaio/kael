@@ -15,6 +15,23 @@ function shouldResetSessionOnEngineError(error: unknown): boolean {
   return normalized.code === "invalid_response" || normalized.code === "unknown";
 }
 
+function extractPlayVlcUrl(reply: string): string | null {
+  const text = reply.trim();
+  const quoted = text.match(/^\/playvlc\s+["'](.+?)["']\s*$/i);
+  if (quoted?.[1]) {
+    return quoted[1].trim();
+  }
+  const bare = text.match(/^\/playvlc\s+(\S+)\s*$/i);
+  if (bare?.[1]) {
+    return bare[1].trim();
+  }
+  return null;
+}
+
+function shellQuoteSingle(value: string): string {
+  return `'${value.replace(/'/g, `'\"'\"'`)}'`;
+}
+
 export class ChatService {
   private readonly tooling: EngineTooling;
 
@@ -149,13 +166,32 @@ export class ChatService {
         requestId: input.requestId,
         tooling: this.tooling,
       });
+      let reply = turn.reply;
+      const playVlcUrl = extractPlayVlcUrl(turn.reply);
+      if (playVlcUrl) {
+        const exec = await this.shell.exec({
+          sessionKey: input.sessionKey,
+          command: `vlc ${shellQuoteSingle(playVlcUrl)}`,
+          background: true,
+          timeoutMs: 120_000,
+        });
+        reply = [
+          `Comando executado via tool exec.`,
+          `session=${exec.id}`,
+          `status=${exec.status}`,
+          `command=${exec.command}`,
+          exec.outputTail?.trim() ? `output:\n${exec.outputTail}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n");
+      }
 
-      const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", turn.reply);
+      const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", reply);
 
       return {
         user,
         assistant,
-        reply: turn.reply,
+        reply,
       };
     } catch (error) {
       const normalized = normalizePiError(error);

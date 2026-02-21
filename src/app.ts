@@ -54,6 +54,7 @@ export async function createKaelApp(): Promise<KaelApp> {
   const shell = new ShellToolService({
     workspaceRoot: config.shell.workspaceRoot,
     defaultTimeoutMs: config.shell.defaultTimeoutMs,
+    noOutputTimeoutMs: config.shell.noOutputTimeoutMs,
     maxTimeoutMs: config.shell.maxTimeoutMs,
     maxOutputChars: config.shell.maxOutputChars,
     approvalWaitMs: config.shell.approvalWaitMs,

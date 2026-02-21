@@ -244,6 +244,52 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-02-21 - Shell runtime hardening (exec/process)
+
+Resumo:
+- `ShellToolService` reforcado com `failureCode` padronizado por sessao (`syntax_error`, `allowlist_miss`, `timeout_overall`, `timeout_no_output`, etc).
+- Adicionado timeout por ausencia de output (`KAEL_EXEC_NO_OUTPUT_TIMEOUT_MS`) para evitar comandos presos sem progresso.
+- `process` expandido com novas acoes: `log` (paginacao por offset/limit) e `remove` (limpeza/cancelamento da sessao).
+- `process list` agora ordena por recencia e retorna janela maior (50 sessoes).
+- `exec` fallback shell ajustado para `sh -c` (evita combinacoes menos portaveis com `-l`).
+
+Arquivos-chave:
+- `src/tools/system/shell-tool-service.ts`
+- `src/config.ts`
+- `src/engine/pi-tools.ts`
+- `src/engine/types.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/tools/system/shell-tool-service.test.ts src/engine/tool-loop-guard.test.ts src/api/server.test.ts`
+
+Pendencias:
+- Unificar lifecycle em supervisor dedicado (estilo OpenClaw) para `exec/process`.
+- Evoluir parser/policy de shell para reduzir approvals desnecessarios em comandos compostos.
+
+Proximo passo recomendado:
+- Implementar supervisor de processos com timeout total + no-output + cancelamento deterministico por escopo.
+
+### 2026-02-21 - Execucao real para pedidos operacionais (VLC)
+
+Resumo:
+- Prompt base atualizado para priorizar execucao real via tools (`exec/process`) em pedidos operacionais, evitando resposta apenas textual.
+- Prompt de turno PI ganhou instrucao operacional extra quando detectar pedido de execucao.
+- Fallback no `ChatService`: quando o modelo responder apenas `/playVLC "url"`, Kael converte para `exec` (`vlc '<url>'`) automaticamente.
+
+Arquivos-chave:
+- `src/config.ts`
+- `src/engine/pi-engine-adapter.ts`
+- `src/chat/service.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/api/server.test.ts src/engine/pi-engine-adapter.test.ts`
+
+Pendencias:
+- Generalizar fallback para outros slash/acoes (nao so `/playVLC`).
+- Preferir sempre tool-call no proprio turno do modelo (reduzir dependencia de fallback textual).
+
 ### 2026-02-21 - Observabilidade PI: diagnostico de resposta vazia (OpenClaw-inspired)
 
 Resumo:

@@ -59,7 +59,9 @@ export function createPiShellTools(params: {
   const inferIntent = (tool: "exec" | "process", rawParams: unknown): string => {
     if (tool === "process") {
       const action =
-        rawParams && typeof rawParams === "object" ? String((rawParams as { action?: unknown }).action ?? "") : "";
+        rawParams && typeof rawParams === "object"
+          ? String((rawParams as { action?: unknown }).action ?? "")
+          : "";
       return action ? `process:${action}` : "process:unknown";
     }
     const command =
@@ -219,19 +221,21 @@ export function createPiShellTools(params: {
     name: "process",
     label: "Process",
     description:
-      "Gerencia sessoes de execucao shell. Acoes: list, poll e kill. Use action=kill como primeira opcao para parar comandos iniciados por exec.",
+      "Gerencia sessoes de execucao shell. Acoes: list, poll, log, kill e remove.",
     parameters: {
       type: "object",
       properties: {
         action: {
           type: "string",
-          enum: ["list", "poll", "kill"],
+          enum: ["list", "poll", "log", "kill", "remove"],
           description: "Acao da sessao",
         },
         sessionId: {
           type: "string",
-          description: "ID da sessao para poll/kill",
+          description: "ID da sessao para poll/log/kill/remove",
         },
+        offset: { type: "number", description: "Offset de leitura para action=log" },
+        limit: { type: "number", description: "Limite de caracteres para action=log" },
       },
       required: ["action"],
       additionalProperties: false,
@@ -248,8 +252,10 @@ export function createPiShellTools(params: {
       toolCalls += 1;
       const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as {
-        action: "list" | "poll" | "kill";
+        action: "list" | "poll" | "log" | "kill" | "remove";
         sessionId?: string;
+        offset?: number;
+        limit?: number;
       };
       const intent = logToolStart("process", args);
       const decision = params.loopGuard?.beforeCall({
@@ -275,6 +281,8 @@ export function createPiShellTools(params: {
         sessionKey: params.sessionKey,
         action: args.action,
         sessionId: args.sessionId,
+        offset: args.offset,
+        limit: args.limit,
       });
       params.loopGuard?.afterCall({
         sessionKey: params.sessionKey,
@@ -286,6 +294,14 @@ export function createPiShellTools(params: {
       const text =
         args.action === "list"
           ? `ok=${result.ok}\nsessions=${(result.sessions ?? []).length}`
+          : args.action === "log"
+            ? [
+                `ok=${result.ok}`,
+                result.message ? `message=${result.message}` : "",
+                result.output ? `output:\n${result.output}` : "",
+              ]
+                .filter(Boolean)
+                .join("\n")
           : [
               `ok=${result.ok}`,
               result.message ? `message=${result.message}` : "",

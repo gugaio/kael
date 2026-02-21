@@ -89,6 +89,7 @@ async function createJobsServer(params: {
       shell: {
         workspaceRoot: params.root,
         defaultTimeoutMs: 60_000,
+        noOutputTimeoutMs: 30_000,
         maxTimeoutMs: 900_000,
         maxOutputChars: 120_000,
         approvalWaitMs: 120_000,

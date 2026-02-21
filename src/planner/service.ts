@@ -392,7 +392,14 @@ export class PlannerService {
         cwd?: string;
         timeoutMs?: number;
         background?: boolean;
-      }) => Promise<{ id: string; status: string; command: string; cwd: string }>;
+      }) => Promise<{
+        id: string;
+        status: string;
+        command: string;
+        cwd: string;
+        outputTail?: string;
+        exitCode?: number | null;
+      }>;
     };
   }): Promise<PlanExecuteNextResult> {
     const plan = this.get(params.planId);
@@ -507,13 +514,15 @@ export class PlannerService {
           return runtimeNotAvailable(action, plan, next.stepIndex);
         }
         const normalizedCommand = normalizePlannerExecCommand(inputs.command ?? "");
-        const exec = await params.runtime.execCommand({
+        const execOutcome = await executeExecWithRecovery({
           sessionKey,
           command: normalizedCommand,
           cwd: inputs.cwd,
           timeoutMs: inputs.timeoutMs,
           background: inputs.background,
+          run: params.runtime.execCommand,
         });
+        const exec = execOutcome.exec;
         execution = {
           kind: "exec",
           refId: exec.id,
@@ -521,6 +530,42 @@ export class PlannerService {
           command: exec.command,
           startedAt: new Date().toISOString(),
         };
+
+        const finalStatus = toTerminalPlanStatusForExec(exec.status);
+        if (finalStatus) {
+          const noteParts = [
+            `Executor: exec finalizou com status=${exec.status}.`,
+            execOutcome.notes.length > 0 ? `Recuperacao: ${execOutcome.notes.join(" | ")}` : "",
+            exec.outputTail ? `Output: ${trimTail(exec.outputTail, 240)}` : "",
+          ].filter(Boolean);
+          const updated = await this.updateStep({
+            planId: plan.id,
+            stepIndex: next.stepIndex,
+            status: finalStatus,
+            notes: noteParts.join(" "),
+            execution: {
+              ...execution,
+              status: exec.status,
+            },
+          });
+          if (finalStatus === "completed") {
+            return {
+              ok: true,
+              plan: updated ?? plan,
+              stepIndex: next.stepIndex,
+              action,
+              execution,
+            };
+          }
+          return {
+            ok: false,
+            reason: "execution_failed",
+            message: exec.outputTail?.trim() || `exec terminou com status=${exec.status}`,
+            plan: updated ?? plan,
+            stepIndex: next.stepIndex,
+            action,
+          };
+        }
       }
 
       const updated = await this.updateStep({
@@ -885,4 +930,164 @@ function normalizePlannerExecCommand(command: string): string {
 
   const exportBlock = needed.map((name) => `export ${name}`).join("\n");
   return `${exportBlock}\n${raw}`;
+}
+
+type ExecRecoverySession = {
+  id: string;
+  status: string;
+  command: string;
+  cwd: string;
+  outputTail?: string;
+  exitCode?: number | null;
+};
+
+async function executeExecWithRecovery(params: {
+  sessionKey: string;
+  command: string;
+  cwd?: string;
+  timeoutMs?: number;
+  background?: boolean;
+  run: (args: {
+    sessionKey: string;
+    command: string;
+    cwd?: string;
+    timeoutMs?: number;
+    background?: boolean;
+  }) => Promise<ExecRecoverySession>;
+}): Promise<{ exec: ExecRecoverySession; notes: string[] }> {
+  const notes: string[] = [];
+  let currentCommand = params.command;
+  let last = await params.run({
+    sessionKey: params.sessionKey,
+    command: currentCommand,
+    cwd: params.cwd,
+    timeoutMs: params.timeoutMs,
+    background: params.background,
+  });
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const failure = classifyExecFailure(last);
+    if (!failure.retryable) {
+      return { exec: last, notes };
+    }
+
+    const recovered = buildExecRecoveryCommand({
+      originalCommand: params.command,
+      lastCommand: currentCommand,
+      outputTail: last.outputTail ?? "",
+      attempt,
+    });
+    if (!recovered) {
+      return { exec: last, notes };
+    }
+
+    notes.push(`tentativa ${attempt + 1}: ${recovered.reason}`);
+    currentCommand = recovered.command;
+    last = await params.run({
+      sessionKey: params.sessionKey,
+      command: currentCommand,
+      cwd: params.cwd,
+      timeoutMs: params.timeoutMs,
+      background: params.background,
+    });
+  }
+
+  return { exec: last, notes };
+}
+
+function classifyExecFailure(exec: ExecRecoverySession): { retryable: boolean; reason: string } {
+  const status = (exec.status || "").toLowerCase();
+  if (status === "completed" || status === "running" || status === "approval-pending") {
+    return { retryable: false, reason: "status_ok" };
+  }
+  if (status === "denied" || status === "canceled") {
+    return { retryable: false, reason: "operator_or_policy" };
+  }
+  const output = (exec.outputTail ?? "").toLowerCase();
+  if (output.includes("could not resolve host")) {
+    return { retryable: true, reason: "dns_resolution_failed" };
+  }
+  if (output.includes("timed out") || output.includes("timeout")) {
+    return { retryable: true, reason: "timeout" };
+  }
+  if (output.includes("invalid data found when processing input")) {
+    return { retryable: true, reason: "invalid_media_payload" };
+  }
+  if (output.includes("temporary failure") || output.includes("connection reset")) {
+    return { retryable: true, reason: "transient_network" };
+  }
+  return { retryable: false, reason: "non_retryable_failure" };
+}
+
+function buildExecRecoveryCommand(params: {
+  originalCommand: string;
+  lastCommand: string;
+  outputTail: string;
+  attempt: number;
+}): { command: string; reason: string } | null {
+  const output = params.outputTail.toLowerCase();
+  if (output.includes("could not resolve host")) {
+    return {
+      reason: "repetir download com pausa curta para resolver falha transiente de DNS",
+      command: `sleep 1\n${params.originalCommand}`,
+    };
+  }
+
+  if (
+    output.includes("invalid data found when processing input") &&
+    params.lastCommand.toLowerCase().includes("ffprobe") &&
+    params.lastCommand.includes("/tmp/first_segment.bin")
+  ) {
+    const repair = [
+      "set -euo pipefail",
+      "if [ -f /tmp/first_segment.bin ] && head -c 16 /tmp/first_segment.bin | grep -q '#EXTM3U'; then",
+      "  PLAY='/tmp/first_segment.bin'",
+      "  BASE_URL=\"$(cat /tmp/first_segment_url.txt | sed 's|[^/]*$||')\"",
+      "  MAP_REF=\"$(grep -m1 '^#EXT-X-MAP:' \"$PLAY\" | sed -E 's/.*URI=\"([^\"]+)\".*/\\1/' || true)\"",
+      "  SEG_REF=\"$(grep -vE '^\\s*#' \"$PLAY\" | head -n 1 | tr -d '\\r' || true)\"",
+      "  [ -n \"$SEG_REF\" ] && curl -fsSL -L \"${BASE_URL}${SEG_REF}\" -o /tmp/_kael_seg.bin",
+      "  if [ -n \"$MAP_REF\" ]; then",
+      "    curl -fsSL -L \"${BASE_URL}${MAP_REF}\" -o /tmp/_kael_init.bin",
+      "    cat /tmp/_kael_init.bin /tmp/_kael_seg.bin > /tmp/first_segment.bin",
+      "  elif [ -f /tmp/_kael_seg.bin ]; then",
+      "    mv /tmp/_kael_seg.bin /tmp/first_segment.bin",
+      "  fi",
+      "fi",
+      params.originalCommand,
+    ].join("\n");
+    return {
+      reason: "reconstruir first_segment.bin quando veio playlist em vez de segmento bruto",
+      command: repair,
+    };
+  }
+
+  if (output.includes("timed out") || output.includes("timeout")) {
+    return {
+      reason: "repetir comando com timeout maior para concluir etapa",
+      command: `${params.originalCommand}`,
+    };
+  }
+
+  return null;
+}
+
+function toTerminalPlanStatusForExec(statusRaw: string): PlanStepStatus | null {
+  const status = statusRaw.toLowerCase();
+  if (status === "completed") {
+    return "completed";
+  }
+  if (status === "failed" || status === "timed_out" || status === "denied") {
+    return "failed";
+  }
+  if (status === "canceled") {
+    return "canceled";
+  }
+  return null;
+}
+
+function trimTail(value: string, maxChars = 240): string {
+  if (!value) {
+    return "";
+  }
+  return value.length <= maxChars ? value : value.slice(value.length - maxChars);
 }

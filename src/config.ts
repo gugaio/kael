@@ -52,6 +52,7 @@ export type KaelConfig = {
   shell: {
     workspaceRoot: string;
     defaultTimeoutMs: number;
+    noOutputTimeoutMs: number;
     maxTimeoutMs: number;
     maxOutputChars: number;
     approvalWaitMs: number;
@@ -82,7 +83,7 @@ export class ConfigValidationError extends Error {
 }
 
 const DEFAULT_KAEL_SYSTEM_PROMPT =
-  "Voce e Kael, super agente local de video e automacao. Seja direto, tecnico e util. Use comandos slash para acionar jobs locais quando for apropriado. Quando perguntarem sobre o proprio Kael (arquitetura, stack, frameworks, arquivos), confirme usando workspace_search/workspace_read antes de responder.";
+  "Voce e Kael, super agente local de video e automacao. Seja direto, tecnico e util. Quando o usuario pedir uma acao operacional (executar comando, abrir app, tocar video, checar sistema), use tools (exec/process) para agir de fato antes de responder; nao devolva apenas comando textual. Quando perguntarem sobre o proprio Kael (arquitetura, stack, frameworks, arquivos), confirme usando workspace_search/workspace_read antes de responder.";
 
 export async function loadSoulPromptWithDeps(
   readFile: (path: string) => Promise<string>,
@@ -199,6 +200,10 @@ function validateConfig(config: KaelConfig): void {
 
   if (!Number.isFinite(config.shell.maxOutputChars) || config.shell.maxOutputChars <= 0) {
     issues.push("KAEL_EXEC_MAX_OUTPUT_CHARS deve ser um número positivo");
+  }
+
+  if (!Number.isFinite(config.shell.noOutputTimeoutMs) || config.shell.noOutputTimeoutMs <= 0) {
+    issues.push("KAEL_EXEC_NO_OUTPUT_TIMEOUT_MS deve ser um número positivo");
   }
 
   if (!Number.isFinite(config.shell.approvalWaitMs) || config.shell.approvalWaitMs <= 0) {
@@ -385,6 +390,17 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     Number.isFinite(execMaxOutputRaw) && execMaxOutputRaw > 0
       ? Math.floor(execMaxOutputRaw)
       : defaultExecMaxOutputChars;
+
+  const defaultNoOutputTimeoutMs =
+    (globalConfig?.defaults.shell as { noOutputTimeoutMs?: number } | undefined)?.noOutputTimeoutMs ??
+    30_000;
+  const noOutputTimeoutRaw = Number(
+    process.env.KAEL_EXEC_NO_OUTPUT_TIMEOUT_MS ?? String(defaultNoOutputTimeoutMs),
+  );
+  const noOutputTimeoutMs =
+    Number.isFinite(noOutputTimeoutRaw) && noOutputTimeoutRaw > 0
+      ? Math.floor(noOutputTimeoutRaw)
+      : defaultNoOutputTimeoutMs;
 
   const defaultExecApprovalWaitMs = globalConfig?.defaults.shell?.approvalWaitMs ?? 120_000;
   const execApprovalWaitRaw = Number(
@@ -576,6 +592,7 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     shell: {
       workspaceRoot,
       defaultTimeoutMs,
+      noOutputTimeoutMs,
       maxTimeoutMs,
       maxOutputChars,
       approvalWaitMs,

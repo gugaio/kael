@@ -333,6 +333,78 @@ describe("PlannerService", () => {
     expect(result.execution?.status).toBe("ls -la");
   });
 
+  it("retries transient exec failure once and completes step when second attempt succeeds", async () => {
+    const { planner } = await makePlanner();
+    const plan = await planner.create({
+      sessionKey: "s1",
+      title: "Retry transient",
+      steps: ["Executar comando shell: curl -fsSL https://example.com -o /tmp/a.txt"],
+    });
+
+    let calls = 0;
+    const result = await planner.executeNext({
+      planId: plan.id,
+      runtime: {
+        execCommand: async ({ command }) => {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              id: "exec-1",
+              status: "failed",
+              command,
+              cwd: ".",
+              outputTail: "curl: (6) Could not resolve host: example.com",
+              exitCode: 6,
+            };
+          }
+          return {
+            id: "exec-2",
+            status: "completed",
+            command,
+            cwd: ".",
+            outputTail: "ok",
+            exitCode: 0,
+          };
+        },
+      },
+    });
+
+    expect(calls).toBe(2);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.plan.steps[0].status).toBe("completed");
+    }
+  });
+
+  it("marks exec step as failed immediately when terminal status is failed", async () => {
+    const { planner } = await makePlanner();
+    const plan = await planner.create({
+      sessionKey: "s1",
+      title: "Fail fast",
+      steps: ["Executar comando shell: false"],
+    });
+
+    const result = await planner.executeNext({
+      planId: plan.id,
+      runtime: {
+        execCommand: async ({ command }) => ({
+          id: "exec-fail",
+          status: "failed",
+          command,
+          cwd: ".",
+          outputTail: "command failed",
+          exitCode: 1,
+        }),
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.plan?.steps[0].status).toBe("failed");
+      expect(result.reason).toBe("execution_failed");
+    }
+  });
+
   it("auto-exports shell vars referenced by inline python os.environ.get", async () => {
     const { planner } = await makePlanner();
     const command =

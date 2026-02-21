@@ -15,8 +15,49 @@ export function isSlashCommand(message: string): boolean {
   return message.trim().startsWith("/");
 }
 
+function extractUrl(text: string): string | null {
+  const match = text.match(/https?:\/\/\S+/i);
+  if (!match?.[0]) {
+    return null;
+  }
+  return match[0].trim().replace(/[),.;]+$/, "");
+}
+
+function shellQuoteSingle(value: string): string {
+  return `'${value.replace(/'/g, `'\"'\"'`)}'`;
+}
+
+function isVlcPlayRequest(message: string): boolean {
+  const text = message.toLowerCase();
+  return text.includes("vlc") && (text.includes("tocar") || text.includes("play") || text.includes("abrir"));
+}
+
 export class SimpleCommandEngine implements AgentEngine {
   async runTurn(input: EngineTurnInput): Promise<EngineTurnOutput> {
+    if (!isSlashCommand(input.message) && isVlcPlayRequest(input.message)) {
+      const url = extractUrl(input.message);
+      if (!url) {
+        return { reply: "Nao encontrei URL valida para abrir no VLC." };
+      }
+      const exec = await input.tooling.execCommand({
+        sessionKey: input.sessionKey,
+        command: `vlc ${shellQuoteSingle(url)}`,
+        background: true,
+        timeoutMs: 120_000,
+      });
+      return {
+        reply: [
+          "Execucao enviada para o VLC.",
+          `session=${exec.id}`,
+          `status=${exec.status}`,
+          `command=${exec.command}`,
+          exec.outputTail?.trim() ? `output:\n${exec.outputTail}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      };
+    }
+
     const parsed = parseCommand(input.message);
 
     if (!parsed) {
