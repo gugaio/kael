@@ -84,6 +84,25 @@ const PlanStepSchema = z.object({
   status: z.string(),
   notes: z.string().optional(),
   updatedAt: z.string(),
+  action: z.object({
+    kind: z.enum(["probe", "capture", "transcode", "hls", "exec"]),
+    params: z
+      .object({
+        inputPath: z.string().optional(),
+        outputPath: z.string().optional(),
+        outputPlaylistPath: z.string().optional(),
+        streamUrl: z.string().optional(),
+        durationSeconds: z.number().optional(),
+        segmentTime: z.number().optional(),
+        args: z.array(z.string()).optional(),
+        command: z.string().optional(),
+        cwd: z.string().optional(),
+        timeoutMs: z.number().optional(),
+        background: z.boolean().optional(),
+      })
+      .optional(),
+    requiredInputs: z.array(z.string()).optional(),
+  }),
   checkpoints: z.array(PlanStepCheckpointSchema).optional(),
   execution: z
     .object({

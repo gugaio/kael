@@ -4,11 +4,32 @@ import { ensureDir, readJsonFile, writeJsonFile } from "../infra/fs.js";
 
 export type PlanStepStatus = "pending" | "in_progress" | "completed" | "blocked" | "failed" | "canceled";
 export type PlanStatus = "active" | "completed" | "blocked" | "failed" | "canceled";
+export type PlanActionKind = "probe" | "capture" | "transcode" | "hls" | "exec";
 
 export type PlanStepCheckpoint = {
   at: string;
   status: PlanStepStatus;
   notes?: string;
+};
+
+export type PlanExecutionInputs = {
+  inputPath?: string;
+  outputPath?: string;
+  outputPlaylistPath?: string;
+  streamUrl?: string;
+  durationSeconds?: number;
+  segmentTime?: number;
+  args?: string[];
+  command?: string;
+  cwd?: string;
+  timeoutMs?: number;
+  background?: boolean;
+};
+
+export type PlanStepAction = {
+  kind: PlanActionKind;
+  params: PlanExecutionInputs;
+  requiredInputs: string[];
 };
 
 export type PlanStep = {
@@ -18,6 +39,7 @@ export type PlanStep = {
   notes?: string;
   updatedAt: string;
   checkpoints: PlanStepCheckpoint[];
+  action: PlanStepAction;
   execution?: {
     kind: "job" | "exec";
     refId: string;
@@ -41,18 +63,9 @@ type PlannerStore = {
   plans: Record<string, ExecutionPlan>;
 };
 
-export type PlanExecutionInputs = {
-  inputPath?: string;
-  outputPath?: string;
-  outputPlaylistPath?: string;
-  streamUrl?: string;
-  durationSeconds?: number;
-  segmentTime?: number;
-  args?: string[];
-  command?: string;
-  cwd?: string;
-  timeoutMs?: number;
-  background?: boolean;
+type PlanStepDraft = {
+  title: string;
+  action: PlanStepAction;
 };
 
 export type PlanExecuteNextResult =
@@ -60,7 +73,7 @@ export type PlanExecuteNextResult =
       ok: true;
       plan: ExecutionPlan;
       stepIndex: number;
-      action: "probe" | "capture" | "transcode" | "hls" | "exec" | "manual";
+      action: PlanActionKind;
       execution?: PlanStep["execution"];
       reason?: string;
     }
@@ -75,7 +88,7 @@ export type PlanExecuteNextResult =
       message: string;
       plan?: ExecutionPlan;
       stepIndex?: number;
-      action?: "probe" | "capture" | "transcode" | "hls" | "exec" | "manual";
+      action?: PlanActionKind;
     };
 
 export type PlanReconcileResult = {
@@ -122,13 +135,17 @@ export class PlannerService {
     const normalizedSteps = params.steps
       .map((title) => title.trim())
       .filter(Boolean)
-      .map((title) => ({
-        id: crypto.randomUUID(),
-        title,
-        status: "pending" as const,
-        updatedAt: now,
-        checkpoints: [{ at: now, status: "pending" as const }],
-      }));
+      .map((title) => {
+        const draft = deriveStepFromTitle(title);
+        return {
+          id: crypto.randomUUID(),
+          title,
+          status: "pending" as const,
+          updatedAt: now,
+          checkpoints: [{ at: now, status: "pending" as const }],
+          action: draft.action,
+        };
+      });
     const plan: ExecutionPlan = {
       id: crypto.randomUUID(),
       sessionKey: params.sessionKey,
@@ -150,12 +167,28 @@ export class PlannerService {
   }): Promise<ExecutionPlan> {
     const objective = params.objective.trim();
     const title = objective ? `Plano: ${objective}` : "Plano de execucao";
-    const steps = deriveStepsFromObjective(objective, params.maxSteps);
-    return this.create({
+    const drafts = deriveStepDraftsFromObjective(objective, params.maxSteps);
+    const now = new Date().toISOString();
+    const steps: PlanStep[] = drafts.map((draft) => ({
+      id: crypto.randomUUID(),
+      title: draft.title,
+      status: "pending",
+      updatedAt: now,
+      checkpoints: [{ at: now, status: "pending" }],
+      action: draft.action,
+    }));
+    const plan: ExecutionPlan = {
+      id: crypto.randomUUID(),
       sessionKey: params.sessionKey,
       title: title.length > 120 ? `${title.slice(0, 120)}...` : title,
+      status: steps.length === 0 ? "completed" : "active",
+      createdAt: now,
+      updatedAt: now,
       steps,
-    });
+    };
+    this.plans.set(plan.id, plan);
+    await this.persist();
+    return plan;
   }
 
   async updateStep(params: {
@@ -215,6 +248,7 @@ export class PlannerService {
       return current;
     }
     const now = new Date().toISOString();
+    const draft = deriveStepFromTitle(title);
     const steps = [
       ...current.steps,
       {
@@ -223,6 +257,7 @@ export class PlannerService {
         status: "pending" as const,
         updatedAt: now,
         checkpoints: [{ at: now, status: "pending" as const }],
+        action: draft.action,
       },
     ];
     const next: ExecutionPlan = {
@@ -340,31 +375,15 @@ export class PlannerService {
         plan,
       };
     }
-    const action = inferExecutionAction(next.step.title);
+
+    const action = next.step.action.kind;
     const sessionKey = params.sessionKey?.trim() || plan.sessionKey;
-    const rawInputs = params.inputs ?? {};
-    const inputs: PlanExecutionInputs =
-      action === "exec" && !rawInputs.command
-        ? { ...rawInputs, command: extractShellCommandFromStepTitle(next.step.title) ?? undefined }
-        : rawInputs;
+    const inputs: PlanExecutionInputs = {
+      ...(next.step.action.params ?? {}),
+      ...(params.inputs ?? {}),
+    };
 
-    if (action === "manual") {
-      const updated = await this.updateStep({
-        planId: plan.id,
-        stepIndex: next.stepIndex,
-        status: "completed",
-        notes: "Executor: etapa manual concluida automaticamente.",
-      });
-      return {
-        ok: true,
-        plan: updated ?? plan,
-        stepIndex: next.stepIndex,
-        action,
-        reason: "manual_step_completed",
-      };
-    }
-
-    const missing = requiredInputForAction(action, inputs);
+    const missing = missingRequiredInputs(next.step.action.requiredInputs, inputs);
     if (missing) {
       const updated = await this.updateStep({
         planId: plan.id,
@@ -574,63 +593,49 @@ function derivePlanStatus(steps: PlanStep[]): PlanStatus {
   return "active";
 }
 
-function inferExecutionAction(stepTitleRaw: string): "probe" | "capture" | "transcode" | "hls" | "exec" | "manual" {
-  const stepTitle = stepTitleRaw.toLowerCase();
-  const has = (...tokens: string[]) => tokens.some((token) => stepTitle.includes(token));
-  if (has("probe", "inspec", "metadata", "metadado")) {
-    return "probe";
+function requiredInputsForAction(kind: PlanActionKind): string[] {
+  if (kind === "probe") {
+    return ["inputPath"];
   }
-  if (has("captura", "capture", "stream", "ingest")) {
-    return "capture";
+  if (kind === "capture") {
+    return ["streamUrl", "outputPath"];
   }
-  if (has("transcode", "transcod", "encode", "converter")) {
-    return "transcode";
+  if (kind === "transcode") {
+    return ["inputPath", "outputPath"];
   }
-  if (has("hls", "playlist", "segment")) {
-    return "hls";
+  if (kind === "hls") {
+    return ["inputPath", "outputPlaylistPath"];
   }
-  if (has("comando", "shell", "bash", "terminal")) {
-    return "exec";
-  }
-  return "manual";
+  return ["command"];
 }
 
-function requiredInputForAction(
-  action: "probe" | "capture" | "transcode" | "hls" | "exec" | "manual",
-  inputs: PlanExecutionInputs,
-): string | null {
-  if (action === "manual") {
-    return null;
-  }
-  if (action === "probe") {
-    return inputs.inputPath ? null : "inputPath";
-  }
-  if (action === "capture") {
-    if (!inputs.streamUrl) {
-      return "streamUrl";
-    }
-    return inputs.outputPath ? null : "outputPath";
-  }
-  if (action === "transcode") {
-    if (!inputs.inputPath) {
-      return "inputPath";
-    }
-    return inputs.outputPath ? null : "outputPath";
-  }
-  if (action === "hls") {
-    if (!inputs.inputPath) {
-      return "inputPath";
-    }
-    return inputs.outputPlaylistPath ? null : "outputPlaylistPath";
-  }
-  return inputs.command ? null : "command";
+function createAction(kind: PlanActionKind, params: PlanExecutionInputs = {}): PlanStepAction {
+  const requiredInputs = requiredInputsForAction(kind).filter((input) => !hasInput(params, input));
+  return {
+    kind,
+    params,
+    requiredInputs,
+  };
 }
 
-function runtimeNotAvailable(
-  action: "probe" | "capture" | "transcode" | "hls" | "exec" | "manual",
-  plan: ExecutionPlan,
-  stepIndex: number,
-): PlanExecuteNextResult {
+function missingRequiredInputs(requiredInputs: string[], inputs: PlanExecutionInputs): string | null {
+  for (const input of requiredInputs) {
+    if (!hasInput(inputs, input)) {
+      return input;
+    }
+  }
+  return null;
+}
+
+function hasInput(inputs: PlanExecutionInputs, key: string): boolean {
+  const value = (inputs as Record<string, unknown>)[key];
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+  return value !== undefined && value !== null;
+}
+
+function runtimeNotAvailable(action: PlanActionKind, plan: ExecutionPlan, stepIndex: number): PlanExecuteNextResult {
   return {
     ok: false,
     reason: "runtime_not_available",
@@ -647,9 +652,11 @@ function normalizePlan(plan: ExecutionPlan): ExecutionPlan {
       Array.isArray(step.checkpoints) && step.checkpoints.length > 0
         ? step.checkpoints
         : [{ at: step.updatedAt || plan.updatedAt || plan.createdAt, status: step.status }];
+    const action = step.action ?? deriveStepFromTitle(step.title).action;
     return {
       ...step,
       checkpoints,
+      action,
     };
   });
   return {
@@ -696,11 +703,7 @@ async function resolveExecutionStatus(
   if (exec.status === "completed") {
     return { status: "completed", observedStatus: exec.status };
   }
-  if (
-    exec.status === "failed" ||
-    exec.status === "timed_out" ||
-    exec.status === "denied"
-  ) {
+  if (exec.status === "failed" || exec.status === "timed_out" || exec.status === "denied") {
     return { status: "failed", observedStatus: exec.status };
   }
   if (exec.status === "canceled") {
@@ -720,64 +723,101 @@ function mergeStepNotes(existing: string | undefined, next: string | undefined, 
   return `${existing}\n${tagged}`;
 }
 
-function deriveStepsFromObjective(objectiveRaw: string, maxStepsRaw?: number): string[] {
+function deriveStepDraftsFromObjective(objectiveRaw: string, maxStepsRaw?: number): PlanStepDraft[] {
   const objective = objectiveRaw.toLowerCase();
   const maxSteps = Number.isFinite(maxStepsRaw) ? Math.max(3, Math.min(12, Math.floor(maxStepsRaw ?? 8))) : 8;
-  const steps: string[] = [];
-
-  const add = (step: string) => {
-    if (!steps.includes(step)) {
-      steps.push(step);
-    }
-  };
-
-  add("Confirmar objetivo e entradas/saidas esperadas");
 
   const has = (...tokens: string[]) => tokens.some((token) => objective.includes(token));
   const isVideoContext = has("video", "transcode", "hls", "stream", "ffmpeg", "vlc", "codec", "captura");
-  const shellCommands = extractShellCommandsFromObjective(objective);
+  const shellCommands = extractShellCommandsFromObjective(objectiveRaw);
   const isShellContext =
-    shellCommands.length > 0 || has("bash", "shell", "terminal", "diretorio", "diretório");
+    shellCommands.length > 0 ||
+    has("bash", "shell", "terminal", "diretorio", "diretório", "hora", "que horas", "arquivo", ".txt");
 
   if (isShellContext) {
-    const shellSteps = [
-      "Confirmar objetivo, escopo e seguranca dos comandos",
-      ...shellCommands.map((command) => `Executar comando shell: ${command}`),
-      "Validar saida dos comandos e consolidar resposta final",
-    ];
-    return shellSteps.slice(0, maxSteps);
+    const commands = shellCommands.length > 0 ? shellCommands : ["pwd", "ls -la"];
+    return commands.slice(0, maxSteps).map((command) => ({
+      title: `Executar comando shell: ${command}`,
+      action: createAction("exec", { command }),
+    }));
   }
 
-  if (isVideoContext) {
-    add("Validar caminhos e requisitos de ambiente");
-  }
-  if (has("probe", "inspec", "codec", "metadata", "metadado")) {
-    add("Executar probe da midia para confirmar codec, duracao e trilhas");
+  const steps: PlanStepDraft[] = [];
+  const push = (draft: PlanStepDraft) => {
+    if (!steps.some((step) => step.title === draft.title)) {
+      steps.push(draft);
+    }
+  };
+
+  if (isVideoContext || has("probe", "inspec", "metadata", "metadado", "codec")) {
+    push({
+      title: "Executar probe da midia para confirmar codec, duracao e trilhas",
+      action: createAction("probe"),
+    });
   }
   if (has("captura", "capture", "stream", "rtmp", "ingest")) {
-    add("Executar captura inicial e validar arquivo gerado");
+    push({
+      title: "Executar captura inicial e validar arquivo gerado",
+      action: createAction("capture"),
+    });
   }
   if (has("transcode", "transcod", "encode", "converter", "conversao", "convert")) {
-    add("Executar transcode com preset seguro e monitorar logs");
+    push({
+      title: "Executar transcode com preset seguro e monitorar logs",
+      action: createAction("transcode"),
+    });
   }
   if (has("hls", "playlist", "segment")) {
-    add("Gerar HLS (playlist + segmentos) e validar reproducao");
-  }
-  if (has("schedule", "agendar", "agend", "cron", "periodic", "periodico")) {
-    add("Configurar schedule e politica de retries");
+    push({
+      title: "Gerar HLS (playlist + segmentos) e validar reproducao",
+      action: createAction("hls"),
+    });
   }
 
-  add("Validar resultado final e registrar aprendizados na memoria");
-
-  if (steps.length <= 2) {
-    return [
-      "Confirmar objetivo, restricoes e criterio de sucesso",
-      "Executar em pequenos passos com validacao por etapa",
-      "Consolidar resultado final e proximos passos",
-    ].slice(0, maxSteps);
+  if (steps.length === 0) {
+    const first = extractSingleShellCommand(objectiveRaw);
+    if (first) {
+      push({
+        title: `Executar comando shell: ${first}`,
+        action: createAction("exec", { command: first }),
+      });
+    } else {
+      push({
+        title: "Definir comando shell principal para cumprir o objetivo",
+        action: createAction("exec"),
+      });
+    }
   }
 
   return steps.slice(0, maxSteps);
+}
+
+function deriveStepFromTitle(titleRaw: string): PlanStepDraft {
+  const title = titleRaw.trim();
+  const lower = title.toLowerCase();
+
+  const shellCommand = extractShellCommandFromStepTitle(title) ?? extractSingleShellCommand(title);
+  if (shellCommand) {
+    return {
+      title,
+      action: createAction("exec", { command: shellCommand }),
+    };
+  }
+
+  if (lower.includes("probe") || lower.includes("metadado") || lower.includes("metadata") || lower.includes("codec")) {
+    return { title, action: createAction("probe") };
+  }
+  if (lower.includes("captura") || lower.includes("capture") || lower.includes("stream")) {
+    return { title, action: createAction("capture") };
+  }
+  if (lower.includes("transcode") || lower.includes("transcod") || lower.includes("encode") || lower.includes("converter")) {
+    return { title, action: createAction("transcode") };
+  }
+  if (lower.includes("hls") || lower.includes("playlist") || lower.includes("segment")) {
+    return { title, action: createAction("hls") };
+  }
+
+  return { title, action: createAction("exec") };
 }
 
 function extractShellCommandsFromObjective(objective: string): string[] {
@@ -785,11 +825,26 @@ function extractShellCommandsFromObjective(objective: string): string[] {
   if (!normalized) {
     return [];
   }
+  const commands: string[] = [];
+
+  if (/\b(que horas|hora atual|horas)\b/i.test(normalized)) {
+    commands.push("date");
+  }
+
+  const targetFile = extractTxtFilename(normalized);
+  if (targetFile) {
+    if (/\b(hora atual|que horas|hora)\b/i.test(normalized)) {
+      commands.push(`date > ${targetFile}`);
+    } else if (/\b(criar|escrever|write)\b/i.test(normalized)) {
+      commands.push(`echo \"ok\" > ${targetFile}`);
+    }
+  }
+
   const parts = normalized
     .split(/\b(?:depois|em seguida|then|e depois|;|,)\b/gi)
     .map((item) => item.trim())
     .filter(Boolean);
-  const commands: string[] = [];
+
   for (const part of parts) {
     const command = extractSingleShellCommand(part);
     if (command && !commands.includes(command)) {
@@ -811,6 +866,7 @@ function extractSingleShellCommand(text: string): string | null {
     /\b(find(?:\s+[^\n,;]+)?)\b/i,
     /\b(grep(?:\s+[^\n,;]+)?)\b/i,
     /\b(curl(?:\s+[^\n,;]+)?)\b/i,
+    /\b(date)\b/i,
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern);
@@ -827,4 +883,19 @@ function extractShellCommandFromStepTitle(stepTitle: string): string | null {
     return null;
   }
   return match[1].trim();
+}
+
+function extractTxtFilename(text: string): string | null {
+  const match = text.match(/\b([a-zA-Z0-9._/-]+\.txt)\b/);
+  if (!match?.[1]) {
+    return null;
+  }
+  const raw = match[1];
+  if (raw.startsWith("/")) {
+    return raw;
+  }
+  if (/\/tmp\/?/.test(text)) {
+    return `/tmp/${raw}`;
+  }
+  return raw;
 }

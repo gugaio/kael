@@ -5,6 +5,32 @@ import { Panel } from "../components/Panel";
 import { cancelPlan, executeNextPlanStep, getPlan, getPlans, reconcilePlans } from "../lib/api";
 import { formatDate, statusTone } from "../lib/format";
 
+function buildInputsTemplate(step: {
+  action: {
+    kind: "probe" | "capture" | "transcode" | "hls" | "exec";
+    params?: Record<string, unknown>;
+    requiredInputs?: string[];
+  };
+}): string {
+  const payload: Record<string, unknown> = { ...(step.action.params ?? {}) };
+  if (step.action.kind === "probe") {
+    payload.inputPath ??= "/tmp/input.mp4";
+  }
+  if (step.action.kind === "transcode") {
+    payload.inputPath ??= "/tmp/input.mp4";
+    payload.outputPath ??= "/tmp/output.mp4";
+  }
+  if (step.action.kind === "hls") {
+    payload.inputPath ??= "/tmp/input.mp4";
+    payload.outputPlaylistPath ??= "/tmp/output.m3u8";
+  }
+  if (step.action.kind === "capture") {
+    payload.streamUrl ??= "http://example.com/live";
+    payload.outputPath ??= "/tmp/capture.mp4";
+  }
+  return JSON.stringify(payload, null, 2);
+}
+
 export function PlansPage(): JSX.Element {
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
@@ -12,9 +38,7 @@ export function PlansPage(): JSX.Element {
   const [statusFilter, setStatusFilter] = useState("");
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [executeSessionKey, setExecuteSessionKey] = useState("");
-  const [executeInputsText, setExecuteInputsText] = useState(
-    '{\n  "inputPath": "/tmp/input.mp4",\n  "outputPath": "/tmp/output.mp4"\n}',
-  );
+  const [executeInputsText, setExecuteInputsText] = useState("{}");
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -155,6 +179,14 @@ export function PlansPage(): JSX.Element {
     [selected],
   );
 
+  useEffect(() => {
+    if (!activeStep) {
+      setExecuteInputsText("{}");
+      return;
+    }
+    setExecuteInputsText(buildInputsTemplate(activeStep));
+  }, [activeStep?.id, activeStep?.action.kind, activeStep?.action.params]);
+
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <Panel title="Plans">
@@ -237,6 +269,14 @@ export function PlansPage(): JSX.Element {
                     next/active step: <span className="text-kael-text">{activeStep.title}</span>
                   </p>
                 )}
+                {activeStep && (
+                  <p className="mt-1 text-xs text-kael-muted">
+                    action={activeStep.action.kind}
+                    {(activeStep.action.requiredInputs ?? []).length > 0
+                      ? ` • required=${(activeStep.action.requiredInputs ?? []).join(", ")}`
+                      : " • required=none"}
+                  </p>
+                )}
               </div>
 
               <div className="grid gap-2 rounded-lg border border-kael-border bg-kael-panelSoft p-3 md:grid-cols-2">
@@ -283,6 +323,11 @@ export function PlansPage(): JSX.Element {
                   onChange={(event) => setExecuteInputsText(event.target.value)}
                   className="min-h-[120px] rounded border border-kael-border bg-kael-panel px-2 py-2 font-mono text-xs outline-none focus:border-kael-accent md:col-span-2"
                 />
+                {activeStep && activeStep.action.kind === "exec" && (
+                  <p className="text-xs text-kael-muted md:col-span-2">
+                    Este step shell usa action estruturada; ajuste o campo command apenas se quiser override.
+                  </p>
+                )}
                 {actionMessage && <p className="text-xs text-emerald-200 md:col-span-2">{actionMessage}</p>}
                 {actionError && <p className="text-xs text-rose-200 md:col-span-2">{actionError}</p>}
               </div>
@@ -299,6 +344,12 @@ export function PlansPage(): JSX.Element {
                       </span>
                     </div>
                     <p className="text-xs text-kael-muted">updated={formatDate(step.updatedAt)}</p>
+                    <p className="mt-1 text-xs text-kael-muted">
+                      action={step.action.kind}
+                      {(step.action.requiredInputs ?? []).length > 0
+                        ? ` required=${(step.action.requiredInputs ?? []).join(", ")}`
+                        : " required=none"}
+                    </p>
                     {step.execution && (
                       <p className="mt-1 text-xs text-kael-muted">
                         execution={step.execution.kind}:{step.execution.refId} status={step.execution.status}

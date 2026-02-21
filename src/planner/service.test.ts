@@ -102,12 +102,11 @@ describe("PlannerService", () => {
       maxSteps: 10,
     });
 
-    expect(plan.steps.length).toBeGreaterThanOrEqual(5);
+    expect(plan.steps.length).toBeGreaterThanOrEqual(3);
     expect(plan.title.toLowerCase()).toContain("capturar stream");
-    expect(plan.steps.some((step) => step.title.toLowerCase().includes("captura"))).toBe(true);
-    expect(plan.steps.some((step) => step.title.toLowerCase().includes("transcode"))).toBe(true);
-    expect(plan.steps.some((step) => step.title.toLowerCase().includes("hls"))).toBe(true);
-    expect(plan.steps.some((step) => step.title.toLowerCase().includes("schedule"))).toBe(true);
+    expect(plan.steps.some((step) => step.action.kind === "capture")).toBe(true);
+    expect(plan.steps.some((step) => step.action.kind === "transcode")).toBe(true);
+    expect(plan.steps.some((step) => step.action.kind === "hls")).toBe(true);
   });
 
   it("executes next step and links runtime execution id", async () => {
@@ -198,7 +197,7 @@ describe("PlannerService", () => {
     const plan = await planner.create({
       sessionKey: "s1",
       title: "Shell",
-      steps: ["Executar comando shell de validacao"],
+      steps: ["Executar comando shell: false"],
     });
     await planner.executeNext({
       planId: plan.id,
@@ -253,6 +252,7 @@ describe("PlannerService", () => {
 
     expect(plan.steps.some((step) => step.title.toLowerCase().includes("executar comando shell: ls"))).toBe(true);
     expect(plan.steps.some((step) => step.title.toLowerCase().includes("executar comando shell: cat"))).toBe(true);
+    expect(plan.steps.every((step) => step.action.kind === "exec")).toBe(true);
   });
 
   it("executes shell step without explicit command input when command is in step title", async () => {
@@ -275,6 +275,51 @@ describe("PlannerService", () => {
       throw new Error("expected ok result");
     }
     expect(result.action).toBe("exec");
+    expect(result.plan.steps[0].action.kind).toBe("exec");
     expect(result.execution?.status).toBe("ls -la");
+  });
+
+  it("blocks generic step with missing command input", async () => {
+    const { planner } = await makePlanner();
+    const plan = await planner.create({
+      sessionKey: "s1",
+      title: "Generico",
+      steps: ["Fazer verificacao geral"],
+    });
+
+    const result = await planner.executeNext({
+      planId: plan.id,
+      runtime: {},
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("expected blocked step");
+    }
+    expect(result.reason).toBe("missing_input");
+    expect(result.action).toBe("exec");
+    expect(result.message).toContain("command");
+    expect(result.plan?.steps[0].status).toBe("blocked");
+  });
+
+  it("extracts date/file commands for time-and-write objective", async () => {
+    const { planner } = await makePlanner();
+    const plan = await planner.generate({
+      sessionKey: "s1",
+      objective: "olha que horas e depois criar um arquivo teste-hora.txt com a hora atual",
+    });
+
+    const titles = plan.steps.map((step) => step.title.toLowerCase());
+    expect(titles.some((t) => t.includes("executar comando shell: date"))).toBe(true);
+    expect(titles.some((t) => t.includes("executar comando shell: date > teste-hora.txt"))).toBe(true);
+  });
+
+  it("uses /tmp path when objective asks file in /tmp", async () => {
+    const { planner } = await makePlanner();
+    const plan = await planner.generate({
+      sessionKey: "s1",
+      objective: "olha a hora e cria teste.txt em /tmp/",
+    });
+    const titles = plan.steps.map((step) => step.title.toLowerCase());
+    expect(titles.some((t) => t.includes("executar comando shell: date > /tmp/teste.txt"))).toBe(true);
   });
 });

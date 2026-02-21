@@ -215,7 +215,7 @@ export type EngineTooling = {
     reason?: string;
     message?: string;
     stepIndex?: number;
-    action?: "probe" | "capture" | "transcode" | "hls" | "exec" | "manual";
+    action?: "probe" | "capture" | "transcode" | "hls" | "exec";
     plan?: {
       id: string;
       sessionKey: string;
