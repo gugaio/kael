@@ -48,6 +48,13 @@ function makeFakeApp(): KaelApp {
         ask: "on-miss",
         allowlist: ["ls", "cat"],
       },
+      research: {
+        enabled: false,
+        provider: "tavily",
+        defaultMaxResults: 5,
+        maxResultsLimit: 10,
+        timeoutMs: 12_000,
+      },
       pi: {
         enabled: true,
         provider: "openai",
@@ -193,6 +200,7 @@ function makeFakeApp(): KaelApp {
         ],
       }),
     } as unknown as KaelApp["planner"],
+    research: {} as KaelApp["research"],
     memory: {} as KaelApp["memory"],
     chat: {
       handleMessage: async ({ message }: { message: string }) => {

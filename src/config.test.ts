@@ -239,4 +239,25 @@ describe('loadConfig validation', () => {
       }
     }
   });
+
+  it('deve falhar quando research habilitado sem api key', async () => {
+    const prevEnabled = process.env.KAEL_RESEARCH_ENABLED;
+    const prevKey = process.env.KAEL_RESEARCH_API_KEY;
+    try {
+      process.env.KAEL_RESEARCH_ENABLED = 'true';
+      process.env.KAEL_RESEARCH_API_KEY = ' ';
+      await expect(loadConfig('/tmp/kael-config-test')).rejects.toBeInstanceOf(ConfigValidationError);
+    } finally {
+      if (prevEnabled === undefined) {
+        delete process.env.KAEL_RESEARCH_ENABLED;
+      } else {
+        process.env.KAEL_RESEARCH_ENABLED = prevEnabled;
+      }
+      if (prevKey === undefined) {
+        delete process.env.KAEL_RESEARCH_API_KEY;
+      } else {
+        process.env.KAEL_RESEARCH_API_KEY = prevKey;
+      }
+    }
+  });
 });

@@ -96,6 +96,13 @@ async function createJobsServer(params: {
         ask: "on-miss",
         allowlist: ["ls", "cat"],
       },
+      research: {
+        enabled: false,
+        provider: "tavily",
+        defaultMaxResults: 5,
+        maxResultsLimit: 10,
+        timeoutMs: 12_000,
+      },
       pi: {
         enabled: true,
         provider: "openai",
@@ -171,6 +178,7 @@ async function createJobsServer(params: {
         steps: [],
       }),
     } as unknown as KaelApp["planner"],
+    research: {} as KaelApp["research"],
     memory: {} as KaelApp["memory"],
     chat: {
       handleMessage: async () => ({

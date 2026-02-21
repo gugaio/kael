@@ -279,6 +279,55 @@ export function createPiShellTools(params: {
     },
   };
 
+  const webSearchTool: AgentTool = {
+    name: "web_search",
+    label: "Web Search",
+    description:
+      "Pesquisa na web com citacao de fontes. Use para fatos atuais, confirmacao externa e comparacao de opcoes.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Consulta de pesquisa" },
+        maxResults: { type: "number", description: "Quantidade maxima de fontes" },
+        recencyDays: { type: "number", description: "Recencia em dias (opcional)" },
+        domainsAllow: { type: "array", items: { type: "string" } },
+        domainsBlock: { type: "array", items: { type: "string" } },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const args = (rawParams ?? {}) as {
+        query: string;
+        maxResults?: number;
+        recencyDays?: number;
+        domainsAllow?: string[];
+        domainsBlock?: string[];
+      };
+      const result = await params.tooling.webSearch({
+        sessionKey: params.sessionKey,
+        query: args.query,
+        maxResults: args.maxResults,
+        recencyDays: args.recencyDays,
+        domainsAllow: args.domainsAllow,
+        domainsBlock: args.domainsBlock,
+      });
+      const text = [
+        `sources=${result.sources.length}`,
+        "answer:",
+        result.answer,
+        "",
+        "sources_list:",
+        ...result.sources.map((item, idx) => `${idx + 1}. ${item.title} | ${item.url}`),
+        ...(result.notes.length > 0 ? ["", "notes:", ...result.notes.map((item) => `- ${item}`)] : []),
+      ].join("\n");
+      return {
+        content: textResult(text),
+        details: result,
+      };
+    },
+  };
+
   const planCreateTool: AgentTool = {
     name: "plan_create",
     label: "Plan Create",
@@ -547,6 +596,7 @@ export function createPiShellTools(params: {
     memorySearchTool,
     memoryGetTool,
     memoryWriteTool,
+    webSearchTool,
     planCreateTool,
     planGenerateTool,
     planListTool,

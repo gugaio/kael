@@ -67,6 +67,13 @@ type PlanStepDraft = {
   title: string;
   action: PlanStepAction;
 };
+export type PlanStepDraftInput = {
+  title: string;
+  action: {
+    kind: PlanActionKind;
+    params?: PlanExecutionInputs;
+  };
+};
 
 export type PlanExecuteNextResult =
   | {
@@ -100,9 +107,24 @@ export type PlanReconcileResult = {
 export class PlannerService {
   private readonly plansPath: string;
   private plans = new Map<string, ExecutionPlan>();
+  private readonly generateDrafts?: (params: {
+    sessionKey: string;
+    objective: string;
+    maxSteps?: number;
+  }) => Promise<PlanStepDraftInput[]>;
 
-  constructor(dataDir: string) {
+  constructor(
+    dataDir: string,
+    options?: {
+      generateDrafts?: (params: {
+        sessionKey: string;
+        objective: string;
+        maxSteps?: number;
+      }) => Promise<PlanStepDraftInput[]>;
+    },
+  ) {
     this.plansPath = path.join(dataDir, "plans", "plans.json");
+    this.generateDrafts = options?.generateDrafts;
   }
 
   async init(): Promise<void> {
@@ -167,7 +189,22 @@ export class PlannerService {
   }): Promise<ExecutionPlan> {
     const objective = params.objective.trim();
     const title = objective ? `Plano: ${objective}` : "Plano de execucao";
-    const drafts = deriveStepDraftsFromObjective(objective, params.maxSteps);
+    const draftsRaw = this.generateDrafts
+      ? await this.generateDrafts({
+          sessionKey: params.sessionKey,
+          objective,
+          maxSteps: params.maxSteps,
+        })
+      : null;
+    const drafts =
+      Array.isArray(draftsRaw) && draftsRaw.length > 0
+        ? normalizeDrafts(draftsRaw, params.maxSteps)
+        : [
+            {
+              title: "Definir comando shell principal para cumprir o objetivo",
+              action: createAction("exec"),
+            },
+          ];
     const now = new Date().toISOString();
     const steps: PlanStep[] = drafts.map((draft) => ({
       id: crypto.randomUUID(),
@@ -593,6 +630,26 @@ function derivePlanStatus(steps: PlanStep[]): PlanStatus {
   return "active";
 }
 
+function normalizeDrafts(drafts: PlanStepDraftInput[], maxStepsRaw?: number): PlanStepDraft[] {
+  const maxSteps = Number.isFinite(maxStepsRaw) ? Math.max(1, Math.min(20, Math.floor(maxStepsRaw ?? 8))) : 8;
+  const normalized: PlanStepDraft[] = [];
+  for (const raw of drafts) {
+    const title = raw?.title?.trim();
+    const kind = raw?.action?.kind;
+    if (!title || !kind) {
+      continue;
+    }
+    normalized.push({
+      title,
+      action: createAction(kind, raw.action.params ?? {}),
+    });
+    if (normalized.length >= maxSteps) {
+      break;
+    }
+  }
+  return normalized;
+}
+
 function requiredInputsForAction(kind: PlanActionKind): string[] {
   if (kind === "probe") {
     return ["inputPath"];
@@ -723,75 +780,6 @@ function mergeStepNotes(existing: string | undefined, next: string | undefined, 
   return `${existing}\n${tagged}`;
 }
 
-function deriveStepDraftsFromObjective(objectiveRaw: string, maxStepsRaw?: number): PlanStepDraft[] {
-  const objective = objectiveRaw.toLowerCase();
-  const maxSteps = Number.isFinite(maxStepsRaw) ? Math.max(3, Math.min(12, Math.floor(maxStepsRaw ?? 8))) : 8;
-
-  const has = (...tokens: string[]) => tokens.some((token) => objective.includes(token));
-  const isVideoContext = has("video", "transcode", "hls", "stream", "ffmpeg", "vlc", "codec", "captura");
-  const shellCommands = extractShellCommandsFromObjective(objectiveRaw);
-  const isShellContext =
-    shellCommands.length > 0 ||
-    has("bash", "shell", "terminal", "diretorio", "diretório", "hora", "que horas", "arquivo", ".txt");
-
-  if (isShellContext) {
-    const commands = shellCommands.length > 0 ? shellCommands : ["pwd", "ls -la"];
-    return commands.slice(0, maxSteps).map((command) => ({
-      title: `Executar comando shell: ${command}`,
-      action: createAction("exec", { command }),
-    }));
-  }
-
-  const steps: PlanStepDraft[] = [];
-  const push = (draft: PlanStepDraft) => {
-    if (!steps.some((step) => step.title === draft.title)) {
-      steps.push(draft);
-    }
-  };
-
-  if (isVideoContext || has("probe", "inspec", "metadata", "metadado", "codec")) {
-    push({
-      title: "Executar probe da midia para confirmar codec, duracao e trilhas",
-      action: createAction("probe"),
-    });
-  }
-  if (has("captura", "capture", "stream", "rtmp", "ingest")) {
-    push({
-      title: "Executar captura inicial e validar arquivo gerado",
-      action: createAction("capture"),
-    });
-  }
-  if (has("transcode", "transcod", "encode", "converter", "conversao", "convert")) {
-    push({
-      title: "Executar transcode com preset seguro e monitorar logs",
-      action: createAction("transcode"),
-    });
-  }
-  if (has("hls", "playlist", "segment")) {
-    push({
-      title: "Gerar HLS (playlist + segmentos) e validar reproducao",
-      action: createAction("hls"),
-    });
-  }
-
-  if (steps.length === 0) {
-    const first = extractSingleShellCommand(objectiveRaw);
-    if (first) {
-      push({
-        title: `Executar comando shell: ${first}`,
-        action: createAction("exec", { command: first }),
-      });
-    } else {
-      push({
-        title: "Definir comando shell principal para cumprir o objetivo",
-        action: createAction("exec"),
-      });
-    }
-  }
-
-  return steps.slice(0, maxSteps);
-}
-
 function deriveStepFromTitle(titleRaw: string): PlanStepDraft {
   const title = titleRaw.trim();
   const lower = title.toLowerCase();
@@ -818,40 +806,6 @@ function deriveStepFromTitle(titleRaw: string): PlanStepDraft {
   }
 
   return { title, action: createAction("exec") };
-}
-
-function extractShellCommandsFromObjective(objective: string): string[] {
-  const normalized = objective.replace(/\s+/g, " ").trim();
-  if (!normalized) {
-    return [];
-  }
-  const commands: string[] = [];
-
-  if (/\b(que horas|hora atual|horas)\b/i.test(normalized)) {
-    commands.push("date");
-  }
-
-  const targetFile = extractTxtFilename(normalized);
-  if (targetFile) {
-    if (/\b(hora atual|que horas|hora)\b/i.test(normalized)) {
-      commands.push(`date > ${targetFile}`);
-    } else if (/\b(criar|escrever|write)\b/i.test(normalized)) {
-      commands.push(`echo \"ok\" > ${targetFile}`);
-    }
-  }
-
-  const parts = normalized
-    .split(/\b(?:depois|em seguida|then|e depois|;|,)\b/gi)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  for (const part of parts) {
-    const command = extractSingleShellCommand(part);
-    if (command && !commands.includes(command)) {
-      commands.push(command);
-    }
-  }
-  return commands.slice(0, 6);
 }
 
 function extractSingleShellCommand(text: string): string | null {
@@ -883,19 +837,4 @@ function extractShellCommandFromStepTitle(stepTitle: string): string | null {
     return null;
   }
   return match[1].trim();
-}
-
-function extractTxtFilename(text: string): string | null {
-  const match = text.match(/\b([a-zA-Z0-9._/-]+\.txt)\b/);
-  if (!match?.[1]) {
-    return null;
-  }
-  const raw = match[1];
-  if (raw.startsWith("/")) {
-    return raw;
-  }
-  if (/\/tmp\/?/.test(text)) {
-    return `/tmp/${raw}`;
-  }
-  return raw;
 }

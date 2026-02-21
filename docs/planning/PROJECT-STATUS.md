@@ -220,7 +220,49 @@ Definition of Done (checklist):
 - [ ] Tuning de ranking/recencia e qualidade de snippets.
 - [ ] Reduzir latencia de reconciliacao com stream/eventos (SSE) em vez de polling.
 
+### Fase 9 - Research Web (API-first)
+
+Status: **Em andamento**
+
+Objetivos:
+- Dar capacidade de pesquisa web com fontes citadas no loop do agente.
+- Manter arquitetura plugavel por provider, com custo operacional baixo.
+- Persistir trilha de pesquisa por sessao para auditoria/continuidade.
+
+Definition of Done (checklist):
+- [x] Tool `web_search` integrada ao PI.
+- [x] Provider API-first inicial (`tavily`) com contrato plugavel.
+- [x] Memoria de pesquisas por sessao em arquivo local.
+- [x] Configuracao `KAEL_RESEARCH_*` documentada e validada no startup.
+- [ ] Re-ranking avancado e deduplicacao semantica.
+- [ ] Suporte opcional a multiplos providers.
+
 ## Registro de Atualizacoes por Commit
+
+### 2026-02-21 - Fase 9.1: web_search API-first (Tavily + memoria por sessao)
+
+Resumo:
+- Criado dominio `src/research` com provider plugavel e implementacao inicial `TavilySearchProvider`.
+- Integrada tool `web_search` ao PI com retorno de resumo, fontes e notas.
+- Adicionada persistencia de historico de pesquisa por sessao em `dataDir/research/<session>.json`.
+- Expandida configuracao para `KAEL_RESEARCH_*` e defaults globais no `~/.kael/config.json`.
+
+Arquivos-chave:
+- `src/research/service.ts`
+- `src/research/provider.ts`
+- `src/engine/pi-tools.ts`
+- `src/config.ts`
+
+Checklist de validacao:
+- [ ] `npm run check`
+- [ ] `npm test`
+
+Pendencias:
+- Re-ranking de fontes por autoridade/recencia.
+- Cache compartilhado entre sessoes.
+
+Proximo passo recomendado:
+- Fase 9.2: fetch/sumarizacao de conteudo por URL com citacoes mais robustas.
 
 ### 2026-02-21 - Fase 8.1: planner/executor baseline (plano persistido)
 

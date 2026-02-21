@@ -9,7 +9,10 @@ import { resolveKaelHome } from "./global-config.js";
 import { JobManager } from "./jobs/manager.js";
 import { JobStore } from "./jobs/store.js";
 import { MemoryService } from "./memory/service.js";
+import { LlmPlanGenerator } from "./planner/llm-generator.js";
 import { PlannerService } from "./planner/service.js";
+import { DisabledSearchProvider, TavilySearchProvider } from "./research/provider.js";
+import { ResearchService } from "./research/service.js";
 import { SessionStore } from "./session/store.js";
 import { ChatService } from "./chat/service.js";
 import { TurnOrchestrator } from "./chat/turn-orchestrator.js";
@@ -23,6 +26,7 @@ export type KaelApp = {
   jobs: JobManager;
   memory: MemoryService;
   planner: PlannerService;
+  research: ResearchService;
   chat: ChatService;
   automation: AutomationService;
   shell: ShellToolService;
@@ -64,14 +68,26 @@ export async function createKaelApp(): Promise<KaelApp> {
     maxSnippetChars: 1200,
   });
   await memory.init();
-  const planner = new PlannerService(config.dataDir);
+  const searchProvider = config.research.enabled && config.research.apiKey
+    ? new TavilySearchProvider(config.research.apiKey)
+    : new DisabledSearchProvider();
+  const research = new ResearchService(searchProvider, {
+    dataDir: config.dataDir,
+    defaultMaxResults: config.research.defaultMaxResults,
+    maxResultsLimit: config.research.maxResultsLimit,
+    timeoutMs: config.research.timeoutMs,
+  });
+  const llmPlanner = new LlmPlanGenerator(config.pi);
+  const planner = new PlannerService(config.dataDir, {
+    generateDrafts: async ({ objective, maxSteps }) => llmPlanner.generate({ objective, maxSteps }),
+  });
   await planner.init();
   const engine = createEngine(config);
   const orchestrator = new TurnOrchestrator(sessions, engine, {
     maxContextMessages: config.context.maxMessages,
     maxContextChars: config.context.maxChars,
   });
-  const chat = new ChatService(sessions, jobs, shell, memory, planner, orchestrator);
+  const chat = new ChatService(sessions, jobs, shell, memory, research, planner, orchestrator);
   const heartbeat = new HeartbeatRunner(jobs, sessions);
   const scheduler = new PersistentScheduler(
     path.join(config.dataDir, "automation", "scheduler-jobs.json"),
@@ -136,6 +152,7 @@ export async function createKaelApp(): Promise<KaelApp> {
     jobs,
     memory,
     planner,
+    research,
     chat,
     automation,
     shell,

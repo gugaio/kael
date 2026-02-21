@@ -16,6 +16,7 @@ Esta pasta descreve a evolucao arquitetural do Kael de forma incremental.
 - `docs/architecture/phases/phase-8.2.md` - Planner inteligente inicial (geracao por objetivo + checkpoints)
 - `docs/architecture/phases/phase-8.3.md` - Executor assistido (`plan_execute_next`) com vinculo a jobs/exec
 - `docs/architecture/phases/phase-8.4.md` - Reconciliacao automatica de steps com runtime (`job/exec`)
+- `docs/architecture/phases/phase-9.md` - Research web API-first (`web_search`) com provider plugavel
 
 ## Como usar
 

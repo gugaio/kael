@@ -59,6 +59,14 @@ export type KaelConfig = {
     ask: ExecAsk;
     allowlist: string[];
   };
+  research: {
+    enabled: boolean;
+    provider: "tavily";
+    apiKey?: string;
+    defaultMaxResults: number;
+    maxResultsLimit: number;
+    timeoutMs: number;
+  };
   pi: PiEngineConfig;
 };
 
@@ -195,6 +203,22 @@ function validateConfig(config: KaelConfig): void {
 
   if (!config.shell.workspaceRoot.trim()) {
     issues.push("KAEL_EXEC_WORKSPACE_ROOT nao pode ser vazio");
+  }
+
+  if (config.research.enabled && !config.research.apiKey) {
+    issues.push("KAEL_RESEARCH_API_KEY e obrigatorio quando KAEL_RESEARCH_ENABLED=true");
+  }
+
+  if (!Number.isFinite(config.research.defaultMaxResults) || config.research.defaultMaxResults <= 0) {
+    issues.push("KAEL_RESEARCH_MAX_RESULTS deve ser um numero positivo");
+  }
+
+  if (!Number.isFinite(config.research.maxResultsLimit) || config.research.maxResultsLimit <= 0) {
+    issues.push("KAEL_RESEARCH_MAX_RESULTS_LIMIT deve ser um numero positivo");
+  }
+
+  if (!Number.isFinite(config.research.timeoutMs) || config.research.timeoutMs <= 0) {
+    issues.push("KAEL_RESEARCH_TIMEOUT_MS deve ser um numero positivo");
   }
 
   if (issues.length > 0) {
@@ -383,6 +407,37 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     .map((item) => item.trim().toLowerCase())
     .filter((item) => item.length > 0);
 
+  const researchEnabledRaw =
+    process.env.KAEL_RESEARCH_ENABLED?.trim() ??
+    String(globalConfig?.defaults.research?.enabled ?? false);
+  const researchEnabled = researchEnabledRaw.toLowerCase() === "true";
+  const researchProviderRaw =
+    process.env.KAEL_RESEARCH_PROVIDER?.trim().toLowerCase() ||
+    globalConfig?.defaults.research?.provider ||
+    "tavily";
+  const researchProvider: "tavily" = "tavily";
+  if (researchProviderRaw !== "tavily") {
+    throw new ConfigValidationError([
+      `KAEL_RESEARCH_PROVIDER invalido: "${researchProviderRaw}". Valores aceitos: tavily`,
+    ]);
+  }
+  const researchMaxRaw = Number(
+    process.env.KAEL_RESEARCH_MAX_RESULTS ?? String(globalConfig?.defaults.research?.maxResults ?? 5),
+  );
+  const researchMax = Number.isFinite(researchMaxRaw) && researchMaxRaw > 0 ? Math.floor(researchMaxRaw) : 5;
+  const researchMaxLimitRaw = Number(
+    process.env.KAEL_RESEARCH_MAX_RESULTS_LIMIT ??
+      String(globalConfig?.defaults.research?.maxResultsLimit ?? 10),
+  );
+  const researchMaxLimit =
+    Number.isFinite(researchMaxLimitRaw) && researchMaxLimitRaw > 0 ? Math.floor(researchMaxLimitRaw) : 10;
+  const researchTimeoutRaw = Number(
+    process.env.KAEL_RESEARCH_TIMEOUT_MS ?? String(globalConfig?.defaults.research?.timeoutMs ?? 12000),
+  );
+  const researchTimeoutMs =
+    Number.isFinite(researchTimeoutRaw) && researchTimeoutRaw > 0 ? Math.floor(researchTimeoutRaw) : 12000;
+  const researchApiKey = process.env.KAEL_RESEARCH_API_KEY?.trim();
+
   const defaultTimeout = globalConfig?.defaults.pi.timeoutMs ?? 45000;
   const timeoutRaw = Number(process.env.KAEL_PI_TIMEOUT_MS ?? String(defaultTimeout));
   const timeoutMs = Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? timeoutRaw : defaultTimeout;
@@ -475,6 +530,14 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       security,
       ask,
       allowlist,
+    },
+    research: {
+      enabled: researchEnabled,
+      provider: researchProvider,
+      apiKey: researchApiKey,
+      defaultMaxResults: researchMax,
+      maxResultsLimit: researchMaxLimit,
+      timeoutMs: researchTimeoutMs,
     },
     pi,
   };

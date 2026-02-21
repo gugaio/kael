@@ -3,6 +3,7 @@ import { normalizePiError } from "../engine/pi-errors.js";
 import type { JobManager } from "../jobs/manager.js";
 import type { MemoryService } from "../memory/service.js";
 import type { PlannerService } from "../planner/service.js";
+import type { ResearchService } from "../research/service.js";
 import type { SessionStore } from "../session/store.js";
 import type { ShellToolService } from "../tools/system/shell-tool-service.js";
 import type { SessionMessage } from "../types.js";
@@ -21,6 +22,7 @@ export class ChatService {
     private readonly jobs: JobManager,
     private readonly shell: ShellToolService,
     private readonly memory: MemoryService,
+    private readonly research: ResearchService,
     private readonly planner: PlannerService,
     private readonly orchestrator: TurnOrchestrator,
   ) {
@@ -41,6 +43,15 @@ export class ChatService {
       memorySearch: ({ query, maxResults }) => this.memory.search(query, maxResults),
       memoryGet: ({ path, from, lines }) => this.memory.get({ relPath: path, from, lines }),
       memoryWrite: ({ content, target }) => this.memory.write({ content, target }),
+      webSearch: ({ sessionKey, query, maxResults, recencyDays, domainsAllow, domainsBlock }) =>
+        this.research.search({
+          sessionKey,
+          query,
+          maxResults,
+          recencyDays,
+          domainsAllow,
+          domainsBlock,
+        }),
       planCreate: ({ sessionKey, title, steps }) => this.planner.create({ sessionKey, title, steps }),
       planGenerate: ({ sessionKey, objective, maxSteps }) =>
         this.planner.generate({ sessionKey, objective, maxSteps }),

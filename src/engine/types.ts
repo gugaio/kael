@@ -1,4 +1,5 @@
 import type { VideoJob } from "../types.js";
+import type { WebSearchResult } from "../research/types.js";
 
 export type EngineTooling = {
   startTranscode: (params: {
@@ -108,6 +109,14 @@ export type EngineTooling = {
     content: string;
     target?: "daily" | "long_term";
   }) => Promise<{ path: string }>;
+  webSearch: (params: {
+    sessionKey: string;
+    query: string;
+    maxResults?: number;
+    recencyDays?: number;
+    domainsAllow?: string[];
+    domainsBlock?: string[];
+  }) => Promise<WebSearchResult>;
   planCreate: (params: {
     sessionKey: string;
     title: string;

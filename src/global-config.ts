@@ -34,6 +34,13 @@ export type KaelGlobalConfig = {
       ask: "off" | "on-miss" | "always";
       allowlist: string[];
     };
+    research: {
+      enabled: boolean;
+      provider: "tavily";
+      maxResults: number;
+      maxResultsLimit: number;
+      timeoutMs: number;
+    };
     pi: {
       provider: string;
       model: string;
@@ -129,6 +136,13 @@ export function buildDefaultGlobalConfig(kaelHome: string): KaelGlobalConfig {
           "ffprobe",
           "vlc",
         ],
+      },
+      research: {
+        enabled: false,
+        provider: "tavily",
+        maxResults: 5,
+        maxResultsLimit: 10,
+        timeoutMs: 12000,
       },
       pi: {
         provider: "openai",

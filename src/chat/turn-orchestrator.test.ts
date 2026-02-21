@@ -51,6 +51,7 @@ function createToolingStub(): EngineTooling {
       endLine: 1,
     }),
     memoryWrite: async () => ({ path: "memory/2000-01-01.md" }),
+    webSearch: async () => ({ answer: "ok", sources: [], notes: [] }),
     planCreate: async () => ({
       id: "p1",
       sessionKey: "s1",

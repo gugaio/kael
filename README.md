@@ -28,6 +28,8 @@ Super agente para videos e automacao.
   - `memory_search` (busca em memoria markdown)
   - `memory_get` (leitura de trecho por path/linhas)
   - `memory_write` (persistencia daily/long_term)
+- Pesquisa web no PI:
+  - `web_search` (Search API-first com fontes citadas)
 - Planner operacional no PI:
   - `plan_create`
   - `plan_generate`
@@ -224,6 +226,12 @@ Se a mesma chave for reutilizada com payload diferente, a API retorna `409`.
 - `KAEL_EXEC_SECURITY` (`deny`, `allowlist`, `full`; default: `allowlist`)
 - `KAEL_EXEC_ASK` (`off`, `on-miss`, `always`; default: `on-miss`)
 - `KAEL_EXEC_ALLOWLIST` (csv; default inclui `ls,cat,pwd,echo,grep,find,curl,ffmpeg,ffprobe,vlc`)
+- `KAEL_RESEARCH_ENABLED` (`true|false`; default: `false`)
+- `KAEL_RESEARCH_PROVIDER` (default: `tavily`)
+- `KAEL_RESEARCH_API_KEY` (obrigatorio quando research habilitado)
+- `KAEL_RESEARCH_MAX_RESULTS` (default: `5`)
+- `KAEL_RESEARCH_MAX_RESULTS_LIMIT` (default: `10`)
+- `KAEL_RESEARCH_TIMEOUT_MS` (default: `12000`)
 
 ### Runtime do PI
 
