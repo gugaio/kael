@@ -13,13 +13,11 @@ export function JobDetailPage(): JSX.Element {
     queryKey: ["job", jobId],
     queryFn: () => getJob(jobId),
     enabled: Boolean(jobId),
-    refetchInterval: 2500,
   });
   const log = useQuery({
     queryKey: ["job-log", jobId],
     queryFn: () => getJobLog(jobId),
     enabled: Boolean(jobId),
-    refetchInterval: 2000,
   });
 
   const cancel = useMutation({
@@ -71,7 +69,7 @@ export function JobDetailPage(): JSX.Element {
         )}
       </Panel>
       <div className="lg:col-span-2">
-        <Panel title="Live Log (polling)">
+        <Panel title="Live Log">
           <pre className="kael-scroll max-h-[65vh] overflow-auto rounded-lg border border-kael-border bg-[#091521] p-3 font-mono text-xs leading-5 text-slate-200">
             {log.data ?? "No log data yet."}
           </pre>
@@ -80,4 +78,3 @@ export function JobDetailPage(): JSX.Element {
     </div>
   );
 }
-

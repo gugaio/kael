@@ -8,6 +8,105 @@ type RequestWithStart = {
   _kaelStartNs?: bigint;
 };
 
+type LiveResource = "health" | "jobs" | "schedules" | "plans" | "approvals";
+
+type LiveSyncEvent = {
+  type: "sync";
+  at: string;
+  seq: number;
+  changed: LiveResource[];
+  summary: {
+    jobs: number;
+    plans: number;
+    schedules: number;
+    approvals: number;
+  };
+};
+
+type LivePingEvent = {
+  type: "ping";
+  at: string;
+  seq: number;
+};
+
+async function buildLiveState(app: KaelApp): Promise<{
+  signatures: Record<LiveResource, string>;
+  summary: LiveSyncEvent["summary"];
+}> {
+  const jobs = app.jobs.listJobs();
+  const plans = app.planner.list({ limit: 100 });
+  const schedules = app.automation.listSchedules();
+  const approvals = await app.shell.listApprovals({ status: "open", limit: 100 });
+  const sessions = await app.sessions.countSessions();
+  const jobsByStatus = app.jobs.getStatusCounts();
+  const runtimeJobs = app.jobs.getRuntimeStats();
+
+  const healthSignature = stableStringify({
+    sessions,
+    jobsByStatus,
+    runtimeJobs,
+    engineMode: app.config.engineMode,
+    piEnabled: app.config.pi.enabled,
+  });
+
+  const jobsSignature = stableStringify(
+    jobs.map((job) => ({
+      id: job.id,
+      status: job.status,
+      startedAt: job.startedAt ?? null,
+      endedAt: job.endedAt ?? null,
+      error: job.error ?? null,
+    })),
+  );
+
+  const schedulesSignature = stableStringify(
+    schedules.map((schedule) => ({
+      id: schedule.id,
+      enabled: schedule.enabled,
+      nextRunAt: schedule.nextRunAt,
+      schedule: schedule.schedule,
+    })),
+  );
+
+  const plansSignature = stableStringify(
+    plans.map((plan) => ({
+      id: plan.id,
+      status: plan.status,
+      updatedAt: plan.updatedAt,
+      steps: plan.steps.map((step) => ({
+        id: step.id,
+        status: step.status,
+        updatedAt: step.updatedAt,
+      })),
+    })),
+  );
+
+  const approvalsSignature = stableStringify(
+    approvals.map((approval) => ({
+      id: approval.id,
+      status: approval.status,
+      command: approval.command,
+      decidedAt: approval.decidedAt ?? null,
+    })),
+  );
+
+  return {
+    signatures: {
+      health: healthSignature,
+      jobs: jobsSignature,
+      schedules: schedulesSignature,
+      plans: plansSignature,
+      approvals: approvalsSignature,
+    },
+    summary: {
+      jobs: jobs.length,
+      plans: plans.length,
+      schedules: schedules.length,
+      approvals: approvals.length,
+    },
+  };
+}
+
 function readIdempotencyKey(headerValue: string | string[] | undefined): string | null {
   if (Array.isArray(headerValue)) {
     return readIdempotencyKey(headerValue[0]);
@@ -57,13 +156,14 @@ export function createApiServer(app: KaelApp): FastifyInstance {
 
   server.addHook("onResponse", async (request, reply) => {
     const startNs = (request as unknown as RequestWithStart)._kaelStartNs;
+    const route = request.routeOptions?.url ?? request.url;
     const durationMs =
       typeof startNs === "bigint" ? Number((process.hrtime.bigint() - startNs) / BigInt(1_000_000)) : null;
 
     kaelLogger.info("api.request", {
       requestId: request.id,
       method: request.method,
-      route: request.routerPath ?? request.url,
+      route,
       status: reply.statusCode,
       durationMs,
       sessionKey: bodySessionKey(request.body),
@@ -72,10 +172,11 @@ export function createApiServer(app: KaelApp): FastifyInstance {
 
   server.setErrorHandler(async (error, request, reply) => {
     const apiError = asApiError(error);
+    const route = request.routeOptions?.url ?? request.url;
     kaelLogger.error("api.request.error", {
       requestId: request.id,
       method: request.method,
-      route: request.routerPath ?? request.url,
+      route,
       status: apiError.status,
       code: apiError.code,
       message: apiError.message,
@@ -111,6 +212,97 @@ export function createApiServer(app: KaelApp): FastifyInstance {
         },
       },
     };
+  });
+
+  server.get("/events/stream", async (request, reply) => {
+    reply.hijack();
+
+    const response = reply.raw;
+    response.statusCode = 200;
+    response.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    response.setHeader("Cache-Control", "no-cache, no-transform");
+    response.setHeader("Connection", "keep-alive");
+    response.setHeader("X-Accel-Buffering", "no");
+    response.flushHeaders?.();
+
+    let closed = false;
+    let seq = 0;
+    let previous = await buildLiveState(app);
+
+    const writeEvent = (eventName: "sync" | "ping", payload: LiveSyncEvent | LivePingEvent): void => {
+      if (closed) {
+        return;
+      }
+      response.write(`event: ${eventName}\n`);
+      response.write(`data: ${JSON.stringify(payload)}\n\n`);
+    };
+
+    const writePing = (): void => {
+      seq += 1;
+      writeEvent("ping", {
+        type: "ping",
+        at: new Date().toISOString(),
+        seq,
+      });
+    };
+
+    const writeSync = (changed: LiveResource[], summary: LiveSyncEvent["summary"]): void => {
+      if (changed.length === 0) {
+        return;
+      }
+      seq += 1;
+      writeEvent("sync", {
+        type: "sync",
+        at: new Date().toISOString(),
+        seq,
+        changed,
+        summary,
+      });
+    };
+
+    writeSync(["health", "jobs", "schedules", "plans", "approvals"], previous.summary);
+
+    const syncTimer = setInterval(() => {
+      void (async () => {
+        if (closed) {
+          return;
+        }
+        try {
+          const current = await buildLiveState(app);
+          const changed = (Object.keys(current.signatures) as LiveResource[]).filter(
+            (resource) => current.signatures[resource] !== previous.signatures[resource],
+          );
+          previous = current;
+          writeSync(changed, current.summary);
+        } catch (error) {
+          kaelLogger.warn("api.events.stream.sync_failed", {
+            requestId: request.id,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      })();
+    }, 1500);
+
+    const pingTimer = setInterval(() => {
+      writePing();
+    }, 15_000);
+
+    const cleanup = (): void => {
+      if (closed) {
+        return;
+      }
+      closed = true;
+      clearInterval(syncTimer);
+      clearInterval(pingTimer);
+      try {
+        response.end();
+      } catch {
+        // ignore
+      }
+    };
+
+    request.raw.on("close", cleanup);
+    request.raw.on("error", cleanup);
   });
 
   server.post<{

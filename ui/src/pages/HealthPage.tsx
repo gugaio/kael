@@ -4,7 +4,7 @@ import { getHealth } from "../lib/api";
 import { formatDate } from "../lib/format";
 
 export function HealthPage(): JSX.Element {
-  const health = useQuery({ queryKey: ["health"], queryFn: getHealth, refetchInterval: 4000 });
+  const health = useQuery({ queryKey: ["health"], queryFn: getHealth });
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -47,4 +47,3 @@ export function HealthPage(): JSX.Element {
     </div>
   );
 }
-

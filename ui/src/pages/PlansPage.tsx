@@ -57,14 +57,12 @@ export function PlansPage(): JSX.Element {
             : undefined,
         limit: 100,
       }),
-    refetchInterval: 3000,
   });
 
   const selectedPlan = useQuery({
     queryKey: ["plan", selectedPlanId],
     queryFn: () => getPlan(selectedPlanId),
     enabled: Boolean(selectedPlanId),
-    refetchInterval: 2000,
   });
 
   useEffect(() => {
@@ -248,7 +246,7 @@ export function PlansPage(): JSX.Element {
       <div className="lg:col-span-2">
         <Panel
           title={selected ? `Plan Detail • ${selected.id.slice(0, 8)}` : "Plan Detail"}
-          right={<span className="text-xs text-kael-muted">polling 2s</span>}
+          right={<span className="text-xs text-kael-muted">live updates</span>}
         >
           {!selected && <p className="text-sm text-kael-muted">Select a plan to inspect execution.</p>}
           {selected && (

@@ -39,23 +39,29 @@ export function ChatPage(): JSX.Element {
   const [planObjective, setPlanObjective] = useState("");
   const [planMaxSteps, setPlanMaxSteps] = useState(8);
   const [planHintDismissed, setPlanHintDismissed] = useState(false);
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const messages = useQuery({
     queryKey: ["session-messages", sessionKey],
     queryFn: () => getSessionMessages(sessionKey),
-    refetchInterval: 2500,
   });
   const plans = useQuery({
     queryKey: ["plans", "session", sessionKey],
     queryFn: () => getPlans({ sessionKey, limit: 10 }),
-    refetchInterval: 3000,
   });
 
   const send = useMutation({
-    mutationFn: async () => postChat(sessionKey, draft.trim()),
+    mutationFn: async (message: string) => postChat(sessionKey, message),
     onSuccess: async () => {
-      setDraft("");
+      setPendingUserMessage(null);
+      setSendError(null);
       await queryClient.invalidateQueries({ queryKey: ["session-messages", sessionKey] });
+    },
+    onError: (error, message) => {
+      setSendError(error instanceof Error ? error.message : "Falha ao enviar mensagem.");
+      setDraft((current) => (current.trim().length > 0 ? current : message));
+      setPendingUserMessage(null);
     },
   });
   const createPlan = useMutation({
@@ -86,10 +92,14 @@ export function ChatPage(): JSX.Element {
 
   const onSubmit = (event: FormEvent): void => {
     event.preventDefault();
-    if (!draft.trim()) {
+    const message = draft.trim();
+    if (!message) {
       return;
     }
-    void send.mutateAsync();
+    setDraft("");
+    setSendError(null);
+    setPendingUserMessage(message);
+    void send.mutateAsync(message);
   };
 
   const planSuggestionVisible = shouldSuggestPlan(draft) && !planHintDismissed;
@@ -99,7 +109,7 @@ export function ChatPage(): JSX.Element {
 
   return (
     <div className="grid min-w-0 gap-4 lg:grid-cols-4">
-      <Panel title="Session" right={<span className="text-xs text-kael-muted">polling 2.5s</span>}>
+      <Panel title="Session" right={<span className="text-xs text-kael-muted">live updates</span>}>
         <label className="text-xs text-kael-muted" htmlFor="sessionKey">Session key</label>
         <input
           id="sessionKey"
@@ -151,8 +161,31 @@ export function ChatPage(): JSX.Element {
                 <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{item.content}</p>
               </div>
             ))}
+            {pendingUserMessage && (
+              <>
+                <div className="min-w-0 rounded-lg border border-cyan-400/30 bg-cyan-500/10 p-2 text-sm">
+                  <div className="mb-1 flex min-w-0 items-center justify-between gap-2 text-xs">
+                    <span className="truncate uppercase tracking-wider text-kael-muted">user</span>
+                    <span className="shrink-0 text-kael-muted">sending...</span>
+                  </div>
+                  <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{pendingUserMessage}</p>
+                </div>
+                <div className="min-w-0 rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-2 text-sm">
+                  <div className="mb-1 flex min-w-0 items-center justify-between gap-2 text-xs">
+                    <span className="truncate uppercase tracking-wider text-kael-muted">assistant</span>
+                    <span className="shrink-0 text-kael-muted">thinking...</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-200/80 animate-pulse" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-200/80 animate-pulse [animation-delay:120ms]" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-200/80 animate-pulse [animation-delay:240ms]" />
+                  </div>
+                </div>
+              </>
+            )}
             {(messages.data ?? []).length === 0 && <p className="text-sm text-kael-muted">No messages yet.</p>}
           </div>
+          {sendError && <p className="mb-3 text-xs text-rose-200">{sendError}</p>}
           {planSuggestionVisible && (
             <div className="mb-3 rounded-xl border border-cyan-400/30 bg-cyan-500/10 p-3">
               <p className="text-sm font-medium">Parece uma tarefa multi-etapa.</p>
@@ -251,7 +284,7 @@ export function ChatPage(): JSX.Element {
               disabled={send.isPending}
               className="rounded border border-kael-accent/60 bg-kael-accent/20 px-3 py-2 text-sm font-medium hover:bg-kael-accent/30 disabled:opacity-60"
             >
-              Send
+              {send.isPending ? "Sending..." : "Send"}
             </button>
             <button
               type="button"

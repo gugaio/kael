@@ -5,7 +5,7 @@ import { formatDate } from "../lib/format";
 
 export function SchedulesPage(): JSX.Element {
   const queryClient = useQueryClient();
-  const schedules = useQuery({ queryKey: ["schedules"], queryFn: getSchedules, refetchInterval: 4000 });
+  const schedules = useQuery({ queryKey: ["schedules"], queryFn: getSchedules });
 
   const pause = useMutation({
     mutationFn: pauseSchedule,
@@ -72,4 +72,3 @@ export function SchedulesPage(): JSX.Element {
     </Panel>
   );
 }
-

@@ -28,12 +28,14 @@ function buildPrompt(input: EngineTurnInput): string {
     "Contexto recente da conversa (ordem cronologica):",
     serializedContext,
     "",
+    "Instrucao critica: responda a MENSAGEM ATUAL do usuario. Nao continue tarefas antigas sem pedido explicito.",
+    "",
     "Mensagem atual do usuario:",
     input.message,
   ].join("\n");
 }
 
-function extractAssistantTextFromSdkMessage(message: unknown): string | null {
+export function extractAssistantTextFromSdkMessage(message: unknown): string | null {
   if (!message || typeof message !== "object") {
     return null;
   }
@@ -44,18 +46,37 @@ function extractAssistantTextFromSdkMessage(message: unknown): string | null {
   }
 
   if (Array.isArray(directContent)) {
-    const joined = directContent
-      .map((block) => {
-        if (!block || typeof block !== "object") {
-          return "";
+    const blocks = directContent.filter((block): block is { type?: unknown; text?: unknown } => {
+      return Boolean(block && typeof block === "object");
+    });
+
+    const preferred = blocks
+      .filter((block) => {
+        const type = typeof block.type === "string" ? block.type.toLowerCase() : "";
+        if (!type) {
+          return true;
         }
-        const maybeText = (block as { text?: unknown }).text;
-        return typeof maybeText === "string" ? maybeText : "";
+        if (type.includes("input")) {
+          return false;
+        }
+        if (type.includes("tool") || type.includes("reasoning")) {
+          return false;
+        }
+        return type.includes("output") || type.includes("assistant") || type === "text";
       })
+      .map((block) => (typeof block.text === "string" ? block.text : ""))
       .join("")
       .trim();
-    if (joined) {
-      return joined;
+    if (preferred) {
+      return preferred;
+    }
+
+    const fallback = blocks
+      .map((block) => (typeof block.text === "string" ? block.text : ""))
+      .join("")
+      .trim();
+    if (fallback) {
+      return fallback;
     }
   }
 

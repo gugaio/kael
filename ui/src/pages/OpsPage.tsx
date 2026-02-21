@@ -13,13 +13,12 @@ import { formatDate, statusTone } from "../lib/format";
 
 export function OpsPage(): JSX.Element {
   const queryClient = useQueryClient();
-  const health = useQuery({ queryKey: ["health"], queryFn: getHealth, refetchInterval: 4000 });
-  const jobs = useQuery({ queryKey: ["jobs"], queryFn: getJobs, refetchInterval: 3000 });
-  const schedules = useQuery({ queryKey: ["schedules"], queryFn: getSchedules, refetchInterval: 5000 });
+  const health = useQuery({ queryKey: ["health"], queryFn: getHealth });
+  const jobs = useQuery({ queryKey: ["jobs"], queryFn: getJobs });
+  const schedules = useQuery({ queryKey: ["schedules"], queryFn: getSchedules });
   const approvals = useQuery({
     queryKey: ["exec-approvals-open"],
     queryFn: () => getExecApprovals("open"),
-    refetchInterval: 2000,
   });
   const approve = useMutation({
     mutationFn: async (id: string) => approveExecApproval(id),

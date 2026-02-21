@@ -6,7 +6,7 @@ import { formatDate, statusTone } from "../lib/format";
 
 export function JobsPage(): JSX.Element {
   const queryClient = useQueryClient();
-  const jobs = useQuery({ queryKey: ["jobs"], queryFn: getJobs, refetchInterval: 2500 });
+  const jobs = useQuery({ queryKey: ["jobs"], queryFn: getJobs });
 
   const cancel = useMutation({
     mutationFn: cancelJob,
@@ -60,4 +60,3 @@ export function JobsPage(): JSX.Element {
     </Panel>
   );
 }
-

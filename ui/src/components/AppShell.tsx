@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { NavLink } from "react-router-dom";
 import { approveExecApproval, denyExecApproval, getExecApprovals } from "../lib/api";
+import { useLiveEvents } from "../lib/live-events";
 
 const navItems = [
   { to: "/", label: "Ops" },
@@ -14,10 +15,10 @@ const navItems = [
 
 export function AppShell(props: { children: ReactNode }): JSX.Element {
   const queryClient = useQueryClient();
+  const live = useLiveEvents();
   const approvals = useQuery({
     queryKey: ["exec-approvals-open"],
     queryFn: () => getExecApprovals("open"),
-    refetchInterval: 2000,
   });
 
   const approve = useMutation({
@@ -45,6 +46,10 @@ export function AppShell(props: { children: ReactNode }): JSX.Element {
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-kael-muted">Kael Operator Console</p>
               <h1 className="text-2xl font-bold">Kael</h1>
+              <p className="mt-1 text-xs text-kael-muted">
+                realtime: {live.mode}
+                {live.lastEventAt ? ` • last event ${new Date(live.lastEventAt).toLocaleTimeString()}` : ""}
+              </p>
             </div>
             <nav className="flex flex-wrap gap-2">
               {navItems.map((item) => (
