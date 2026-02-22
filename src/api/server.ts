@@ -167,6 +167,45 @@ async function withIdempotency<T>(params: {
 export function createApiServer(app: KaelApp): FastifyInstance {
   const server = Fastify({ logger: false });
   const idempotency = new IdempotencyStore(app.config.idempotency.ttlMs);
+  const reconcilePlansNow = async (params?: { planId?: string; limit?: number }): Promise<void> => {
+    try {
+      await app.planner.reconcile({
+        planId: params?.planId,
+        limit: params?.limit,
+        runtime: {
+          getJob: async (jobId: string) => {
+            const found = app.jobs.getJob(jobId);
+            if (!found) {
+              return null;
+            }
+            return {
+              status: found.status,
+              error: found.error,
+            };
+          },
+          pollExec: async (sessionId: string) => {
+            const poll = await app.shell.process({
+              sessionKey: "planner.reconcile",
+              action: "poll",
+              sessionId,
+            });
+            if (!poll.ok || !poll.session) {
+              return null;
+            }
+            return {
+              status: poll.session.status,
+              message: poll.message,
+            };
+          },
+        },
+      });
+    } catch (error) {
+      kaelLogger.warn("planner.reconcile.on_demand_failed", {
+        planId: params?.planId ?? null,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
 
   server.addHook("onRequest", async (request) => {
     (request as unknown as RequestWithStart)._kaelStartNs = process.hrtime.bigint();
@@ -548,6 +587,9 @@ export function createApiServer(app: KaelApp): FastifyInstance {
       },
     });
 
+    // Event-driven reconcile: update step/plan status ASAP after triggering execution.
+    await reconcilePlansNow({ planId, limit: 1 });
+
     return result;
   });
 
@@ -643,6 +685,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
       if (!approval) {
         throw new ApiError(404, "NOT_FOUND", "approval not found");
       }
+      await reconcilePlansNow({ limit: 200 });
       return { ok: true, approval };
     },
   );
@@ -658,6 +701,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
       if (!approval) {
         throw new ApiError(404, "NOT_FOUND", "approval not found");
       }
+      await reconcilePlansNow({ limit: 200 });
       return { ok: true, approval };
     },
   );

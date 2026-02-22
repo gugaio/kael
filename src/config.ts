@@ -332,7 +332,7 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
   const plannerReconcileEnabled = plannerReconcileEnabledRaw.toLowerCase() !== "false";
 
   const defaultPlannerReconcileIntervalMs =
-    globalConfig?.defaults.automation?.plannerReconcileIntervalMs ?? 5000;
+    globalConfig?.defaults.automation?.plannerReconcileIntervalMs ?? 30000;
   const plannerReconcileIntervalRaw = Number(
     process.env.KAEL_PLANNER_RECONCILE_INTERVAL_MS ?? String(defaultPlannerReconcileIntervalMs),
   );

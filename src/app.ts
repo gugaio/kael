@@ -110,6 +110,10 @@ export async function createKaelApp(): Promise<KaelApp> {
         return;
       }
       if (job.type === "planner_reconcile") {
+        const hasActivePlan = planner.list({ status: "active", limit: 1 }).length > 0;
+        if (!hasActivePlan) {
+          return;
+        }
         await planner.reconcile({
           limit: 200,
           runtime: {

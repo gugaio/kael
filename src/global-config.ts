@@ -117,7 +117,7 @@ export function buildDefaultGlobalConfig(kaelHome: string): KaelGlobalConfig {
         heartbeatEnabled: true,
         heartbeatIntervalMs: 30000,
         plannerReconcileEnabled: true,
-        plannerReconcileIntervalMs: 5000,
+        plannerReconcileIntervalMs: 30000,
         schedulerTickMs: 1000,
       },
       shell: {
