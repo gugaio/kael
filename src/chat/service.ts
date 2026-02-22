@@ -35,6 +35,7 @@ function shellQuoteSingle(value: string): string {
 
 export class ChatService {
   private readonly tooling: EngineTooling;
+  private readonly chatOnlyTooling: EngineTooling;
 
   constructor(
     private readonly sessions: SessionStore,
@@ -156,6 +157,51 @@ export class ChatService {
           },
         }),
     };
+    this.chatOnlyTooling = {
+      ...this.tooling,
+      startTranscode: async () => {
+        throw new Error("chat-only mode: transcode disabled");
+      },
+      startConvertHls: async () => {
+        throw new Error("chat-only mode: convert_hls disabled");
+      },
+      startCaptureStream: async () => {
+        throw new Error("chat-only mode: capture_stream disabled");
+      },
+      startProbeMedia: async () => {
+        throw new Error("chat-only mode: probe_media job disabled");
+      },
+      videoHlsInspect: async () => {
+        throw new Error("chat-only mode: video_hls_inspect disabled");
+      },
+      videoProbe: async () => {
+        throw new Error("chat-only mode: video_probe disabled");
+      },
+      listJobs: () => [],
+      execCommand: async () => {
+        throw new Error("chat-only mode: exec disabled");
+      },
+      processCommand: async () => {
+        throw new Error("chat-only mode: process disabled");
+      },
+      planCreate: async () => {
+        throw new Error("chat-only mode: plan_create disabled");
+      },
+      planGenerate: async () => {
+        throw new Error("chat-only mode: plan_generate disabled");
+      },
+      planList: () => [],
+      planUpdateStep: async () => {
+        throw new Error("chat-only mode: plan_update_step disabled");
+      },
+      planNextAction: () => null,
+      planExecuteNext: async () => {
+        throw new Error("chat-only mode: plan_execute_next disabled");
+      },
+      planReconcile: async () => {
+        throw new Error("chat-only mode: plan_reconcile disabled");
+      },
+    };
   }
 
   async handleMessage(input: {
@@ -163,6 +209,26 @@ export class ChatService {
     message: string;
     requestId?: string;
   }): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string }> {
+    return this.handleMessageInternal(input, this.tooling, { allowPlayVlcShortcut: true });
+  }
+
+  async handleMessageChatOnly(input: {
+    sessionKey: string;
+    message: string;
+    requestId?: string;
+  }): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string }> {
+    return this.handleMessageInternal(input, this.chatOnlyTooling, { allowPlayVlcShortcut: false });
+  }
+
+  private async handleMessageInternal(
+    input: {
+      sessionKey: string;
+      message: string;
+      requestId?: string;
+    },
+    tooling: EngineTooling,
+    opts: { allowPlayVlcShortcut: boolean },
+  ): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string }> {
     let user = await this.sessions.appendMessage(input.sessionKey, "user", input.message);
 
     try {
@@ -170,10 +236,10 @@ export class ChatService {
         sessionKey: input.sessionKey,
         message: input.message,
         requestId: input.requestId,
-        tooling: this.tooling,
+        tooling,
       });
       let reply = turn.reply;
-      const playVlcUrl = extractPlayVlcUrl(turn.reply);
+      const playVlcUrl = opts.allowPlayVlcShortcut ? extractPlayVlcUrl(turn.reply) : null;
       if (playVlcUrl) {
         const exec = await this.shell.exec({
           sessionKey: input.sessionKey,
@@ -239,7 +305,7 @@ export class ChatService {
         sessionKey: input.sessionKey,
         message: input.message,
         requestId: input.requestId,
-        tooling: this.tooling,
+        tooling,
       });
       const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", turn.reply);
 

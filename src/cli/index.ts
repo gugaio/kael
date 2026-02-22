@@ -1,7 +1,9 @@
 import { Command } from "commander";
+import { createKaelApp } from "../app.js";
 import { startApiServer } from "../api/server.js";
 import { loadConfig } from "../config.js";
 import { initKaelHome, resolveKaelHome } from "../global-config.js";
+import { DiscordChatOnlyBot } from "../integrations/discord/discord-bot.js";
 
 type UrlOption = {
   url?: string;
@@ -296,6 +298,27 @@ async function main(): Promise<void> {
     .description("Inicia API HTTP local")
     .action(async () => {
       await startApiServer();
+    });
+
+  program
+    .command("discord-bot")
+    .description("Inicia bot Discord (chat-only) usando o core local do Kael")
+    .action(async () => {
+      const app = await createKaelApp();
+      const bot = DiscordChatOnlyBot.fromEnv(app);
+      const stop = async () => {
+        await bot.stop().catch(() => undefined);
+        process.exit(0);
+      };
+      process.on("SIGINT", () => {
+        void stop();
+      });
+      process.on("SIGTERM", () => {
+        void stop();
+      });
+      await bot.start();
+      console.log("Discord bot conectado (chat-only).");
+      // Mantem processo vivo; o WebSocket/Timers sustentam o event loop.
     });
 
   program

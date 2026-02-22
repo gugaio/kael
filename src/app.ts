@@ -68,6 +68,7 @@ export async function createKaelApp(): Promise<KaelApp> {
   await shell.init();
   const memory = new MemoryService({
     workspaceRoot: config.shell.workspaceRoot,
+    storageRoot: path.join(resolveKaelHome(), "data", "memory"),
     defaultMaxResults: 6,
     maxSnippetChars: 1200,
   });

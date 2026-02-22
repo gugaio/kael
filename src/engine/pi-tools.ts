@@ -458,25 +458,35 @@ export function createPiShellTools(params: {
       additionalProperties: false,
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
+      const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as { query: string; maxResults?: number };
-      const results = await params.tooling.memorySearch({
-        query: args.query,
-        maxResults: args.maxResults,
-      });
-      const text =
-        results.length === 0
-          ? "results=0"
-          : [
-              `results=${results.length}`,
-              ...results.map(
-                (item, idx) =>
-                  `${idx + 1}. ${item.path}#L${item.startLine}-L${item.endLine} score=${item.score}\n${item.snippet}`,
-              ),
-            ].join("\n\n");
-      return {
-        content: textResult(text),
-        details: { results },
-      };
+      const intent = logToolStart("memory_search", args);
+      try {
+        const results = await params.tooling.memorySearch({
+          query: args.query,
+          maxResults: args.maxResults,
+        });
+        const text =
+          results.length === 0
+            ? "results=0"
+            : [
+                `results=${results.length}`,
+                ...results.map(
+                  (item, idx) =>
+                    `${idx + 1}. ${item.path}#L${item.startLine}-L${item.endLine} score=${item.score}\n${item.snippet}`,
+                ),
+              ].join("\n\n");
+        const details = { results };
+        logToolEnd("memory_search", intent, { status: "completed", resultCount: results.length }, startedAtMs);
+        return {
+          content: textResult(text),
+          details,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logToolEnd("memory_search", intent, { status: "failed", reason: message }, startedAtMs);
+        throw error;
+      }
     },
   };
 
@@ -495,17 +505,26 @@ export function createPiShellTools(params: {
       additionalProperties: false,
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
+      const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as { path: string; from?: number; lines?: number };
-      const result = await params.tooling.memoryGet({
-        path: args.path,
-        from: args.from,
-        lines: args.lines,
-      });
-      const text = `${result.path}#L${result.startLine}-L${result.endLine}\n${result.text}`;
-      return {
-        content: textResult(text),
-        details: result,
-      };
+      const intent = logToolStart("memory_get", args);
+      try {
+        const result = await params.tooling.memoryGet({
+          path: args.path,
+          from: args.from,
+          lines: args.lines,
+        });
+        const text = `${result.path}#L${result.startLine}-L${result.endLine}\n${result.text}`;
+        logToolEnd("memory_get", intent, { status: "completed", path: result.path }, startedAtMs);
+        return {
+          content: textResult(text),
+          details: result,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logToolEnd("memory_get", intent, { status: "failed", reason: message }, startedAtMs);
+        throw error;
+      }
     },
   };
 
@@ -528,15 +547,24 @@ export function createPiShellTools(params: {
       additionalProperties: false,
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
+      const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as { content: string; target?: "daily" | "long_term" };
-      const saved = await params.tooling.memoryWrite({
-        content: args.content,
-        target: args.target,
-      });
-      return {
-        content: textResult(`saved=true\npath=${saved.path}`),
-        details: saved,
-      };
+      const intent = logToolStart("memory_write", args);
+      try {
+        const saved = await params.tooling.memoryWrite({
+          content: args.content,
+          target: args.target,
+        });
+        logToolEnd("memory_write", intent, { status: "completed", path: saved.path }, startedAtMs);
+        return {
+          content: textResult(`saved=true\npath=${saved.path}`),
+          details: saved,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logToolEnd("memory_write", intent, { status: "failed", reason: message }, startedAtMs);
+        throw error;
+      }
     },
   };
 

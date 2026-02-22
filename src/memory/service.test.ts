@@ -6,18 +6,20 @@ import { MemoryService } from "./service.js";
 
 async function makeService() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-memory-"));
+  const storageRoot = path.join(root, ".kael", "data", "memory");
   const service = new MemoryService({
     workspaceRoot: root,
+    storageRoot,
     defaultMaxResults: 6,
     maxSnippetChars: 500,
   });
   await service.init();
-  return { service, root };
+  return { service, root, storageRoot };
 }
 
 describe("MemoryService", () => {
   it("writes daily and long-term memory", async () => {
-    const { service, root } = await makeService();
+    const { service, storageRoot } = await makeService();
 
     const daily = await service.write({ content: "lembrar pipeline semanal" });
     const longTerm = await service.write({
@@ -28,8 +30,8 @@ describe("MemoryService", () => {
     expect(daily.path.startsWith("memory/")).toBe(true);
     expect(longTerm.path).toBe("MEMORY.md");
 
-    const dailyRaw = await fs.readFile(path.join(root, daily.path), "utf-8");
-    const longRaw = await fs.readFile(path.join(root, "MEMORY.md"), "utf-8");
+    const dailyRaw = await fs.readFile(path.join(storageRoot, "daily", path.basename(daily.path)), "utf-8");
+    const longRaw = await fs.readFile(path.join(storageRoot, "MEMORY.md"), "utf-8");
     expect(dailyRaw).toContain("lembrar pipeline semanal");
     expect(longRaw).toContain("preferencia: logs curtos");
   });
@@ -58,4 +60,3 @@ describe("MemoryService", () => {
     );
   });
 });
-
