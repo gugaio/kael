@@ -16,6 +16,18 @@ type OrchestratedTurnInput = {
 };
 
 type ContextMessage = NonNullable<EngineTurnInput["contextMessages"]>[number];
+export type ContextCompactionResult = {
+  compacted: boolean;
+  reason:
+    | "no_messages"
+    | "recent_compaction"
+    | "below_threshold"
+    | "not_enough_older"
+    | "compacted";
+  summarizedMessages: number;
+  totalMessages: number;
+  totalChars: number;
+};
 
 function isConversationRole(role: string): role is "user" | "assistant" | "system" {
   return role === "user" || role === "assistant" || role === "system";
@@ -47,6 +59,10 @@ export class TurnOrchestrator {
       contextMessages,
       tooling: input.tooling,
     });
+  }
+
+  async compactNow(input: { sessionKey: string; currentMessage?: string }): Promise<ContextCompactionResult> {
+    return this.compactContext(input.sessionKey, input.currentMessage ?? null, true);
   }
 
   private async buildContextMessages(
@@ -97,38 +113,71 @@ export class TurnOrchestrator {
   }
 
   private async maybeCompactContext(sessionKey: string, currentMessage: string): Promise<void> {
+    await this.compactContext(sessionKey, currentMessage, false);
+  }
+
+  private async compactContext(
+    sessionKey: string,
+    currentMessage: string | null,
+    force: boolean,
+  ): Promise<ContextCompactionResult> {
     const fetchLimit = Math.max(this.cfg.maxContextMessages * 12, this.cfg.maxContextMessages);
     const history = await this.sessions.getMessages(sessionKey, fetchLimit);
     const conversational = history.filter(isUserOrAssistant);
     if (conversational.length === 0) {
-      return;
+      return {
+        compacted: false,
+        reason: "no_messages",
+        summarizedMessages: 0,
+        totalMessages: 0,
+        totalChars: 0,
+      };
     }
 
     const trimmed = [...conversational];
     const last = trimmed[trimmed.length - 1];
-    if (last?.role === "user" && last.content === currentMessage) {
+    if (currentMessage && last?.role === "user" && last.content === currentMessage) {
       trimmed.pop();
     }
 
     const hasRecentCompaction = history
       .slice(-20)
       .some((message) => message.role === "system" && message.content.startsWith(COMPACTION_PREFIX));
-    if (hasRecentCompaction) {
-      return;
+    if (!force && hasRecentCompaction) {
+      const totalCharsRecent = trimmed.reduce((acc, item) => acc + item.content.length, 0);
+      return {
+        compacted: false,
+        reason: "recent_compaction",
+        summarizedMessages: 0,
+        totalMessages: trimmed.length,
+        totalChars: totalCharsRecent,
+      };
     }
 
     const totalChars = trimmed.reduce((acc, item) => acc + item.content.length, 0);
     const messageThreshold = Math.max(this.cfg.maxContextMessages * 3, this.cfg.maxContextMessages + 12);
     const charsThreshold = Math.max(this.cfg.maxContextChars * 3, this.cfg.maxContextChars + 4000);
     const shouldCompact = trimmed.length > messageThreshold || totalChars > charsThreshold;
-    if (!shouldCompact) {
-      return;
+    if (!force && !shouldCompact) {
+      return {
+        compacted: false,
+        reason: "below_threshold",
+        summarizedMessages: 0,
+        totalMessages: trimmed.length,
+        totalChars,
+      };
     }
 
     const keepRecent = Math.max(this.cfg.maxContextMessages, 12);
     const older = trimmed.slice(0, Math.max(0, trimmed.length - keepRecent));
     if (older.length < 6) {
-      return;
+      return {
+        compacted: false,
+        reason: "not_enough_older",
+        summarizedMessages: 0,
+        totalMessages: trimmed.length,
+        totalChars,
+      };
     }
 
     const summary = this.summarizeForCompaction(older);
@@ -138,7 +187,15 @@ export class TurnOrchestrator {
       summarizedMessages: older.length,
       totalMessages: trimmed.length,
       totalChars,
+      forced: force,
     });
+    return {
+      compacted: true,
+      reason: "compacted",
+      summarizedMessages: older.length,
+      totalMessages: trimmed.length,
+      totalChars,
+    };
   }
 
   private summarizeForCompaction(messages: Array<{ role: "user" | "assistant"; content: string; createdAt: string }>): string {

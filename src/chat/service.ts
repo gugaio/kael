@@ -33,6 +33,18 @@ function shellQuoteSingle(value: string): string {
   return `'${value.replace(/'/g, `'\"'\"'`)}'`;
 }
 
+function isCompactCommand(input: string): boolean {
+  return input.trim().toLowerCase() === "/compact";
+}
+
+function clipForMemory(input: string, maxChars = 220): string {
+  const normalized = input.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxChars - 3))}...`;
+}
+
 export class ChatService {
   private readonly tooling: EngineTooling;
   private readonly chatOnlyTooling: EngineTooling;
@@ -230,6 +242,18 @@ export class ChatService {
     opts: { allowPlayVlcShortcut: boolean },
   ): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string }> {
     let user = await this.sessions.appendMessage(input.sessionKey, "user", input.message);
+    if (isCompactCommand(input.message)) {
+      const result = await this.handleCompactCommand({
+        sessionKey: input.sessionKey,
+        currentMessage: input.message,
+      });
+      const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", result.reply);
+      return {
+        user,
+        assistant,
+        reply: result.reply,
+      };
+    }
 
     try {
       const turn = await this.orchestrator.run({
@@ -319,5 +343,80 @@ export class ChatService {
 
   async getHistory(sessionKey: string, limit = 50): Promise<SessionMessage[]> {
     return this.sessions.getMessages(sessionKey, limit);
+  }
+
+  private async handleCompactCommand(input: {
+    sessionKey: string;
+    currentMessage: string;
+  }): Promise<{ reply: string }> {
+    const flush = await this.flushSessionToDailyMemory(input);
+    const compaction = await this.orchestrator.compactNow({
+      sessionKey: input.sessionKey,
+      currentMessage: input.currentMessage,
+    });
+
+    const lines = [
+      "Compactacao manual executada.",
+      `Daily flush: ${flush.written ? "ok" : "skip"}`,
+      flush.path ? `memory_path=${flush.path}` : "",
+      flush.written ? `memory_msgs=${flush.includedMessages}` : "",
+      flush.reason ? `memory_reason=${flush.reason}` : "",
+      `compaction: ${compaction.compacted ? "ok" : "skip"}`,
+      `compaction_reason=${compaction.reason}`,
+      `compaction_total_messages=${compaction.totalMessages}`,
+      `compaction_total_chars=${compaction.totalChars}`,
+      compaction.compacted ? `compaction_summarized_messages=${compaction.summarizedMessages}` : "",
+    ].filter(Boolean);
+
+    return { reply: lines.join("\n") };
+  }
+
+  private async flushSessionToDailyMemory(input: {
+    sessionKey: string;
+    currentMessage: string;
+  }): Promise<{
+    written: boolean;
+    path?: string;
+    reason?: string;
+    includedMessages: number;
+  }> {
+    const history = await this.sessions.getMessages(input.sessionKey, 80);
+    const conversational = history
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .filter((m) => !(m.role === "user" && m.content === input.currentMessage));
+
+    const recent = conversational.slice(-12);
+    if (recent.length < 2) {
+      return {
+        written: false,
+        reason: "not_enough_conversation",
+        includedMessages: recent.length,
+      };
+    }
+
+    const first = recent[0]?.createdAt ?? "";
+    const last = recent[recent.length - 1]?.createdAt ?? "";
+    const bullets = recent
+      .map((m) => `- ${m.role}: ${clipForMemory(m.content)}`)
+      .join("\n");
+    const note = [
+      "[manual-compact] Resumo heuristico de contexto antes da compactacao.",
+      `session=${input.sessionKey}`,
+      `janela=${first} -> ${last}`,
+      `mensagens=${recent.length}`,
+      "trechos:",
+      bullets,
+    ].join("\n");
+
+    const write = await this.memory.write({
+      content: note,
+      target: "daily",
+    });
+
+    return {
+      written: true,
+      path: write.path,
+      includedMessages: recent.length,
+    };
   }
 }

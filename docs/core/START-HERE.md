@@ -34,6 +34,7 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 9.1: concluida (research API-first com `web_search`, Tavily e memoria por sessao).
 - Fase 9.2: concluida (enriquecimento por URL com `web_fetch`, extracao de texto e cache TTL).
 - Fase 9.3: concluida (sintese multi-fonte com `web_research` e score de confianca).
+- Fase 10.0: em andamento (compaction manual `/compact` + memory flush para `daily` como base de curadoria de memoria).
 
 ## Estudos e referencias tecnicas
 

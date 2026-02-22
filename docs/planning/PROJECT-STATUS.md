@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-02-21**
+Ultima atualizacao: **2026-02-22**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -238,6 +238,23 @@ Definition of Done (checklist):
 - [x] Cache de fetch por URL com TTL configuravel.
 - [x] Configuracao `KAEL_RESEARCH_*` documentada e validada no startup.
 - [x] Sumarizacao multi-fonte com evidencia e score de confianca.
+
+### Fase 10 - Compaction + Memory Flush (curadoria de memoria)
+
+Status: **Em andamento**
+
+Objetivos:
+- Tornar compaction um fluxo explicito e testavel (`/compact`).
+- Introduzir memory flush para `daily` antes de compactar contexto.
+- Criar base para promocao futura de fatos para `MEMORY.md`.
+
+Definition of Done (checklist):
+- [x] Comando manual `/compact` no chat para disparar compactacao sob demanda.
+- [x] Memory flush MVP para `memory/YYYY-MM-DD.md` (append) antes da compactacao manual.
+- [x] Resposta de status com resultado de flush/compact (facilita teste/manual tuning).
+- [ ] Memory flush guiado por LLM (em vez de resumo heuristico local).
+- [ ] Compaction automatica por limiar com memory flush pre-compaction.
+- [ ] Promocao/dedupe de fatos duraveis em `MEMORY.md`.
 - [x] Ranking de evidencia (relevancia, fonte, recencia, fetch, diversidade).
 - [ ] Deduplicacao semantica.
 - [ ] Suporte opcional a multiplos providers.
