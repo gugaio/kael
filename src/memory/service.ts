@@ -46,6 +46,10 @@ function isMarkdownFile(filePath: string): boolean {
   return filePath.toLowerCase().endsWith(".md");
 }
 
+function normalizeForDedupe(input: string): string {
+  return input.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
 export class MemoryService {
   private readonly workspaceRoot: string;
   private readonly storageRoot: string;
@@ -85,6 +89,12 @@ export class MemoryService {
     const target = params.target ?? "daily";
 
     if (target === "long_term") {
+      const existing = await fs.readFile(this.longTermPath, "utf-8").catch(() => "");
+      const normalizedExisting = normalizeForDedupe(existing);
+      const normalizedText = normalizeForDedupe(text);
+      if (normalizedText && normalizedExisting.includes(normalizedText)) {
+        return { path: "MEMORY.md" };
+      }
       const block = `\n\n## ${stamp}\n${text}\n`;
       await fs.appendFile(this.longTermPath, block, "utf-8");
       return { path: "MEMORY.md" };

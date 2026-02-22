@@ -365,6 +365,7 @@ export class ChatService {
     requestId?: string;
   }): Promise<{ reply: string }> {
     const flush = await this.flushSessionToDailyMemory(input);
+    const promote = await this.promoteLongTermMemoryIfNeeded(input);
     const compaction = await this.orchestrator.compactNow({
       sessionKey: input.sessionKey,
       currentMessage: input.currentMessage,
@@ -376,6 +377,8 @@ export class ChatService {
       flush.path ? `memory_path=${flush.path}` : "",
       flush.written ? `memory_msgs=${flush.includedMessages}` : "",
       flush.reason ? `memory_reason=${flush.reason}` : "",
+      `long_term_promote: ${promote.written ? "ok" : "skip"}`,
+      promote.reason ? `long_term_reason=${promote.reason}` : "",
       `compaction: ${compaction.compacted ? "ok" : "skip"}`,
       `compaction_reason=${compaction.reason}`,
       `compaction_total_messages=${compaction.totalMessages}`,
@@ -409,6 +412,7 @@ export class ChatService {
     });
 
     const flush = await this.flushSessionToDailyMemory(input);
+    const promote = await this.promoteLongTermMemoryIfNeeded(input);
     const compaction = await this.orchestrator.compactNow({
       sessionKey: input.sessionKey,
       currentMessage: input.currentMessage,
@@ -420,6 +424,8 @@ export class ChatService {
       flushWritten: flush.written,
       flushReason: flush.reason ?? null,
       flushPath: flush.path ?? null,
+      longTermWritten: promote.written,
+      longTermReason: promote.reason ?? null,
       compactionApplied: compaction.compacted,
       compactionReason: compaction.reason,
       compactionSummarizedMessages: compaction.summarizedMessages,
@@ -557,6 +563,63 @@ export class ChatService {
       path: relPath,
       reason: "llm_flush",
       includedMessages: 0,
+    };
+  }
+
+  private async promoteLongTermMemoryIfNeeded(input: {
+    sessionKey: string;
+    currentMessage: string;
+    tooling: EngineTooling;
+    requestId?: string;
+  }): Promise<{
+    written: boolean;
+    reason?: string;
+  }> {
+    const before = await this.readMemorySnapshot("MEMORY.md");
+    kaelLogger.info("chat.compact.long_term_promote.started", {
+      sessionKey: input.sessionKey,
+      requestId: input.requestId ?? null,
+    });
+
+    const prompt = [
+      "Promocao de memoria de longo prazo apos memory flush/compactacao.",
+      "Revise o contexto recente e promova SOMENTE fatos duraveis e uteis (preferencias, identidade, ambiente, padroes de uso, configuracoes estaveis, objetivos persistentes).",
+      "Antes de escrever, consulte memoria existente com memory_search/memory_get para evitar duplicatas e para atualizar fatos existentes.",
+      "Se precisar salvar, use memory_write(target='long_term').",
+      "Nao replique logs, respostas temporarias, ou detalhes passageiros.",
+      "Se nao houver nada para promover, responda apenas: NO_LONG_TERM_PROMOTION",
+      "Nao use shell, nao use video, nao use plans.",
+    ].join(" ");
+
+    try {
+      await this.orchestrator.runUtilityTurn({
+        sessionKey: input.sessionKey,
+        message: prompt,
+        requestId: input.requestId ? `${input.requestId}:compact-promote` : undefined,
+        tooling: input.tooling,
+        excludeCurrentMessage: input.currentMessage,
+      });
+    } catch (error) {
+      kaelLogger.warn("chat.compact.long_term_promote.failed", {
+        sessionKey: input.sessionKey,
+        requestId: input.requestId ?? null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return { written: false, reason: "llm_error" };
+    }
+
+    const after = await this.readMemorySnapshot("MEMORY.md");
+    const wrote = (after.length ?? 0) > (before.length ?? 0);
+    kaelLogger.info("chat.compact.long_term_promote.finished", {
+      sessionKey: input.sessionKey,
+      requestId: input.requestId ?? null,
+      wroteLongTerm: wrote,
+      beforeLen: before.length ?? 0,
+      afterLen: after.length ?? 0,
+    });
+    return {
+      written: wrote,
+      reason: wrote ? "llm_promote" : "no_change",
     };
   }
 

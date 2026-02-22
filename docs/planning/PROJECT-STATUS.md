@@ -254,7 +254,8 @@ Definition of Done (checklist):
 - [x] Resposta de status com resultado de flush/compact (facilita teste/manual tuning).
 - [x] Memory flush guiado por LLM (com fallback heuristico local).
 - [x] Compaction automatica por limiar com memory flush pre-compaction.
-- [ ] Promocao/dedupe de fatos duraveis em `MEMORY.md`.
+- [x] Promocao de fatos duraveis para `MEMORY.md` no fluxo de compactacao (LLM-guided).
+- [x] Dedupe textual basico na escrita de `memory_write(target=long_term)`.
 - [x] Ranking de evidencia (relevancia, fonte, recencia, fetch, diversidade).
 - [ ] Deduplicacao semantica.
 - [ ] Suporte opcional a multiplos providers.
