@@ -108,6 +108,7 @@ function buildPrompt(input: EngineTurnInput): string {
       ? [
           "Instrucao operacional: o usuario pediu acao real. Use tools (exec/process) para executar e validar.",
           "Nao responda apenas com comando textual ou slash command sem executar.",
+          "Ao gerar scripts Python em exec, use 'python3' (nao use 'python').",
         ]
       : []),
     "",

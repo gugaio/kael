@@ -24,6 +24,7 @@ export type ExecFailureCode =
   | "approval_denied"
   | "allowlist_miss"
   | "syntax_error"
+  | "command_not_found"
   | "process_error"
   | "timeout_overall"
   | "timeout_no_output"
@@ -180,6 +181,28 @@ export class ShellToolService {
         command,
         cwd,
         reason: preflightError,
+      });
+      return failed;
+    }
+    const commandHintError = this.preflightCommandHint(command);
+    if (commandHintError) {
+      const failed: ExecSession = {
+        id: randomUUID(),
+        command,
+        cwd,
+        status: "failed",
+        startedAt: new Date().toISOString(),
+        endedAt: new Date().toISOString(),
+        outputTail: `[preflight] ${commandHintError}`,
+        exitCode: 127,
+        failureCode: "command_not_found",
+      };
+      this.sessions.set(failed.id, failed);
+      kaelLogger.warn("shell.exec.preflight_failed", {
+        sessionKey: params.sessionKey,
+        command,
+        cwd,
+        reason: commandHintError,
       });
       return failed;
     }
@@ -518,6 +541,8 @@ export class ShellToolService {
           failureCode:
             code === 0
               ? "none"
+              : this.looksLikeCommandNotFound(code, session.outputTail)
+                ? "command_not_found"
               : child.process.signalCode
                 ? "signal"
                 : "non_zero_exit",
@@ -637,5 +662,39 @@ export class ShellToolService {
 
     this.shellChoice = { command: "sh", args: ["-c"] };
     return this.shellChoice;
+  }
+
+  private preflightCommandHint(command: string): string | null {
+    const trimmed = command.trim();
+    if (!/^python(\s|$)/.test(trimmed)) {
+      return null;
+    }
+    const py = spawnSync("python", ["--version"], {
+      encoding: "utf8",
+      timeout: 1500,
+      maxBuffer: 16 * 1024,
+    });
+    const pyMissing = py.error && (py.error as NodeJS.ErrnoException).code === "ENOENT";
+    if (!pyMissing) {
+      return null;
+    }
+    const py3 = spawnSync("python3", ["--version"], {
+      encoding: "utf8",
+      timeout: 1500,
+      maxBuffer: 16 * 1024,
+    });
+    const py3Ok = (py3.status ?? 1) === 0;
+    if (py3Ok) {
+      return "comando usa 'python', mas este ambiente nao possui 'python'. Use 'python3'.";
+    }
+    return "comando usa 'python', mas este ambiente nao possui 'python'.";
+  }
+
+  private looksLikeCommandNotFound(code: number | null, outputTail: string): boolean {
+    if (code !== 127) {
+      return false;
+    }
+    const text = outputTail.toLowerCase();
+    return text.includes("command not found") || text.includes("not found");
   }
 }

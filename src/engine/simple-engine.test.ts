@@ -8,6 +8,23 @@ function createTooling(execImpl?: EngineTooling["execCommand"]): EngineTooling {
     startConvertHls: async () => ({ id: "j2" } as never),
     startCaptureStream: async () => ({ id: "j3" } as never),
     startProbeMedia: async () => ({ id: "j4" } as never),
+    videoHlsInspect: async () => ({
+      ok: true,
+      url: "https://example.com/master.m3u8",
+      finalUrl: "https://example.com/master.m3u8",
+      playlistType: "master" as const,
+      variants: [],
+      renditions: [],
+      segments: [],
+      errors: [],
+    }),
+    videoProbe: async () => ({
+      ok: true,
+      input: "https://example.com/video.m3u8",
+      timeoutMs: 1000,
+      streams: [],
+      errors: [],
+    }),
     listJobs: () => [],
     execCommand:
       execImpl ??
@@ -82,4 +99,3 @@ describe("SimpleCommandEngine", () => {
     expect(result.reply).toContain("status=running");
   });
 });
-

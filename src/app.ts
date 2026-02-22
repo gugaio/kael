@@ -20,6 +20,7 @@ import { WorkspaceInspector } from "./workspace/inspector.js";
 import { LocalProcessRunner } from "./tools/system/process-runner.js";
 import { ShellToolService } from "./tools/system/shell-tool-service.js";
 import { VideoJobService } from "./tools/video/video-job-service.js";
+import { VideoInspectToolService } from "./tools/video/video-inspect-tool-service.js";
 
 export type KaelApp = {
   config: KaelConfig;
@@ -51,6 +52,7 @@ export async function createKaelApp(): Promise<KaelApp> {
     killGraceMs: config.execution.killGraceMs,
   });
   const jobs = new JobManager(jobStore, video);
+  const videoInspect = new VideoInspectToolService();
   const shell = new ShellToolService({
     workspaceRoot: config.shell.workspaceRoot,
     defaultTimeoutMs: config.shell.defaultTimeoutMs,
@@ -99,7 +101,17 @@ export async function createKaelApp(): Promise<KaelApp> {
     maxContextMessages: config.context.maxMessages,
     maxContextChars: config.context.maxChars,
   });
-  const chat = new ChatService(sessions, jobs, shell, memory, workspace, research, planner, orchestrator);
+  const chat = new ChatService(
+    sessions,
+    jobs,
+    shell,
+    videoInspect,
+    memory,
+    workspace,
+    research,
+    planner,
+    orchestrator,
+  );
   const heartbeat = new HeartbeatRunner(jobs, sessions);
   const scheduler = new PersistentScheduler(
     path.join(config.dataDir, "automation", "scheduler-jobs.json"),

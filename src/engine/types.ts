@@ -24,6 +24,68 @@ export type EngineTooling = {
     sessionKey: string;
     inputPath: string;
   }) => Promise<VideoJob>;
+  videoHlsInspect: (params: {
+    sessionKey: string;
+    url: string;
+    maxSegments?: number;
+    timeoutMs?: number;
+  }) => Promise<{
+    ok: boolean;
+    url: string;
+    finalUrl: string;
+    playlistType: "master" | "media" | "unknown";
+    variants: Array<{
+      uri: string;
+      url: string;
+      bandwidth?: number;
+      averageBandwidth?: number;
+      resolution?: string;
+      frameRate?: number;
+      codecs?: string;
+      audioGroupId?: string;
+      subtitlesGroupId?: string;
+    }>;
+    renditions: Array<{
+      type: string;
+      groupId?: string;
+      name?: string;
+      language?: string;
+      default?: boolean;
+      autoselect?: boolean;
+      forced?: boolean;
+      uri?: string;
+      url?: string;
+    }>;
+    segments: Array<{
+      uri: string;
+      url: string;
+      duration?: number;
+      title?: string;
+    }>;
+    targetDuration?: number;
+    mediaSequence?: number;
+    errors: string[];
+  }>;
+  videoProbe: (params: {
+    sessionKey: string;
+    input: string;
+    timeoutMs?: number;
+    keyframes?: boolean;
+    maxKeyframes?: number;
+    streamSelector?: string;
+  }) => Promise<{
+    ok: boolean;
+    input: string;
+    timeoutMs: number;
+    format?: unknown;
+    streams?: unknown[];
+    keyframes?: {
+      streamSelector: string;
+      count: number;
+      timestamps: number[];
+    };
+    errors: string[];
+  }>;
   listJobs: () => {
     id: string;
     status: string;
@@ -58,6 +120,7 @@ export type EngineTooling = {
       | "approval_denied"
       | "allowlist_miss"
       | "syntax_error"
+      | "command_not_found"
       | "process_error"
       | "timeout_overall"
       | "timeout_no_output"

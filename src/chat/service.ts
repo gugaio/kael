@@ -6,6 +6,7 @@ import type { PlannerService } from "../planner/service.js";
 import type { ResearchService } from "../research/service.js";
 import type { SessionStore } from "../session/store.js";
 import type { ShellToolService } from "../tools/system/shell-tool-service.js";
+import type { VideoInspectToolService } from "../tools/video/video-inspect-tool-service.js";
 import type { SessionMessage } from "../types.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
 import { TurnOrchestrator } from "./turn-orchestrator.js";
@@ -39,6 +40,7 @@ export class ChatService {
     private readonly sessions: SessionStore,
     private readonly jobs: JobManager,
     private readonly shell: ShellToolService,
+    private readonly videoInspect: VideoInspectToolService,
     private readonly memory: MemoryService,
     private readonly workspace: WorkspaceInspector,
     private readonly research: ResearchService,
@@ -50,6 +52,10 @@ export class ChatService {
       startConvertHls: (params) => this.jobs.startConvertHls(params),
       startCaptureStream: (params) => this.jobs.startCaptureStream(params),
       startProbeMedia: (params) => this.jobs.startProbeMedia(params),
+      videoHlsInspect: async ({ url, maxSegments, timeoutMs }) =>
+        this.videoInspect.inspectHls({ url, maxSegments, timeoutMs }),
+      videoProbe: async ({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }) =>
+        this.videoInspect.probe({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }),
       listJobs: () =>
         this.jobs.listJobs().map((job) => ({
           id: job.id,

@@ -27,6 +27,23 @@ function createToolingStub(): EngineTooling {
     startProbeMedia: async () => {
       throw new Error("not used");
     },
+    videoHlsInspect: async () => ({
+      ok: true,
+      url: "https://example.com/master.m3u8",
+      finalUrl: "https://example.com/master.m3u8",
+      playlistType: "master" as const,
+      variants: [],
+      renditions: [],
+      segments: [],
+      errors: [],
+    }),
+    videoProbe: async () => ({
+      ok: true,
+      input: "x",
+      timeoutMs: 1000,
+      streams: [],
+      errors: [],
+    }),
     listJobs: () => [],
     execCommand: async () => ({
       id: "1",
