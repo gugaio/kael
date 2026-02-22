@@ -57,6 +57,9 @@ export function createPiShellTools(params: {
   const maxExecCalls = Math.max(1, Math.floor(params.budget?.maxExecCalls ?? 6));
 
   const inferIntent = (tool: string, rawParams: unknown): string => {
+    if (tool === "memory_search") return "memory:search";
+    if (tool === "memory_get") return "memory:get";
+    if (tool === "memory_write") return "memory:write";
     if (tool === "process") {
       const action =
         rawParams && typeof rawParams === "object"
@@ -104,10 +107,22 @@ export function createPiShellTools(params: {
     result: unknown,
     startedAtMs: number,
   ): void => {
-    const typed = (result ?? {}) as { status?: unknown; blocked?: unknown; reason?: unknown };
+    const typed = (result ?? {}) as {
+      status?: unknown;
+      blocked?: unknown;
+      reason?: unknown;
+      resultCount?: unknown;
+      topPaths?: unknown;
+      path?: unknown;
+    };
     const status = typeof typed.status === "string" ? typed.status : "unknown";
     const blocked = typed.blocked === true;
     const reason = typeof typed.reason === "string" ? typed.reason : undefined;
+    const resultCount = typeof typed.resultCount === "number" ? typed.resultCount : undefined;
+    const topPaths = Array.isArray(typed.topPaths)
+      ? typed.topPaths.filter((v): v is string => typeof v === "string").slice(0, 5)
+      : undefined;
+    const path = typeof typed.path === "string" ? typed.path : undefined;
     kaelLogger.info("pi.tool.call.finished", {
       turnId: params.trace?.turnId ?? null,
       attempt: params.trace?.attempt ?? null,
@@ -118,6 +133,9 @@ export function createPiShellTools(params: {
       status,
       blocked,
       reason,
+      resultCount,
+      topPaths,
+      path,
       durationMs: Date.now() - startedAtMs,
     });
     params.onToolEvent?.({ phase: "end", tool, status, blocked, reason });
@@ -477,7 +495,16 @@ export function createPiShellTools(params: {
                 ),
               ].join("\n\n");
         const details = { results };
-        logToolEnd("memory_search", intent, { status: "completed", resultCount: results.length }, startedAtMs);
+        logToolEnd(
+          "memory_search",
+          intent,
+          {
+            status: "completed",
+            resultCount: results.length,
+            topPaths: results.slice(0, 5).map((r) => `${r.path}:${r.startLine}-${r.endLine}`),
+          },
+          startedAtMs,
+        );
         return {
           content: textResult(text),
           details,

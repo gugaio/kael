@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { ensureDir } from "../infra/fs.js";
+import { kaelLogger } from "../infra/logger.js";
 
 export type MemoryWriteTarget = "daily" | "long_term";
 
@@ -48,6 +49,107 @@ function isMarkdownFile(filePath: string): boolean {
 
 function normalizeForDedupe(input: string): string {
   return input.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function stripDiacritics(input: string): string {
+  return input.normalize("NFD").replace(/\p{Diacritic}+/gu, "");
+}
+
+function normalizeForSearch(input: string): string {
+  return stripDiacritics(input).toLowerCase();
+}
+
+const PT_STOPWORDS = new Set([
+  "a",
+  "o",
+  "os",
+  "as",
+  "de",
+  "da",
+  "do",
+  "das",
+  "dos",
+  "e",
+  "em",
+  "na",
+  "no",
+  "nas",
+  "nos",
+  "um",
+  "uma",
+  "meu",
+  "minha",
+  "meus",
+  "minhas",
+  "qual",
+  "quais",
+  "que",
+  "agora",
+  "hoje",
+  "ola",
+  "oi",
+  "kael",
+  "novo",
+  "novamente",
+  "aparece",
+  "memoria",
+  "teste",
+  "so",
+  "se",
+  "nao",
+  "sabe",
+  "souber",
+]);
+
+const MEMORY_SYNONYMS: Record<string, string[]> = {
+  time: ["clube", "torce", "torcida", "futebol"],
+  clube: ["time", "torce", "futebol"],
+  torce: ["time", "clube", "torcida", "futebol"],
+  nome: ["chama", "chamar"],
+  chamar: ["nome", "chama"],
+  prefere: ["preferencia", "gosta", "favorito"],
+  gosto: ["gosta", "preferencia", "favorito"],
+  gosta: ["preferencia", "favorito", "curte"],
+  favorito: ["preferencia", "gosta"],
+  trabalho: ["empresa", "job", "projeto"],
+  projeto: ["trabalho", "repo", "kael"],
+};
+
+function tokenizeQuery(input: string): string[] {
+  const normalized = normalizeForSearch(input);
+  return normalized
+    .split(/[^\p{L}\p{N}]+/u)
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 2)
+    .filter((item) => !PT_STOPWORDS.has(item));
+}
+
+function expandTerms(baseTerms: string[]): { terms: string[]; weights: Map<string, number> } {
+  const weights = new Map<string, number>();
+  for (const term of baseTerms) {
+    weights.set(term, Math.max(weights.get(term) ?? 0, 1));
+    for (const synonym of MEMORY_SYNONYMS[term] ?? []) {
+      if (synonym.length < 2) continue;
+      weights.set(synonym, Math.max(weights.get(synonym) ?? 0, 0.55));
+    }
+  }
+  return { terms: Array.from(weights.keys()), weights };
+}
+
+function recencyBoostFromPath(relPath: string): number {
+  const match = relPath.match(/^memory\/(\d{4}-\d{2}-\d{2})\.md$/);
+  if (!match?.[1]) {
+    return relPath === "MEMORY.md" ? 1.35 : 1;
+  }
+  const then = Date.parse(`${match[1]}T00:00:00Z`);
+  if (!Number.isFinite(then)) {
+    return 1;
+  }
+  const days = Math.max(0, (Date.now() - then) / (24 * 60 * 60 * 1000));
+  if (days <= 1) return 1.2;
+  if (days <= 7) return 1.12;
+  if (days <= 30) return 1.05;
+  return 0.95;
 }
 
 export class MemoryService {
@@ -109,60 +211,105 @@ export class MemoryService {
   }
 
   async search(query: string, maxResults?: number): Promise<MemorySearchResult[]> {
-    const normalizedQuery = query.trim().toLowerCase();
+    const normalizedQuery = normalizeForSearch(query.trim());
     if (!normalizedQuery) {
       return [];
     }
-    const terms = Array.from(
-      new Set(
-        normalizedQuery
-          .split(/\s+/)
-          .map((item) => item.trim())
-          .filter((item) => item.length >= 2),
-      ),
-    );
-    if (terms.length === 0) {
+    const baseTerms = Array.from(new Set(tokenizeQuery(query)));
+    if (baseTerms.length === 0) {
       return [];
     }
+    const { terms, weights } = expandTerms(baseTerms);
 
     const files = await this.listMemoryFiles();
     const targetResults = Number.isFinite(maxResults ?? NaN)
       ? Math.max(1, Math.floor(maxResults ?? this.defaultMaxResults))
       : this.defaultMaxResults;
     const hits: MemorySearchResult[] = [];
+    const topPathsForLog: string[] = [];
 
     for (const filePath of files) {
       const content = await fs.readFile(filePath, "utf-8").catch(() => "");
       if (!content.trim()) {
         continue;
       }
+      const relPath = this.toRelativeMemoryPath(filePath);
+      const pathBoost = relPath === "MEMORY.md" ? 1.35 : 1;
+      const timeBoost = recencyBoostFromPath(relPath);
+      const normalizedContent = normalizeForSearch(content);
       const lines = content.split("\n");
       for (let idx = 0; idx < lines.length; idx += 1) {
         const line = lines[idx];
-        const lower = line.toLowerCase();
+        const lower = normalizeForSearch(line);
         let score = 0;
+        let matchedCount = 0;
         for (const term of terms) {
           if (lower.includes(term)) {
-            score += 1;
+            score += weights.get(term) ?? 1;
+            matchedCount += 1;
           }
         }
-        if (score === 0) {
+        if (score <= 0) {
           continue;
         }
-        const start = Math.max(0, idx - 1);
-        const end = Math.min(lines.length - 1, idx + 1);
+        if (baseTerms.length > 1) {
+          const phrase = baseTerms.join(" ");
+          if (lower.includes(phrase)) {
+            score += 2.5;
+          }
+        }
+        // Penaliza hit muito fraco de sinonimo isolado em linha curta.
+        if (matchedCount === 1 && score < 0.8 && lower.length < 24) {
+          score *= 0.7;
+        }
+        // Boost se termos-base aparecem em qualquer parte do arquivo.
+        let fileSupport = 0;
+        for (const term of baseTerms) {
+          if (normalizedContent.includes(term)) {
+            fileSupport += 0.15;
+          }
+        }
+        const finalScore = Number(((score + fileSupport) * pathBoost * timeBoost).toFixed(3));
+
+        const start = Math.max(0, idx - 2);
+        const end = Math.min(lines.length - 1, idx + 2);
         const snippet = lines.slice(start, end + 1).join("\n").trim();
         hits.push({
-          path: this.toRelativeMemoryPath(filePath),
+          path: relPath,
           startLine: start + 1,
           endLine: end + 1,
           snippet: clip(snippet, this.maxSnippetChars),
-          score,
+          score: finalScore,
         });
       }
     }
+    const results = hits
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (a.path !== b.path) return a.path.localeCompare(b.path);
+        return a.startLine - b.startLine;
+      })
+      // dedupe por path+line (evita muitas linhas adjacentes equivalentes dominarem top N)
+      .filter((hit, idx, arr) => {
+        if (idx === 0) return true;
+        const prev = arr[idx - 1];
+        if (!prev) return true;
+        return !(prev.path === hit.path && Math.abs(prev.startLine - hit.startLine) <= 1);
+      })
+      .slice(0, targetResults);
 
-    return hits.sort((a, b) => b.score - a.score).slice(0, targetResults);
+    for (const result of results.slice(0, 5)) {
+      topPathsForLog.push(`${result.path}:${result.startLine}-${result.endLine}`);
+    }
+    kaelLogger.info("memory.search.finished", {
+      query: clip(query, 180),
+      baseTerms,
+      expandedTerms: terms,
+      resultCount: results.length,
+      topPaths: topPathsForLog,
+    });
+
+    return results;
   }
 
   async get(params: { relPath: string; from?: number; lines?: number }): Promise<MemoryGetResult> {
