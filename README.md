@@ -1,38 +1,38 @@
 # Kael
 
-Super agente para videos e automacao.
+Super agent for video and automation.
 
-## Documentos de orientacao
+## Orientation Docs
 
-- `AGENTS.md`: instrucoes principais para qualquer agente.
-- `docs/core/START-HERE.md`: indice rapido de onboarding.
-- `docs/planning/PROJECT-STATUS.md`: fases, entregas e checklist por commit.
-- `docs/architecture/README.md`: arquitetura incremental por fase.
-- `docs/ui/UI-GUIDE.md`: guia oficial da UI (visao, fases, status e proximos passos).
-- `docs/how-jobs-and-heartbeat-work.md`: guia detalhado do ciclo de vida de jobs e heartbeat.
+- `AGENTS.md`: Core instructions for any agent.
+- `docs/core/START-HERE.md`: Quick onboarding index.
+- `docs/planning/PROJECT-STATUS.md`: Phases, deliverables, and checklist per commit.
+- `docs/architecture/README.md`: Incremental architecture by phase.
+- `docs/ui/UI-GUIDE.md`: Official UI guide (vision, phases, status, and next steps).
+- `docs/how-jobs-and-heartbeat-work.md`: Detailed guide for job lifecycle and heartbeat.
 
-## Escopo atual
+## Current Scope
 
-- API HTTP local (Fastify)
-- CLI para operar chat e jobs
-- Sessao persistente com transcript JSONL
-- Engine desacoplada com modos:
-  - `simple` (comandos)
-  - `pi` (runtime PI embutido via SDK)
-  - `hybrid` (slash commands local + conversa via PI com fallback)
-- Shell tools no PI:
-  - `exec` (comando shell com timeout/background)
-  - `process` (list/poll/kill de sessoes em background)
-  - policy e approvals persistidas em `~/.kael/exec-approvals.json`
-- Memoria operacional no PI:
-  - `memory_search` (busca em memoria markdown)
-  - `memory_get` (leitura de trecho por path/linhas)
-  - `memory_write` (persistencia daily/long_term)
-- Pesquisa web no PI:
-  - `web_search` (Search API-first com fontes citadas)
-  - `web_fetch` (fetch de URL com extracao de texto e cache TTL)
-  - `web_research` (search + fetch + resumo com evidencia e confianca)
-- Planner operacional no PI:
+- Local HTTP API (Fastify)
+- CLI for chat and jobs operations
+- Persistent session with JSONL transcript
+- Decoupled engine with modes:
+  - `simple` (commands only)
+  - `pi` (embedded PI runtime via SDK)
+  - `hybrid` (local slash commands + PI conversation with fallback)
+- Shell tools in PI:
+  - `exec` (shell command with timeout/background support)
+  - `process` (list/poll/kill background sessions)
+  - Policy and approvals persisted in `~/.kael/exec-approvals.json`
+- Operational memory in PI:
+  - `memory_search` (search in markdown memory)
+  - `memory_get` (read segment by path/lines)
+  - `memory_write` (persistence to daily/long_term targets)
+- Web research in PI:
+  - `web_search` (Search API-first with cited sources)
+  - `web_fetch` (URL fetch with text extraction and TTL cache)
+  - `web_research` (search + fetch + summary with evidence and confidence)
+- Operational planner in PI:
   - `plan_create`
   - `plan_generate`
   - `plan_list`
@@ -40,18 +40,18 @@ Super agente para videos e automacao.
   - `plan_next`
   - `plan_execute_next`
   - `plan_reconcile`
-- Jobs de video assíncronos:
+- Async video jobs:
   - `transcode`
   - `convert_hls`
   - `capture_stream`
   - `probe_media`
 
-## Requisitos
+## Requirements
 
 - Node.js 22+
-- ffmpeg e ffprobe no PATH
+- ffmpeg and ffprobe in PATH
 
-## Rodando
+## Running
 
 ```bash
 npm install
@@ -60,64 +60,64 @@ npx tsx src/cli/index.ts init
 npm run dev
 ```
 
-Servidor padrao: `http://127.0.0.1:3210`
+Default server: `http://127.0.0.1:3210`
 
-## UI Web (UI-1)
+## Web UI (UI-1)
 
 ```bash
-# instalar deps do frontend
+# install frontend dependencies
 npm --prefix ui install
 
-# subir backend (terminal 1)
+# start backend (terminal 1)
 npm run dev
 
-# subir UI (terminal 2)
+# start UI (terminal 2)
 npm run ui:dev
 ```
 
-UI default: `http://127.0.0.1:5173` (proxy para API local em `/api`).
+Default UI: `http://127.0.0.1:5173` (proxy to local API at `/api`).
 
-## Comandos CLI
+## CLI Commands
 
 ```bash
-# inicializar ~/.kael (ou $KAEL_HOME)
+# initialize ~/.kael (or $KAEL_HOME)
 npx tsx src/cli/index.ts init
 
-# sobrescrever config global
+# overwrite global config
 npx tsx src/cli/index.ts init --force
 
-# iniciar API
+# start API
 npx tsx src/cli/index.ts server
 
-# ajuda de comandos de chat
+# chat commands help
 npx tsx src/cli/index.ts chat --message "/help"
 
-# listar jobs
+# list jobs
 npx tsx src/cli/index.ts jobs
 
-# cancelar job
+# cancel job
 npx tsx src/cli/index.ts job-cancel --id <jobId>
 
-# listar schedules
+# list schedules
 npx tsx src/cli/index.ts schedules
 
-# criar/atualizar schedule por intervalo
+# create/update schedule by interval
 npx tsx src/cli/index.ts schedule-upsert --id heartbeat.main --type heartbeat --interval-ms 30000
 
-# criar/atualizar schedule por cron (5 campos)
+# create/update schedule by cron (5 fields)
 npx tsx src/cli/index.ts schedule-upsert --id heartbeat.cron --type heartbeat --cron "*/5 * * * *"
 
-# pausar/reativar schedule
+# pause/resume schedule
 npx tsx src/cli/index.ts schedule-pause --id heartbeat.main
 npx tsx src/cli/index.ts schedule-resume --id heartbeat.main
 
-# approvals de exec
+# exec approvals
 npx tsx src/cli/index.ts approvals --status open
 npx tsx src/cli/index.ts approval-approve --id <approvalId>
 npx tsx src/cli/index.ts approval-deny --id <approvalId>
 ```
 
-## Comandos de chat (engine de comandos)
+## Chat Commands (command engine)
 
 ```text
 /transcode <input> <output>
@@ -131,7 +131,7 @@ npx tsx src/cli/index.ts approval-deny --id <approvalId>
 ## Endpoints
 
 - `GET /health`
-- `POST /chat` (opcional: `?includeMessages=true` para incluir objetos `user` e `assistant`)
+- `POST /chat` (optional: `?includeMessages=true` to include `user` and `assistant` objects)
 - `GET /sessions/:sessionKey/messages`
 - `GET /plans`
 - `GET /plans/:planId`
@@ -158,9 +158,9 @@ npx tsx src/cli/index.ts approval-deny --id <approvalId>
 - `POST /schedules/:scheduleId/pause`
 - `POST /schedules/:scheduleId/resume`
 
-### Contrato de erro (padronizado)
+### Error Contract (standardized)
 
-Erros da API agora seguem o formato:
+API errors follow this format:
 
 ```json
 {
@@ -175,11 +175,11 @@ Erros da API agora seguem o formato:
 }
 ```
 
-Códigos atuais: `BAD_REQUEST`, `NOT_FOUND`, `IDEMPOTENCY_CONFLICT`, `INTERNAL_ERROR`.
+Current codes: `BAD_REQUEST`, `NOT_FOUND`, `IDEMPOTENCY_CONFLICT`, `INTERNAL_ERROR`.
 
-### Idempotency (Fase 3)
+### Idempotency (Phase 3)
 
-Para evitar duplicacao em retries de cliente, envie o header `x-idempotency-key` em:
+To prevent duplicates on client retries, send header `x-idempotency-key` in:
 
 - `POST /chat`
 - `POST /jobs/transcode`
@@ -187,26 +187,26 @@ Para evitar duplicacao em retries de cliente, envie o header `x-idempotency-key`
 - `POST /jobs/capture`
 - `POST /jobs/probe`
 
-Se a mesma chave e mesmo payload forem repetidos dentro do TTL, a API retorna a resposta cacheada com header `x-idempotency-replayed: true`.
-Se a mesma chave for reutilizada com payload diferente, a API retorna `409`.
+If same key and same payload are repeated within TTL, API returns cached response with header `x-idempotency-replayed: true`.
+If same key is reused with different payload, API returns `409`.
 
-## Configuracao por ambiente
+## Environment Configuration
 
 - `KAEL_PORT` (default: `3210`)
 - `KAEL_HOST` (default: `127.0.0.1`)
 - `KAEL_DATA_DIR` (default: `./.kael-data`)
 - `KAEL_ENGINE_MODE` (`simple`, `pi`, `hybrid`; default: `simple`)
-- `KAEL_CONTEXT_MAX_MESSAGES` (janela de contexto para engine; default: `24`)
-- `KAEL_CONTEXT_MAX_CHARS` (limite de caracteres da janela; default: `12000`)
+- `KAEL_CONTEXT_MAX_MESSAGES` (context window for engine; default: `24`)
+- `KAEL_CONTEXT_MAX_CHARS` (char limit of window; default: `12000`)
 - `KAEL_PI_PROVIDER` (default: `openai`)
-- `KAEL_PI_API_KEY` (opcional; pode ser usado para resolver credencial do provider)
+- `KAEL_PI_API_KEY` (optional; can be used to resolve provider credential)
 - `KAEL_PI_MODEL` (default: `gpt-4o-mini`)
 - `KAEL_PI_TIMEOUT_MS` (default: `45000`)
 - `KAEL_PI_RETRY_ATTEMPTS` (default: `3`)
 - `KAEL_PI_RETRY_BASE_MS` (default: `300`)
 - `KAEL_PI_RETRY_MAX_MS` (default: `3000`)
 - `KAEL_PI_RETRY_JITTER_MS` (default: `250`)
-- `KAEL_SOUL_PATH` (opcional; caminho explicito para `SOUL.md`)
+- `KAEL_SOUL_PATH` (optional; explicit path to `SOUL.md`)
 - `KAEL_IDEMPOTENCY_ENABLED` (default: `true`)
 - `KAEL_IDEMPOTENCY_TTL_MS` (default: `600000`)
 - `KAEL_HEARTBEAT_ENABLED` (default: `true`)
@@ -227,10 +227,10 @@ Se a mesma chave for reutilizada com payload diferente, a API retorna `409`.
 - `KAEL_EXEC_APPROVAL_WAIT_MS` (default: `120000`)
 - `KAEL_EXEC_SECURITY` (`deny`, `allowlist`, `full`; default: `allowlist`)
 - `KAEL_EXEC_ASK` (`off`, `on-miss`, `always`; default: `on-miss`)
-- `KAEL_EXEC_ALLOWLIST` (csv; default inclui `ls,cat,pwd,echo,grep,find,curl,ffmpeg,ffprobe,vlc`)
+- `KAEL_EXEC_ALLOWLIST` (csv; default includes `ls,cat,pwd,echo,grep,find,curl,ffmpeg,ffprobe,vlc`)
 - `KAEL_RESEARCH_ENABLED` (`true|false`; default: `false`)
 - `KAEL_RESEARCH_PROVIDER` (default: `tavily`)
-- `KAEL_RESEARCH_API_KEY` (obrigatorio quando research habilitado)
+- `KAEL_RESEARCH_API_KEY` (required when research enabled)
 - `KAEL_RESEARCH_MAX_RESULTS` (default: `5`)
 - `KAEL_RESEARCH_MAX_RESULTS_LIMIT` (default: `10`)
 - `KAEL_RESEARCH_TIMEOUT_MS` (default: `12000`)
@@ -239,58 +239,58 @@ Se a mesma chave for reutilizada com payload diferente, a API retorna `409`.
 - `KAEL_RESEARCH_FETCH_MAX_REDIRECTS` (default: `3`)
 - `KAEL_RESEARCH_FETCH_MAX_RESPONSE_BYTES` (default: `2000000`)
 
-### Runtime do PI
+### PI Runtime
 
-Kael executa PI embutido via SDK usando dependencias npm:
+Kael runs embedded PI via SDK using npm dependencies:
 - `@mariozechner/pi-agent-core`
 - `@mariozechner/pi-ai`
 
-Nao ha dependencia do binario `pi` no PATH.
+No dependency on `pi` binary in PATH.
 
-Se no futuro for necessario reintroduzir transportes alternativos (processo local/HTTP), a recomendacao e criar um adapter separado e manter `PiEngineAdapter` principal limpo (SDK-only).
+If alternative transports (local process/HTTP) are needed in future, the recommendation is to create a separate adapter and keep main `PiEngineAdapter` clean (SDK-only).
 
-Observacao: Kael agora carrega `.env` automaticamente no bootstrap da app.
-Observacao: no modo PI (`pi`/`hybrid`), Kael monta o `system prompt` com `docs/core/SOUL.md` automaticamente (ou `KAEL_SOUL_PATH`, se definido).
-Observacao: Kael aplica janela de contexto multi-turn antes de chamar PI (via `TurnOrchestrator`).
-Observacao: scheduler suporta `intervalMs` e cron expression simples (5 campos, com `*`, `*/n` e valores exatos).
-Observacao: `KAEL_ENGINE_MODE=pi|hybrid` exige `KAEL_PI_API_KEY`; configuracoes invalidas falham no startup com mensagem clara.
-Observacao: comandos shell fora da allowlist podem retornar `approval-pending`; o arquivo de controle fica em `~/.kael/exec-approvals.json`.
-Observacao: memoria operacional e armazenada em `MEMORY.md` e `memory/YYYY-MM-DD.md` no `KAEL_EXEC_WORKSPACE_ROOT`.
+Note: Kael now loads `.env` automatically at app bootstrap.
+Note: In PI mode (`pi`/`hybrid`), Kael mounts `system prompt` with `docs/core/SOUL.md` automatically (or `KAEL_SOUL_PATH`, if set).
+Note: Kael applies multi-turn context window before calling PI (via `TurnOrchestrator`).
+Note: Scheduler supports `intervalMs` and simple cron expression (5 fields, with `*`, `*/n` and exact values).
+Note: `KAEL_ENGINE_MODE=pi|hybrid` requires `KAEL_PI_API_KEY`; invalid configs fail at startup with clear message.
+Note: Shell commands outside allowlist may return `approval-pending`; control file is at `~/.kael/exec-approvals.json`.
+Note: Operational memory is stored in `MEMORY.md` and `memory/YYYY-MM-DD.md` at `KAEL_EXEC_WORKSPACE_ROOT`.
 
-## Logs e observabilidade
+## Logging & Observability
 
-- Logs em JSON no `stdout`.
-- Eventos HTTP incluem `requestId`, rota, status e duracao.
-- Eventos de scheduler incluem `scheduleId`, tipo, `durationMs` e status de execucao.
-- `GET /health` inclui `uptimeSec` e metricas agregadas de sessoes/jobs/schedules.
-- `GET /health` inclui `metrics.runtimeJobs` (`activeJobs`, `queuedJobs`, `maxConcurrentJobs`).
+- JSON logs to `stdout`.
+- HTTP events include `requestId`, route, status, and duration.
+- Scheduler events include `scheduleId`, type, `durationMs`, and execution status.
+- `GET /health` includes `uptimeSec` and aggregated session/job/schedule metrics.
+- `GET /health` includes `metrics.runtimeJobs` (`activeJobs`, `queuedJobs`, `maxConcurrentJobs`).
 
-## Seguranca de execucao (jobs)
+## Job Execution Security
 
-- Validacao de input/output path antes de spawn.
-- Bloqueio de paths fora das roots permitidas (quando `KAEL_SAFE_PATHS_ENABLED=true`).
-- Validacao de stream URL (`http`, `https`, `rtsp`, `rtmp`, `udp`).
-- Limite de args custom e bloqueio de flags criticas em args de usuario (`-i`, `-y`).
-- Controle de concorrencia por fila interna (`KAEL_MAX_CONCURRENT_JOBS`).
-- Timeout por job com cancelamento controlado (`SIGTERM` seguido de `SIGKILL` apos grace period, se necessario).
+- Input/output path validation before spawn.
+- Block paths outside allowed roots (when `KAEL_SAFE_PATHS_ENABLED=true`).
+- Stream URL validation (`http`, `https`, `rtsp`, `rtmp`, `udp`).
+- Custom arg limit and critical flag blocking in user args (`-i`, `-y`).
+- Concurrency control via internal queue (`KAEL_MAX_CONCURRENT_JOBS`).
+- Per-job timeout with controlled cancellation (`SIGTERM` followed by `SIGKILL` after grace period, if needed).
 
-## Cobertura de testes E2E (jobs)
+## E2E Test Coverage (jobs)
 
-- `src/api/jobs.e2e.test.ts` cobre:
-  - validacao de seguranca (path fora da allowlist)
-  - timeout com falha e log de timeout
-  - cancelamento de job queued e running via API
+- `src/api/jobs.e2e.test.ts` covers:
+  - security validation (path outside allowlist)
+  - timeout with failure and timeout log
+  - queued and running job cancellation via API
 
-## Config global (~/.kael)
+## Global Config (~/.kael)
 
-O comando `init` cria a home global com:
+The `init` command creates global home with:
 
 - `~/.kael/config.json`
 - `~/.kael/data`
 - `~/.kael/logs`
 
-Ordem de prioridade da configuracao:
+Configuration priority order:
 
-1. Variaveis de ambiente (`KAEL_*`)
-2. Config global (`~/.kael/config.json`)
-3. Fallback local do projeto
+1. Environment variables (`KAEL_*`)
+2. Global config (`~/.kael/config.json`)
+3. Project local fallback
