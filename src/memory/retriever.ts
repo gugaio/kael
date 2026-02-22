@@ -1,4 +1,5 @@
 import { kaelLogger } from "../infra/logger.js";
+import type { MemoryRetriever, MemorySearchQuery } from "./types.js";
 import {
   MEMORY_SEARCH_PT_STOPWORDS,
   MEMORY_SEARCH_PT_SYNONYMS,
@@ -10,7 +11,8 @@ type MemoryTextEntry = {
   text: string;
 };
 
-type SearchMemoryTextsParams = {
+type SearchMemoryTextsParams = SearchMemoryTextsParamsInternal;
+type SearchMemoryTextsParamsInternal = {
   query: string;
   entries: MemoryTextEntry[];
   maxResults: number;
@@ -162,4 +164,15 @@ export function searchMemoryTexts(params: SearchMemoryTextsParams): MemorySearch
   });
 
   return results;
+}
+
+export class BuiltinMemoryRetriever implements MemoryRetriever {
+  search(params: MemorySearchQuery): MemorySearchResult[] {
+    return searchMemoryTexts({
+      query: params.query,
+      entries: params.entries,
+      maxResults: params.maxResults,
+      maxSnippetChars: params.maxSnippetChars,
+    });
+  }
 }

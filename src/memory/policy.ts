@@ -1,4 +1,5 @@
 import type { SessionMessage } from "../types.js";
+import type { HeuristicDailyFlushNote, MemoryPolicy } from "./types.js";
 
 export function isCompactCommand(input: string): boolean {
   return input.trim().toLowerCase() === "/compact";
@@ -44,11 +45,7 @@ export function buildHeuristicDailyFlushNote(params: {
   sessionKey: string;
   currentMessage: string;
   history: SessionMessage[];
-}): {
-  note: string;
-  includedMessages: number;
-  reason?: string;
-} | null {
+}): HeuristicDailyFlushNote | null {
   const conversational = params.history
     .filter((m) => m.role === "user" || m.role === "assistant")
     .filter((m) => !(m.role === "user" && m.content === params.currentMessage));
@@ -75,4 +72,26 @@ export function buildHeuristicDailyFlushNote(params: {
     includedMessages: recent.length,
     reason: "heuristic_fallback",
   };
+}
+
+export class DefaultMemoryPolicy implements MemoryPolicy {
+  isCompactCommand(input: string): boolean {
+    return isCompactCommand(input);
+  }
+  todayDailyRelPath(now?: Date): string {
+    return todayMemoryRelPath(now);
+  }
+  buildMemoryFlushPrompt(): string {
+    return buildMemoryFlushPrompt();
+  }
+  buildLongTermPromotionPrompt(): string {
+    return buildLongTermPromotionPrompt();
+  }
+  buildHeuristicDailyFlushNote(params: {
+    sessionKey: string;
+    currentMessage: string;
+    history: SessionMessage[];
+  }): HeuristicDailyFlushNote | null {
+    return buildHeuristicDailyFlushNote(params);
+  }
 }

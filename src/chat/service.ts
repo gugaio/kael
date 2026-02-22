@@ -10,14 +10,7 @@ import type { VideoInspectToolService } from "../tools/video/video-inspect-tool-
 import type { SessionMessage } from "../types.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
 import { TurnOrchestrator } from "./turn-orchestrator.js";
-import { kaelLogger } from "../infra/logger.js";
-import {
-  buildHeuristicDailyFlushNote,
-  buildLongTermPromotionPrompt,
-  buildMemoryFlushPrompt,
-  isCompactCommand,
-  todayMemoryRelPath,
-} from "../memory/policy.js";
+import { MemoryOrchestrator } from "../memory/orchestrator.js";
 
 function shouldResetSessionOnEngineError(error: unknown): boolean {
   const normalized = normalizePiError(error);
@@ -44,6 +37,7 @@ function shellQuoteSingle(value: string): string {
 export class ChatService {
   private readonly tooling: EngineTooling;
   private readonly chatOnlyTooling: EngineTooling;
+  private readonly memoryOrchestrator: MemoryOrchestrator;
 
   constructor(
     private readonly sessions: SessionStore,
@@ -56,6 +50,7 @@ export class ChatService {
     private readonly planner: PlannerService,
     private readonly orchestrator: TurnOrchestrator,
   ) {
+    this.memoryOrchestrator = new MemoryOrchestrator(this.sessions, this.memory, this.orchestrator);
     this.tooling = {
       startTranscode: (params) => this.jobs.startTranscode(params),
       startConvertHls: (params) => this.jobs.startConvertHls(params),
@@ -238,7 +233,7 @@ export class ChatService {
     opts: { allowPlayVlcShortcut: boolean },
   ): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string }> {
     let user = await this.sessions.appendMessage(input.sessionKey, "user", input.message);
-    if (isCompactCommand(input.message)) {
+    if (this.memoryOrchestrator.isCompactCommand(input.message)) {
       const result = await this.handleCompactCommand({
         sessionKey: input.sessionKey,
         currentMessage: input.message,
@@ -254,7 +249,7 @@ export class ChatService {
     }
 
     try {
-      await this.runAutoCompactionWithMemoryFlushIfNeeded({
+      await this.memoryOrchestrator.runAutoCompactionWithMemoryFlushIfNeeded({
         sessionKey: input.sessionKey,
         currentMessage: input.message,
         tooling,
@@ -355,12 +350,7 @@ export class ChatService {
     tooling: EngineTooling;
     requestId?: string;
   }): Promise<{ reply: string }> {
-    const flush = await this.flushSessionToDailyMemory(input);
-    const promote = await this.promoteLongTermMemoryIfNeeded(input);
-    const compaction = await this.orchestrator.compactNow({
-      sessionKey: input.sessionKey,
-      currentMessage: input.currentMessage,
-    });
+    const { flush, promote, compaction } = await this.memoryOrchestrator.runManualCompact(input);
 
     const lines = [
       "Compactacao manual executada.",
@@ -378,218 +368,5 @@ export class ChatService {
     ].filter(Boolean);
 
     return { reply: lines.join("\n") };
-  }
-
-  private async runAutoCompactionWithMemoryFlushIfNeeded(input: {
-    sessionKey: string;
-    currentMessage: string;
-    tooling: EngineTooling;
-    requestId?: string;
-  }): Promise<void> {
-    const need = await this.orchestrator.checkCompactionNeed({
-      sessionKey: input.sessionKey,
-      currentMessage: input.currentMessage,
-    });
-    if (need.reason !== "compaction_needed") {
-      return;
-    }
-
-    kaelLogger.info("chat.compact.auto.started", {
-      sessionKey: input.sessionKey,
-      requestId: input.requestId ?? null,
-      totalMessages: need.totalMessages,
-      totalChars: need.totalChars,
-      summarizedMessages: need.summarizedMessages,
-    });
-
-    const flush = await this.flushSessionToDailyMemory(input);
-    const promote = await this.promoteLongTermMemoryIfNeeded(input);
-    const compaction = await this.orchestrator.compactNow({
-      sessionKey: input.sessionKey,
-      currentMessage: input.currentMessage,
-    });
-
-    kaelLogger.info("chat.compact.auto.finished", {
-      sessionKey: input.sessionKey,
-      requestId: input.requestId ?? null,
-      flushWritten: flush.written,
-      flushReason: flush.reason ?? null,
-      flushPath: flush.path ?? null,
-      longTermWritten: promote.written,
-      longTermReason: promote.reason ?? null,
-      compactionApplied: compaction.compacted,
-      compactionReason: compaction.reason,
-      compactionSummarizedMessages: compaction.summarizedMessages,
-    });
-  }
-
-  private async flushSessionToDailyMemory(input: {
-    sessionKey: string;
-    currentMessage: string;
-    tooling: EngineTooling;
-    requestId?: string;
-  }): Promise<{
-    written: boolean;
-    path?: string;
-    reason?: string;
-    includedMessages: number;
-  }> {
-    const llmFlush = await this.tryLlmMemoryFlush(input);
-    if (llmFlush.written) {
-      return llmFlush;
-    }
-
-    const history = await this.sessions.getMessages(input.sessionKey, 80);
-    const heuristic = buildHeuristicDailyFlushNote({
-      sessionKey: input.sessionKey,
-      currentMessage: input.currentMessage,
-      history,
-    });
-    if (!heuristic) {
-      return {
-        written: false,
-        reason: "not_enough_conversation",
-        includedMessages: 0,
-      };
-    }
-
-    const write = await this.memory.write({
-      content: heuristic.note,
-      target: "daily",
-    });
-
-    return {
-      written: true,
-      path: write.path,
-      reason: llmFlush.reason ? `heuristic_fallback_after_${llmFlush.reason}` : heuristic.reason,
-      includedMessages: heuristic.includedMessages,
-    };
-  }
-
-  private async tryLlmMemoryFlush(input: {
-    sessionKey: string;
-    currentMessage: string;
-    tooling: EngineTooling;
-    requestId?: string;
-  }): Promise<{
-    written: boolean;
-    path?: string;
-    reason?: string;
-    includedMessages: number;
-  }> {
-    const relPath = todayMemoryRelPath();
-    const before = await this.readMemorySnapshot(relPath);
-    const prompt = buildMemoryFlushPrompt();
-
-    kaelLogger.info("chat.compact.memory_flush.started", {
-      sessionKey: input.sessionKey,
-      requestId: input.requestId ?? null,
-      mode: "llm",
-    });
-
-    try {
-      await this.orchestrator.runUtilityTurn({
-        sessionKey: input.sessionKey,
-        message: prompt,
-        requestId: input.requestId ? `${input.requestId}:compact-flush` : undefined,
-        tooling: input.tooling,
-        excludeCurrentMessage: input.currentMessage,
-      });
-    } catch (error) {
-      kaelLogger.warn("chat.compact.memory_flush.failed", {
-        sessionKey: input.sessionKey,
-        requestId: input.requestId ?? null,
-        mode: "llm",
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return {
-        written: false,
-        reason: "llm_error",
-        includedMessages: 0,
-      };
-    }
-
-    const after = await this.readMemorySnapshot(relPath);
-    const wrote = (after.length ?? 0) > (before.length ?? 0);
-    kaelLogger.info("chat.compact.memory_flush.finished", {
-      sessionKey: input.sessionKey,
-      requestId: input.requestId ?? null,
-      mode: "llm",
-      wroteDaily: wrote,
-      beforeLen: before.length ?? 0,
-      afterLen: after.length ?? 0,
-      path: relPath,
-    });
-    if (!wrote) {
-      return {
-        written: false,
-        reason: "llm_no_daily_write",
-        includedMessages: 0,
-      };
-    }
-    return {
-      written: true,
-      path: relPath,
-      reason: "llm_flush",
-      includedMessages: 0,
-    };
-  }
-
-  private async promoteLongTermMemoryIfNeeded(input: {
-    sessionKey: string;
-    currentMessage: string;
-    tooling: EngineTooling;
-    requestId?: string;
-  }): Promise<{
-    written: boolean;
-    reason?: string;
-  }> {
-    const before = await this.readMemorySnapshot("MEMORY.md");
-    kaelLogger.info("chat.compact.long_term_promote.started", {
-      sessionKey: input.sessionKey,
-      requestId: input.requestId ?? null,
-    });
-
-    const prompt = buildLongTermPromotionPrompt();
-
-    try {
-      await this.orchestrator.runUtilityTurn({
-        sessionKey: input.sessionKey,
-        message: prompt,
-        requestId: input.requestId ? `${input.requestId}:compact-promote` : undefined,
-        tooling: input.tooling,
-        excludeCurrentMessage: input.currentMessage,
-      });
-    } catch (error) {
-      kaelLogger.warn("chat.compact.long_term_promote.failed", {
-        sessionKey: input.sessionKey,
-        requestId: input.requestId ?? null,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return { written: false, reason: "llm_error" };
-    }
-
-    const after = await this.readMemorySnapshot("MEMORY.md");
-    const wrote = (after.length ?? 0) > (before.length ?? 0);
-    kaelLogger.info("chat.compact.long_term_promote.finished", {
-      sessionKey: input.sessionKey,
-      requestId: input.requestId ?? null,
-      wroteLongTerm: wrote,
-      beforeLen: before.length ?? 0,
-      afterLen: after.length ?? 0,
-    });
-    return {
-      written: wrote,
-      reason: wrote ? "llm_promote" : "no_change",
-    };
-  }
-
-  private async readMemorySnapshot(relPath: string): Promise<{ length: number | null }> {
-    try {
-      const result = await this.memory.get({ relPath });
-      return { length: result.text.length };
-    } catch {
-      return { length: null };
-    }
   }
 }
