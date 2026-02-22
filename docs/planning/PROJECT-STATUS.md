@@ -252,8 +252,8 @@ Definition of Done (checklist):
 - [x] Comando manual `/compact` no chat para disparar compactacao sob demanda.
 - [x] Memory flush MVP para `memory/YYYY-MM-DD.md` (append) antes da compactacao manual.
 - [x] Resposta de status com resultado de flush/compact (facilita teste/manual tuning).
-- [ ] Memory flush guiado por LLM (em vez de resumo heuristico local).
-- [ ] Compaction automatica por limiar com memory flush pre-compaction.
+- [x] Memory flush guiado por LLM (com fallback heuristico local).
+- [x] Compaction automatica por limiar com memory flush pre-compaction.
 - [ ] Promocao/dedupe de fatos duraveis em `MEMORY.md`.
 - [x] Ranking de evidencia (relevancia, fonte, recencia, fetch, diversidade).
 - [ ] Deduplicacao semantica.

@@ -10,6 +10,7 @@ import type { VideoInspectToolService } from "../tools/video/video-inspect-tool-
 import type { SessionMessage } from "../types.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
 import { TurnOrchestrator } from "./turn-orchestrator.js";
+import { kaelLogger } from "../infra/logger.js";
 
 function shouldResetSessionOnEngineError(error: unknown): boolean {
   const normalized = normalizePiError(error);
@@ -43,6 +44,10 @@ function clipForMemory(input: string, maxChars = 220): string {
     return normalized;
   }
   return `${normalized.slice(0, Math.max(0, maxChars - 3))}...`;
+}
+
+function todayMemoryRelPath(now = new Date()): string {
+  return `memory/${now.toISOString().slice(0, 10)}.md`;
 }
 
 export class ChatService {
@@ -246,6 +251,8 @@ export class ChatService {
       const result = await this.handleCompactCommand({
         sessionKey: input.sessionKey,
         currentMessage: input.message,
+        tooling,
+        requestId: input.requestId,
       });
       const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", result.reply);
       return {
@@ -256,6 +263,12 @@ export class ChatService {
     }
 
     try {
+      await this.runAutoCompactionWithMemoryFlushIfNeeded({
+        sessionKey: input.sessionKey,
+        currentMessage: input.message,
+        tooling,
+        requestId: input.requestId,
+      });
       const turn = await this.orchestrator.run({
         sessionKey: input.sessionKey,
         message: input.message,
@@ -348,6 +361,8 @@ export class ChatService {
   private async handleCompactCommand(input: {
     sessionKey: string;
     currentMessage: string;
+    tooling: EngineTooling;
+    requestId?: string;
   }): Promise<{ reply: string }> {
     const flush = await this.flushSessionToDailyMemory(input);
     const compaction = await this.orchestrator.compactNow({
@@ -371,15 +386,62 @@ export class ChatService {
     return { reply: lines.join("\n") };
   }
 
+  private async runAutoCompactionWithMemoryFlushIfNeeded(input: {
+    sessionKey: string;
+    currentMessage: string;
+    tooling: EngineTooling;
+    requestId?: string;
+  }): Promise<void> {
+    const need = await this.orchestrator.checkCompactionNeed({
+      sessionKey: input.sessionKey,
+      currentMessage: input.currentMessage,
+    });
+    if (need.reason !== "compaction_needed") {
+      return;
+    }
+
+    kaelLogger.info("chat.compact.auto.started", {
+      sessionKey: input.sessionKey,
+      requestId: input.requestId ?? null,
+      totalMessages: need.totalMessages,
+      totalChars: need.totalChars,
+      summarizedMessages: need.summarizedMessages,
+    });
+
+    const flush = await this.flushSessionToDailyMemory(input);
+    const compaction = await this.orchestrator.compactNow({
+      sessionKey: input.sessionKey,
+      currentMessage: input.currentMessage,
+    });
+
+    kaelLogger.info("chat.compact.auto.finished", {
+      sessionKey: input.sessionKey,
+      requestId: input.requestId ?? null,
+      flushWritten: flush.written,
+      flushReason: flush.reason ?? null,
+      flushPath: flush.path ?? null,
+      compactionApplied: compaction.compacted,
+      compactionReason: compaction.reason,
+      compactionSummarizedMessages: compaction.summarizedMessages,
+    });
+  }
+
   private async flushSessionToDailyMemory(input: {
     sessionKey: string;
     currentMessage: string;
+    tooling: EngineTooling;
+    requestId?: string;
   }): Promise<{
     written: boolean;
     path?: string;
     reason?: string;
     includedMessages: number;
   }> {
+    const llmFlush = await this.tryLlmMemoryFlush(input);
+    if (llmFlush.written) {
+      return llmFlush;
+    }
+
     const history = await this.sessions.getMessages(input.sessionKey, 80);
     const conversational = history
       .filter((m) => m.role === "user" || m.role === "assistant")
@@ -416,7 +478,94 @@ export class ChatService {
     return {
       written: true,
       path: write.path,
+      reason: llmFlush.reason ? `heuristic_fallback_after_${llmFlush.reason}` : "heuristic_fallback",
       includedMessages: recent.length,
     };
+  }
+
+  private async tryLlmMemoryFlush(input: {
+    sessionKey: string;
+    currentMessage: string;
+    tooling: EngineTooling;
+    requestId?: string;
+  }): Promise<{
+    written: boolean;
+    path?: string;
+    reason?: string;
+    includedMessages: number;
+  }> {
+    const relPath = todayMemoryRelPath();
+    const before = await this.readMemorySnapshot(relPath);
+    const prompt = [
+      "Memory flush de compactacao manual.",
+      "Analise o contexto recente da sessao e salve SOMENTE memorias realmente uteis.",
+      "Escreva em memoria diaria usando memory_write(target='daily').",
+      "Se houver fato duravel novo ou atualizacao importante (preferencia, identidade, ambiente, projeto), voce TAMBEM pode escrever em memory_write(target='long_term').",
+      "Evite duplicatas literais. Seja conciso.",
+      "Se nao houver nada util para salvar, responda apenas: NO_MEMORY_FLUSH",
+      "Nao execute shell, nao use tools de video, nao use plans.",
+    ].join(" ");
+
+    kaelLogger.info("chat.compact.memory_flush.started", {
+      sessionKey: input.sessionKey,
+      requestId: input.requestId ?? null,
+      mode: "llm",
+    });
+
+    try {
+      await this.orchestrator.runUtilityTurn({
+        sessionKey: input.sessionKey,
+        message: prompt,
+        requestId: input.requestId ? `${input.requestId}:compact-flush` : undefined,
+        tooling: input.tooling,
+        excludeCurrentMessage: input.currentMessage,
+      });
+    } catch (error) {
+      kaelLogger.warn("chat.compact.memory_flush.failed", {
+        sessionKey: input.sessionKey,
+        requestId: input.requestId ?? null,
+        mode: "llm",
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return {
+        written: false,
+        reason: "llm_error",
+        includedMessages: 0,
+      };
+    }
+
+    const after = await this.readMemorySnapshot(relPath);
+    const wrote = (after.length ?? 0) > (before.length ?? 0);
+    kaelLogger.info("chat.compact.memory_flush.finished", {
+      sessionKey: input.sessionKey,
+      requestId: input.requestId ?? null,
+      mode: "llm",
+      wroteDaily: wrote,
+      beforeLen: before.length ?? 0,
+      afterLen: after.length ?? 0,
+      path: relPath,
+    });
+    if (!wrote) {
+      return {
+        written: false,
+        reason: "llm_no_daily_write",
+        includedMessages: 0,
+      };
+    }
+    return {
+      written: true,
+      path: relPath,
+      reason: "llm_flush",
+      includedMessages: 0,
+    };
+  }
+
+  private async readMemorySnapshot(relPath: string): Promise<{ length: number | null }> {
+    try {
+      const result = await this.memory.get({ relPath });
+      return { length: result.text.length };
+    } catch {
+      return { length: null };
+    }
   }
 }

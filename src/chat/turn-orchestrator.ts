@@ -15,6 +15,14 @@ type OrchestratedTurnInput = {
   tooling: EngineTooling;
 };
 
+type UtilityTurnInput = {
+  sessionKey: string;
+  message: string;
+  requestId?: string;
+  tooling: EngineTooling;
+  excludeCurrentMessage?: string | null;
+};
+
 type ContextMessage = NonNullable<EngineTurnInput["contextMessages"]>[number];
 export type ContextCompactionResult = {
   compacted: boolean;
@@ -23,6 +31,7 @@ export type ContextCompactionResult = {
     | "recent_compaction"
     | "below_threshold"
     | "not_enough_older"
+    | "compaction_needed"
     | "compacted";
   summarizedMessages: number;
   totalMessages: number;
@@ -61,8 +70,29 @@ export class TurnOrchestrator {
     });
   }
 
+  async runUtilityTurn(input: UtilityTurnInput): Promise<EngineTurnOutput> {
+    const contextMessages = await this.buildContextMessages(
+      input.sessionKey,
+      input.excludeCurrentMessage ?? "",
+    );
+    return this.engine.runTurn({
+      sessionKey: input.sessionKey,
+      message: input.message,
+      requestId: input.requestId,
+      contextMessages,
+      tooling: input.tooling,
+    });
+  }
+
   async compactNow(input: { sessionKey: string; currentMessage?: string }): Promise<ContextCompactionResult> {
-    return this.compactContext(input.sessionKey, input.currentMessage ?? null, true);
+    return this.compactContext(input.sessionKey, input.currentMessage ?? null, true, true);
+  }
+
+  async checkCompactionNeed(input: {
+    sessionKey: string;
+    currentMessage?: string;
+  }): Promise<ContextCompactionResult> {
+    return this.compactContext(input.sessionKey, input.currentMessage ?? null, false, false);
   }
 
   private async buildContextMessages(
@@ -113,13 +143,14 @@ export class TurnOrchestrator {
   }
 
   private async maybeCompactContext(sessionKey: string, currentMessage: string): Promise<void> {
-    await this.compactContext(sessionKey, currentMessage, false);
+    await this.compactContext(sessionKey, currentMessage, false, true);
   }
 
   private async compactContext(
     sessionKey: string,
     currentMessage: string | null,
     force: boolean,
+    apply: boolean,
   ): Promise<ContextCompactionResult> {
     const fetchLimit = Math.max(this.cfg.maxContextMessages * 12, this.cfg.maxContextMessages);
     const history = await this.sessions.getMessages(sessionKey, fetchLimit);
@@ -175,6 +206,16 @@ export class TurnOrchestrator {
         compacted: false,
         reason: "not_enough_older",
         summarizedMessages: 0,
+        totalMessages: trimmed.length,
+        totalChars,
+      };
+    }
+
+    if (!apply) {
+      return {
+        compacted: false,
+        reason: "compaction_needed",
+        summarizedMessages: older.length,
         totalMessages: trimmed.length,
         totalChars,
       };
