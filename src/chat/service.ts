@@ -11,6 +11,13 @@ import type { SessionMessage } from "../types.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
 import { TurnOrchestrator } from "./turn-orchestrator.js";
 import { kaelLogger } from "../infra/logger.js";
+import {
+  buildHeuristicDailyFlushNote,
+  buildLongTermPromotionPrompt,
+  buildMemoryFlushPrompt,
+  isCompactCommand,
+  todayMemoryRelPath,
+} from "../memory/policy.js";
 
 function shouldResetSessionOnEngineError(error: unknown): boolean {
   const normalized = normalizePiError(error);
@@ -32,22 +39,6 @@ function extractPlayVlcUrl(reply: string): string | null {
 
 function shellQuoteSingle(value: string): string {
   return `'${value.replace(/'/g, `'\"'\"'`)}'`;
-}
-
-function isCompactCommand(input: string): boolean {
-  return input.trim().toLowerCase() === "/compact";
-}
-
-function clipForMemory(input: string, maxChars = 220): string {
-  const normalized = input.replace(/\s+/g, " ").trim();
-  if (normalized.length <= maxChars) {
-    return normalized;
-  }
-  return `${normalized.slice(0, Math.max(0, maxChars - 3))}...`;
-}
-
-function todayMemoryRelPath(now = new Date()): string {
-  return `memory/${now.toISOString().slice(0, 10)}.md`;
 }
 
 export class ChatService {
@@ -449,43 +440,29 @@ export class ChatService {
     }
 
     const history = await this.sessions.getMessages(input.sessionKey, 80);
-    const conversational = history
-      .filter((m) => m.role === "user" || m.role === "assistant")
-      .filter((m) => !(m.role === "user" && m.content === input.currentMessage));
-
-    const recent = conversational.slice(-12);
-    if (recent.length < 2) {
+    const heuristic = buildHeuristicDailyFlushNote({
+      sessionKey: input.sessionKey,
+      currentMessage: input.currentMessage,
+      history,
+    });
+    if (!heuristic) {
       return {
         written: false,
         reason: "not_enough_conversation",
-        includedMessages: recent.length,
+        includedMessages: 0,
       };
     }
 
-    const first = recent[0]?.createdAt ?? "";
-    const last = recent[recent.length - 1]?.createdAt ?? "";
-    const bullets = recent
-      .map((m) => `- ${m.role}: ${clipForMemory(m.content)}`)
-      .join("\n");
-    const note = [
-      "[manual-compact] Resumo heuristico de contexto antes da compactacao.",
-      `session=${input.sessionKey}`,
-      `janela=${first} -> ${last}`,
-      `mensagens=${recent.length}`,
-      "trechos:",
-      bullets,
-    ].join("\n");
-
     const write = await this.memory.write({
-      content: note,
+      content: heuristic.note,
       target: "daily",
     });
 
     return {
       written: true,
       path: write.path,
-      reason: llmFlush.reason ? `heuristic_fallback_after_${llmFlush.reason}` : "heuristic_fallback",
-      includedMessages: recent.length,
+      reason: llmFlush.reason ? `heuristic_fallback_after_${llmFlush.reason}` : heuristic.reason,
+      includedMessages: heuristic.includedMessages,
     };
   }
 
@@ -502,15 +479,7 @@ export class ChatService {
   }> {
     const relPath = todayMemoryRelPath();
     const before = await this.readMemorySnapshot(relPath);
-    const prompt = [
-      "Memory flush de compactacao manual.",
-      "Analise o contexto recente da sessao e salve SOMENTE memorias realmente uteis.",
-      "Escreva em memoria diaria usando memory_write(target='daily').",
-      "Se houver fato duravel novo ou atualizacao importante (preferencia, identidade, ambiente, projeto), voce TAMBEM pode escrever em memory_write(target='long_term').",
-      "Evite duplicatas literais. Seja conciso.",
-      "Se nao houver nada util para salvar, responda apenas: NO_MEMORY_FLUSH",
-      "Nao execute shell, nao use tools de video, nao use plans.",
-    ].join(" ");
+    const prompt = buildMemoryFlushPrompt();
 
     kaelLogger.info("chat.compact.memory_flush.started", {
       sessionKey: input.sessionKey,
@@ -581,15 +550,7 @@ export class ChatService {
       requestId: input.requestId ?? null,
     });
 
-    const prompt = [
-      "Promocao de memoria de longo prazo apos memory flush/compactacao.",
-      "Revise o contexto recente e promova SOMENTE fatos duraveis e uteis (preferencias, identidade, ambiente, padroes de uso, configuracoes estaveis, objetivos persistentes).",
-      "Antes de escrever, consulte memoria existente com memory_search/memory_get para evitar duplicatas e para atualizar fatos existentes.",
-      "Se precisar salvar, use memory_write(target='long_term').",
-      "Nao replique logs, respostas temporarias, ou detalhes passageiros.",
-      "Se nao houver nada para promover, responda apenas: NO_LONG_TERM_PROMOTION",
-      "Nao use shell, nao use video, nao use plans.",
-    ].join(" ");
+    const prompt = buildLongTermPromotionPrompt();
 
     try {
       await this.orchestrator.runUtilityTurn({
