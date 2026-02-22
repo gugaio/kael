@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Panel } from "../components/Panel";
-import { generatePlan, getPlans, getSessionMessages, postChat, type Plan } from "../lib/api";
-import { formatDate, statusTone } from "../lib/format";
+import { generatePlan, getSessionMessages, postChat } from "../lib/api";
+import { formatDate } from "../lib/format";
 
 function shouldSuggestPlan(draft: string): boolean {
   const text = draft.toLowerCase().trim();
@@ -46,10 +46,6 @@ export function ChatPage(): JSX.Element {
   const messages = useQuery({
     queryKey: ["session-messages", sessionKey],
     queryFn: () => getSessionMessages(sessionKey),
-  });
-  const plans = useQuery({
-    queryKey: ["plans", "session", sessionKey],
-    queryFn: () => getPlans({ sessionKey, limit: 10 }),
   });
 
   const send = useMutation({
@@ -104,9 +100,6 @@ export function ChatPage(): JSX.Element {
   };
 
   const planSuggestionVisible = shouldSuggestPlan(draft) && !planHintDismissed;
-  const latestPlan: Plan | undefined = (plans.data ?? [])
-    .slice()
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -135,28 +128,6 @@ export function ChatPage(): JSX.Element {
             </Link>
           )}
         >
-          {latestPlan && (
-            <div className="mb-3 rounded-xl border border-kael-border bg-kael-panelSoft p-3">
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <p className="text-xs uppercase tracking-wider text-kael-muted">Plano da sessao</p>
-                <span className={`rounded-full border px-2 py-0.5 text-xs ${statusTone(latestPlan.status)}`}>
-                  {latestPlan.status}
-                </span>
-              </div>
-              <p className="truncate text-sm font-medium">{latestPlan.title}</p>
-              <p className="text-xs text-kael-muted">
-                updated: {formatDate(latestPlan.updatedAt)} • steps: {latestPlan.steps.length}
-              </p>
-              <div className="mt-2 flex gap-2">
-                <Link
-                  to={`/plans?planId=${encodeURIComponent(latestPlan.id)}`}
-                  className="rounded border border-kael-accent/60 bg-kael-accent/20 px-2 py-1 text-xs hover:bg-kael-accent/30"
-                >
-                  Open in Plans
-                </Link>
-              </div>
-            </div>
-          )}
           <div className="kael-scroll mb-3 max-h-[55vh] min-w-0 space-y-2 overflow-y-auto overflow-x-hidden rounded-xl border border-kael-border bg-kael-panelSoft p-3">
             {(messages.data ?? []).map((item) => (
               <div
