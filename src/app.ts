@@ -9,6 +9,7 @@ import { resolveKaelHome } from "./global-config.js";
 import { JobManager } from "./jobs/manager.js";
 import { JobStore } from "./jobs/store.js";
 import { MemoryService } from "./memory/service.js";
+import { HybridMemoryRetriever } from "./memory/retriever-hybrid.js";
 import { LlmPlanGenerator } from "./planner/llm-generator.js";
 import { PlannerService } from "./planner/service.js";
 import { DisabledSearchProvider, TavilySearchProvider } from "./research/provider.js";
@@ -71,6 +72,7 @@ export async function createKaelApp(): Promise<KaelApp> {
     storageRoot: path.join(resolveKaelHome(), "data", "memory"),
     defaultMaxResults: 6,
     maxSnippetChars: 1200,
+    retriever: new HybridMemoryRetriever(),
   });
   await memory.init();
   const workspace = new WorkspaceInspector({

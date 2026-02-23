@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { ensureDir } from "../infra/fs.js";
-import { searchMemoryTexts } from "./retriever.js";
+import { BuiltinMemoryRetriever } from "./retriever.js";
+import type { MemoryRetriever } from "./types.js";
 
 export type MemoryWriteTarget = "daily" | "long_term";
 
@@ -26,6 +27,7 @@ type MemoryServiceConfig = {
   storageRoot?: string;
   defaultMaxResults: number;
   maxSnippetChars: number;
+  retriever?: MemoryRetriever;
 };
 
 function toIsoDate(date = new Date()): string {
@@ -53,6 +55,7 @@ export class MemoryService {
   private readonly dailyDir: string;
   private readonly legacyLongTermPath: string;
   private readonly legacyDailyDir: string;
+  private readonly retriever: MemoryRetriever;
 
   constructor(cfg: MemoryServiceConfig) {
     this.workspaceRoot = path.resolve(cfg.workspaceRoot);
@@ -63,6 +66,7 @@ export class MemoryService {
     this.dailyDir = path.join(this.storageRoot, "daily");
     this.legacyLongTermPath = path.join(this.workspaceRoot, "MEMORY.md");
     this.legacyDailyDir = path.join(this.workspaceRoot, "memory");
+    this.retriever = cfg.retriever ?? new BuiltinMemoryRetriever();
   }
 
   async init(): Promise<void> {
@@ -113,7 +117,7 @@ export class MemoryService {
         text: await fs.readFile(filePath, "utf-8").catch(() => ""),
       })),
     );
-    return searchMemoryTexts({
+    return this.retriever.search({
       query,
       entries,
       maxResults: targetResults,
