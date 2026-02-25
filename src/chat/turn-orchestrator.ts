@@ -44,6 +44,17 @@ function isConversationRole(role: string): role is "user" | "assistant" | "syste
 
 const COMPACTION_PREFIX = "[compaction]";
 
+// Multiplica a janela de contexto para determinar quando compactar.
+// Ex: maxContextMessages=24 → threshold=72 mensagens.
+const COMPACTION_THRESHOLD_MULTIPLIER = 3;
+// Piso minimo extra para configs pequenos nao dispararem compaction cedo demais.
+const COMPACTION_MIN_EXTRA_MESSAGES = 12;
+const COMPACTION_MIN_EXTRA_CHARS = 4000;
+// Quantas mensagens recentes buscar para compaction (multiplo da janela).
+const COMPACTION_FETCH_MULTIPLIER = 12;
+// Quantas mensagens recentes buscar para construir contexto.
+const CONTEXT_FETCH_MULTIPLIER = 4;
+
 function isUserOrAssistant(
   message: SessionMessage,
 ): message is SessionMessage & { role: "user" | "assistant" } {
@@ -57,8 +68,14 @@ export class TurnOrchestrator {
     private readonly cfg: TurnOrchestratorConfig,
   ) {}
 
+  /**
+   * Executa um turno do engine com contexto construido a partir do historico.
+   *
+   * NOTA: compaction nao e feita aqui — e responsabilidade do caller
+   * (MemoryOrchestrator via runAutoCompactionWithMemoryFlushIfNeeded).
+   * Isso evita chamadas duplicadas a getMessages.
+   */
   async run(input: OrchestratedTurnInput): Promise<EngineTurnOutput> {
-    await this.maybeCompactContext(input.sessionKey, input.message);
     const contextMessages = await this.buildContextMessages(input.sessionKey, input.message);
 
     return this.engine.runTurn({
@@ -99,7 +116,7 @@ export class TurnOrchestrator {
     sessionKey: string,
     currentMessage: string,
   ): Promise<ContextMessage[]> {
-    const fetchLimit = Math.max(this.cfg.maxContextMessages * 4, this.cfg.maxContextMessages);
+    const fetchLimit = this.cfg.maxContextMessages * CONTEXT_FETCH_MULTIPLIER;
     const history = await this.sessions.getMessages(sessionKey, fetchLimit);
     const conversational: ContextMessage[] = history
       .filter((message) => isConversationRole(message.role))
@@ -142,17 +159,13 @@ export class TurnOrchestrator {
     return selected.reverse();
   }
 
-  private async maybeCompactContext(sessionKey: string, currentMessage: string): Promise<void> {
-    await this.compactContext(sessionKey, currentMessage, false, true);
-  }
-
   private async compactContext(
     sessionKey: string,
     currentMessage: string | null,
     force: boolean,
     apply: boolean,
   ): Promise<ContextCompactionResult> {
-    const fetchLimit = Math.max(this.cfg.maxContextMessages * 12, this.cfg.maxContextMessages);
+    const fetchLimit = this.cfg.maxContextMessages * COMPACTION_FETCH_MULTIPLIER;
     const history = await this.sessions.getMessages(sessionKey, fetchLimit);
     const conversational = history.filter(isUserOrAssistant);
     if (conversational.length === 0) {
@@ -186,8 +199,16 @@ export class TurnOrchestrator {
     }
 
     const totalChars = trimmed.reduce((acc, item) => acc + item.content.length, 0);
-    const messageThreshold = Math.max(this.cfg.maxContextMessages * 3, this.cfg.maxContextMessages + 12);
-    const charsThreshold = Math.max(this.cfg.maxContextChars * 3, this.cfg.maxContextChars + 4000);
+    // Compacta quando o historico atinge N vezes a janela de contexto,
+    // mas com piso minimo para configs pequenos (ex: maxContextMessages=2 → threshold=14, nao 6).
+    const messageThreshold = Math.max(
+      this.cfg.maxContextMessages * COMPACTION_THRESHOLD_MULTIPLIER,
+      this.cfg.maxContextMessages + COMPACTION_MIN_EXTRA_MESSAGES,
+    );
+    const charsThreshold = Math.max(
+      this.cfg.maxContextChars * COMPACTION_THRESHOLD_MULTIPLIER,
+      this.cfg.maxContextChars + COMPACTION_MIN_EXTRA_CHARS,
+    );
     const shouldCompact = trimmed.length > messageThreshold || totalChars > charsThreshold;
     if (!force && !shouldCompact) {
       return {
