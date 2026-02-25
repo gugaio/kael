@@ -119,7 +119,7 @@ function createToolingStub(): EngineTooling {
 }
 
 describe("TurnOrchestrator compaction", () => {
-  it("gera compaction automatica quando contexto explode", async () => {
+  it("compactNow gera compaction quando contexto explode", async () => {
     const messages: SessionMessage[] = [];
     for (let idx = 0; idx < 90; idx += 1) {
       const role = idx % 2 === 0 ? "user" : "assistant";
@@ -152,23 +152,82 @@ describe("TurnOrchestrator compaction", () => {
       { maxContextMessages: 24, maxContextChars: 12000 },
     );
 
+    const result = await orchestrator.compactNow({
+      sessionKey: "s1",
+      currentMessage: "mensagem atual",
+    });
+
+    expect(result.compacted).toBe(true);
+    expect(result.reason).toBe("compacted");
+    expect(appendMessage).toHaveBeenCalledTimes(1);
+    const [sessionArg, roleArg, contentArg] = appendMessage.mock.calls[0];
+    expect(sessionArg).toBe("s1");
+    expect(roleArg).toBe("system");
+    expect(String(contentArg)).toContain("[compaction]");
+  });
+
+  it("checkCompactionNeed detecta necessidade sem aplicar", async () => {
+    const messages: SessionMessage[] = [];
+    for (let idx = 0; idx < 90; idx += 1) {
+      const role = idx % 2 === 0 ? "user" : "assistant";
+      messages.push(createMessage(role, `mensagem-${idx} ${"x".repeat(120)}`, idx));
+    }
+
+    const appendMessage = vi.fn();
+    const getMessages = vi.fn(async (_sessionKey: string, limit = 50) =>
+      limit > 0 ? messages.slice(-limit) : messages,
+    );
+
+    const engine: AgentEngine = { runTurn: async () => ({ reply: "ok" }) };
+
+    const orchestrator = new TurnOrchestrator(
+      { appendMessage, getMessages } as never,
+      engine,
+      { maxContextMessages: 24, maxContextChars: 12000 },
+    );
+
+    const result = await orchestrator.checkCompactionNeed({
+      sessionKey: "s1",
+      currentMessage: "mensagem atual",
+    });
+
+    expect(result.compacted).toBe(false);
+    expect(result.reason).toBe("compaction_needed");
+    expect(result.summarizedMessages).toBeGreaterThan(0);
+    // Nao deve ter aplicado nada
+    expect(appendMessage).not.toHaveBeenCalled();
+  });
+
+  it("run nao dispara compaction (responsabilidade do caller)", async () => {
+    const messages: SessionMessage[] = [];
+    for (let idx = 0; idx < 90; idx += 1) {
+      const role = idx % 2 === 0 ? "user" : "assistant";
+      messages.push(createMessage(role, `mensagem-${idx} ${"x".repeat(120)}`, idx));
+    }
+
+    const appendMessage = vi.fn();
+    const getMessages = vi.fn(async (_sessionKey: string, limit = 50) =>
+      limit > 0 ? messages.slice(-limit) : messages,
+    );
+
+    const runTurn = vi.fn(async (input: EngineTurnInput): Promise<EngineTurnOutput> => ({ reply: input.message }));
+    const engine: AgentEngine = { runTurn };
+
+    const orchestrator = new TurnOrchestrator(
+      { appendMessage, getMessages } as never,
+      engine,
+      { maxContextMessages: 24, maxContextChars: 12000 },
+    );
+
     await orchestrator.run({
       sessionKey: "s1",
       message: "mensagem atual",
       tooling: createToolingStub(),
     });
 
-    expect(appendMessage).toHaveBeenCalledTimes(1);
-    const [sessionArg, roleArg, contentArg] = appendMessage.mock.calls[0];
-    expect(sessionArg).toBe("s1");
-    expect(roleArg).toBe("system");
-    expect(String(contentArg)).toContain("[compaction]");
-    const calledInput = runTurn.mock.calls[0]?.[0];
-    if (!calledInput) {
-      throw new Error("engine.runTurn should be called");
-    }
-    const contextMessages = calledInput.contextMessages ?? [];
-    expect(contextMessages.some((item) => item.role === "system")).toBe(true);
+    // run() nao deve chamar appendMessage (compaction e feita externamente)
+    expect(appendMessage).not.toHaveBeenCalled();
+    expect(runTurn).toHaveBeenCalledTimes(1);
   });
 
   it("nao compacta novamente quando ha compaction recente", async () => {
@@ -192,12 +251,14 @@ describe("TurnOrchestrator compaction", () => {
       engine,
       { maxContextMessages: 4, maxContextChars: 200 },
     );
-    await orchestrator.run({
+
+    const result = await orchestrator.checkCompactionNeed({
       sessionKey: "s1",
-      message: "mensagem atual",
-      tooling: createToolingStub(),
+      currentMessage: "mensagem atual",
     });
 
+    expect(result.compacted).toBe(false);
+    expect(result.reason).toBe("recent_compaction");
     expect(appendMessage).not.toHaveBeenCalled();
   });
 });
