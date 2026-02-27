@@ -185,6 +185,28 @@ export class VideoJobService {
     });
   }
 
+  async startProbeUrl(params: {
+    sessionKey: string;
+    streamUrl: string;
+  }): Promise<VideoJob> {
+    validateStreamUrl(params.streamUrl);
+    return this.startJob({
+      type: "probe_media",
+      sessionKey: params.sessionKey,
+      command: "ffprobe",
+      input: params.streamUrl,
+      args: [
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration,size,bit_rate:stream=index,codec_name,codec_type,width,height,avg_frame_rate",
+        "-of",
+        "json",
+        params.streamUrl,
+      ],
+    });
+  }
+
   async cancelJob(jobId: string): Promise<{ job: VideoJob | null; canceled: boolean }> {
     const job = this.jobs.get(jobId);
     if (!job) {

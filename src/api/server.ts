@@ -902,6 +902,44 @@ export function createApiServer(app: KaelApp): FastifyInstance {
       sessionKey?: string;
       inputPath?: string;
     };
+  }>("/jobs/probe-url", async (request, reply) => {
+    const sessionKey = request.body.sessionKey?.trim() || "main";
+    const streamUrl = request.body.inputPath?.trim();
+
+    if (!streamUrl) {
+      throw new ApiError(400, "BAD_REQUEST", "inputPath is required");
+    }
+
+    const idempotencyKey = readIdempotencyKey(request.headers["x-idempotency-key"]);
+    try {
+      const { replayed, value } = await withIdempotency({
+        store: idempotency,
+        enabled: app.config.idempotency.enabled,
+        scope: "jobs:probe-url",
+        idempotencyKey,
+        signature: stableStringify({ sessionKey, streamUrl }),
+        execute: async () => {
+          const job = await app.jobs.startProbeUrl({ sessionKey, streamUrl });
+          return { ok: true, job };
+        },
+      });
+      if (replayed) {
+        reply.header("x-idempotency-replayed", "true");
+      }
+      return value;
+    } catch (error) {
+      if (error instanceof IdempotencyConflictError) {
+        throw new ApiError(409, "IDEMPOTENCY_CONFLICT", error.message);
+      }
+      throw error;
+    }
+  });
+
+  server.post<{
+    Body: {
+      sessionKey?: string;
+      inputPath?: string;
+    };
   }>("/jobs/probe", async (request, reply) => {
     const sessionKey = request.body.sessionKey?.trim() || "main";
     const inputPath = request.body.inputPath?.trim();
