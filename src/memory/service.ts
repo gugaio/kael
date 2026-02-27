@@ -28,6 +28,11 @@ type MemoryServiceConfig = {
   defaultMaxResults: number;
   maxSnippetChars: number;
   retriever?: MemoryRetriever;
+  semanticDedupe?: {
+    minTokens?: number;
+    jaccardThreshold?: number;
+    containmentThreshold?: number;
+  };
 };
 
 function toIsoDate(date = new Date()): string {
@@ -46,6 +51,133 @@ function normalizeForDedupe(input: string): string {
   return input.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+const SEMANTIC_DEDUPE_MIN_TOKENS = 4;
+const SEMANTIC_DEDUPE_JACCARD_THRESHOLD = 0.72;
+const SEMANTIC_DEDUPE_CONTAINMENT_THRESHOLD = 0.85;
+const SEMANTIC_DEDUPE_STOPWORDS = new Set([
+  "a",
+  "o",
+  "os",
+  "as",
+  "de",
+  "do",
+  "da",
+  "dos",
+  "das",
+  "e",
+  "em",
+  "no",
+  "na",
+  "nos",
+  "nas",
+  "para",
+  "por",
+  "com",
+  "sem",
+  "um",
+  "uma",
+  "uns",
+  "umas",
+  "que",
+  "se",
+  "ao",
+  "aos",
+  "à",
+  "às",
+  "the",
+  "and",
+  "or",
+  "to",
+  "of",
+  "in",
+  "on",
+  "for",
+  "with",
+]);
+
+function tokenizeForSemanticDedupe(input: string): string[] {
+  return input
+    .toLowerCase()
+    .replace(/[`#>*_[\](){}:;,.!?/\\|"'=-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3)
+    .filter((token) => !SEMANTIC_DEDUPE_STOPWORDS.has(token));
+}
+
+function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) {
+    return 0;
+  }
+  let intersection = 0;
+  for (const token of a) {
+    if (b.has(token)) {
+      intersection += 1;
+    }
+  }
+  const union = a.size + b.size - intersection;
+  return union <= 0 ? 0 : intersection / union;
+}
+
+function containmentRatio(candidate: Set<string>, existing: Set<string>): number {
+  if (candidate.size === 0) {
+    return 0;
+  }
+  let matched = 0;
+  for (const token of candidate) {
+    if (existing.has(token)) {
+      matched += 1;
+    }
+  }
+  return matched / candidate.size;
+}
+
+function splitLongTermBlocks(raw: string): string[] {
+  const text = raw.trim();
+  if (!text) {
+    return [];
+  }
+  const blocks = text
+    .split(/\n(?=##\s+\d{4}-\d{2}-\d{2}T)/g)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return blocks.length > 0 ? blocks : [text];
+}
+
+function isSemanticDuplicateLongTermEntry(
+  existingRaw: string,
+  candidateRaw: string,
+  cfg: {
+    minTokens: number;
+    jaccardThreshold: number;
+    containmentThreshold: number;
+  },
+): boolean {
+  const candidateTokens = new Set(tokenizeForSemanticDedupe(candidateRaw));
+  if (candidateTokens.size < cfg.minTokens) {
+    return false;
+  }
+
+  for (const block of splitLongTermBlocks(existingRaw)) {
+    const blockTokens = new Set(tokenizeForSemanticDedupe(block));
+    if (blockTokens.size < cfg.minTokens) {
+      continue;
+    }
+    const jaccard = jaccardSimilarity(candidateTokens, blockTokens);
+    if (jaccard >= cfg.jaccardThreshold) {
+      return true;
+    }
+    const containment = containmentRatio(candidateTokens, blockTokens);
+    if (containment >= cfg.containmentThreshold) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export class MemoryService {
   private readonly workspaceRoot: string;
   private readonly storageRoot: string;
@@ -56,6 +188,11 @@ export class MemoryService {
   private readonly legacyLongTermPath: string;
   private readonly legacyDailyDir: string;
   private readonly retriever: MemoryRetriever;
+  private readonly semanticDedupe: {
+    minTokens: number;
+    jaccardThreshold: number;
+    containmentThreshold: number;
+  };
 
   constructor(cfg: MemoryServiceConfig) {
     this.workspaceRoot = path.resolve(cfg.workspaceRoot);
@@ -67,6 +204,17 @@ export class MemoryService {
     this.legacyLongTermPath = path.join(this.workspaceRoot, "MEMORY.md");
     this.legacyDailyDir = path.join(this.workspaceRoot, "memory");
     this.retriever = cfg.retriever ?? new BuiltinMemoryRetriever();
+    this.semanticDedupe = {
+      minTokens: Math.max(1, Math.floor(cfg.semanticDedupe?.minTokens ?? SEMANTIC_DEDUPE_MIN_TOKENS)),
+      jaccardThreshold: Math.min(
+        1,
+        Math.max(0, cfg.semanticDedupe?.jaccardThreshold ?? SEMANTIC_DEDUPE_JACCARD_THRESHOLD),
+      ),
+      containmentThreshold: Math.min(
+        1,
+        Math.max(0, cfg.semanticDedupe?.containmentThreshold ?? SEMANTIC_DEDUPE_CONTAINMENT_THRESHOLD),
+      ),
+    };
   }
 
   async init(): Promise<void> {
@@ -91,6 +239,9 @@ export class MemoryService {
       const normalizedExisting = normalizeForDedupe(existing);
       const normalizedText = normalizeForDedupe(text);
       if (normalizedText && normalizedExisting.includes(normalizedText)) {
+        return { path: "MEMORY.md" };
+      }
+      if (isSemanticDuplicateLongTermEntry(existing, text, this.semanticDedupe)) {
         return { path: "MEMORY.md" };
       }
       const block = `\n\n## ${stamp}\n${text}\n`;

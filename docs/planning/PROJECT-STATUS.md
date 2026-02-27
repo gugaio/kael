@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-02-22**
+Ultima atualizacao: **2026-02-25**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -238,10 +238,11 @@ Definition of Done (checklist):
 - [x] Cache de fetch por URL com TTL configuravel.
 - [x] Configuracao `KAEL_RESEARCH_*` documentada e validada no startup.
 - [x] Sumarizacao multi-fonte com evidencia e score de confianca.
+- [ ] Suporte opcional a multiplos providers.
 
 ### Fase 10 - Compaction + Memory Flush (curadoria de memoria)
 
-Status: **Em andamento**
+Status: **Concluida**
 
 Objetivos:
 - Tornar compaction um fluxo explicito e testavel (`/compact`).
@@ -257,10 +258,33 @@ Definition of Done (checklist):
 - [x] Promocao de fatos duraveis para `MEMORY.md` no fluxo de compactacao (LLM-guided).
 - [x] Dedupe textual basico na escrita de `memory_write(target=long_term)`.
 - [x] Ranking de evidencia (relevancia, fonte, recencia, fetch, diversidade).
-- [ ] Deduplicacao semantica.
-- [ ] Suporte opcional a multiplos providers.
+- [x] Deduplicacao semantica.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-02-25 - Fase 10: deduplicacao semantica basica em memoria de longo prazo
+
+Resumo:
+- `MemoryService.write(target=long_term)` agora bloqueia entradas semanticamente similares via similaridade de tokens (jaccard/containment), alem do dedupe textual literal.
+- Dedupe semantica avalia por bloco de entrada em `MEMORY.md` (secoes `## <timestamp>`), reduzindo repeticao de fatos reescritos.
+- Adicionado teste de regressao para evitar append de memoria longa com texto equivalente em outra redacao.
+- Ajustado `PROJECT-STATUS`/Fase 10 para refletir conclusao da pendencia de deduplicacao semantica.
+
+Arquivos-chave:
+- `src/memory/service.ts`
+- `src/memory/service.test.ts`
+- `docs/architecture/phases/phase-10.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [ ] `npm run check`
+- [x] `npx vitest run src/memory/service.test.ts`
+
+Pendencias:
+- Calibrar thresholds de similaridade com uso real para reduzir falsos positivos/negativos.
+
+Proximo passo recomendado:
+- Fase 9.x: suporte opcional a multiplos providers de pesquisa com fallback plugavel.
 
 ### 2026-02-21 - Shell runtime hardening (exec/process)
 

@@ -19,7 +19,7 @@ Indice rapido para humanos e onboarding inicial.
 ## Estado atual das fases (resumo rapido)
 
 - Fase 1: concluida.
-- Fase 2: concluida (engine hibrida + tools de video).
+- Fase 2: em andamento (engine hibrida + tools de video concluidos; faltam testes automatizados das tools).
 - Fase 3: concluida (resiliencia operacional).
 - Fase 4: concluida (autonomia: heartbeat + scheduler persistente + schedules API/CLI).
 - Fase 5: concluida (hardening: observabilidade + seguranca de execucao de jobs).
@@ -34,7 +34,8 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 9.1: concluida (research API-first com `web_search`, Tavily e memoria por sessao).
 - Fase 9.2: concluida (enriquecimento por URL com `web_fetch`, extracao de texto e cache TTL).
 - Fase 9.3: concluida (sintese multi-fonte com `web_research` e score de confianca).
-- Fase 10.0: em andamento (compaction manual `/compact` + memory flush para `daily` como base de curadoria de memoria).
+- Fase 9.4: concluida (hardening + ranking de evidencia/confianca em `web_fetch`/`web_research`).
+- Fase 10.0: concluida (compaction manual/auto + memory flush + promocao para `MEMORY.md` + dedupe semantica basica).
 
 ## Estudos e referencias tecnicas
 
