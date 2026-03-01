@@ -54,6 +54,8 @@ const COMPACTION_MIN_EXTRA_CHARS = 4000;
 const COMPACTION_FETCH_MULTIPLIER = 12;
 // Quantas mensagens recentes buscar para construir contexto.
 const CONTEXT_FETCH_MULTIPLIER = 4;
+// Quantidade minima de novas mensagens user/assistant para nova compaction apos watermark.
+const COMPACTION_MIN_NEW_MESSAGES_SINCE_LAST = 12;
 
 function isUserOrAssistant(
   message: SessionMessage,
@@ -165,6 +167,7 @@ export class TurnOrchestrator {
     force: boolean,
     apply: boolean,
   ): Promise<ContextCompactionResult> {
+    const watermark = await this.sessions.getCompactionWatermark(sessionKey);
     const fetchLimit = this.cfg.maxContextMessages * COMPACTION_FETCH_MULTIPLIER;
     const history = await this.sessions.getMessages(sessionKey, fetchLimit);
     const conversational = history.filter(isUserOrAssistant);
@@ -184,10 +187,37 @@ export class TurnOrchestrator {
       trimmed.pop();
     }
 
-    const hasRecentCompaction = history
+    const minNewSinceLastCompaction = Math.max(
+      this.cfg.maxContextMessages,
+      COMPACTION_MIN_NEW_MESSAGES_SINCE_LAST,
+    );
+    const hasWatermark = watermark.lastCompactionUserAssistantCount != null || watermark.lastCompactionAt != null;
+    const newUserAssistantMessagesSinceLastCompaction = hasWatermark
+      ? Math.max(
+          0,
+          watermark.userAssistantCount - (watermark.lastCompactionUserAssistantCount ?? watermark.userAssistantCount),
+        )
+      : null;
+
+    if (
+      !force &&
+      newUserAssistantMessagesSinceLastCompaction != null &&
+      newUserAssistantMessagesSinceLastCompaction < minNewSinceLastCompaction
+    ) {
+      const totalCharsRecent = trimmed.reduce((acc, item) => acc + item.content.length, 0);
+      return {
+        compacted: false,
+        reason: "recent_compaction",
+        summarizedMessages: 0,
+        totalMessages: trimmed.length,
+        totalChars: totalCharsRecent,
+      };
+    }
+
+    const hasRecentCompactionInHistory = history
       .slice(-20)
       .some((message) => message.role === "system" && message.content.startsWith(COMPACTION_PREFIX));
-    if (!force && hasRecentCompaction) {
+    if (!force && !hasWatermark && hasRecentCompactionInHistory) {
       const totalCharsRecent = trimmed.reduce((acc, item) => acc + item.content.length, 0);
       return {
         compacted: false,
@@ -244,12 +274,15 @@ export class TurnOrchestrator {
 
     const summary = this.summarizeForCompaction(older);
     await this.sessions.appendMessage(sessionKey, "system", `${COMPACTION_PREFIX}\n${summary}`);
+    await this.sessions.markCompaction(sessionKey);
     kaelLogger.info("session.context.compacted", {
       sessionKey,
       summarizedMessages: older.length,
       totalMessages: trimmed.length,
       totalChars,
       forced: force,
+      userAssistantCount: watermark.userAssistantCount,
+      newUserAssistantMessagesSinceLastCompaction,
     });
     return {
       compacted: true,

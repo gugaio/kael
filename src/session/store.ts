@@ -35,7 +35,16 @@ export class SessionStore {
     };
 
     await fs.appendFile(entry.transcriptPath, JSON.stringify(message) + "\n", "utf-8");
-    await this.touchSession(sessionKey, entry, now);
+    const nextUserAssistantCount =
+      role === "user" || role === "assistant" ? (entry.userAssistantCount ?? 0) + 1 : (entry.userAssistantCount ?? 0);
+    await this.touchSession(
+      sessionKey,
+      {
+        ...entry,
+        userAssistantCount: nextUserAssistantCount,
+      },
+      now,
+    );
     return message;
   }
 
@@ -46,12 +55,7 @@ export class SessionStore {
       return [];
     }
 
-    const raw = await fs.readFile(entry.transcriptPath, "utf-8").catch(() => "");
-    if (!raw.trim()) {
-      return [];
-    }
-
-    const lines = raw.split("\n").filter(Boolean);
+    const lines = await this.readTranscriptLines(entry.transcriptPath, limit);
     const messages: SessionMessage[] = lines
       .map((line) => {
         try {
@@ -62,7 +66,45 @@ export class SessionStore {
       })
       .filter((message): message is SessionMessage => Boolean(message));
 
-    return limit > 0 ? messages.slice(-limit) : messages;
+    return messages;
+  }
+
+  async getCompactionWatermark(sessionKey: string): Promise<{
+    userAssistantCount: number;
+    lastCompactionUserAssistantCount: number | null;
+    lastCompactionAt: string | null;
+  }> {
+    const index = await this.readIndex();
+    const entry = index[sessionKey];
+    if (!entry) {
+      return {
+        userAssistantCount: 0,
+        lastCompactionUserAssistantCount: null,
+        lastCompactionAt: null,
+      };
+    }
+
+    return {
+      userAssistantCount: entry.userAssistantCount ?? 0,
+      lastCompactionUserAssistantCount: entry.lastCompactionUserAssistantCount ?? null,
+      lastCompactionAt: entry.lastCompactionAt ?? null,
+    };
+  }
+
+  async markCompaction(sessionKey: string): Promise<void> {
+    const index = await this.readIndex();
+    const entry = index[sessionKey];
+    if (!entry) {
+      return;
+    }
+    const now = new Date().toISOString();
+    index[sessionKey] = {
+      ...entry,
+      updatedAt: now,
+      lastCompactionAt: now,
+      lastCompactionUserAssistantCount: entry.userAssistantCount ?? 0,
+    };
+    await writeJsonFile(this.indexPath, index);
   }
 
   async resetSession(sessionKey: string): Promise<SessionEntry> {
@@ -77,6 +119,7 @@ export class SessionStore {
       transcriptPath,
       createdAt: now,
       updatedAt: now,
+      userAssistantCount: 0,
     };
 
     await ensureDir(path.dirname(transcriptPath));
@@ -108,6 +151,7 @@ export class SessionStore {
       transcriptPath,
       createdAt: now,
       updatedAt: now,
+      userAssistantCount: 0,
     };
 
     index[sessionKey] = entry;
@@ -125,5 +169,52 @@ export class SessionStore {
 
   private async readIndex(): Promise<SessionIndex> {
     return readJsonFile<SessionIndex>(this.indexPath, {});
+  }
+
+  private async readTranscriptLines(transcriptPath: string, limit: number): Promise<string[]> {
+    if (limit <= 0) {
+      const raw = await fs.readFile(transcriptPath, "utf-8").catch(() => "");
+      if (!raw.trim()) {
+        return [];
+      }
+      return raw.split("\n").filter(Boolean);
+    }
+
+    const handle = await fs.open(transcriptPath, "r").catch(() => null);
+    if (!handle) {
+      return [];
+    }
+    try {
+      const stat = await handle.stat();
+      if (stat.size <= 0) {
+        return [];
+      }
+      const chunkSize = 64 * 1024;
+      let position = stat.size;
+      const chunks: Buffer[] = [];
+      let totalBytes = 0;
+
+      while (position > 0) {
+        const readSize = Math.min(chunkSize, position);
+        position -= readSize;
+        const buffer = Buffer.allocUnsafe(readSize);
+        const { bytesRead } = await handle.read(buffer, 0, readSize, position);
+        if (bytesRead <= 0) {
+          break;
+        }
+        const chunk = bytesRead === readSize ? buffer : buffer.subarray(0, bytesRead);
+        chunks.unshift(chunk);
+        totalBytes += chunk.length;
+
+        const text = Buffer.concat(chunks, totalBytes).toString("utf-8");
+        const lines = text.split("\n").filter(Boolean);
+        if (lines.length >= limit || position === 0) {
+          return lines.slice(-limit);
+        }
+      }
+      return [];
+    } finally {
+      await handle.close();
+    }
   }
 }

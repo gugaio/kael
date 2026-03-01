@@ -14,6 +14,9 @@ export type SessionEntry = {
   transcriptPath: string;
   createdAt: string;
   updatedAt: string;
+  userAssistantCount?: number;
+  lastCompactionUserAssistantCount?: number;
+  lastCompactionAt?: string;
 };
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "canceled";

@@ -134,13 +134,23 @@ describe("TurnOrchestrator compaction", () => {
     const getMessages = vi.fn(async (_sessionKey: string, limit = 50) =>
       limit > 0 ? messages.slice(-limit) : messages,
     );
+    const getCompactionWatermark = vi.fn(async () => ({
+      userAssistantCount: messages.filter((item) => item.role === "user" || item.role === "assistant").length,
+      lastCompactionUserAssistantCount: null,
+      lastCompactionAt: null,
+    }));
+    const markCompaction = vi.fn(async () => {});
 
     const sessionStore = {
       appendMessage,
       getMessages,
+      getCompactionWatermark,
+      markCompaction,
     } as unknown as {
       appendMessage: typeof appendMessage;
       getMessages: typeof getMessages;
+      getCompactionWatermark: typeof getCompactionWatermark;
+      markCompaction: typeof markCompaction;
     };
 
     const runTurn = vi.fn(async (input: EngineTurnInput): Promise<EngineTurnOutput> => ({ reply: input.message }));
@@ -164,6 +174,7 @@ describe("TurnOrchestrator compaction", () => {
     expect(sessionArg).toBe("s1");
     expect(roleArg).toBe("system");
     expect(String(contentArg)).toContain("[compaction]");
+    expect(markCompaction).toHaveBeenCalledTimes(1);
   });
 
   it("checkCompactionNeed detecta necessidade sem aplicar", async () => {
@@ -177,11 +188,17 @@ describe("TurnOrchestrator compaction", () => {
     const getMessages = vi.fn(async (_sessionKey: string, limit = 50) =>
       limit > 0 ? messages.slice(-limit) : messages,
     );
+    const getCompactionWatermark = vi.fn(async () => ({
+      userAssistantCount: messages.filter((item) => item.role === "user" || item.role === "assistant").length,
+      lastCompactionUserAssistantCount: null,
+      lastCompactionAt: null,
+    }));
+    const markCompaction = vi.fn(async () => {});
 
     const engine: AgentEngine = { runTurn: async () => ({ reply: "ok" }) };
 
     const orchestrator = new TurnOrchestrator(
-      { appendMessage, getMessages } as never,
+      { appendMessage, getMessages, getCompactionWatermark, markCompaction } as never,
       engine,
       { maxContextMessages: 24, maxContextChars: 12000 },
     );
@@ -196,6 +213,7 @@ describe("TurnOrchestrator compaction", () => {
     expect(result.summarizedMessages).toBeGreaterThan(0);
     // Nao deve ter aplicado nada
     expect(appendMessage).not.toHaveBeenCalled();
+    expect(markCompaction).not.toHaveBeenCalled();
   });
 
   it("run nao dispara compaction (responsabilidade do caller)", async () => {
@@ -209,12 +227,18 @@ describe("TurnOrchestrator compaction", () => {
     const getMessages = vi.fn(async (_sessionKey: string, limit = 50) =>
       limit > 0 ? messages.slice(-limit) : messages,
     );
+    const getCompactionWatermark = vi.fn(async () => ({
+      userAssistantCount: messages.filter((item) => item.role === "user" || item.role === "assistant").length,
+      lastCompactionUserAssistantCount: null,
+      lastCompactionAt: null,
+    }));
+    const markCompaction = vi.fn(async () => {});
 
     const runTurn = vi.fn(async (input: EngineTurnInput): Promise<EngineTurnOutput> => ({ reply: input.message }));
     const engine: AgentEngine = { runTurn };
 
     const orchestrator = new TurnOrchestrator(
-      { appendMessage, getMessages } as never,
+      { appendMessage, getMessages, getCompactionWatermark, markCompaction } as never,
       engine,
       { maxContextMessages: 24, maxContextChars: 12000 },
     );
@@ -228,6 +252,7 @@ describe("TurnOrchestrator compaction", () => {
     // run() nao deve chamar appendMessage (compaction e feita externamente)
     expect(appendMessage).not.toHaveBeenCalled();
     expect(runTurn).toHaveBeenCalledTimes(1);
+    expect(markCompaction).not.toHaveBeenCalled();
   });
 
   it("nao compacta novamente quando ha compaction recente", async () => {
@@ -241,13 +266,19 @@ describe("TurnOrchestrator compaction", () => {
     const getMessages = vi.fn(async (_sessionKey: string, limit = 50) =>
       limit > 0 ? messages.slice(-limit) : messages,
     );
+    const getCompactionWatermark = vi.fn(async () => ({
+      userAssistantCount: messages.filter((item) => item.role === "user" || item.role === "assistant").length,
+      lastCompactionUserAssistantCount: null,
+      lastCompactionAt: null,
+    }));
+    const markCompaction = vi.fn(async () => {});
 
     const engine: AgentEngine = {
       runTurn: async () => ({ reply: "ok" }),
     };
 
     const orchestrator = new TurnOrchestrator(
-      { appendMessage, getMessages } as never,
+      { appendMessage, getMessages, getCompactionWatermark, markCompaction } as never,
       engine,
       { maxContextMessages: 4, maxContextChars: 200 },
     );
@@ -260,5 +291,42 @@ describe("TurnOrchestrator compaction", () => {
     expect(result.compacted).toBe(false);
     expect(result.reason).toBe("recent_compaction");
     expect(appendMessage).not.toHaveBeenCalled();
+    expect(markCompaction).not.toHaveBeenCalled();
+  });
+
+  it("nao compacta novamente sem progresso suficiente desde a ultima compactacao (watermark)", async () => {
+    const messages: SessionMessage[] = Array.from({ length: 80 }).map((_, idx) =>
+      createMessage(idx % 2 === 0 ? "user" : "assistant", `msg-${idx} ${"x".repeat(80)}`, idx + 1),
+    );
+    const appendMessage = vi.fn();
+    const getMessages = vi.fn(async (_sessionKey: string, limit = 50) =>
+      limit > 0 ? messages.slice(-limit) : messages,
+    );
+    const getCompactionWatermark = vi.fn(async () => ({
+      userAssistantCount: 80,
+      lastCompactionUserAssistantCount: 70,
+      lastCompactionAt: new Date().toISOString(),
+    }));
+    const markCompaction = vi.fn(async () => {});
+
+    const engine: AgentEngine = {
+      runTurn: async () => ({ reply: "ok" }),
+    };
+
+    const orchestrator = new TurnOrchestrator(
+      { appendMessage, getMessages, getCompactionWatermark, markCompaction } as never,
+      engine,
+      { maxContextMessages: 24, maxContextChars: 2000 },
+    );
+
+    const result = await orchestrator.checkCompactionNeed({
+      sessionKey: "s1",
+      currentMessage: "mensagem atual",
+    });
+
+    expect(result.compacted).toBe(false);
+    expect(result.reason).toBe("recent_compaction");
+    expect(appendMessage).not.toHaveBeenCalled();
+    expect(markCompaction).not.toHaveBeenCalled();
   });
 });
