@@ -146,7 +146,7 @@ export class MemoryOrchestrator {
       mode: "llm",
     });
     try {
-      await this.turns.runUtilityTurn({
+      await this.turns.runTurnWithExcludedMessage({
         sessionKey: params.sessionKey,
         message: this.policy.buildMemoryFlushPrompt(),
         requestId: params.requestId ? `${params.requestId}:compact-flush` : undefined,
@@ -193,7 +193,7 @@ export class MemoryOrchestrator {
       requestId: params.requestId ?? null,
     });
     try {
-      await this.turns.runUtilityTurn({
+      await this.turns.runTurnWithExcludedMessage({
         sessionKey: params.sessionKey,
         message: this.policy.buildLongTermPromotionPrompt(),
         requestId: params.requestId ? `${params.requestId}:compact-promote` : undefined,

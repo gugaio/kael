@@ -219,7 +219,7 @@ describe("TurnOrchestrator compaction", () => {
       { maxContextMessages: 24, maxContextChars: 12000 },
     );
 
-    await orchestrator.run({
+    await orchestrator.runConversationTurn({
       sessionKey: "s1",
       message: "mensagem atual",
       tooling: createToolingStub(),

@@ -75,7 +75,7 @@ export class TurnOrchestrator {
    * (MemoryOrchestrator via runAutoCompactionWithMemoryFlushIfNeeded).
    * Isso evita chamadas duplicadas a getMessages.
    */
-  async run(input: OrchestratedTurnInput): Promise<EngineTurnOutput> {
+  async runConversationTurn(input: OrchestratedTurnInput): Promise<EngineTurnOutput> {
     const contextMessages = await this.buildContextMessages(input.sessionKey, input.message);
 
     return this.engine.runTurn({
@@ -87,7 +87,7 @@ export class TurnOrchestrator {
     });
   }
 
-  async runUtilityTurn(input: UtilityTurnInput): Promise<EngineTurnOutput> {
+  async runTurnWithExcludedMessage(input: UtilityTurnInput): Promise<EngineTurnOutput> {
     const contextMessages = await this.buildContextMessages(
       input.sessionKey,
       input.excludeCurrentMessage ?? "",

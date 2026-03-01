@@ -274,7 +274,7 @@ export class ChatService {
         tooling,
         requestId: input.requestId,
       });
-      const turn = await this.orchestrator.run({
+      const turn = await this.orchestrator.runConversationTurn({
         sessionKey: input.sessionKey,
         message: input.message,
         requestId: input.requestId,
@@ -343,7 +343,7 @@ export class ChatService {
       // Falha irrecuperavel: recria sessao e tenta novamente uma vez sem historico antigo.
       await this.sessions.resetSession(input.sessionKey);
       user = await this.sessions.appendMessage(input.sessionKey, "user", input.message);
-      const turn = await this.orchestrator.run({
+      const turn = await this.orchestrator.runConversationTurn({
         sessionKey: input.sessionKey,
         message: input.message,
         requestId: input.requestId,
