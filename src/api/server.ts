@@ -806,6 +806,44 @@ export function createApiServer(app: KaelApp): FastifyInstance {
   server.post<{
     Body: {
       sessionKey?: string;
+      input?: string;
+    };
+  }>("/jobs/vlc", async (request, reply) => {
+    const sessionKey = request.body.sessionKey?.trim() || "main";
+    const input = request.body.input?.trim();
+
+    if (!input) {
+      throw new ApiError(400, "BAD_REQUEST", "input is required");
+    }
+
+    const idempotencyKey = readIdempotencyKey(request.headers["x-idempotency-key"]);
+    try {
+      const { replayed, value } = await withIdempotency({
+        store: idempotency,
+        enabled: app.config.idempotency.enabled,
+        scope: "jobs:vlc",
+        idempotencyKey,
+        signature: stableStringify({ sessionKey, input }),
+        execute: async () => {
+          const job = await app.jobs.startPlayVlc({ sessionKey, input });
+          return { ok: true, job };
+        },
+      });
+      if (replayed) {
+        reply.header("x-idempotency-replayed", "true");
+      }
+      return value;
+    } catch (error) {
+      if (error instanceof IdempotencyConflictError) {
+        throw new ApiError(409, "IDEMPOTENCY_CONFLICT", error.message);
+      }
+      throw error;
+    }
+  });
+
+  server.post<{
+    Body: {
+      sessionKey?: string;
       inputPath?: string;
       outputPlaylistPath?: string;
       segmentTime?: number;

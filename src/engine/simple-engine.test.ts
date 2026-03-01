@@ -79,23 +79,21 @@ function makeInput(message: string, tooling: EngineTooling): EngineTurnInput {
 }
 
 describe("SimpleCommandEngine", () => {
-  it("executa VLC quando pedido em linguagem natural", async () => {
-    const execSpy = vi.fn(async () => ({
-      id: "exec-1",
-      command: "vlc 'https://example.com/video.m3u8'",
-      cwd: "/tmp",
-      status: "running" as const,
-      startedAt: new Date().toISOString(),
-      outputTail: "",
-    }));
+  it("inicia job de VLC via slash command", async () => {
+    const startPlayVlc = vi.fn(async () => ({ id: "j-vlc" } as never));
     const engine = new SimpleCommandEngine();
 
     const result = await engine.runTurn(
-      makeInput("usa o vlc para tocar https://example.com/video.m3u8", createTooling(execSpy)),
+      makeInput(
+        "/vlc https://example.com/video.m3u8",
+        {
+          ...createTooling(),
+          startPlayVlc,
+        },
+      ),
     );
 
-    expect(execSpy).toHaveBeenCalledTimes(1);
-    expect(result.reply).toContain("Execucao enviada para o VLC.");
-    expect(result.reply).toContain("status=running");
+    expect(startPlayVlc).toHaveBeenCalledTimes(1);
+    expect(result.reply).toContain("VLC iniciado. jobId=j-vlc");
   });
 });

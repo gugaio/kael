@@ -53,6 +53,7 @@ flowchart TD
             API --> Transcode[POST /jobs/transcode]
             API --> HLS[POST /jobs/hls]
             API --> Capture[POST /jobs/capture]
+            API --> Vlc[POST /jobs/vlc]
             API --> Probe[POST /jobs/probe]
             API --> ProbeUrl[POST /jobs/probe-url]
         end
@@ -119,6 +120,7 @@ flowchart TD
 | POST | /jobs/transcode | Transcode video |
 | POST | /jobs/hls | Convert to HLS |
 | POST | /jobs/capture | Capture stream |
+| POST | /jobs/vlc | Play input/url with VLC |
 | POST | /jobs/probe | Probe local media |
 | POST | /jobs/probe-url | Probe URL/stream |
 

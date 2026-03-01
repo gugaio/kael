@@ -14,7 +14,7 @@ mesmo quando o engine principal estiver em modo `pi`.
   - execucao direta via `SimpleCommandEngine` usando as tools locais.
 - Preservar fluxos especiais existentes:
   - `/compact` continua no fluxo do `MemoryOrchestrator`;
-  - fallback de `playVLC` em resposta textual do modelo permanece no path conversacional.
+  - comandos operacionais de video/sistema passam pelo mesmo fast-path deterministico de slash commands.
 
 ## Valor arquitetural
 

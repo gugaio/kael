@@ -67,6 +67,13 @@ export class JobManager {
     return this.video.startProbeMedia(params);
   }
 
+  async startPlayVlc(params: {
+    sessionKey: string;
+    input: string;
+  }): Promise<VideoJob> {
+    return this.video.startPlayVlc(params);
+  }
+
   async startProbeUrl(params: {
     sessionKey: string;
     streamUrl: string;

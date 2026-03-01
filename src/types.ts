@@ -21,13 +21,13 @@ export type SessionEntry = {
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "canceled";
 
-export type VideoJobType = "transcode" | "convert_hls" | "capture_stream" | "probe_media";
+export type VideoJobType = "transcode" | "convert_hls" | "capture_stream" | "probe_media" | "play_vlc";
 
 export type VideoJob = {
   id: string;
   type: VideoJobType;
   sessionKey: string;
-  command: "ffmpeg" | "ffprobe";
+  command: "ffmpeg" | "ffprobe" | "vlc";
   input: string;
   output?: string;
   args: string[];

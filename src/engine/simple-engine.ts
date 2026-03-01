@@ -23,41 +23,8 @@ function extractUrl(text: string): string | null {
   return match[0].trim().replace(/[),.;]+$/, "");
 }
 
-function shellQuoteSingle(value: string): string {
-  return `'${value.replace(/'/g, `'\"'\"'`)}'`;
-}
-
-function isVlcPlayRequest(message: string): boolean {
-  const text = message.toLowerCase();
-  return text.includes("vlc") && (text.includes("tocar") || text.includes("play") || text.includes("abrir"));
-}
-
 export class SimpleCommandEngine implements AgentEngine {
   async runTurn(input: EngineTurnInput): Promise<EngineTurnOutput> {
-    if (!isSlashCommand(input.message) && isVlcPlayRequest(input.message)) {
-      const url = extractUrl(input.message);
-      if (!url) {
-        return { reply: "Nao encontrei URL valida para abrir no VLC." };
-      }
-      const exec = await input.tooling.execCommand({
-        sessionKey: input.sessionKey,
-        command: `vlc ${shellQuoteSingle(url)}`,
-        background: true,
-        timeoutMs: 120_000,
-      });
-      return {
-        reply: [
-          "Execucao enviada para o VLC.",
-          `session=${exec.id}`,
-          `status=${exec.status}`,
-          `command=${exec.command}`,
-          exec.outputTail?.trim() ? `output:\n${exec.outputTail}` : "",
-        ]
-          .filter(Boolean)
-          .join("\n"),
-      };
-    }
-
     const parsed = parseCommand(input.message);
 
     if (!parsed) {
@@ -70,7 +37,7 @@ export class SimpleCommandEngine implements AgentEngine {
     if (parsed.name === "/help") {
       return {
         reply:
-          "Comandos: /transcode <input> <output> | /hls <input> <playlist.m3u8> [segmentSeconds] | /capture <url> <output> [durationSeconds] | /probe <input> | /jobs | /help",
+          "Comandos: /transcode <input> <output> | /hls <input> <playlist.m3u8> [segmentSeconds] | /capture <url> <output> [durationSeconds] | /probe <input> | /vlc <input|url> | /jobs | /help",
       };
     }
 
@@ -141,6 +108,22 @@ export class SimpleCommandEngine implements AgentEngine {
         inputPath,
       });
       return { reply: `Probe iniciado. jobId=${job.id}` };
+    }
+
+    if (parsed.name === "/vlc" || parsed.name === "/playvlc") {
+      const fallbackUrl = extractUrl(input.message);
+      const inputTarget = parsed.args[0] ?? fallbackUrl;
+      if (!inputTarget) {
+        return { reply: "Uso: /vlc <input|url>" };
+      }
+      if (!input.tooling.startPlayVlc) {
+        return { reply: "Tool de VLC indisponivel neste modo." };
+      }
+      const job = await input.tooling.startPlayVlc({
+        sessionKey: input.sessionKey,
+        input: inputTarget,
+      });
+      return { reply: `VLC iniciado. jobId=${job.id}` };
     }
 
     return { reply: "Comando desconhecido. Use /help." };

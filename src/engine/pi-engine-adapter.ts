@@ -61,8 +61,6 @@ function isOperationalExecutionRequest(message: string): boolean {
     "abrir",
     "toca",
     "tocar",
-    "use o vlc",
-    "usa o vlc",
     "run ",
     "shell",
     "bash",

@@ -24,6 +24,10 @@ export type EngineTooling = {
     sessionKey: string;
     inputPath: string;
   }) => Promise<VideoJob>;
+  startPlayVlc?: (params: {
+    sessionKey: string;
+    input: string;
+  }) => Promise<VideoJob>;
   videoHlsInspect: (params: {
     sessionKey: string;
     url: string;

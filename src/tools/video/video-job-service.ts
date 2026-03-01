@@ -17,7 +17,7 @@ type StartJobParams = {
   id: string;
   type: VideoJobType;
   sessionKey: string;
-  command: "ffmpeg" | "ffprobe";
+  command: "ffmpeg" | "ffprobe" | "vlc";
   input: string;
   output?: string;
   args: string[];
@@ -204,6 +204,34 @@ export class VideoJobService {
         "json",
         params.streamUrl,
       ],
+    });
+  }
+
+  async startPlayVlc(params: {
+    sessionKey: string;
+    input: string;
+  }): Promise<VideoJob> {
+    const value = params.input.trim();
+    if (!value) {
+      throw new Error("input is required");
+    }
+    if (/^https?:\/\//i.test(value)) {
+      validateStreamUrl(value);
+    } else {
+      await validateExistingInputPath({
+        value,
+        label: "input",
+        allowedRoots: this.safety.allowedPaths,
+        safePathsEnabled: this.safety.safePathsEnabled,
+      });
+    }
+
+    return this.startJob({
+      type: "play_vlc",
+      sessionKey: params.sessionKey,
+      command: "vlc",
+      input: value,
+      args: [value],
     });
   }
 

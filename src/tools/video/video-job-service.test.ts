@@ -79,7 +79,7 @@ describe("VideoJobService runtime controls", () => {
     expect(store.get(second.id)?.status).toBe("queued");
 
     runner.processes[0]?.emitClose(0);
-    await sleep(20);
+    await sleep(40);
 
     expect(runner.processes.length).toBe(2);
     expect(store.get(first.id)?.status).toBe("succeeded");

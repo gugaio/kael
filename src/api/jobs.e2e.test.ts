@@ -235,6 +235,28 @@ async function getJobStatus(server: ReturnType<typeof createApiServer>, jobId: s
 }
 
 describe("Jobs E2E API", () => {
+  it("creates VLC job via /jobs/vlc", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-jobs-e2e-"));
+    const runner = new FakeRunner();
+    const { server } = await createJobsServer({ root, runner });
+
+    const created = await server.inject({
+      method: "POST",
+      url: "/jobs/vlc",
+      payload: {
+        sessionKey: "s1",
+        input: "https://example.com/live.m3u8",
+      },
+    });
+
+    expect(created.statusCode).toBe(200);
+    const body = created.json();
+    expect(body.ok).toBe(true);
+    expect(body.job.type).toBe("play_vlc");
+    expect(body.job.command).toBe("vlc");
+    await server.close();
+  });
+
   it("rejects unsafe input path outside allowed roots", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-jobs-e2e-"));
     const runner = new FakeRunner();

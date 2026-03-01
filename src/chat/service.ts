@@ -18,23 +18,6 @@ function shouldResetSessionOnEngineError(error: unknown): boolean {
   return normalized.code === "invalid_response" || normalized.code === "unknown";
 }
 
-function extractPlayVlcUrl(reply: string): string | null {
-  const text = reply.trim();
-  const quoted = text.match(/^\/playvlc\s+["'](.+?)["']\s*$/i);
-  if (quoted?.[1]) {
-    return quoted[1].trim();
-  }
-  const bare = text.match(/^\/playvlc\s+(\S+)\s*$/i);
-  if (bare?.[1]) {
-    return bare[1].trim();
-  }
-  return null;
-}
-
-function shellQuoteSingle(value: string): string {
-  return `'${value.replace(/'/g, `'\"'\"'`)}'`;
-}
-
 export class ChatService {
   private readonly tooling: EngineTooling;
   private readonly chatOnlyTooling: EngineTooling;
@@ -58,6 +41,7 @@ export class ChatService {
       startConvertHls: (params) => this.jobs.startConvertHls(params),
       startCaptureStream: (params) => this.jobs.startCaptureStream(params),
       startProbeMedia: (params) => this.jobs.startProbeMedia(params),
+      startPlayVlc: (params) => this.jobs.startPlayVlc(params),
       videoHlsInspect: async ({ url, maxSegments, timeoutMs }) =>
         this.videoInspect.inspectHls({ url, maxSegments, timeoutMs }),
       videoProbe: async ({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }) =>
@@ -176,6 +160,9 @@ export class ChatService {
       startProbeMedia: async () => {
         throw new Error("chat-only mode: probe_media job disabled");
       },
+      startPlayVlc: async () => {
+        throw new Error("chat-only mode: play_vlc job disabled");
+      },
       videoHlsInspect: async () => {
         throw new Error("chat-only mode: video_hls_inspect disabled");
       },
@@ -214,7 +201,7 @@ export class ChatService {
     message: string;
     requestId?: string;
   }): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string }> {
-    return this.handleMessageInternal(input, this.tooling, { allowPlayVlcShortcut: true });
+    return this.handleMessageInternal(input, this.tooling, { allowOperationalShortcuts: true });
   }
 
   async handleMessageChatOnly(input: {
@@ -222,7 +209,7 @@ export class ChatService {
     message: string;
     requestId?: string;
   }): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string }> {
-    return this.handleMessageInternal(input, this.chatOnlyTooling, { allowPlayVlcShortcut: false });
+    return this.handleMessageInternal(input, this.chatOnlyTooling, { allowOperationalShortcuts: false });
   }
 
   private async handleMessageInternal(
@@ -232,7 +219,7 @@ export class ChatService {
       requestId?: string;
     },
     tooling: EngineTooling,
-    opts: { allowPlayVlcShortcut: boolean },
+    opts: { allowOperationalShortcuts: boolean },
   ): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string }> {
     let user = await this.sessions.appendMessage(input.sessionKey, "user", input.message);
     if (this.memoryOrchestrator.isCompactCommand(input.message)) {
@@ -253,7 +240,7 @@ export class ChatService {
     try {
       // Fast-path operacional para slash commands, inclusive quando engineMode=pi.
       // Isso preserva comportamento deterministico para comandos de job/sistema sem depender do LLM.
-      if (opts.allowPlayVlcShortcut && isSlashCommand(input.message)) {
+      if (opts.allowOperationalShortcuts && isSlashCommand(input.message)) {
         const turn = await this.commandEngine.runTurn({
           sessionKey: input.sessionKey,
           message: input.message,
@@ -280,25 +267,7 @@ export class ChatService {
         requestId: input.requestId,
         tooling,
       });
-      let reply = turn.reply;
-      const playVlcUrl = opts.allowPlayVlcShortcut ? extractPlayVlcUrl(turn.reply) : null;
-      if (playVlcUrl) {
-        const exec = await this.shell.exec({
-          sessionKey: input.sessionKey,
-          command: `vlc ${shellQuoteSingle(playVlcUrl)}`,
-          background: true,
-          timeoutMs: 120_000,
-        });
-        reply = [
-          `Comando executado via tool exec.`,
-          `session=${exec.id}`,
-          `status=${exec.status}`,
-          `command=${exec.command}`,
-          exec.outputTail?.trim() ? `output:\n${exec.outputTail}` : "",
-        ]
-          .filter(Boolean)
-          .join("\n");
-      }
+      const reply = turn.reply;
 
       const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", reply);
 
