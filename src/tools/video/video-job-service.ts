@@ -313,17 +313,18 @@ export class VideoJobService {
       process.on("error", async (error) => {
         clearTimeout(timeoutHandle);
         this.activeJobs.delete(params.id);
+        const canceled = this.canceledJobs.has(params.id);
         this.canceledJobs.delete(params.id);
         await this.jobs.update(params.id, {
-          status: "failed",
+          status: canceled ? "canceled" : "failed",
           endedAt: new Date().toISOString(),
-          error: error.message,
+          error: canceled ? "job canceled by user" : error.message,
         });
         logStream.end(`\n[process-error] ${error.message}\n`);
         kaelLogger.error("jobs.execution.failed", {
           jobId: params.id,
           type: params.type,
-          reason: "process_error",
+          reason: canceled ? "canceled_process_error" : "process_error",
           message: error.message,
         });
         this.drainQueue();

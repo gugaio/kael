@@ -28,6 +28,10 @@ class ControlledProcess extends EventEmitter {
   emitClose(code: number | null): void {
     this.emit("close", code);
   }
+
+  emitError(error: Error): void {
+    this.emit("error", error);
+  }
 }
 
 class FakeRunner implements ProcessRunner {
@@ -159,5 +163,45 @@ describe("VideoJobService runtime controls", () => {
     runner.processes[0]?.emitClose(null);
     await sleep(10);
     expect(store.get(running.id)?.status).toBe("canceled");
+  });
+
+  it("keeps canceled status when process emits error after cancel", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-video-"));
+    const input = path.join(root, "input.mp4");
+    await fs.writeFile(input, "x", "utf-8");
+
+    const store = new JobStore(root);
+    await store.init();
+    const runner = new FakeRunner();
+    const service = new VideoJobService(store, runner, {
+      safePathsEnabled: true,
+      allowedPaths: [root],
+      maxJobArgs: 24,
+      maxConcurrentJobs: 1,
+      jobTimeoutMs: 60_000,
+      killGraceMs: 10,
+    });
+
+    const running = await service.startTranscode({
+      sessionKey: "s1",
+      inputPath: input,
+      outputPath: path.join(root, "running.mp4"),
+    });
+    const queued = await service.startTranscode({
+      sessionKey: "s1",
+      inputPath: input,
+      outputPath: path.join(root, "queued.mp4"),
+    });
+    await sleep(10);
+
+    await service.cancelJob(running.id);
+    runner.processes[0]?.emitError(new Error("kill failed"));
+    await sleep(15);
+
+    expect(store.get(running.id)?.status).toBe("canceled");
+
+    // Error handler deve liberar slot e drenar fila.
+    expect(runner.processes.length).toBe(2);
+    expect(store.get(queued.id)?.status).toBe("running");
   });
 });

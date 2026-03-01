@@ -9,6 +9,7 @@ import type { ShellToolService } from "../tools/system/shell-tool-service.js";
 import type { VideoInspectToolService } from "../tools/video/video-inspect-tool-service.js";
 import type { SessionMessage } from "../types.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
+import { isSlashCommand, SimpleCommandEngine } from "../engine/simple-engine.js";
 import { TurnOrchestrator } from "./turn-orchestrator.js";
 import { MemoryOrchestrator } from "../memory/orchestrator.js";
 
@@ -38,6 +39,7 @@ export class ChatService {
   private readonly tooling: EngineTooling;
   private readonly chatOnlyTooling: EngineTooling;
   private readonly memoryOrchestrator: MemoryOrchestrator;
+  private readonly commandEngine = new SimpleCommandEngine();
 
   constructor(
     private readonly sessions: SessionStore,
@@ -249,6 +251,23 @@ export class ChatService {
     }
 
     try {
+      // Fast-path operacional para slash commands, inclusive quando engineMode=pi.
+      // Isso preserva comportamento deterministico para comandos de job/sistema sem depender do LLM.
+      if (opts.allowPlayVlcShortcut && isSlashCommand(input.message)) {
+        const turn = await this.commandEngine.runTurn({
+          sessionKey: input.sessionKey,
+          message: input.message,
+          requestId: input.requestId,
+          tooling,
+        });
+        const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", turn.reply);
+        return {
+          user,
+          assistant,
+          reply: turn.reply,
+        };
+      }
+
       await this.memoryOrchestrator.runAutoCompactionWithMemoryFlushIfNeeded({
         sessionKey: input.sessionKey,
         currentMessage: input.message,

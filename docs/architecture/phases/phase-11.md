@@ -1,0 +1,35 @@
+# Arquitetura - Fase 11 (Reply Orchestrator Lite)
+
+Status: em andamento
+
+## Objetivo
+
+Introduzir uma camada leve de orquestracao de reply para manter comandos operacionais deterministicos,
+mesmo quando o engine principal estiver em modo `pi`.
+
+## Escopo inicial
+
+- Fast-path de slash commands no `ChatService`:
+  - bypass do turno LLM para comandos operacionais (`/jobs`, `/probe`, `/transcode`, etc.);
+  - execucao direta via `SimpleCommandEngine` usando as tools locais.
+- Preservar fluxos especiais existentes:
+  - `/compact` continua no fluxo do `MemoryOrchestrator`;
+  - fallback de `playVLC` em resposta textual do modelo permanece no path conversacional.
+
+## Valor arquitetural
+
+- Reduz latencia e variabilidade para operacoes repetitivas.
+- Evita degradacao de UX quando o modelo nao segue formato de comando.
+- Aproxima o Kael de um "auto-reply" pragmatico sem acoplar multi-canal agora.
+
+## Limites desta fase
+
+- Sem fila inbound dedicada por `sessionKey`.
+- Sem roteamento multi-channel.
+- Sem camada extensa de diretivas/policies estilo OpenClaw.
+
+## Proximos incrementos recomendados
+
+1. Extrair roteador de comandos para modulo dedicado com testes unitarios.
+2. Adicionar dedupe/fila leve por `sessionKey` para reduzir colisao de requests concorrentes.
+3. Expor telemetria de fast-path vs turno LLM no health/events.

@@ -36,6 +36,7 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 9.3: concluida (sintese multi-fonte com `web_research` e score de confianca).
 - Fase 9.4: concluida (hardening + ranking de evidencia/confianca em `web_fetch`/`web_research`).
 - Fase 10.0: concluida (compaction manual/auto + memory flush + promocao para `MEMORY.md` + dedupe semantica basica).
+- Fase 11: em andamento (reply orchestrator lite com fast-path deterministico para slash commands).
 
 ## Estudos e referencias tecnicas
 

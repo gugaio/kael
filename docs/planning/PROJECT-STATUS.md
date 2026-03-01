@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-02-25**
+Ultima atualizacao: **2026-02-27**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -260,7 +260,94 @@ Definition of Done (checklist):
 - [x] Ranking de evidencia (relevancia, fonte, recencia, fetch, diversidade).
 - [x] Deduplicacao semantica.
 
+### Fase 11 - Reply Orchestrator Lite (comandos determinísticos)
+
+Status: **Em andamento**
+
+Objetivos:
+- Garantir fast-path deterministico para comandos operacionais no chat.
+- Reduzir dependencia do LLM para operacoes de controle (`/jobs`, `/probe`, `/transcode`, etc.).
+- Preparar base para auto-reply incremental sem acoplar multi-canal.
+
+Definition of Done (checklist):
+- [x] Fast-path de slash commands no `ChatService` (incluindo modo `pi`).
+- [ ] Extrair roteador de comandos para modulo dedicado com testes unitarios.
+- [ ] Telemetria de fast-path vs turno LLM em eventos/logs.
+
+### Fase 12 - Supervisor de Execucao Shell (determinismo operacional)
+
+Status: **Planejada**
+
+Objetivos:
+- Unificar lifecycle de `exec/process` em supervisor dedicado.
+- Tornar timeout/cancelamento mais deterministico sob carga.
+- Reduzir superficie de erro em polling e limpeza de sessoes.
+
+Definition of Done (checklist):
+- [ ] Supervisor dedicado para sessoes de shell e transicoes de estado.
+- [ ] API `process` apoiada em snapshot consistente por supervisor.
+- [ ] Testes de corrida/cancelamento/timeout em cenarios concorrentes.
+
+### Fase 13 - Fechamento de Qualidade de Video Runtime
+
+Status: **Planejada**
+
+Objetivos:
+- Fechar pendencias de automacao de testes da Fase 2 (tools de video).
+- Reforcar cobertura de cenarios invalidos/limites nas tools de inspecao e jobs.
+
+Definition of Done (checklist):
+- [ ] Cobertura automatizada para `video-inspect-tool-service`.
+- [ ] Cobertura adicional de seguranca/validacao de params de video.
+- [ ] Execucao de `npm run check` + suite alvo de video em CI/local.
+
 ## Registro de Atualizacoes por Commit
+
+### 2026-02-27 - Video jobs: manter cancelamento em erro de processo
+
+Resumo:
+- Ajustado `VideoJobService` para preservar status `canceled` quando um job previamente cancelado dispara `process.on("error")`.
+- Mantido cleanup de `canceledJobs` no handler de erro para evitar estado residual quando `close` nao chega.
+- Adicionado teste cobrindo cancelamento seguido de erro de processo e validando drenagem da fila.
+
+Arquivos-chave:
+- `src/tools/video/video-job-service.ts`
+- `src/tools/video/video-job-service.test.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/tools/video/video-job-service.test.ts`
+
+Pendencias:
+- Revisar classificacao de logs para separar claramente erro operacional vs erro esperado apos cancelamento.
+
+Proximo passo recomendado:
+- Avaliar se eventos de cancelamento com erro devem gerar log `info`/`warn` em vez de `error`.
+
+### 2026-02-27 - Fase 11: fast-path de slash commands no ChatService
+
+Resumo:
+- `ChatService` agora faz fast-path de slash commands no nivel do chat, com execucao deterministica via `SimpleCommandEngine`.
+- O fast-path passa a valer tambem quando o engine principal esta em modo `pi`, reduzindo dependencia do LLM para comandos operacionais.
+- Fluxos especiais existentes foram preservados (`/compact` no `MemoryOrchestrator` e fallback de `playVLC` no caminho conversacional).
+- Planejamento das proximas fases registrado (Fases 11-13) com foco em orquestracao de reply, supervisor de shell e qualidade de video runtime.
+
+Arquivos-chave:
+- `src/chat/service.ts`
+- `docs/architecture/README.md`
+- `docs/architecture/phases/phase-11.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/engine/simple-engine.test.ts src/engine/pi-engine-adapter.test.ts`
+
+Pendencias:
+- Extrair roteador de comandos para modulo dedicado e cobrir com testes unitarios diretos.
+
+Proximo passo recomendado:
+- Implementar extracao do command router (Fase 11, item 2) sem alterar comportamento externo.
 
 ### 2026-02-25 - Fase 10: deduplicacao semantica basica em memoria de longo prazo
 
