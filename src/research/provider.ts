@@ -1,5 +1,29 @@
 import type { SearchProvider, SearchProviderRequest, SearchProviderResponse, WebSource } from "./types.js";
 
+function buildAbortSignal(timeoutMs: number, signal?: AbortSignal): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  if (!signal) {
+    return timeoutSignal;
+  }
+  const combined = new AbortController();
+  const abortWith = (reason?: unknown): void => {
+    if (!combined.signal.aborted) {
+      combined.abort(reason);
+    }
+  };
+  const onTimeout = (): void => abortWith(timeoutSignal.reason);
+  const onExternal = (): void => abortWith(signal.reason);
+
+  if (timeoutSignal.aborted || signal.aborted) {
+    abortWith(timeoutSignal.aborted ? timeoutSignal.reason : signal.reason);
+    return combined.signal;
+  }
+
+  timeoutSignal.addEventListener("abort", onTimeout, { once: true });
+  signal.addEventListener("abort", onExternal, { once: true });
+  return combined.signal;
+}
+
 function normalizeDomainList(items: string[] | undefined): string[] | undefined {
   if (!items || items.length === 0) {
     return undefined;
@@ -68,7 +92,7 @@ export class TavilySearchProvider implements SearchProvider {
         "content-type": "application/json",
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(request.timeoutMs),
+      signal: buildAbortSignal(request.timeoutMs, request.signal),
     });
 
     if (!response.ok) {

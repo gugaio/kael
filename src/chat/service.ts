@@ -60,7 +60,7 @@ export class ChatService {
       memoryWrite: ({ content, target }) => this.memory.write({ content, target }),
       workspaceSearch: ({ query, maxResults }) => this.workspace.search({ query, maxResults }),
       workspaceRead: ({ path, from, lines }) => this.workspace.read({ relPath: path, from, lines }),
-      webSearch: ({ sessionKey, query, maxResults, recencyDays, domainsAllow, domainsBlock }) =>
+      webSearch: ({ sessionKey, query, maxResults, recencyDays, domainsAllow, domainsBlock, signal }) =>
         this.research.search({
           sessionKey,
           query,
@@ -68,12 +68,14 @@ export class ChatService {
           recencyDays,
           domainsAllow,
           domainsBlock,
+          signal,
         }),
-      webFetch: ({ sessionKey, url, maxChars }) =>
+      webFetch: ({ sessionKey, url, maxChars, signal }) =>
         this.research.fetchUrl({
           sessionKey,
           url,
           maxChars,
+          signal,
         }),
       webResearch: ({
         sessionKey,
@@ -84,6 +86,7 @@ export class ChatService {
         recencyDays,
         domainsAllow,
         domainsBlock,
+        signal,
       }) =>
         this.research.research({
           sessionKey,
@@ -94,6 +97,7 @@ export class ChatService {
           recencyDays,
           domainsAllow,
           domainsBlock,
+          signal,
         }),
       planCreate: ({ sessionKey, title, steps }) => this.planner.create({ sessionKey, title, steps }),
       planGenerate: ({ sessionKey, objective, maxSteps }) =>

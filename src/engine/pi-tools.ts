@@ -32,6 +32,7 @@ function formatSession(session: {
 export function createPiShellTools(params: {
   sessionKey: string;
   tooling: EngineTooling;
+  turnSignal?: AbortSignal;
   loopGuard?: ToolLoopGuard;
   trace?: {
     turnId: string;
@@ -42,6 +43,9 @@ export function createPiShellTools(params: {
   budget?: {
     maxToolCalls?: number;
     maxExecCalls?: number;
+    maxWebFetchCalls?: number;
+    maxWebSearchCalls?: number;
+    maxWebResearchCalls?: number;
   };
   onToolEvent?: (event: {
     phase: "start" | "end";
@@ -53,8 +57,14 @@ export function createPiShellTools(params: {
 }): AgentTool[] {
   let toolCalls = 0;
   let execCalls = 0;
+  let webFetchCalls = 0;
+  let webSearchCalls = 0;
+  let webResearchCalls = 0;
   const maxToolCalls = Math.max(1, Math.floor(params.budget?.maxToolCalls ?? 12));
   const maxExecCalls = Math.max(1, Math.floor(params.budget?.maxExecCalls ?? 6));
+  const maxWebFetchCalls = Math.max(1, Math.floor(params.budget?.maxWebFetchCalls ?? 5));
+  const maxWebSearchCalls = Math.max(1, Math.floor(params.budget?.maxWebSearchCalls ?? 3));
+  const maxWebResearchCalls = Math.max(1, Math.floor(params.budget?.maxWebResearchCalls ?? 2));
 
   const inferIntent = (tool: string, rawParams: unknown): string => {
     if (tool === "memory_search") return "memory:search";
@@ -72,6 +82,15 @@ export function createPiShellTools(params: {
     }
     if (tool === "video_probe") {
       return "video:probe";
+    }
+    if (tool === "web_search") {
+      return "web:search";
+    }
+    if (tool === "web_fetch") {
+      return "web:fetch";
+    }
+    if (tool === "web_research") {
+      return "web:research";
     }
     const command =
       rawParams && typeof rawParams === "object"
@@ -675,6 +694,25 @@ export function createPiShellTools(params: {
       additionalProperties: false,
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
+      if (toolCalls >= maxToolCalls) {
+        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+        params.onToolEvent?.({ phase: "end", tool: "web_search", status: "blocked", blocked: true, reason });
+        return {
+          content: textResult(`blocked=true\nreason=${reason}`),
+          details: { blocked: true, reason, status: "blocked" },
+        };
+      }
+      if (webSearchCalls >= maxWebSearchCalls) {
+        const reason = `web_search_budget_exceeded:${webSearchCalls}/${maxWebSearchCalls}`;
+        params.onToolEvent?.({ phase: "end", tool: "web_search", status: "blocked", blocked: true, reason });
+        return {
+          content: textResult(`blocked=true\nreason=${reason}`),
+          details: { blocked: true, reason, status: "blocked" },
+        };
+      }
+      toolCalls += 1;
+      webSearchCalls += 1;
+      const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as {
         query: string;
         maxResults?: number;
@@ -682,6 +720,26 @@ export function createPiShellTools(params: {
         domainsAllow?: string[];
         domainsBlock?: string[];
       };
+      const intent = logToolStart("web_search", args);
+      const decision = params.loopGuard?.beforeCall({
+        sessionKey: params.sessionKey,
+        tool: "web_search",
+        params: args,
+      });
+      if (decision && !decision.allowed) {
+        const blockedResult = {
+          content: textResult(
+            `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}`,
+          ),
+          details: {
+            blocked: true,
+            reason: decision.reason,
+            retryAfterMs: decision.retryAfterMs,
+          },
+        };
+        logToolEnd("web_search", intent, blockedResult.details, startedAtMs);
+        return blockedResult;
+      }
       const result = await params.tooling.webSearch({
         sessionKey: params.sessionKey,
         query: args.query,
@@ -689,6 +747,13 @@ export function createPiShellTools(params: {
         recencyDays: args.recencyDays,
         domainsAllow: args.domainsAllow,
         domainsBlock: args.domainsBlock,
+        signal: params.turnSignal,
+      });
+      params.loopGuard?.afterCall({
+        sessionKey: params.sessionKey,
+        tool: "web_search",
+        params: args,
+        result,
       });
       const text = [
         `sources=${result.sources.length}`,
@@ -699,10 +764,12 @@ export function createPiShellTools(params: {
         ...result.sources.map((item, idx) => `${idx + 1}. ${item.title} | ${item.url}`),
         ...(result.notes.length > 0 ? ["", "notes:", ...result.notes.map((item) => `- ${item}`)] : []),
       ].join("\n");
-      return {
+      const response = {
         content: textResult(text),
         details: result,
       };
+      logToolEnd("web_search", intent, result, startedAtMs);
+      return response;
     },
   };
 
@@ -721,11 +788,57 @@ export function createPiShellTools(params: {
       additionalProperties: false,
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
+      if (toolCalls >= maxToolCalls) {
+        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+        params.onToolEvent?.({ phase: "end", tool: "web_fetch", status: "blocked", blocked: true, reason });
+        return {
+          content: textResult(`blocked=true\nreason=${reason}`),
+          details: { blocked: true, reason, status: "blocked" },
+        };
+      }
+      if (webFetchCalls >= maxWebFetchCalls) {
+        const reason = `web_fetch_budget_exceeded:${webFetchCalls}/${maxWebFetchCalls}`;
+        params.onToolEvent?.({ phase: "end", tool: "web_fetch", status: "blocked", blocked: true, reason });
+        return {
+          content: textResult(`blocked=true\nreason=${reason}`),
+          details: { blocked: true, reason, status: "blocked" },
+        };
+      }
+      toolCalls += 1;
+      webFetchCalls += 1;
+      const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as { url: string; maxChars?: number };
+      const intent = logToolStart("web_fetch", args);
+      const decision = params.loopGuard?.beforeCall({
+        sessionKey: params.sessionKey,
+        tool: "web_fetch",
+        params: args,
+      });
+      if (decision && !decision.allowed) {
+        const blockedResult = {
+          content: textResult(
+            `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}`,
+          ),
+          details: {
+            blocked: true,
+            reason: decision.reason,
+            retryAfterMs: decision.retryAfterMs,
+          },
+        };
+        logToolEnd("web_fetch", intent, blockedResult.details, startedAtMs);
+        return blockedResult;
+      }
       const result = await params.tooling.webFetch({
         sessionKey: params.sessionKey,
         url: args.url,
         maxChars: args.maxChars,
+        signal: params.turnSignal,
+      });
+      params.loopGuard?.afterCall({
+        sessionKey: params.sessionKey,
+        tool: "web_fetch",
+        params: args,
+        result,
       });
       const text = [
         `url=${result.url}`,
@@ -738,10 +851,12 @@ export function createPiShellTools(params: {
       ]
         .filter(Boolean)
         .join("\n");
-      return {
+      const response = {
         content: textResult(text),
         details: result,
       };
+      logToolEnd("web_fetch", intent, result, startedAtMs);
+      return response;
     },
   };
 
@@ -765,6 +880,25 @@ export function createPiShellTools(params: {
       additionalProperties: false,
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
+      if (toolCalls >= maxToolCalls) {
+        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+        params.onToolEvent?.({ phase: "end", tool: "web_research", status: "blocked", blocked: true, reason });
+        return {
+          content: textResult(`blocked=true\nreason=${reason}`),
+          details: { blocked: true, reason, status: "blocked" },
+        };
+      }
+      if (webResearchCalls >= maxWebResearchCalls) {
+        const reason = `web_research_budget_exceeded:${webResearchCalls}/${maxWebResearchCalls}`;
+        params.onToolEvent?.({ phase: "end", tool: "web_research", status: "blocked", blocked: true, reason });
+        return {
+          content: textResult(`blocked=true\nreason=${reason}`),
+          details: { blocked: true, reason, status: "blocked" },
+        };
+      }
+      toolCalls += 1;
+      webResearchCalls += 1;
+      const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as {
         query: string;
         maxResults?: number;
@@ -774,6 +908,26 @@ export function createPiShellTools(params: {
         domainsAllow?: string[];
         domainsBlock?: string[];
       };
+      const intent = logToolStart("web_research", args);
+      const decision = params.loopGuard?.beforeCall({
+        sessionKey: params.sessionKey,
+        tool: "web_research",
+        params: args,
+      });
+      if (decision && !decision.allowed) {
+        const blockedResult = {
+          content: textResult(
+            `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}`,
+          ),
+          details: {
+            blocked: true,
+            reason: decision.reason,
+            retryAfterMs: decision.retryAfterMs,
+          },
+        };
+        logToolEnd("web_research", intent, blockedResult.details, startedAtMs);
+        return blockedResult;
+      }
       const result = await params.tooling.webResearch({
         sessionKey: params.sessionKey,
         query: args.query,
@@ -783,6 +937,13 @@ export function createPiShellTools(params: {
         recencyDays: args.recencyDays,
         domainsAllow: args.domainsAllow,
         domainsBlock: args.domainsBlock,
+        signal: params.turnSignal,
+      });
+      params.loopGuard?.afterCall({
+        sessionKey: params.sessionKey,
+        tool: "web_research",
+        params: args,
+        result,
       });
       const text = [
         `confidence=${result.confidence}`,
@@ -800,10 +961,12 @@ export function createPiShellTools(params: {
           ),
         ...(result.notes.length > 0 ? ["", "notes:", ...result.notes.map((item) => `- ${item}`)] : []),
       ].join("\n");
-      return {
+      const response = {
         content: textResult(text),
         details: result,
       };
+      logToolEnd("web_research", intent, result, startedAtMs);
+      return response;
     },
   };
 

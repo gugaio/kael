@@ -218,11 +218,13 @@ export type EngineTooling = {
     recencyDays?: number;
     domainsAllow?: string[];
     domainsBlock?: string[];
+    signal?: AbortSignal;
   }) => Promise<WebSearchResult>;
   webFetch: (params: {
     sessionKey: string;
     url: string;
     maxChars?: number;
+    signal?: AbortSignal;
   }) => Promise<WebFetchResult>;
   webResearch: (params: {
     sessionKey: string;
@@ -233,6 +235,7 @@ export type EngineTooling = {
     recencyDays?: number;
     domainsAllow?: string[];
     domainsBlock?: string[];
+    signal?: AbortSignal;
   }) => Promise<WebResearchResult>;
   planCreate: (params: {
     sessionKey: string;

@@ -132,6 +132,30 @@ function isRedirectStatus(status: number): boolean {
   return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
 }
 
+function buildAbortSignal(timeoutMs: number, signal?: AbortSignal): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  if (!signal) {
+    return timeoutSignal;
+  }
+  const combined = new AbortController();
+  const abortWith = (reason?: unknown): void => {
+    if (!combined.signal.aborted) {
+      combined.abort(reason);
+    }
+  };
+  const onTimeout = (): void => abortWith(timeoutSignal.reason);
+  const onExternal = (): void => abortWith(signal.reason);
+
+  if (timeoutSignal.aborted || signal.aborted) {
+    abortWith(timeoutSignal.aborted ? timeoutSignal.reason : signal.reason);
+    return combined.signal;
+  }
+
+  timeoutSignal.addEventListener("abort", onTimeout, { once: true });
+  signal.addEventListener("abort", onExternal, { once: true });
+  return combined.signal;
+}
+
 export async function fetchWithSsrFGuard(params: {
   url: string;
   fetchImpl?: typeof fetch;
@@ -139,6 +163,7 @@ export async function fetchWithSsrFGuard(params: {
   maxRedirects?: number;
   timeoutMs: number;
   headers?: HeadersInit;
+  signal?: AbortSignal;
 }): Promise<{ response: Response; finalUrl: string }> {
   const fetchImpl = params.fetchImpl ?? fetch;
   const maxRedirects =
@@ -156,7 +181,7 @@ export async function fetchWithSsrFGuard(params: {
       method: "GET",
       headers: params.headers,
       redirect: "manual",
-      signal: AbortSignal.timeout(remaining),
+      signal: buildAbortSignal(remaining, params.signal),
     });
     if (!isRedirectStatus(response.status)) {
       return { response, finalUrl: currentUrl };

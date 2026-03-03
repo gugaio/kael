@@ -197,6 +197,7 @@ export async function fetchAndExtractWebContent(params: {
   fetchMaxRedirects: number;
   fetchMaxResponseBytes: number;
   maxChars: number;
+  signal?: AbortSignal;
 }): Promise<FetchedWebContent> {
   const parsed = new URL(params.url);
   const guarded = await fetchWithSsrFGuard({
@@ -205,6 +206,7 @@ export async function fetchAndExtractWebContent(params: {
     lookup: params.lookup,
     timeoutMs: params.timeoutMs,
     maxRedirects: params.fetchMaxRedirects,
+    signal: params.signal,
     headers: {
       "user-agent": "KaelResearchBot/0.1 (+local-agent)",
       accept: "text/html, text/plain;q=0.9, */*;q=0.7",

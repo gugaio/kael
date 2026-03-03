@@ -1,4 +1,4 @@
-type ToolName = "exec" | "process";
+type ToolName = "exec" | "process" | "web_search" | "web_fetch" | "web_research";
 
 type LoopGuardPolicy = {
   historySize: number;
@@ -74,6 +74,30 @@ function buildFingerprint(tool: ToolName, result: unknown): string {
       exitCode: raw.exitCode ?? null,
       approvalId: raw.approvalId ?? null,
       outputTail: trimTail(typeof raw.outputTail === "string" ? raw.outputTail : ""),
+    });
+  }
+  if (tool === "web_fetch") {
+    return stableStringify({
+      url: raw.url ?? null,
+      finalUrl: raw.finalUrl ?? null,
+      cached: raw.cached ?? null,
+      contentType: raw.contentType ?? null,
+      excerptTail: trimTail(typeof raw.excerpt === "string" ? raw.excerpt : ""),
+    });
+  }
+  if (tool === "web_search") {
+    return stableStringify({
+      sourcesCount: Array.isArray(raw.sources) ? raw.sources.length : 0,
+      answerTail: trimTail(typeof raw.answer === "string" ? raw.answer : ""),
+      notesCount: Array.isArray(raw.notes) ? raw.notes.length : 0,
+    });
+  }
+  if (tool === "web_research") {
+    return stableStringify({
+      confidence: raw.confidence ?? null,
+      evidenceCount: Array.isArray(raw.evidence) ? raw.evidence.length : 0,
+      notesCount: Array.isArray(raw.notes) ? raw.notes.length : 0,
+      summaryTail: trimTail(typeof raw.summary === "string" ? raw.summary : ""),
     });
   }
 
@@ -183,4 +207,3 @@ export class ToolLoopGuard {
     return `${key.sessionKey}::${key.tool}::${key.signature}`;
   }
 }
-

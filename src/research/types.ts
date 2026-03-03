@@ -4,6 +4,7 @@ export type WebSearchQuery = {
   recencyDays?: number;
   domainsAllow?: string[];
   domainsBlock?: string[];
+  signal?: AbortSignal;
 };
 
 export type WebResearchQuery = WebSearchQuery & {
@@ -83,6 +84,7 @@ export type SearchProviderRequest = {
   recencyDays?: number;
   domainsAllow?: string[];
   timeoutMs: number;
+  signal?: AbortSignal;
 };
 
 export type SearchProviderResponse = {

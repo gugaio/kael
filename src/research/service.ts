@@ -190,6 +190,7 @@ export class ResearchService {
       recencyDays: params.recencyDays,
       domainsAllow: params.domainsAllow,
       timeoutMs: this.timeoutMs,
+      signal: params.signal,
     });
 
     const filtered = providerResult.results.filter((item) => passesBlocklist(item.url, params.domainsBlock));
@@ -237,6 +238,7 @@ export class ResearchService {
     sessionKey: string;
     url: string;
     maxChars?: number;
+    signal?: AbortSignal;
   }): Promise<WebFetchResult> {
     if (!this.enabled) {
       throw new Error("web_fetch desabilitado. Configure KAEL_RESEARCH_ENABLED=true para ativar.");
@@ -291,6 +293,7 @@ export class ResearchService {
       fetchMaxRedirects: this.fetchMaxRedirects,
       fetchMaxResponseBytes: this.fetchMaxResponseBytes,
       maxChars,
+      signal: params.signal,
     });
     const nextEntries = {
       ...cache.entries,
@@ -334,6 +337,7 @@ export class ResearchService {
       recencyDays: params.recencyDays,
       domainsAllow: params.domainsAllow,
       domainsBlock: params.domainsBlock,
+      signal: params.signal,
     });
 
     const fetchTopRaw = params.fetchTop ?? 3;
@@ -360,6 +364,7 @@ export class ResearchService {
           sessionKey: params.sessionKey,
           url: source.url,
           maxChars: params.fetchMaxChars,
+          signal: params.signal,
         });
         const target = evidence.find((item) => item.source.url === source.url);
         if (target) {

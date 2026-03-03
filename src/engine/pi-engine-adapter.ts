@@ -18,6 +18,11 @@ type PiAgentLike = {
   subscribe: (listener: (event: unknown) => void) => (() => void) | void;
 };
 
+type CreatedPiAgent = {
+  agent: PiAgentLike;
+  abortController: AbortController;
+};
+
 type PiAdapterObservabilityConfig = {
   failureDumpDir?: string;
   dumpEnabled?: boolean;
@@ -287,7 +292,7 @@ export class PiEngineAdapter implements AgentEngine {
           blockedCalls: 0,
           lastBlockedReason: "",
         };
-        const agent = this.createSdkAgent(input, {
+        const { agent, abortController } = this.createSdkAgent(input, {
           turnId,
           attempt,
           onToolEvent: (event) => {
@@ -332,8 +337,11 @@ export class PiEngineAdapter implements AgentEngine {
 
           const timeout = setTimeout(() => {
             finish(() => {
+              abortController.abort(
+                new DOMException("Pi turn timed out and was aborted", "AbortError"),
+              );
               agent.abort();
-              const timedOutWithTools = attemptStats.toolCalls > 0;
+              const timedOutWithTools = attemptStats.toolCalls > 0 || attemptStats.blockedCalls > 0;
               kaelLogger.warn("pi.turn.timeout", {
                 turnId,
                 requestId: input.requestId ?? null,
@@ -477,7 +485,7 @@ export class PiEngineAdapter implements AgentEngine {
         reason?: string;
       }) => void;
     },
-  ): PiAgentLike {
+  ): CreatedPiAgent {
     const model = getModel(this.cfg.provider as never, this.cfg.model);
     if (!model) {
       throw new PiEngineError({
@@ -486,6 +494,7 @@ export class PiEngineAdapter implements AgentEngine {
         retryable: false,
       });
     }
+    const abortController = new AbortController();
     const agent = new Agent({
       initialState: {
         systemPrompt: this.cfg.systemPrompt,
@@ -494,6 +503,7 @@ export class PiEngineAdapter implements AgentEngine {
         tools: createPiShellTools({
           sessionKey: input.sessionKey,
           tooling: input.tooling,
+          turnSignal: abortController.signal,
           loopGuard: this.loopGuard,
           trace: {
             turnId: trace.turnId,
@@ -504,6 +514,9 @@ export class PiEngineAdapter implements AgentEngine {
           budget: {
             maxToolCalls: 12,
             maxExecCalls: 6,
+            maxWebFetchCalls: 5,
+            maxWebSearchCalls: 3,
+            maxWebResearchCalls: 2,
           },
           onToolEvent: trace.onToolEvent,
         }),
@@ -523,7 +536,10 @@ export class PiEngineAdapter implements AgentEngine {
       },
     }) as unknown as PiAgentLike;
 
-    return agent;
+    return {
+      agent,
+      abortController,
+    };
   }
 
   private async writeFailureDump(payload: Record<string, unknown>): Promise<void> {
