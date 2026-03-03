@@ -319,6 +319,26 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-03 - Docs: README principal reestruturado (PT-BR first)
+
+Resumo:
+- README reescrito com foco de pagina principal do GitHub: proposta de valor clara, quick start rapido e secoes mais escaneaveis.
+- Conteudo reorganizado por prioridade: visao do produto, stack, setup, capacidades, comandos-chave e docs de referencia.
+- Adicionado destaque explicito do modo `discord-bot` sem scheduler/email polling para evitar duplicacao operacional.
+
+Arquivos-chave:
+- `README.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] Revisao manual de links/comandos e consistencia textual
+
+Pendencias:
+- Opcional: incluir GIF curto/screenshot da UI para aumentar impacto visual da pagina inicial.
+
+Proximo passo recomendado:
+- Adicionar secao \"Exemplos reais\" com 3 fluxos (video, pesquisa, email) para onboarding mais rapido.
+
 ### 2026-03-03 - Fase 14/Runtime: evitar polling de email duplicado entre API e Discord
 
 Resumo:
