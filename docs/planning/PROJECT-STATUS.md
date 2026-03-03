@@ -303,6 +303,31 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-03 - Refactor pre-Fase 12: tooling factory + contrato ShellRuntime
+
+Resumo:
+- Extraida a montagem de `EngineTooling` do `ChatService` para `src/chat/tooling-factory.ts` (`createChatTooling` + `createChatOnlyTooling`).
+- `ChatService` simplificado para focar fluxo de roteamento/turno, recebendo `tooling` pronto por injecao.
+- Introduzido contrato `ShellRuntime` em `shell-tool-service`, com consumidores (`app`/`chat`) dependentes da interface em vez da classe concreta.
+
+Arquivos-chave:
+- `src/chat/tooling-factory.ts`
+- `src/chat/service.ts`
+- `src/app.ts`
+- `src/tools/system/shell-tool-service.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/api/server.test.ts src/chat/command-router.test.ts src/chat/routing-telemetry.test.ts src/engine/simple-engine.test.ts`
+- [x] `npx vitest run src/tools/system/shell-tool-service.test.ts`
+
+Pendencias:
+- Nenhuma pendencia deste refactor.
+
+Proximo passo recomendado:
+- Iniciar Fase 12 implementando supervisor dedicado de `exec/process` por tras do contrato `ShellRuntime`.
+
 ### 2026-03-03 - Fase 11: telemetria de roteamento (fast-path vs LLM)
 
 Resumo:

@@ -16,10 +16,11 @@ import { DisabledSearchProvider, TavilySearchProvider } from "./research/provide
 import { ResearchService } from "./research/service.js";
 import { SessionStore } from "./session/store.js";
 import { ChatService } from "./chat/service.js";
+import { createChatOnlyTooling, createChatTooling } from "./chat/tooling-factory.js";
 import { TurnOrchestrator } from "./chat/turn-orchestrator.js";
 import { WorkspaceInspector } from "./workspace/inspector.js";
 import { LocalProcessRunner } from "./tools/system/process-runner.js";
-import { ShellToolService } from "./tools/system/shell-tool-service.js";
+import { ShellToolService, type ShellRuntime } from "./tools/system/shell-tool-service.js";
 import { VideoJobService } from "./tools/video/video-job-service.js";
 import { VideoInspectToolService } from "./tools/video/video-inspect-tool-service.js";
 
@@ -32,7 +33,7 @@ export type KaelApp = {
   research: ResearchService;
   chat: ChatService;
   automation: AutomationService;
-  shell: ShellToolService;
+  shell: ShellRuntime;
 };
 
 export async function createKaelApp(): Promise<KaelApp> {
@@ -104,8 +105,7 @@ export async function createKaelApp(): Promise<KaelApp> {
     maxContextMessages: config.context.maxMessages,
     maxContextChars: config.context.maxChars,
   });
-  const chat = new ChatService(
-    sessions,
+  const tooling = createChatTooling({
     jobs,
     shell,
     videoInspect,
@@ -113,7 +113,14 @@ export async function createKaelApp(): Promise<KaelApp> {
     workspace,
     research,
     planner,
+  });
+  const chat = new ChatService(
+    sessions,
+    shell,
     orchestrator,
+    memory,
+    tooling,
+    createChatOnlyTooling(tooling),
   );
   const heartbeat = new HeartbeatRunner(jobs, sessions);
   const scheduler = new PersistentScheduler(

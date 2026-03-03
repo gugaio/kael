@@ -81,6 +81,16 @@ export type ProcessCommandResult = {
   message?: string;
 };
 
+export interface ShellRuntime {
+  exec(params: ExecCommandParams): Promise<ExecSession>;
+  process(params: ProcessCommandParams): Promise<ProcessCommandResult>;
+  listApprovals(params?: {
+    status?: "pending" | "approved" | "denied" | "expired" | "open";
+    limit?: number;
+  }): Promise<ExecApprovalEntry[]>;
+  resolveApproval(approvalId: string, decision: "approved" | "denied"): Promise<ExecApprovalEntry | null>;
+}
+
 type ShellToolConfig = {
   workspaceRoot: string;
   defaultTimeoutMs: number;
@@ -121,7 +131,7 @@ function tailSnippet(value: string, maxChars = 280): string {
   return value.length <= maxChars ? value : value.slice(value.length - maxChars);
 }
 
-export class ShellToolService {
+export class ShellToolService implements ShellRuntime {
   private readonly runner = new LocalProcessRunner();
   private readonly sessions = new Map<string, ExecSession>();
   private readonly active = new Map<string, ActiveProcess>();

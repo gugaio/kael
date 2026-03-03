@@ -21,6 +21,8 @@ mesmo quando o engine principal estiver em modo `pi`.
 - Reduz latencia e variabilidade para operacoes repetitivas.
 - Evita degradacao de UX quando o modelo nao segue formato de comando.
 - Aproxima o Kael de um "auto-reply" pragmatico sem acoplar multi-canal agora.
+- Refactor posterior consolidou `tooling factory` fora do `ChatService`, reduzindo acoplamento.
+- Contrato `ShellRuntime` introduzido para preparar migracao de `exec/process` para supervisor dedicado (Fase 12).
 
 ## Limites desta fase
 
