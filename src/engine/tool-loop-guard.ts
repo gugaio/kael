@@ -6,6 +6,7 @@ type LoopGuardPolicy = {
   repeatThreshold: number;
   cooldownMs: number;
   pollNoProgressThreshold: number;
+  webNoProgressThreshold: number;
 };
 
 type ToolLoopKey = {
@@ -37,6 +38,7 @@ const DEFAULT_POLICY: LoopGuardPolicy = {
   repeatThreshold: 4,
   cooldownMs: 8_000,
   pollNoProgressThreshold: 5,
+  webNoProgressThreshold: 2,
 };
 
 function stableStringify(value: unknown): string {
@@ -165,8 +167,8 @@ export class ToolLoopGuard {
     };
 
     const hitRepeatThreshold = repeatCount >= this.policy.repeatThreshold;
-    const hitNoProgressThreshold =
-      this.isPollNoProgressPattern(input.tool, input.params) && noProgressCount >= this.policy.pollNoProgressThreshold;
+    const noProgressThreshold = this.resolveNoProgressThreshold(input.tool, input.params);
+    const hitNoProgressThreshold = noProgressThreshold > 0 && noProgressCount >= noProgressThreshold;
 
     if (hitRepeatThreshold || hitNoProgressThreshold) {
       next.cooldownUntil = nowMs + this.policy.cooldownMs;
@@ -176,12 +178,15 @@ export class ToolLoopGuard {
     this.prune(nowMs);
   }
 
-  private isPollNoProgressPattern(tool: ToolName, params: unknown): boolean {
+  private resolveNoProgressThreshold(tool: ToolName, params: unknown): number {
+    if (tool === "web_fetch" || tool === "web_search") {
+      return this.policy.webNoProgressThreshold;
+    }
     if (tool !== "process" || !params || typeof params !== "object") {
-      return false;
+      return 0;
     }
     const action = (params as { action?: unknown }).action;
-    return action === "poll";
+    return action === "poll" ? this.policy.pollNoProgressThreshold : 0;
   }
 
   private prune(nowMs: number): void {

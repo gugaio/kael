@@ -39,7 +39,14 @@ export type KaelApp = {
   shell: ShellRuntime;
 };
 
-export async function createKaelApp(): Promise<KaelApp> {
+export type CreateKaelAppOptions = {
+  startAutomation?: boolean;
+  enableEmailPolling?: boolean;
+};
+
+export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise<KaelApp> {
+  const startAutomation = options.startAutomation ?? true;
+  const enableEmailPolling = options.enableEmailPolling ?? startAutomation;
   const config = await loadConfig();
   const sessions = new SessionStore(config.dataDir);
   const jobStore = new JobStore(config.dataDir);
@@ -127,7 +134,7 @@ export async function createKaelApp(): Promise<KaelApp> {
   );
   const heartbeat = new HeartbeatRunner(jobs, sessions);
   let emailIngest: EmailIngestService | null = null;
-  if (config.email.enabled && config.email.provider === "gmail_pop3") {
+  if (enableEmailPolling && config.email.enabled && config.email.provider === "gmail_pop3") {
     const provider = new GmailPop3Provider({
       address: config.email.gmail.address,
       appPassword: config.email.gmail.appPassword,
@@ -206,25 +213,27 @@ export async function createKaelApp(): Promise<KaelApp> {
     },
   );
   await scheduler.init();
-  await scheduler.upsertIntervalJob({
-    id: "heartbeat.main",
-    type: "heartbeat",
-    intervalMs: config.automation.heartbeatIntervalMs,
-    enabled: config.automation.heartbeatEnabled,
-  });
-  await scheduler.upsertIntervalJob({
-    id: "planner.reconcile",
-    type: "planner_reconcile",
-    intervalMs: config.automation.plannerReconcileIntervalMs,
-    enabled: config.automation.plannerReconcileEnabled,
-  });
-  await scheduler.upsertIntervalJob({
-    id: "email.poll",
-    type: "email_poll",
-    intervalMs: config.email.pollIntervalMs,
-    enabled: config.email.enabled,
-  });
-  scheduler.start();
+  if (startAutomation) {
+    await scheduler.upsertIntervalJob({
+      id: "heartbeat.main",
+      type: "heartbeat",
+      intervalMs: config.automation.heartbeatIntervalMs,
+      enabled: config.automation.heartbeatEnabled,
+    });
+    await scheduler.upsertIntervalJob({
+      id: "planner.reconcile",
+      type: "planner_reconcile",
+      intervalMs: config.automation.plannerReconcileIntervalMs,
+      enabled: config.automation.plannerReconcileEnabled,
+    });
+    await scheduler.upsertIntervalJob({
+      id: "email.poll",
+      type: "email_poll",
+      intervalMs: config.email.pollIntervalMs,
+      enabled: config.email.enabled && enableEmailPolling,
+    });
+    scheduler.start();
+  }
   const automation = new AutomationService(scheduler);
 
   return {

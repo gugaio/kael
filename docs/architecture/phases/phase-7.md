@@ -3,12 +3,13 @@
 Status: em andamento
 
 Objetivo:
-- Evitar que o agente fique preso em loops de tool calling (`exec`/`process`) sem progresso.
+- Evitar que o agente fique preso em loops de tool calling (`exec`/`process`/`web_*`) sem progresso.
 
 Entregas:
 - `ToolLoopGuard` no engine PI com estado por `sessionKey + tool + assinatura de parametros`.
 - Deteccao de repeticao/no-progress com cooldown curto antes de permitir nova chamada.
-- Integracao direta nas tools `exec` e `process` em `src/engine/pi-tools.ts`.
+- Integracao direta nas tools `exec`, `process`, `web_search`, `web_fetch` e `web_research` em `src/engine/pi-tools.ts`.
+- No-progress threshold dedicado para web (`web_fetch`/`web_search`) para cortar loops de fetch repetido mais cedo.
 - Resposta estruturada ao modelo quando bloqueado (`blocked=true`, `reason`, `retryAfterMs`).
 - Testes unitarios do guard (`src/engine/tool-loop-guard.test.ts`).
 - Context guard com auto-compaction no `TurnOrchestrator`:
@@ -19,7 +20,7 @@ Entregas:
 - Testes unitarios da compaction (`src/chat/turn-orchestrator.test.ts`).
 
 Decisoes:
-- Escopo inicial limitado a `exec` e `process` (alto risco de loop e custo).
+- Escopo evoluiu de `exec/process` para tambem cobrir loops de pesquisa web sem progresso no mesmo turno.
 - Cooldown temporario (nao bloqueio permanente), para manter capacidade de recuperacao automatica.
 
 Proximo passo:

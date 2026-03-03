@@ -302,10 +302,10 @@ export class DiscordChatOnlyBot {
     });
 
     const typingInterval = setInterval(() => {
-      void this.sendTyping(msg.channel_id);
+      void this.safeSendTyping(msg.channel_id, sessionKey);
     }, 8000);
     try {
-      await this.sendTyping(msg.channel_id);
+      await this.safeSendTyping(msg.channel_id, sessionKey);
       const turn = await this.app.chat.handleMessageChatOnly({
         sessionKey,
         message: content,
@@ -335,6 +335,18 @@ export class DiscordChatOnlyBot {
 
   private async sendTyping(channelId: string): Promise<void> {
     await this.discordApi(`/channels/${channelId}/typing`, "POST");
+  }
+
+  private async safeSendTyping(channelId: string, sessionKey: string): Promise<void> {
+    try {
+      await this.sendTyping(channelId);
+    } catch (error) {
+      kaelLogger.warn("discord.typing.failed", {
+        channelId,
+        sessionKey,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   private async sendChannelMessage(channelId: string, content: string, replyToId?: string): Promise<void> {

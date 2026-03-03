@@ -484,7 +484,7 @@ export function createPiShellTools(params: {
     name: "memory_search",
     label: "Memory Search",
     description:
-      "Busca semantica simplificada em MEMORY.md e memory/*.md. Use antes de responder sobre fatos, decisoes, preferencias e tarefas passadas.",
+      "Busca semantica simplificada em MEMORY.md e memory/*.md. Use SEMPRE antes de responder sobre fatos pessoais/historicos (ex: meu time, preferencias, decisoes, combinados).",
     parameters: {
       type: "object",
       properties: {
@@ -539,7 +539,8 @@ export function createPiShellTools(params: {
   const memoryGetTool: AgentTool = {
     name: "memory_get",
     label: "Memory Get",
-    description: "Le trecho de MEMORY.md ou memory/*.md por path e opcionalmente intervalo de linhas.",
+    description:
+      "Le trecho de MEMORY.md ou memory/*.md por path e opcionalmente intervalo de linhas. Use para confirmar evidencias retornadas por memory_search antes de responder.",
     parameters: {
       type: "object",
       properties: {
@@ -698,7 +699,9 @@ export function createPiShellTools(params: {
         const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
         params.onToolEvent?.({ phase: "end", tool: "web_search", status: "blocked", blocked: true, reason });
         return {
-          content: textResult(`blocked=true\nreason=${reason}`),
+          content: textResult(
+            `blocked=true\nreason=${reason}\nnextAction=finalize_answer_with_available_evidence`,
+          ),
           details: { blocked: true, reason, status: "blocked" },
         };
       }
@@ -706,7 +709,9 @@ export function createPiShellTools(params: {
         const reason = `web_search_budget_exceeded:${webSearchCalls}/${maxWebSearchCalls}`;
         params.onToolEvent?.({ phase: "end", tool: "web_search", status: "blocked", blocked: true, reason });
         return {
-          content: textResult(`blocked=true\nreason=${reason}`),
+          content: textResult(
+            `blocked=true\nreason=${reason}\nnextAction=finalize_answer_with_available_evidence`,
+          ),
           details: { blocked: true, reason, status: "blocked" },
         };
       }
@@ -729,7 +734,7 @@ export function createPiShellTools(params: {
       if (decision && !decision.allowed) {
         const blockedResult = {
           content: textResult(
-            `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}`,
+            `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}\nnextAction=finalize_answer_with_available_evidence`,
           ),
           details: {
             blocked: true,
@@ -768,7 +773,7 @@ export function createPiShellTools(params: {
         content: textResult(text),
         details: result,
       };
-      logToolEnd("web_search", intent, result, startedAtMs);
+      logToolEnd("web_search", intent, { status: "completed", ...result }, startedAtMs);
       return response;
     },
   };
@@ -792,7 +797,9 @@ export function createPiShellTools(params: {
         const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
         params.onToolEvent?.({ phase: "end", tool: "web_fetch", status: "blocked", blocked: true, reason });
         return {
-          content: textResult(`blocked=true\nreason=${reason}`),
+          content: textResult(
+            `blocked=true\nreason=${reason}\nnextAction=finalize_answer_with_available_evidence`,
+          ),
           details: { blocked: true, reason, status: "blocked" },
         };
       }
@@ -800,7 +807,9 @@ export function createPiShellTools(params: {
         const reason = `web_fetch_budget_exceeded:${webFetchCalls}/${maxWebFetchCalls}`;
         params.onToolEvent?.({ phase: "end", tool: "web_fetch", status: "blocked", blocked: true, reason });
         return {
-          content: textResult(`blocked=true\nreason=${reason}`),
+          content: textResult(
+            `blocked=true\nreason=${reason}\nnextAction=finalize_answer_with_available_evidence`,
+          ),
           details: { blocked: true, reason, status: "blocked" },
         };
       }
@@ -817,7 +826,7 @@ export function createPiShellTools(params: {
       if (decision && !decision.allowed) {
         const blockedResult = {
           content: textResult(
-            `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}`,
+            `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}\nnextAction=finalize_answer_with_available_evidence`,
           ),
           details: {
             blocked: true,
@@ -855,7 +864,7 @@ export function createPiShellTools(params: {
         content: textResult(text),
         details: result,
       };
-      logToolEnd("web_fetch", intent, result, startedAtMs);
+      logToolEnd("web_fetch", intent, { status: "completed", ...result }, startedAtMs);
       return response;
     },
   };
@@ -884,7 +893,9 @@ export function createPiShellTools(params: {
         const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
         params.onToolEvent?.({ phase: "end", tool: "web_research", status: "blocked", blocked: true, reason });
         return {
-          content: textResult(`blocked=true\nreason=${reason}`),
+          content: textResult(
+            `blocked=true\nreason=${reason}\nnextAction=finalize_answer_with_available_evidence`,
+          ),
           details: { blocked: true, reason, status: "blocked" },
         };
       }
@@ -892,7 +903,9 @@ export function createPiShellTools(params: {
         const reason = `web_research_budget_exceeded:${webResearchCalls}/${maxWebResearchCalls}`;
         params.onToolEvent?.({ phase: "end", tool: "web_research", status: "blocked", blocked: true, reason });
         return {
-          content: textResult(`blocked=true\nreason=${reason}`),
+          content: textResult(
+            `blocked=true\nreason=${reason}\nnextAction=finalize_answer_with_available_evidence`,
+          ),
           details: { blocked: true, reason, status: "blocked" },
         };
       }
@@ -917,7 +930,7 @@ export function createPiShellTools(params: {
       if (decision && !decision.allowed) {
         const blockedResult = {
           content: textResult(
-            `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}`,
+            `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}\nnextAction=finalize_answer_with_available_evidence`,
           ),
           details: {
             blocked: true,
@@ -965,7 +978,7 @@ export function createPiShellTools(params: {
         content: textResult(text),
         details: result,
       };
-      logToolEnd("web_research", intent, result, startedAtMs);
+      logToolEnd("web_research", intent, { status: "completed", ...result }, startedAtMs);
       return response;
     },
   };

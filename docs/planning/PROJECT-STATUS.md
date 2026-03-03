@@ -319,6 +319,101 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-03 - Fase 14/Runtime: evitar polling de email duplicado entre API e Discord
+
+Resumo:
+- `createKaelApp` passou a aceitar opcoes de runtime (`startAutomation`, `enableEmailPolling`) para separar papeis entre processos.
+- Comando `discord-bot` agora sobe em modo sem automacao/scheduler e sem `email_poll`, evitando ingest duplicado quando API e Discord rodam juntos.
+- API/`server` mantem comportamento padrao (scheduler + heartbeat + planner + email_poll) sem mudanca funcional.
+
+Arquivos-chave:
+- `src/app.ts`
+- `src/cli/index.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+
+Pendencias:
+- Coordenacao distribuida por lock de processo ainda nao existe (estrategia atual e separacao de papeis por comando).
+
+Proximo passo recomendado:
+- Opcional: adicionar lock de lider para scheduler quando houver multiplas instancias full-runtime.
+
+### 2026-03-03 - Fase 9/11: disciplina de pesquisa web para evitar timeout por cadeia de searches
+
+Resumo:
+- Prompt do `PiEngineAdapter` ganhou regra explicita de disciplina web: preferir `web_research` para perguntas abertas e evitar cadeia de `web_search`.
+- Quando uma tool web retorna bloqueio (budget/loop), o payload agora inclui `nextAction=finalize_answer_with_available_evidence` para induzir encerramento da resposta em best-effort.
+- Mantida telemetria de completion nas tools web para diagnostico mais claro.
+- Adicionado teste unitario para garantir injecao dessa disciplina de pesquisa no prompt.
+
+Arquivos-chave:
+- `src/engine/pi-engine-adapter.ts`
+- `src/engine/pi-tools.ts`
+- `src/engine/pi-engine-adapter.test.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm run test -- src/engine/pi-engine-adapter.test.ts src/engine/tool-loop-guard.test.ts`
+
+Pendencias:
+- Adicionar fallback de resposta automatica no `ChatService` para timeout com evidencias parciais de pesquisa.
+
+Proximo passo recomendado:
+- Persistir "ultimo pacote de evidencia web" por turno e usar fallback deterministico quando o LLM atingir timeout.
+
+### 2026-03-03 - Fase 7: guardrail para loop web_fetch/web_search + telemetria de status
+
+Resumo:
+- Ajustado `ToolLoopGuard` para bloquear repeticao sem progresso em `web_fetch`/`web_search` com threshold dedicado (`webNoProgressThreshold`), reduzindo risco de timeout por loops web no mesmo turno.
+- Mantido threshold separado para `process poll`, evitando regressao em monitoramento legitimo de processos.
+- Telemetria das tools web ajustada para registrar `status=completed` (antes aparecia `status=unknown`), melhorando diagnostico operacional.
+- Adicionado teste unitario cobrindo bloqueio cedo de `web_fetch` repetido sem progresso.
+
+Arquivos-chave:
+- `src/engine/tool-loop-guard.ts`
+- `src/engine/tool-loop-guard.test.ts`
+- `src/engine/pi-tools.ts`
+- `docs/architecture/phases/phase-7.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm run test -- src/engine/tool-loop-guard.test.ts src/engine/pi-engine-adapter.test.ts`
+
+Pendencias:
+- Expor metricas agregadas de bloqueio por tipo (`exec/process/web`) no endpoint de observabilidade.
+
+Proximo passo recomendado:
+- Adicionar contador de `pi.turn.timeout` por rota/ferramenta dominante para tuning automatico de budgets.
+
+### 2026-03-03 - Fase 8: recall de memoria mais consistente para fatos pessoais
+
+Resumo:
+- `PiEngineAdapter` ganhou detector de perguntas com alta chance de depender de memoria (ex: "qual meu time", "minha preferencia", "lembra do combinado").
+- `buildPrompt` agora injeta instrucoes explicitas de recall nesses casos: `memory_search` primeiro, `memory_get` para confirmar, e proibicao de inventar quando nao houver evidencia.
+- Descricoes das tools `memory_search` e `memory_get` foram reforcadas para priorizar fatos pessoais/historicos.
+- Adicionados testes unitarios para garantir que o prompt ativa fluxo de memoria com e sem contexto.
+
+Arquivos-chave:
+- `src/engine/pi-engine-adapter.ts`
+- `src/engine/pi-tools.ts`
+- `src/engine/pi-engine-adapter.test.ts`
+- `docs/architecture/phases/phase-8.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm run test -- src/engine/pi-engine-adapter.test.ts`
+
+Pendencias:
+- Cobrir mais gatilhos semanticos reais via telemetria de misses de recall em producao.
+
+Proximo passo recomendado:
+- Adicionar metrica/evento de "memory recall expected but not called" para tuning continuo do prompt.
+
 ### 2026-03-03 - Fase 14: anti-duplicacao de poll + auto-reply SMTP
 
 Resumo:

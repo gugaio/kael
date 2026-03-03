@@ -75,19 +75,79 @@ function isOperationalExecutionRequest(message: string): boolean {
   return tokens.some((token) => text.includes(token));
 }
 
-function buildPrompt(input: EngineTurnInput): string {
+function isMemoryRecallQuestion(message: string): boolean {
+  const text = message.toLowerCase();
+  const lexicalTriggers = [
+    "meu ",
+    "minha ",
+    "meus ",
+    "minhas ",
+    "lembra",
+    "lembrar",
+    "como combinamos",
+    "qual era",
+    "qual é meu",
+    "qual e meu",
+    "qual é minha",
+    "qual e minha",
+    "time",
+    "preferencia",
+    "preferência",
+    "gosto",
+    "projeto",
+    "decisao",
+    "decisão",
+    "historico",
+    "histórico",
+    "contexto anterior",
+  ];
+  return lexicalTriggers.some((token) => text.includes(token));
+}
+
+function buildMemoryRecallInstruction(currentMessage: string): string[] {
+  return [
+    "Pergunta com alta chance de depender de memoria detectada.",
+    "Antes de responder, siga obrigatoriamente este fluxo de recall:",
+    "1) Chame memory_search com uma consulta curta baseada na mensagem atual.",
+    "2) Se houver resultado relevante, chame memory_get no path candidato para confirmar o texto fonte.",
+    "3) Responda com base no que foi encontrado; nao invente fatos ausentes.",
+    "4) Se nao achar evidencia suficiente, diga explicitamente que nao encontrou na memoria.",
+    "Exemplos classicos de recall: 'qual meu time?', 'qual minha preferencia?', 'o que combinamos antes?'.",
+    `Consulta sugerida para memory_search: "${currentMessage.slice(0, 140)}"`,
+    "",
+  ];
+}
+
+function buildWebToolingDisciplineInstruction(): string[] {
+  return [
+    "Disciplina obrigatoria para pesquisa web:",
+    "1) Se a pergunta for aberta (resumo/destaques/estado atual), prefira web_research em vez de varias chamadas manuais.",
+    "2) Evite repetir web_search em cadeia para cada manchete; busque e sintetize com o que ja tem.",
+    "3) Se qualquer tool retornar blocked=true (budget/loop), pare de chamar tools e entregue resposta best-effort com evidencias coletadas.",
+    "",
+  ];
+}
+
+export function buildPrompt(input: EngineTurnInput): string {
   const context = input.contextMessages ?? [];
+  const needsMemoryRecall = isMemoryRecallQuestion(input.message);
   if (context.length === 0) {
+    const leadingInstructions: string[] = [];
+    if (needsMemoryRecall) {
+      leadingInstructions.push(...buildMemoryRecallInstruction(input.message));
+    }
     if (isSelfKnowledgeQuestion(input.message)) {
-      return [
+      leadingInstructions.push(
         "Pergunta sobre o proprio Kael detectada.",
         "Antes de responder, investigue o workspace com workspace_search e workspace_read e responda com evidencias (arquivo:linha).",
         "",
-        "Mensagem atual do usuario:",
-        input.message,
-      ].join("\n");
+      );
     }
-    return input.message;
+    leadingInstructions.push(...buildWebToolingDisciplineInstruction());
+    if (leadingInstructions.length === 0) {
+      return input.message;
+    }
+    return [...leadingInstructions, "Mensagem atual do usuario:", input.message].join("\n");
   }
 
   const serializedContext = context
@@ -106,6 +166,8 @@ function buildPrompt(input: EngineTurnInput): string {
           "",
         ]
       : []),
+    ...buildWebToolingDisciplineInstruction(),
+    ...(needsMemoryRecall ? buildMemoryRecallInstruction(input.message) : []),
     "Instrucao critica: responda a MENSAGEM ATUAL do usuario. Nao continue tarefas antigas sem pedido explicito.",
     ...(isOperationalExecutionRequest(input.message)
       ? [

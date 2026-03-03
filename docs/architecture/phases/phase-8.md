@@ -19,6 +19,10 @@ Entregas:
   - escrita daily/long-term
   - busca por snippet
   - bloqueio de path fora da area de memoria
+- Evolucao de policy de recall no runtime PI:
+  - `PiEngineAdapter` detecta perguntas com forte sinal de memoria pessoal/historica (ex: "meu time", "minha preferencia", "lembra do combinado").
+  - Prompt de turno passa a instruir fluxo obrigatorio `memory_search -> memory_get` antes da resposta nesses casos.
+  - Tool descriptions de memoria reforcam uso para fatos pessoais/historicos e confirmacao por evidencia.
 
 Arquivos-chave:
 - `src/memory/service.ts`

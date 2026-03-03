@@ -116,5 +116,43 @@ describe("ToolLoopGuard", () => {
     });
     expect(otherTool.allowed).toBe(true);
   });
-});
 
+  it("bloqueia web_fetch repetido sem progresso mais cedo", () => {
+    const guard = new ToolLoopGuard({
+      webNoProgressThreshold: 2,
+      repeatThreshold: 10,
+      cooldownMs: 5000,
+      repeatWindowMs: 10_000,
+    });
+    const sessionKey = "s-web";
+    const params = { url: "https://example.com/page" };
+    const result = {
+      url: "https://example.com/page",
+      finalUrl: "https://example.com/page",
+      cached: true,
+      contentType: "text/html",
+      excerpt: "mesmo trecho",
+    };
+
+    guard.afterCall({
+      sessionKey,
+      tool: "web_fetch",
+      params,
+      result,
+      nowMs: 1000,
+    });
+    guard.afterCall({
+      sessionKey,
+      tool: "web_fetch",
+      params,
+      result,
+      nowMs: 1500,
+    });
+
+    const blocked = guard.beforeCall({ sessionKey, tool: "web_fetch", params, nowMs: 1800 });
+    expect(blocked.allowed).toBe(false);
+    if (!blocked.allowed) {
+      expect(blocked.retryAfterMs).toBeGreaterThan(0);
+    }
+  });
+});

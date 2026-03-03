@@ -304,7 +304,8 @@ async function main(): Promise<void> {
     .command("discord-bot")
     .description("Inicia bot Discord (chat-only) usando o core local do Kael")
     .action(async () => {
-      const app = await createKaelApp();
+      // Evita scheduler/email_poll duplicado quando API e Discord rodam em processos separados.
+      const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
       const bot = DiscordChatOnlyBot.fromEnv(app);
       const stop = async () => {
         await bot.stop().catch(() => undefined);
