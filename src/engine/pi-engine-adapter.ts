@@ -353,6 +353,7 @@ export class PiEngineAdapter implements AgentEngine {
           toolCalls: 0,
           blockedCalls: 0,
           lastBlockedReason: "",
+          webEvidence: [] as string[],
         };
         const { agent, abortController } = this.createSdkAgent(input, {
           turnId,
@@ -366,6 +367,20 @@ export class PiEngineAdapter implements AgentEngine {
               attemptStats.blockedCalls += 1;
               if (event.reason) {
                 attemptStats.lastBlockedReason = event.reason;
+              }
+            }
+            if (
+              event.phase === "end" &&
+              typeof event.summary === "string" &&
+              event.summary.trim() &&
+              (event.tool === "web_search" || event.tool === "web_fetch" || event.tool === "web_research")
+            ) {
+              const normalized = event.summary.trim();
+              if (!attemptStats.webEvidence.includes(normalized)) {
+                attemptStats.webEvidence.push(normalized);
+              }
+              if (attemptStats.webEvidence.length > 5) {
+                attemptStats.webEvidence = attemptStats.webEvidence.slice(-5);
               }
             }
           },
@@ -419,7 +434,14 @@ export class PiEngineAdapter implements AgentEngine {
               reject(
                 new PiEngineError({
                   message: timedOutWithTools
-                    ? `Pi SDK call timed out after ${attemptStats.toolCalls} tool calls`
+                    ? [
+                        `Pi SDK call timed out after ${attemptStats.toolCalls} tool calls`,
+                        attemptStats.webEvidence.length > 0
+                          ? `partial_web_evidence: ${attemptStats.webEvidence.join(" || ")}`
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join("\n")
                     : "Pi SDK call timed out",
                   code: "timeout",
                   retryable: !timedOutWithTools,
@@ -545,6 +567,7 @@ export class PiEngineAdapter implements AgentEngine {
         status?: string;
         blocked?: boolean;
         reason?: string;
+        summary?: string;
       }) => void;
     },
   ): CreatedPiAgent {

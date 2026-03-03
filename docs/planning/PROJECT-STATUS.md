@@ -319,6 +319,31 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-03 - Runtime hardening: fallback de timeout com evidencia parcial + retry Discord API
+
+Resumo:
+- `PiEngineAdapter` agora agrega resumo das tools web executadas no turno e, em timeout, inclui evidencias parciais no erro do turno.
+- `ChatService` passou a extrair essas evidencias parciais e exibi-las na resposta de fallback de timeout (best-effort), em vez de retornar apenas erro generico.
+- `pi-tools` ganhou summaries estruturados para `web_search`, `web_fetch` e `web_research`, usados na trilha de fallback.
+- Cliente Discord (`discordApi`) agora aplica retry com backoff+jitter para `429`/`5xx` e falhas de rede transitórias, reduzindo falhas intermitentes de typing/envio.
+
+Arquivos-chave:
+- `src/engine/pi-engine-adapter.ts`
+- `src/engine/pi-tools.ts`
+- `src/chat/service.ts`
+- `src/integrations/discord/discord-bot.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm run test -- src/engine/pi-engine-adapter.test.ts src/engine/tool-loop-guard.test.ts src/chat/turn-orchestrator.test.ts`
+
+Pendencias:
+- Fallback ainda depende das evidencias capturadas por tool summary; nao persiste pacote de evidencia por turno para reuso posterior.
+
+Proximo passo recomendado:
+- Persistir snapshot de evidencias web por `requestId` para fallback deterministico mesmo em falhas antes do `agent_end`.
+
 ### 2026-03-03 - Docs: README principal reestruturado (PT-BR first)
 
 Resumo:

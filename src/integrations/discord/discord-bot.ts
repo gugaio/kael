@@ -365,21 +365,74 @@ export class DiscordChatOnlyBot {
   }
 
   private async discordApi<T = unknown>(path: string, method: "GET" | "POST", body?: unknown): Promise<T> {
-    const res = await fetch(`https://discord.com/api/v10${path}`, {
-      method,
-      headers: {
-        authorization: `Bot ${this.cfg.token}`,
-        ...(body ? { "content-type": "application/json" } : {}),
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const raw = await res.text();
-    if (!res.ok) {
-      throw new Error(`Discord API ${method} ${path} failed (${res.status}): ${raw.slice(0, 300)}`);
+    const maxAttempts = 4;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const res = await fetch(`https://discord.com/api/v10${path}`, {
+          method,
+          headers: {
+            authorization: `Bot ${this.cfg.token}`,
+            ...(body ? { "content-type": "application/json" } : {}),
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        const raw = await res.text();
+        if (!res.ok) {
+          const retryAfterHeader = res.headers.get("retry-after");
+          const retryAfterSec = retryAfterHeader ? Number(retryAfterHeader) : NaN;
+          const retryAfterMs =
+            Number.isFinite(retryAfterSec) && retryAfterSec >= 0
+              ? Math.ceil(retryAfterSec * 1000)
+              : this.computeBackoffMs(attempt);
+          const retryable = res.status === 429 || res.status >= 500;
+          if (retryable && attempt < maxAttempts) {
+            kaelLogger.warn("discord.api.retry", {
+              path,
+              method,
+              status: res.status,
+              attempt,
+              retryAfterMs,
+            });
+            await this.sleep(retryAfterMs);
+            continue;
+          }
+          throw new Error(`Discord API ${method} ${path} failed (${res.status}): ${raw.slice(0, 300)}`);
+        }
+        if (!raw.trim()) {
+          return {} as T;
+        }
+        return JSON.parse(raw) as T;
+      } catch (error) {
+        const isNetworkError =
+          error instanceof TypeError ||
+          (error instanceof Error &&
+            /(fetch failed|network|econn|socket|timeout|timed out|reset|disconnect)/i.test(error.message));
+        if (!isNetworkError || attempt >= maxAttempts) {
+          throw error;
+        }
+        const retryAfterMs = this.computeBackoffMs(attempt);
+        kaelLogger.warn("discord.api.retry", {
+          path,
+          method,
+          status: "network_error",
+          attempt,
+          retryAfterMs,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        await this.sleep(retryAfterMs);
+      }
     }
-    if (!raw.trim()) {
-      return {} as T;
-    }
-    return JSON.parse(raw) as T;
+    throw new Error(`Discord API ${method} ${path} failed after retries`);
+  }
+
+  private computeBackoffMs(attempt: number): number {
+    const base = 400;
+    const exp = Math.min(5000, base * 2 ** Math.max(0, attempt - 1));
+    const jitter = Math.floor(Math.random() * 200);
+    return exp + jitter;
+  }
+
+  private async sleep(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

@@ -15,6 +15,23 @@ function shouldResetSessionOnEngineError(error: unknown): boolean {
   return normalized.code === "invalid_response" || normalized.code === "unknown";
 }
 
+function extractPartialWebEvidence(message: string): string[] {
+  const marker = "partial_web_evidence:";
+  const idx = message.indexOf(marker);
+  if (idx < 0) {
+    return [];
+  }
+  const raw = message.slice(idx + marker.length).trim();
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split("||")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
 export class ChatService {
   private readonly tooling: EngineTooling;
   private readonly chatOnlyTooling: EngineTooling;
@@ -141,6 +158,11 @@ export class ChatService {
     } catch (error) {
       const normalized = normalizePiError(error);
       if (normalized.code === "timeout") {
+        const partialEvidence = extractPartialWebEvidence(normalized.message);
+        const cleanReason = normalized.message
+          .split("\n")
+          .find((line) => !line.includes("partial_web_evidence:"))
+          ?.trim();
         const sessions = await this.shell.process({
           sessionKey: input.sessionKey,
           action: "list",
@@ -152,7 +174,9 @@ export class ChatService {
         });
         const reply = [
           "A execucao demorou demais e foi interrompida para evitar loop de ferramentas.",
-          normalized.message ? `Motivo: ${normalized.message}` : "",
+          cleanReason ? `Motivo: ${cleanReason}` : "",
+          partialEvidence.length > 0 ? "Evidencias parciais coletadas antes do timeout:" : "",
+          ...partialEvidence.map((item) => `- ${item}`),
           lines.length > 0 ? "Ultimas execucoes shell observadas:" : "",
           ...lines,
           "Se quiser, posso continuar de forma mais objetiva com um comando por vez.",

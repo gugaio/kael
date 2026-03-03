@@ -53,6 +53,7 @@ export function createPiShellTools(params: {
     status?: string;
     blocked?: boolean;
     reason?: string;
+    summary?: string;
   }) => void;
 }): AgentTool[] {
   let toolCalls = 0;
@@ -125,6 +126,7 @@ export function createPiShellTools(params: {
     intent: string,
     result: unknown,
     startedAtMs: number,
+    summary?: string,
   ): void => {
     const typed = (result ?? {}) as {
       status?: unknown;
@@ -157,7 +159,55 @@ export function createPiShellTools(params: {
       path,
       durationMs: Date.now() - startedAtMs,
     });
-    params.onToolEvent?.({ phase: "end", tool, status, blocked, reason });
+    params.onToolEvent?.({ phase: "end", tool, status, blocked, reason, summary });
+  };
+
+  const summarizeWebSearch = (result: { answer?: string; sources?: Array<{ title?: string; url?: string }> }) => {
+    const top = (result.sources ?? [])
+      .slice(0, 3)
+      .map((item) => `${item.title ?? "fonte"} | ${item.url ?? "n/a"}`);
+    if (top.length === 0) {
+      return "";
+    }
+    const answer = typeof result.answer === "string" ? result.answer.replace(/\s+/g, " ").slice(0, 180) : "";
+    return [`web_search`, ...top, answer ? `resumo=${answer}` : ""].filter(Boolean).join(" | ");
+  };
+
+  const summarizeWebFetch = (result: {
+    title?: string;
+    finalUrl?: string;
+    excerpt?: string;
+  }) => {
+    const excerpt =
+      typeof result.excerpt === "string" ? result.excerpt.replace(/\s+/g, " ").slice(0, 180) : "";
+    return [
+      "web_fetch",
+      result.title ? `titulo=${result.title.slice(0, 80)}` : "",
+      result.finalUrl ? `url=${result.finalUrl}` : "",
+      excerpt ? `trecho=${excerpt}` : "",
+    ]
+      .filter(Boolean)
+      .join(" | ");
+  };
+
+  const summarizeWebResearch = (result: {
+    summary?: string;
+    confidence?: number;
+    evidence?: Array<{ source?: { title?: string; url?: string } }>;
+  }) => {
+    const evidence = (result.evidence ?? [])
+      .slice(0, 3)
+      .map((item) => `${item.source?.title ?? "fonte"} | ${item.source?.url ?? "n/a"}`);
+    const summary =
+      typeof result.summary === "string" ? result.summary.replace(/\s+/g, " ").slice(0, 180) : "";
+    return [
+      "web_research",
+      typeof result.confidence === "number" ? `confianca=${result.confidence}` : "",
+      ...evidence,
+      summary ? `resumo=${summary}` : "",
+    ]
+      .filter(Boolean)
+      .join(" | ");
   };
 
   const execTool: AgentTool = {
@@ -773,7 +823,13 @@ export function createPiShellTools(params: {
         content: textResult(text),
         details: result,
       };
-      logToolEnd("web_search", intent, { status: "completed", ...result }, startedAtMs);
+      logToolEnd(
+        "web_search",
+        intent,
+        { status: "completed", ...result },
+        startedAtMs,
+        summarizeWebSearch(result),
+      );
       return response;
     },
   };
@@ -864,7 +920,13 @@ export function createPiShellTools(params: {
         content: textResult(text),
         details: result,
       };
-      logToolEnd("web_fetch", intent, { status: "completed", ...result }, startedAtMs);
+      logToolEnd(
+        "web_fetch",
+        intent,
+        { status: "completed", ...result },
+        startedAtMs,
+        summarizeWebFetch(result),
+      );
       return response;
     },
   };
@@ -978,7 +1040,13 @@ export function createPiShellTools(params: {
         content: textResult(text),
         details: result,
       };
-      logToolEnd("web_research", intent, { status: "completed", ...result }, startedAtMs);
+      logToolEnd(
+        "web_research",
+        intent,
+        { status: "completed", ...result },
+        startedAtMs,
+        summarizeWebResearch(result),
+      );
       return response;
     },
   };
