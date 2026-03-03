@@ -276,7 +276,7 @@ Definition of Done (checklist):
 
 ### Fase 12 - Supervisor de Execucao Shell (determinismo operacional)
 
-Status: **Em andamento**
+Status: **Concluida**
 
 Objetivos:
 - Unificar lifecycle de `exec/process` em supervisor dedicado.
@@ -286,7 +286,7 @@ Objetivos:
 Definition of Done (checklist):
 - [x] Supervisor dedicado para sessoes de shell e transicoes de estado.
 - [x] API `process` apoiada em snapshot consistente por supervisor.
-- [ ] Testes de corrida/cancelamento/timeout em cenarios concorrentes.
+- [x] Testes de corrida/cancelamento/timeout em cenarios concorrentes.
 
 ### Fase 13 - Fechamento de Qualidade de Video Runtime
 
@@ -302,6 +302,30 @@ Definition of Done (checklist):
 - [ ] Execucao de `npm run check` + suite alvo de video em CI/local.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-03 - Fase 12: testes de corrida do supervisor (timeout/kill + remove/output)
+
+Resumo:
+- Adicionada suite dedicada para `ShellProcessSupervisor` com runner fake deterministico.
+- Coberto cenario de corrida `kill` proximo do `timeout`, garantindo estado final `timed_out` quando o close chega tarde.
+- Coberto cenario de `remove` durante output continuo, garantindo que a sessao removida nao reaparece.
+- Fase 12 marcada como concluida com checklist completo.
+
+Arquivos-chave:
+- `src/tools/system/shell-process-supervisor.test.ts`
+- `docs/architecture/phases/phase-12.md`
+- `docs/core/START-HERE.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/tools/system/shell-process-supervisor.test.ts src/tools/system/shell-tool-service.test.ts`
+
+Pendencias:
+- Evoluir snapshots/versionamento do supervisor como melhoria pos-fase.
+
+Proximo passo recomendado:
+- Iniciar Fase 13 com foco em cobertura automatizada de runtime de video (`video-inspect-tool-service`).
 
 ### 2026-03-03 - Fase 12: supervisor dedicado para lifecycle de exec/process
 
@@ -324,10 +348,10 @@ Checklist de validacao:
 - [x] `npx vitest run src/api/server.test.ts src/api/jobs.e2e.test.ts`
 
 Pendencias:
-- Expandir testes concorrentes de timeout + kill para fechamento completo da fase.
+- Nenhuma pendencia aberta da fase apos adicao da suite de corrida dedicada.
 
 Proximo passo recomendado:
-- Cobrir cenarios de corrida (kill perto do timeout e remove durante fluxo de output) para marcar o ultimo item da Fase 12 como concluido.
+- Iniciar Fase 13 com cobertura automatizada de runtime de video.
 
 ### 2026-03-03 - Refactor pre-Fase 12: tooling factory + contrato ShellRuntime
 

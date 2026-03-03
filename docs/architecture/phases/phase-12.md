@@ -1,6 +1,6 @@
 # Arquitetura - Fase 12 (Supervisor de Execucao Shell)
 
-Status: em andamento
+Status: concluida
 
 ## Objetivo
 
@@ -28,5 +28,4 @@ em cancelamento, timeout e polling sob carga.
 
 ## Pendencias da fase
 
-1. Ampliar testes de concorrencia para cobrir timeout + kill simultaneos.
-2. Evoluir snapshots/versionamento do supervisor para observabilidade de mudancas.
+1. Evoluir snapshots/versionamento do supervisor para observabilidade de mudancas (pos-fase).

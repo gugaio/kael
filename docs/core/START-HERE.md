@@ -37,7 +37,7 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 9.4: concluida (hardening + ranking de evidencia/confianca em `web_fetch`/`web_research`).
 - Fase 10.0: concluida (compaction manual/auto + memory flush + promocao para `MEMORY.md` + dedupe semantica basica).
 - Fase 11: concluida (reply orchestrator lite com fast-path deterministico + roteador dedicado + telemetria de rota).
-- Fase 12: em andamento (supervisor dedicado para lifecycle de `exec/process`).
+- Fase 12: concluida (supervisor dedicado para lifecycle de `exec/process` + testes de corrida baseline).
 
 ## Estudos e referencias tecnicas
 
