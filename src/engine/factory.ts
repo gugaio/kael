@@ -33,6 +33,9 @@ export function createEngine(config: KaelConfig): AgentEngine {
         return simple.runTurn(input);
       }
     },
+    getRuntimeTelemetrySnapshot() {
+      return pi.getRuntimeTelemetrySnapshot();
+    },
   };
 
   return new HybridEngine(simple, safePiWithFallback);

@@ -14,4 +14,18 @@ export class HybridEngine implements AgentEngine {
 
     return this.defaultEngine.runTurn(input);
   }
+
+  getRuntimeTelemetrySnapshot() {
+    const fromDefault = this.defaultEngine.getRuntimeTelemetrySnapshot?.();
+    if (fromDefault) {
+      return fromDefault;
+    }
+    return (
+      this.commandEngine.getRuntimeTelemetrySnapshot?.() ?? {
+        timeouts: 0,
+        toolCallsByName: {},
+        blockedCallsByTool: {},
+      }
+    );
+  }
 }

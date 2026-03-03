@@ -89,6 +89,16 @@ export class TurnOrchestrator {
     });
   }
 
+  getEngineRuntimeTelemetrySnapshot() {
+    return (
+      this.engine.getRuntimeTelemetrySnapshot?.() ?? {
+        timeouts: 0,
+        toolCallsByName: {},
+        blockedCallsByTool: {},
+      }
+    );
+  }
+
   async runTurnWithExcludedMessage(input: UtilityTurnInput): Promise<EngineTurnOutput> {
     const contextMessages = await this.buildContextMessages(
       input.sessionKey,

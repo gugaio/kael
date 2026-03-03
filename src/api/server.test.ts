@@ -255,6 +255,16 @@ function makeFakeApp(): KaelApp {
         lastRouteKind: chatCallCount > 0 ? ("llm_turn" as const) : null,
         lastRouteAt: chatCallCount > 0 ? new Date().toISOString() : null,
       }),
+      getEngineRuntimeTelemetrySnapshot: () => ({
+        timeouts: 2,
+        toolCallsByName: {
+          web_search: 7,
+          web_fetch: 4,
+        },
+        blockedCallsByTool: {
+          web_search: 1,
+        },
+      }),
     } as unknown as KaelApp["chat"],
     automation: {
       listSchedules: () => Array.from(schedules.values()),
@@ -357,6 +367,9 @@ describe("API integration", () => {
     expect(body.metrics.chatRouting.fastPath).toBe(2);
     expect(body.metrics.chatRouting.compact).toBe(1);
     expect(typeof body.metrics.chatRouting.total).toBe("number");
+    expect(body.metrics.engineRuntime.timeouts).toBe(2);
+    expect(body.metrics.engineRuntime.toolCallsByName.web_search).toBe(7);
+    expect(body.metrics.engineRuntime.blockedCallsByTool.web_search).toBe(1);
     expect(body.metrics.schedules.total).toBeGreaterThan(0);
     await server.close();
   });

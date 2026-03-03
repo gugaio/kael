@@ -319,6 +319,37 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-03 - Observabilidade: metricas de timeout/bloqueio por tool no /health
+
+Resumo:
+- Engine ganhou snapshot de telemetria de runtime (`timeouts`, `toolCallsByName`, `blockedCallsByTool`) via contrato opcional do `AgentEngine`.
+- `PiEngineAdapter` passou a acumular contadores globais por tool e total de timeouts.
+- `HybridEngine`/fallback propagam snapshot de telemetria do engine PI para manter visibilidade em `engineMode=hybrid`.
+- `ChatService` e `TurnOrchestrator` expuseram o snapshot para API.
+- Endpoint `GET /health` agora retorna `metrics.engineRuntime` com esses contadores.
+
+Arquivos-chave:
+- `src/engine/types.ts`
+- `src/engine/pi-engine-adapter.ts`
+- `src/engine/hybrid-engine.ts`
+- `src/engine/simple-engine.ts`
+- `src/engine/factory.ts`
+- `src/chat/turn-orchestrator.ts`
+- `src/chat/service.ts`
+- `src/api/server.ts`
+- `src/api/server.test.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm run test -- src/api/server.test.ts src/engine/pi-engine-adapter.test.ts`
+
+Pendencias:
+- Metricas ainda sao in-memory por processo; nao ha agregacao cross-processo.
+
+Proximo passo recomendado:
+- Expor metricas por janela temporal (ultimos 5/15 min) para diferenciar picos de acumulado historico.
+
 ### 2026-03-03 - Runtime hardening: fallback de timeout com evidencia parcial + retry Discord API
 
 Resumo:

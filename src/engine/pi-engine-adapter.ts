@@ -10,7 +10,7 @@ import { retry } from "../infra/retry.js";
 import { normalizePiError, PiEngineError } from "./pi-errors.js";
 import { createPiShellTools } from "./pi-tools.js";
 import { ToolLoopGuard } from "./tool-loop-guard.js";
-import type { AgentEngine, EngineTurnInput, EngineTurnOutput } from "./types.js";
+import type { AgentEngine, EngineRuntimeTelemetry, EngineTurnInput, EngineTurnOutput } from "./types.js";
 
 type PiAgentLike = {
   prompt: (prompt: string) => Promise<void>;
@@ -319,6 +319,11 @@ function messageShape(message: unknown): SdkMessageShape {
 
 export class PiEngineAdapter implements AgentEngine {
   private readonly loopGuard = new ToolLoopGuard();
+  private readonly telemetry: EngineRuntimeTelemetry = {
+    timeouts: 0,
+    toolCallsByName: {},
+    blockedCallsByTool: {},
+  };
 
   constructor(
     private readonly cfg: PiEngineConfig,
@@ -361,6 +366,7 @@ export class PiEngineAdapter implements AgentEngine {
           onToolEvent: (event) => {
             if (event.phase === "start") {
               attemptStats.toolCalls += 1;
+              this.telemetry.toolCallsByName[event.tool] = (this.telemetry.toolCallsByName[event.tool] ?? 0) + 1;
               return;
             }
             if (event.blocked) {
@@ -368,6 +374,8 @@ export class PiEngineAdapter implements AgentEngine {
               if (event.reason) {
                 attemptStats.lastBlockedReason = event.reason;
               }
+              this.telemetry.blockedCallsByTool[event.tool] =
+                (this.telemetry.blockedCallsByTool[event.tool] ?? 0) + 1;
             }
             if (
               event.phase === "end" &&
@@ -431,6 +439,7 @@ export class PiEngineAdapter implements AgentEngine {
                 blockedReason: attemptStats.lastBlockedReason || null,
                 durationMs: Date.now() - attemptStartedAtMs,
               });
+              this.telemetry.timeouts += 1;
               reject(
                 new PiEngineError({
                   message: timedOutWithTools
@@ -554,6 +563,14 @@ export class PiEngineAdapter implements AgentEngine {
       this.cfg.retry,
       ({ error }) => normalizePiError(error).retryable,
     );
+  }
+
+  getRuntimeTelemetrySnapshot(): EngineRuntimeTelemetry {
+    return {
+      timeouts: this.telemetry.timeouts,
+      toolCallsByName: { ...this.telemetry.toolCallsByName },
+      blockedCallsByTool: { ...this.telemetry.blockedCallsByTool },
+    };
   }
 
   private createSdkAgent(

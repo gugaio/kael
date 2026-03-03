@@ -72,6 +72,14 @@ export class ChatService {
     return this.routingTelemetry.snapshot();
   }
 
+  getEngineRuntimeTelemetrySnapshot(): {
+    timeouts: number;
+    toolCallsByName: Record<string, number>;
+    blockedCallsByTool: Record<string, number>;
+  } {
+    return this.orchestrator.getEngineRuntimeTelemetrySnapshot();
+  }
+
   private async handleMessageInternal(
     input: {
       sessionKey: string;

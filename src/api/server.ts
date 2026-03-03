@@ -47,12 +47,14 @@ async function buildLiveState(app: KaelApp): Promise<{
   const jobsByStatus = app.jobs.getStatusCounts();
   const runtimeJobs = app.jobs.getRuntimeStats();
   const chatRouting = app.chat.getRoutingTelemetrySnapshot();
+  const engineRuntime = app.chat.getEngineRuntimeTelemetrySnapshot();
 
   const healthSignature = stableStringify({
     sessions,
     jobsByStatus,
     runtimeJobs,
     chatRouting,
+    engineRuntime,
     engineMode: app.config.engineMode,
     piEnabled: app.config.pi.enabled,
   });
@@ -253,6 +255,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
     const jobsByStatus = app.jobs.getStatusCounts();
     const runtimeJobs = app.jobs.getRuntimeStats();
     const chatRouting = app.chat.getRoutingTelemetrySnapshot();
+    const engineRuntime = app.chat.getEngineRuntimeTelemetrySnapshot();
     const schedules = app.automation.listSchedules();
     const enabledSchedules = schedules.filter((item) => item.enabled).length;
     const version = process.env.KAEL_VERSION?.trim() || process.env.npm_package_version || "0.1.0";
@@ -271,6 +274,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
         jobsByStatus,
         runtimeJobs,
         chatRouting,
+        engineRuntime,
         schedules: {
           total: schedules.length,
           enabled: enabledSchedules,

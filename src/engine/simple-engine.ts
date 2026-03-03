@@ -128,4 +128,12 @@ export class SimpleCommandEngine implements AgentEngine {
 
     return { reply: "Comando desconhecido. Use /help." };
   }
+
+  getRuntimeTelemetrySnapshot() {
+    return {
+      timeouts: 0,
+      toolCallsByName: {},
+      blockedCallsByTool: {},
+    };
+  }
 }

@@ -391,6 +391,13 @@ export type EngineTurnOutput = {
   reply: string;
 };
 
+export type EngineRuntimeTelemetry = {
+  timeouts: number;
+  toolCallsByName: Record<string, number>;
+  blockedCallsByTool: Record<string, number>;
+};
+
 export interface AgentEngine {
   runTurn(input: EngineTurnInput): Promise<EngineTurnOutput>;
+  getRuntimeTelemetrySnapshot?: () => EngineRuntimeTelemetry;
 }
