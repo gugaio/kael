@@ -301,7 +301,79 @@ Definition of Done (checklist):
 - [ ] Cobertura adicional de seguranca/validacao de params de video.
 - [ ] Execucao de `npm run check` + suite alvo de video em CI/local.
 
+### Fase 14 - Email Ingress MVP (conta dedicada)
+
+Status: **Em andamento**
+
+Objetivos:
+- Permitir inbox dedicada para o Kael com ingest de novos emails no loop do agente.
+- Preservar arquitetura desacoplada para evoluir de polling POP3 para push (Gmail Pub/Sub) sem quebrar o core.
+
+Definition of Done (checklist):
+- [x] Contrato `EmailProvider` + `EmailIngestService` desacoplados do core.
+- [x] Provider inicial `gmail_pop3` com estado de mensagens vistas.
+- [x] Scheduler persistente com job `email_poll`.
+- [x] Guard de concorrencia para evitar duplicacao por ticks sobrepostos.
+- [x] Auto-reply opcional via SMTP Gmail (`KAEL_EMAIL_AUTO_REPLY_ENABLED`).
+- [ ] Evoluir provider push (Gmail API/PubSub) mantendo o mesmo contrato.
+
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-03 - Fase 14: anti-duplicacao de poll + auto-reply SMTP
+
+Resumo:
+- `EmailIngestService` recebeu lock de execucao (`pollInFlight`) para impedir overlap entre polls e reduzir ingest duplicado.
+- Adicionado `EmailSender` e implementado `GmailSmtpSender` (SMTP TLS/Auth Login) para resposta automatica por email.
+- Runtime atualizado para habilitar sender por config (`KAEL_EMAIL_AUTO_REPLY_ENABLED`) sem acoplamento ao provider.
+- Config de email expandida com parametros SMTP (`KAEL_EMAIL_GMAIL_SMTP_*`).
+
+Arquivos-chave:
+- `src/email/ingest-service.ts`
+- `src/email/types.ts`
+- `src/email/gmail-smtp-sender.ts`
+- `src/app.ts`
+- `src/config.ts`
+- `src/email/ingest-service.test.ts`
+- `docs/architecture/phases/phase-14.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/email/ingest-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- Provider push (Gmail Pub/Sub) mantendo contrato `EmailProvider`.
+
+Proximo passo recomendado:
+- Implementar `gmail_pubsub` provider e manter `gmail_pop3` como fallback.
+
+### 2026-03-03 - Fase 14: email ingress MVP (provider + scheduler)
+
+Resumo:
+- Implementado domínio de email com contrato `EmailProvider` e `EmailIngestService`.
+- Adicionado provider inicial `GmailPop3Provider` (polling POP3 sobre TLS, parsing de headers/body e dedupe por UID persistido).
+- Integrado ao runtime via scheduler (`email_poll`) para ingest periódico no `ChatService`.
+- Configuração adicionada em `KAEL_EMAIL_*` para habilitar/desabilitar e parametrizar a conta Gmail dedicada.
+
+Arquivos-chave:
+- `src/email/types.ts`
+- `src/email/pop3-client.ts`
+- `src/email/gmail-pop3-provider.ts`
+- `src/email/ingest-service.ts`
+- `src/app.ts`
+- `src/config.ts`
+- `docs/architecture/phases/phase-14.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/email/ingest-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- Provider push (Gmail Pub/Sub) para reduzir latencia e custo de polling.
+
+Proximo passo recomendado:
+- Criar `gmail_pubsub` provider no mesmo contrato de `EmailProvider` e promover POP3 para fallback.
 
 ### 2026-03-03 - Fase 12: testes de corrida do supervisor (timeout/kill + remove/output)
 

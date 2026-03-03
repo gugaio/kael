@@ -15,6 +15,9 @@ import { PlannerService } from "./planner/service.js";
 import { DisabledSearchProvider, TavilySearchProvider } from "./research/provider.js";
 import { ResearchService } from "./research/service.js";
 import { SessionStore } from "./session/store.js";
+import { EmailIngestService } from "./email/ingest-service.js";
+import { GmailPop3Provider } from "./email/gmail-pop3-provider.js";
+import { GmailSmtpSender } from "./email/gmail-smtp-sender.js";
 import { ChatService } from "./chat/service.js";
 import { createChatOnlyTooling, createChatTooling } from "./chat/tooling-factory.js";
 import { TurnOrchestrator } from "./chat/turn-orchestrator.js";
@@ -123,6 +126,30 @@ export async function createKaelApp(): Promise<KaelApp> {
     createChatOnlyTooling(tooling),
   );
   const heartbeat = new HeartbeatRunner(jobs, sessions);
+  let emailIngest: EmailIngestService | null = null;
+  if (config.email.enabled && config.email.provider === "gmail_pop3") {
+    const provider = new GmailPop3Provider({
+      address: config.email.gmail.address,
+      appPassword: config.email.gmail.appPassword,
+      host: config.email.gmail.host,
+      port: config.email.gmail.port,
+      timeoutMs: config.email.gmail.timeoutMs,
+      topLines: config.email.gmail.topLines,
+      maxMessagesPerPoll: config.email.gmail.maxMessagesPerPoll,
+      statePath: path.join(config.dataDir, "email", "gmail-pop3-state.json"),
+    });
+    const sender = config.email.autoReplyEnabled
+      ? new GmailSmtpSender({
+          address: config.email.gmail.address,
+          appPassword: config.email.gmail.appPassword,
+          host: config.email.gmail.smtpHost,
+          port: config.email.gmail.smtpPort,
+          timeoutMs: config.email.gmail.smtpTimeoutMs,
+        })
+      : undefined;
+    emailIngest = new EmailIngestService(provider, chat, sender);
+    await emailIngest.init();
+  }
   const scheduler = new PersistentScheduler(
     path.join(config.dataDir, "automation", "scheduler-jobs.json"),
     config.automation.schedulerTickMs,
@@ -165,6 +192,16 @@ export async function createKaelApp(): Promise<KaelApp> {
             },
           },
         });
+        return;
+      }
+      if (job.type === "email_poll") {
+        if (!emailIngest) {
+          return;
+        }
+        const result = await emailIngest.pollNow();
+        if (result.skipped) {
+          return;
+        }
       }
     },
   );
@@ -180,6 +217,12 @@ export async function createKaelApp(): Promise<KaelApp> {
     type: "planner_reconcile",
     intervalMs: config.automation.plannerReconcileIntervalMs,
     enabled: config.automation.plannerReconcileEnabled,
+  });
+  await scheduler.upsertIntervalJob({
+    id: "email.poll",
+    type: "email_poll",
+    intervalMs: config.email.pollIntervalMs,
+    enabled: config.email.enabled,
   });
   scheduler.start();
   const automation = new AutomationService(scheduler);

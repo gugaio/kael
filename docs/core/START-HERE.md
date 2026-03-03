@@ -38,6 +38,7 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 10.0: concluida (compaction manual/auto + memory flush + promocao para `MEMORY.md` + dedupe semantica basica).
 - Fase 11: concluida (reply orchestrator lite com fast-path deterministico + roteador dedicado + telemetria de rota).
 - Fase 12: concluida (supervisor dedicado para lifecycle de `exec/process` + testes de corrida baseline).
+- Fase 14: em andamento (email ingress MVP via provider desacoplado + polling POP3 Gmail).
 
 ## Estudos e referencias tecnicas
 

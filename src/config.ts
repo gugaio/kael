@@ -72,6 +72,24 @@ export type KaelConfig = {
     fetchMaxRedirects: number;
     fetchMaxResponseBytes: number;
   };
+  email: {
+    enabled: boolean;
+    pollIntervalMs: number;
+    provider: "gmail_pop3";
+    autoReplyEnabled: boolean;
+    gmail: {
+      address: string;
+      appPassword: string;
+      host: string;
+      port: number;
+      timeoutMs: number;
+      topLines: number;
+      maxMessagesPerPoll: number;
+      smtpHost: string;
+      smtpPort: number;
+      smtpTimeoutMs: number;
+    };
+  };
   pi: PiEngineConfig;
 };
 
@@ -244,6 +262,31 @@ function validateConfig(config: KaelConfig): void {
 
   if (!Number.isFinite(config.research.fetchMaxResponseBytes) || config.research.fetchMaxResponseBytes <= 0) {
     issues.push("KAEL_RESEARCH_FETCH_MAX_RESPONSE_BYTES deve ser um numero positivo");
+  }
+
+  if (!Number.isFinite(config.email.pollIntervalMs) || config.email.pollIntervalMs <= 0) {
+    issues.push("KAEL_EMAIL_POLL_INTERVAL_MS deve ser um numero positivo");
+  }
+
+  if (config.email.enabled) {
+    if (!config.email.gmail.address.trim()) {
+      issues.push("KAEL_EMAIL_GMAIL_ADDRESS e obrigatorio quando KAEL_EMAIL_ENABLED=true");
+    }
+    if (!config.email.gmail.appPassword.trim()) {
+      issues.push("KAEL_EMAIL_GMAIL_APP_PASSWORD e obrigatorio quando KAEL_EMAIL_ENABLED=true");
+    }
+    if (!config.email.gmail.host.trim()) {
+      issues.push("KAEL_EMAIL_GMAIL_HOST nao pode ser vazio");
+    }
+    if (!Number.isFinite(config.email.gmail.port) || config.email.gmail.port <= 0) {
+      issues.push("KAEL_EMAIL_GMAIL_PORT deve ser um numero positivo");
+    }
+    if (!config.email.gmail.smtpHost.trim()) {
+      issues.push("KAEL_EMAIL_GMAIL_SMTP_HOST nao pode ser vazio");
+    }
+    if (!Number.isFinite(config.email.gmail.smtpPort) || config.email.gmail.smtpPort <= 0) {
+      issues.push("KAEL_EMAIL_GMAIL_SMTP_PORT deve ser um numero positivo");
+    }
   }
 
   if (issues.length > 0) {
@@ -506,6 +549,45 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       : 2_000_000;
   const researchApiKey = process.env.KAEL_RESEARCH_API_KEY?.trim();
 
+  const emailEnabledRaw = process.env.KAEL_EMAIL_ENABLED?.trim() ?? "false";
+  const emailEnabled = emailEnabledRaw.toLowerCase() === "true";
+  const emailPollIntervalRaw = Number(process.env.KAEL_EMAIL_POLL_INTERVAL_MS ?? "60000");
+  const emailPollIntervalMs =
+    Number.isFinite(emailPollIntervalRaw) && emailPollIntervalRaw > 0
+      ? Math.floor(emailPollIntervalRaw)
+      : 60000;
+  const emailProviderRaw = process.env.KAEL_EMAIL_PROVIDER?.trim().toLowerCase() || "gmail_pop3";
+  const emailProvider: "gmail_pop3" = "gmail_pop3";
+  if (emailProviderRaw !== "gmail_pop3") {
+    throw new ConfigValidationError([
+      `KAEL_EMAIL_PROVIDER invalido: "${emailProviderRaw}". Valores aceitos: gmail_pop3`,
+    ]);
+  }
+  const emailGmailPortRaw = Number(process.env.KAEL_EMAIL_GMAIL_PORT ?? "995");
+  const emailGmailPort =
+    Number.isFinite(emailGmailPortRaw) && emailGmailPortRaw > 0 ? Math.floor(emailGmailPortRaw) : 995;
+  const emailGmailTimeoutRaw = Number(process.env.KAEL_EMAIL_GMAIL_TIMEOUT_MS ?? "15000");
+  const emailGmailTimeoutMs =
+    Number.isFinite(emailGmailTimeoutRaw) && emailGmailTimeoutRaw > 0 ? Math.floor(emailGmailTimeoutRaw) : 15000;
+  const emailGmailTopLinesRaw = Number(process.env.KAEL_EMAIL_GMAIL_TOP_LINES ?? "40");
+  const emailGmailTopLines =
+    Number.isFinite(emailGmailTopLinesRaw) && emailGmailTopLinesRaw > 0
+      ? Math.floor(emailGmailTopLinesRaw)
+      : 40;
+  const emailGmailMaxPerPollRaw = Number(process.env.KAEL_EMAIL_GMAIL_MAX_MESSAGES_PER_POLL ?? "10");
+  const emailGmailMaxPerPoll =
+    Number.isFinite(emailGmailMaxPerPollRaw) && emailGmailMaxPerPollRaw > 0
+      ? Math.floor(emailGmailMaxPerPollRaw)
+      : 10;
+  const emailAutoReplyRaw = process.env.KAEL_EMAIL_AUTO_REPLY_ENABLED?.trim() ?? "false";
+  const emailAutoReplyEnabled = emailAutoReplyRaw.toLowerCase() === "true";
+  const emailSmtpPortRaw = Number(process.env.KAEL_EMAIL_GMAIL_SMTP_PORT ?? "465");
+  const emailSmtpPort =
+    Number.isFinite(emailSmtpPortRaw) && emailSmtpPortRaw > 0 ? Math.floor(emailSmtpPortRaw) : 465;
+  const emailSmtpTimeoutRaw = Number(process.env.KAEL_EMAIL_GMAIL_SMTP_TIMEOUT_MS ?? "15000");
+  const emailSmtpTimeoutMs =
+    Number.isFinite(emailSmtpTimeoutRaw) && emailSmtpTimeoutRaw > 0 ? Math.floor(emailSmtpTimeoutRaw) : 15000;
+
   const defaultTimeout = globalConfig?.defaults.pi.timeoutMs ?? 45000;
   const timeoutRaw = Number(process.env.KAEL_PI_TIMEOUT_MS ?? String(defaultTimeout));
   const timeoutMs = Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? timeoutRaw : defaultTimeout;
@@ -611,6 +693,24 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       fetchCacheTtlMs: researchFetchCacheTtlMs,
       fetchMaxRedirects: researchFetchMaxRedirects,
       fetchMaxResponseBytes: researchFetchMaxResponseBytes,
+    },
+    email: {
+      enabled: emailEnabled,
+      pollIntervalMs: emailPollIntervalMs,
+      provider: emailProvider,
+      autoReplyEnabled: emailAutoReplyEnabled,
+      gmail: {
+        address: process.env.KAEL_EMAIL_GMAIL_ADDRESS?.trim() || "",
+        appPassword: process.env.KAEL_EMAIL_GMAIL_APP_PASSWORD?.trim() || "",
+        host: process.env.KAEL_EMAIL_GMAIL_HOST?.trim() || "pop.gmail.com",
+        port: emailGmailPort,
+        timeoutMs: emailGmailTimeoutMs,
+        topLines: emailGmailTopLines,
+        maxMessagesPerPoll: emailGmailMaxPerPoll,
+        smtpHost: process.env.KAEL_EMAIL_GMAIL_SMTP_HOST?.trim() || "smtp.gmail.com",
+        smtpPort: emailSmtpPort,
+        smtpTimeoutMs: emailSmtpTimeoutMs,
+      },
     },
     pi,
   };
