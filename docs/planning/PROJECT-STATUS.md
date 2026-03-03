@@ -276,7 +276,7 @@ Definition of Done (checklist):
 
 ### Fase 12 - Supervisor de Execucao Shell (determinismo operacional)
 
-Status: **Planejada**
+Status: **Em andamento**
 
 Objetivos:
 - Unificar lifecycle de `exec/process` em supervisor dedicado.
@@ -284,8 +284,8 @@ Objetivos:
 - Reduzir superficie de erro em polling e limpeza de sessoes.
 
 Definition of Done (checklist):
-- [ ] Supervisor dedicado para sessoes de shell e transicoes de estado.
-- [ ] API `process` apoiada em snapshot consistente por supervisor.
+- [x] Supervisor dedicado para sessoes de shell e transicoes de estado.
+- [x] API `process` apoiada em snapshot consistente por supervisor.
 - [ ] Testes de corrida/cancelamento/timeout em cenarios concorrentes.
 
 ### Fase 13 - Fechamento de Qualidade de Video Runtime
@@ -302,6 +302,32 @@ Definition of Done (checklist):
 - [ ] Execucao de `npm run check` + suite alvo de video em CI/local.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-03 - Fase 12: supervisor dedicado para lifecycle de exec/process
+
+Resumo:
+- Criado `ShellProcessSupervisor` para centralizar ciclo de vida de execucao shell (`start`, `poll/list`, `kill`, `log`, `remove`).
+- `ShellToolService` refatorado para delegar runtime de processo ao supervisor e manter policy/preflight/approvals no service.
+- Corrigida condicao de corrida em `process remove`: sessao removida nao volta a aparecer apos encerramento tardio do processo.
+- Adicionado teste cobrindo o cenario de nao-ressurreicao de sessao apos `remove`.
+
+Arquivos-chave:
+- `src/tools/system/shell-process-supervisor.ts`
+- `src/tools/system/shell-tool-service.ts`
+- `src/tools/system/shell-tool-service.test.ts`
+- `docs/architecture/phases/phase-12.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/tools/system/shell-tool-service.test.ts`
+- [x] `npx vitest run src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- Expandir testes concorrentes de timeout + kill para fechamento completo da fase.
+
+Proximo passo recomendado:
+- Cobrir cenarios de corrida (kill perto do timeout e remove durante fluxo de output) para marcar o ultimo item da Fase 12 como concluido.
 
 ### 2026-03-03 - Refactor pre-Fase 12: tooling factory + contrato ShellRuntime
 

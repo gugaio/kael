@@ -90,4 +90,43 @@ describe("ShellToolService", () => {
     expect(result.status).toBe("denied");
     expect(result.outputTail).toContain("negado");
   });
+
+  it("nao ressuscita sessao apos remove de processo em execucao", async () => {
+    const { service } = await createService({
+      ask: "off",
+      security: "full",
+    });
+
+    const started = await service.exec({
+      sessionKey: "s1",
+      command: "sleep 1",
+      background: true,
+    });
+    expect(started.status).toBe("running");
+
+    const removed = await service.process({
+      sessionKey: "s1",
+      action: "remove",
+      sessionId: started.id,
+    });
+    expect(removed.ok).toBe(true);
+
+    const pollAfterRemove = await service.process({
+      sessionKey: "s1",
+      action: "poll",
+      sessionId: started.id,
+    });
+    expect(pollAfterRemove.ok).toBe(false);
+
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 1300);
+    });
+
+    const pollAfterClose = await service.process({
+      sessionKey: "s1",
+      action: "poll",
+      sessionId: started.id,
+    });
+    expect(pollAfterClose.ok).toBe(false);
+  });
 });

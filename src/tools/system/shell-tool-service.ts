@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { kaelLogger } from "../../infra/logger.js";
 import { LocalProcessRunner } from "./process-runner.js";
+import { ShellProcessSupervisor } from "./shell-process-supervisor.js";
 import {
   ExecApprovalStore,
   type ExecApprovalEntry,
@@ -43,13 +44,6 @@ export type ExecSession = {
   outputTail: string;
   approvalId?: string;
   failureCode?: ExecFailureCode;
-};
-
-type ActiveProcess = {
-  session: ExecSession;
-  killRequested: boolean;
-  process: ReturnType<LocalProcessRunner["spawn"]>["process"];
-  completion: Promise<ExecSession>;
 };
 
 export type ExecCommandParams = {
@@ -116,29 +110,17 @@ function clampTimeout(value: number | undefined, fallback: number, max: number):
   return Math.min(Math.floor(value), max);
 }
 
-function appendWithCap(current: string, chunk: string, maxChars: number): string {
-  const next = current + chunk;
-  if (next.length <= maxChars) {
-    return next;
-  }
-  return next.slice(next.length - maxChars);
-}
-
-function tailSnippet(value: string, maxChars = 280): string {
-  if (!value) {
-    return "";
-  }
-  return value.length <= maxChars ? value : value.slice(value.length - maxChars);
-}
-
 export class ShellToolService implements ShellRuntime {
   private readonly runner = new LocalProcessRunner();
-  private readonly sessions = new Map<string, ExecSession>();
-  private readonly active = new Map<string, ActiveProcess>();
+  private readonly supervisor: ShellProcessSupervisor;
   private readonly approvals: ExecApprovalStore;
   private shellChoice: ResolvedShell | null = null;
 
   constructor(private readonly cfg: ShellToolConfig) {
+    this.supervisor = new ShellProcessSupervisor(this.runner, {
+      maxOutputChars: cfg.maxOutputChars,
+      noOutputTimeoutMs: cfg.noOutputTimeoutMs,
+    });
     this.approvals = new ExecApprovalStore(cfg.approvalsPath, {
       security: cfg.security,
       ask: cfg.ask,
@@ -185,7 +167,7 @@ export class ShellToolService implements ShellRuntime {
         exitCode: 2,
         failureCode: "syntax_error",
       };
-      this.sessions.set(failed.id, failed);
+      this.supervisor.upsertSession(failed);
       kaelLogger.warn("shell.exec.preflight_failed", {
         sessionKey: params.sessionKey,
         command,
@@ -207,7 +189,7 @@ export class ShellToolService implements ShellRuntime {
         exitCode: 127,
         failureCode: "command_not_found",
       };
-      this.sessions.set(failed.id, failed);
+      this.supervisor.upsertSession(failed);
       kaelLogger.warn("shell.exec.preflight_failed", {
         sessionKey: params.sessionKey,
         command,
@@ -237,7 +219,7 @@ export class ShellToolService implements ShellRuntime {
           ? "allowlist_miss"
           : "approval_denied",
       };
-      this.sessions.set(denied.id, denied);
+      this.supervisor.upsertSession(denied);
       kaelLogger.warn("shell.exec.denied", {
         sessionKey: params.sessionKey,
         command,
@@ -257,7 +239,7 @@ export class ShellToolService implements ShellRuntime {
         outputTail: decision.reason,
         approvalId: decision.approvalId,
       };
-      this.sessions.set(pending.id, pending);
+      this.supervisor.upsertSession(pending);
       kaelLogger.info("shell.exec.approval_pending", {
         sessionKey: params.sessionKey,
         command,
@@ -278,7 +260,7 @@ export class ShellToolService implements ShellRuntime {
           outputTail: waitResult.reason,
           failureCode: "approval_denied",
         };
-        this.sessions.set(deniedPending.id, deniedPending);
+        this.supervisor.upsertSession(deniedPending);
         kaelLogger.warn("shell.exec.approval_not_granted", {
           sessionKey: params.sessionKey,
           command,
@@ -293,319 +275,48 @@ export class ShellToolService implements ShellRuntime {
       pending.status = "running";
       pending.outputTail = "";
       pending.endedAt = undefined;
-      const started = this.startProcess({
+      const started = this.supervisor.startProcess({
         sessionKey: params.sessionKey,
         command,
         cwd,
         timeoutMs,
+        resolveShell: () => this.resolveShell(),
+        looksLikeCommandNotFound: (code, outputTail) => this.looksLikeCommandNotFound(code, outputTail),
         existingSession: pending,
       });
       if (params.background) {
         return started;
       }
-      const startedActive = this.active.get(started.id);
-      if (!startedActive) {
+      const completion = this.supervisor.getCompletion(started.id);
+      if (!completion) {
         return started;
       }
-      return startedActive.completion;
+      return completion;
     }
 
-    const session = this.startProcess({
+    const session = this.supervisor.startProcess({
       sessionKey: params.sessionKey,
       command,
       cwd,
       timeoutMs,
+      resolveShell: () => this.resolveShell(),
+      looksLikeCommandNotFound: (code, outputTail) => this.looksLikeCommandNotFound(code, outputTail),
     });
 
     if (params.background) {
       return session;
     }
 
-    const active = this.active.get(session.id);
-    if (!active) {
+    const completion = this.supervisor.getCompletion(session.id);
+    if (!completion) {
       return session;
     }
 
-    return active.completion;
+    return completion;
   }
 
   async process(params: ProcessCommandParams): Promise<ProcessCommandResult> {
-    if (params.action === "list") {
-      return {
-        ok: true,
-        action: "list",
-        sessions: Array.from(this.sessions.values())
-          .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
-          .slice(0, 50),
-      };
-    }
-
-    if (!params.sessionId) {
-      return {
-        ok: false,
-        action: params.action,
-        message: "sessionId e obrigatorio para poll/kill/log/remove",
-      };
-    }
-
-    const session = this.sessions.get(params.sessionId);
-    if (!session) {
-      return {
-        ok: false,
-        action: params.action,
-        message: `session ${params.sessionId} nao encontrada`,
-      };
-    }
-
-    if (params.action === "poll") {
-      return {
-        ok: true,
-        action: "poll",
-        session,
-      };
-    }
-
-    if (params.action === "log") {
-      const total = session.outputTail.length;
-      const offset = Number.isFinite(params.offset) ? Math.max(0, Math.floor(params.offset ?? 0)) : 0;
-      const limit = Number.isFinite(params.limit) ? Math.max(1, Math.floor(params.limit ?? 4000)) : 4000;
-      const end = Math.min(total, offset + limit);
-      return {
-        ok: true,
-        action: "log",
-        session,
-        output: session.outputTail.slice(offset, end),
-        message: `offset=${offset} end=${end} total=${total}`,
-      };
-    }
-
-    if (params.action === "remove") {
-      const activeSession = this.active.get(params.sessionId);
-      if (activeSession) {
-        activeSession.killRequested = true;
-        activeSession.process.kill("SIGTERM");
-      }
-      this.active.delete(params.sessionId);
-      this.sessions.delete(params.sessionId);
-      return {
-        ok: true,
-        action: "remove",
-        message: `session ${params.sessionId} removida`,
-      };
-    }
-
-    const active = this.active.get(params.sessionId);
-    if (!active) {
-      return {
-        ok: false,
-        action: "kill",
-        session,
-        message: `session ${params.sessionId} nao esta em execucao`,
-      };
-    }
-
-    active.killRequested = true;
-    active.process.kill("SIGTERM");
-
-    kaelLogger.warn("shell.process.kill_requested", {
-      sessionKey: params.sessionKey,
-      command: session.command,
-      sessionId: session.id,
-    });
-
-    return {
-      ok: true,
-      action: "kill",
-      session,
-      message: `SIGTERM enviado para session ${params.sessionId}`,
-    };
-  }
-
-  private startProcess(params: {
-    sessionKey: string;
-    command: string;
-    cwd: string;
-    timeoutMs: number;
-    existingSession?: ExecSession;
-  }): ExecSession {
-    const session: ExecSession = params.existingSession ?? {
-      id: randomUUID(),
-      command: params.command,
-      cwd: params.cwd,
-      status: "running",
-      startedAt: new Date().toISOString(),
-      outputTail: "",
-      failureCode: "none",
-    };
-
-    this.sessions.set(session.id, session);
-
-    const shell = this.resolveShell();
-    const child = this.runner.spawn(shell.command, [...shell.args, params.command], { cwd: params.cwd });
-
-    kaelLogger.info("shell.exec.started", {
-      sessionKey: params.sessionKey,
-      sessionId: session.id,
-      command: params.command,
-      cwd: params.cwd,
-      timeoutMs: params.timeoutMs,
-    });
-
-    let active!: ActiveProcess;
-    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-    let noOutputTimeoutHandle: ReturnType<typeof setInterval> | undefined;
-    let lastOutputAtMs = Date.now();
-    const completion = new Promise<ExecSession>((resolve) => {
-      let settled = false;
-      const finish = (next: Partial<ExecSession>): void => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        if (timeoutHandle) {
-          clearTimeout(timeoutHandle);
-        }
-        if (noOutputTimeoutHandle) {
-          clearInterval(noOutputTimeoutHandle);
-        }
-        const endedAt = new Date().toISOString();
-        const finalSession: ExecSession = {
-          ...session,
-          ...next,
-          endedAt,
-        };
-        this.sessions.set(session.id, finalSession);
-        this.active.delete(session.id);
-        kaelLogger.info("shell.exec.finished", {
-          sessionKey: params.sessionKey,
-          sessionId: finalSession.id,
-          command: finalSession.command,
-          status: finalSession.status,
-          exitCode: finalSession.exitCode ?? null,
-          failureCode: finalSession.failureCode ?? "none",
-          outputTail: finalSession.status === "completed" ? undefined : tailSnippet(finalSession.outputTail),
-          durationMs:
-            Date.parse(finalSession.endedAt ?? endedAt) - Date.parse(finalSession.startedAt),
-        });
-        resolve(finalSession);
-      };
-
-      child.process.stdout.on("data", (chunk) => {
-        session.outputTail = appendWithCap(
-          session.outputTail,
-          String(chunk),
-          this.cfg.maxOutputChars,
-        );
-        lastOutputAtMs = Date.now();
-        this.sessions.set(session.id, { ...session });
-      });
-
-      child.process.stderr.on("data", (chunk) => {
-        session.outputTail = appendWithCap(
-          session.outputTail,
-          String(chunk),
-          this.cfg.maxOutputChars,
-        );
-        lastOutputAtMs = Date.now();
-        this.sessions.set(session.id, { ...session });
-      });
-
-      child.process.on("error", (error) => {
-        finish({
-          status: "failed",
-          exitCode: null,
-          failureCode: "process_error",
-          outputTail: appendWithCap(
-            session.outputTail,
-            `\n[process-error] ${error.message}\n`,
-            this.cfg.maxOutputChars,
-          ),
-        });
-      });
-
-      child.process.on("close", (code) => {
-        if (session.status === "timed_out") {
-          finish({
-            status: "timed_out",
-            exitCode: code,
-            timedOut: true,
-            failureCode: session.failureCode ?? "timeout_overall",
-            outputTail: session.outputTail,
-          });
-          return;
-        }
-
-        if (active.killRequested) {
-          finish({
-            status: "canceled",
-            exitCode: code,
-            failureCode: "none",
-            outputTail: session.outputTail,
-          });
-          return;
-        }
-
-        finish({
-          status: code === 0 ? "completed" : "failed",
-          exitCode: code,
-          failureCode:
-            code === 0
-              ? "none"
-              : this.looksLikeCommandNotFound(code, session.outputTail)
-                ? "command_not_found"
-              : child.process.signalCode
-                ? "signal"
-                : "non_zero_exit",
-          outputTail: session.outputTail,
-        });
-      });
-
-      timeoutHandle = setTimeout(() => {
-        session.status = "timed_out";
-        session.timedOut = true;
-        session.failureCode = "timeout_overall";
-        session.outputTail = appendWithCap(
-          session.outputTail,
-          `\n[timeout] processo excedeu ${params.timeoutMs}ms\n`,
-          this.cfg.maxOutputChars,
-        );
-        child.process.kill("SIGTERM");
-        setTimeout(() => {
-          if (!child.process.killed) {
-            child.process.kill("SIGKILL");
-          }
-        }, 1500);
-      }, params.timeoutMs);
-
-      noOutputTimeoutHandle = setInterval(() => {
-        if (session.status !== "running") {
-          return;
-        }
-        const idleMs = Date.now() - lastOutputAtMs;
-        if (idleMs < this.cfg.noOutputTimeoutMs) {
-          return;
-        }
-        session.status = "timed_out";
-        session.timedOut = true;
-        session.failureCode = "timeout_no_output";
-        session.outputTail = appendWithCap(
-          session.outputTail,
-          `\n[timeout] processo sem output por ${this.cfg.noOutputTimeoutMs}ms\n`,
-          this.cfg.maxOutputChars,
-        );
-        child.process.kill("SIGTERM");
-      }, Math.min(this.cfg.noOutputTimeoutMs, 2_000));
-    });
-
-    active = {
-      session,
-      killRequested: false,
-      process: child.process,
-      completion,
-    };
-
-    this.active.set(session.id, active);
-    return session;
+    return this.supervisor.processCommand(params);
   }
 
   private resolveCwd(input?: string): string {

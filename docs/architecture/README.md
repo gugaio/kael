@@ -18,6 +18,7 @@ Esta pasta descreve a evolucao arquitetural do Kael de forma incremental.
 - `docs/architecture/phases/phase-8.4.md` - Reconciliacao automatica de steps com runtime (`job/exec`)
 - `docs/architecture/phases/phase-9.md` - Research web API-first (`web_search`) com provider plugavel
 - `docs/architecture/phases/phase-11.md` - Reply Orchestrator Lite (fast-path operacional no chat)
+- `docs/architecture/phases/phase-12.md` - Supervisor de execucao shell (`exec/process`) para determinismo operacional
 
 ## Como usar
 
