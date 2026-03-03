@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-02-27**
+Ultima atualizacao: **2026-03-03**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -271,7 +271,7 @@ Objetivos:
 
 Definition of Done (checklist):
 - [x] Fast-path de slash commands no `ChatService` (incluindo modo `pi`).
-- [ ] Extrair roteador de comandos para modulo dedicado com testes unitarios.
+- [x] Extrair roteador de comandos para modulo dedicado com testes unitarios.
 - [ ] Telemetria de fast-path vs turno LLM em eventos/logs.
 
 ### Fase 12 - Supervisor de Execucao Shell (determinismo operacional)
@@ -302,6 +302,30 @@ Definition of Done (checklist):
 - [ ] Execucao de `npm run check` + suite alvo de video em CI/local.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-03 - Fase 11: extracao do command router com testes unitarios
+
+Resumo:
+- Extraido o fast-path de slash commands do `ChatService` para um modulo dedicado (`CommandRouter`).
+- Mantido comportamento externo: somente slash commands entram no fast-path e apenas quando atalhos operacionais estao habilitados.
+- Adicionados testes unitarios diretos cobrindo roteamento habilitado/desabilitado e mensagem sem slash.
+
+Arquivos-chave:
+- `src/chat/command-router.ts`
+- `src/chat/command-router.test.ts`
+- `src/chat/service.ts`
+- `docs/architecture/phases/phase-11.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/chat/command-router.test.ts src/engine/simple-engine.test.ts`
+
+Pendencias:
+- Expor telemetria de fast-path vs turno LLM em eventos/logs.
+
+Proximo passo recomendado:
+- Iniciar implementacao da telemetria do roteador no `ChatService`/orquestrador para fechar a Fase 11.
 
 ### 2026-02-27 - Video jobs: manter cancelamento em erro de processo
 

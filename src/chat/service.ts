@@ -9,9 +9,9 @@ import type { ShellToolService } from "../tools/system/shell-tool-service.js";
 import type { VideoInspectToolService } from "../tools/video/video-inspect-tool-service.js";
 import type { SessionMessage } from "../types.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
-import { isSlashCommand, SimpleCommandEngine } from "../engine/simple-engine.js";
 import { TurnOrchestrator } from "./turn-orchestrator.js";
 import { MemoryOrchestrator } from "../memory/orchestrator.js";
+import { CommandRouter } from "./command-router.js";
 
 function shouldResetSessionOnEngineError(error: unknown): boolean {
   const normalized = normalizePiError(error);
@@ -22,7 +22,7 @@ export class ChatService {
   private readonly tooling: EngineTooling;
   private readonly chatOnlyTooling: EngineTooling;
   private readonly memoryOrchestrator: MemoryOrchestrator;
-  private readonly commandEngine = new SimpleCommandEngine();
+  private readonly commandRouter = new CommandRouter();
 
   constructor(
     private readonly sessions: SessionStore,
@@ -244,18 +244,19 @@ export class ChatService {
     try {
       // Fast-path operacional para slash commands, inclusive quando engineMode=pi.
       // Isso preserva comportamento deterministico para comandos de job/sistema sem depender do LLM.
-      if (opts.allowOperationalShortcuts && isSlashCommand(input.message)) {
-        const turn = await this.commandEngine.runTurn({
+      const commandRoute = await this.commandRouter.tryRoute({
           sessionKey: input.sessionKey,
           message: input.message,
           requestId: input.requestId,
           tooling,
+          allowOperationalShortcuts: opts.allowOperationalShortcuts,
         });
-        const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", turn.reply);
+      if (commandRoute.handled) {
+        const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", commandRoute.reply);
         return {
           user,
           assistant,
-          reply: turn.reply,
+          reply: commandRoute.reply,
         };
       }
 

@@ -30,6 +30,5 @@ mesmo quando o engine principal estiver em modo `pi`.
 
 ## Proximos incrementos recomendados
 
-1. Extrair roteador de comandos para modulo dedicado com testes unitarios.
-2. Adicionar dedupe/fila leve por `sessionKey` para reduzir colisao de requests concorrentes.
-3. Expor telemetria de fast-path vs turno LLM no health/events.
+1. Adicionar dedupe/fila leve por `sessionKey` para reduzir colisao de requests concorrentes.
+2. Expor telemetria de fast-path vs turno LLM no health/events.
