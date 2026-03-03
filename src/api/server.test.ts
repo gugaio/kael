@@ -229,6 +229,14 @@ function makeFakeApp(): KaelApp {
         };
       },
       getHistory: async () => [],
+      getRoutingTelemetrySnapshot: () => ({
+        total: chatCallCount,
+        compact: 1,
+        fastPath: 2,
+        llmTurn: Math.max(0, chatCallCount - 3),
+        lastRouteKind: chatCallCount > 0 ? ("llm_turn" as const) : null,
+        lastRouteAt: chatCallCount > 0 ? new Date().toISOString() : null,
+      }),
     } as unknown as KaelApp["chat"],
     automation: {
       listSchedules: () => Array.from(schedules.values()),
@@ -328,6 +336,9 @@ describe("API integration", () => {
     expect(body.metrics.totalJobs).toBe(10);
     expect(body.metrics.jobsByStatus.failed).toBe(4);
     expect(body.metrics.runtimeJobs.activeJobs).toBe(1);
+    expect(body.metrics.chatRouting.fastPath).toBe(2);
+    expect(body.metrics.chatRouting.compact).toBe(1);
+    expect(typeof body.metrics.chatRouting.total).toBe("number");
     expect(body.metrics.schedules.total).toBeGreaterThan(0);
     await server.close();
   });

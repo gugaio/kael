@@ -262,7 +262,7 @@ Definition of Done (checklist):
 
 ### Fase 11 - Reply Orchestrator Lite (comandos determinísticos)
 
-Status: **Em andamento**
+Status: **Concluida**
 
 Objetivos:
 - Garantir fast-path deterministico para comandos operacionais no chat.
@@ -272,7 +272,7 @@ Objetivos:
 Definition of Done (checklist):
 - [x] Fast-path de slash commands no `ChatService` (incluindo modo `pi`).
 - [x] Extrair roteador de comandos para modulo dedicado com testes unitarios.
-- [ ] Telemetria de fast-path vs turno LLM em eventos/logs.
+- [x] Telemetria de fast-path vs turno LLM em eventos/logs.
 
 ### Fase 12 - Supervisor de Execucao Shell (determinismo operacional)
 
@@ -302,6 +302,30 @@ Definition of Done (checklist):
 - [ ] Execucao de `npm run check` + suite alvo de video em CI/local.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-03 - Fase 11: telemetria de roteamento (fast-path vs LLM)
+
+Resumo:
+- Adicionada telemetria de roteamento no `ChatService` para contabilizar turnos `compact`, `fast_path` e `llm_turn`.
+- Incluido log estruturado `chat.route.selected` com `sessionKey` e `requestId` para cada rota escolhida.
+- Exposta metrica `chatRouting` no endpoint `/health`, permitindo observabilidade em runtime e diff no stream de eventos via assinatura de health.
+
+Arquivos-chave:
+- `src/chat/routing-telemetry.ts`
+- `src/chat/service.ts`
+- `src/api/server.ts`
+- `src/api/server.test.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/chat/routing-telemetry.test.ts src/api/server.test.ts`
+
+Pendencias:
+- Nenhuma pendencia aberta da Fase 11.
+
+Proximo passo recomendado:
+- Iniciar Fase 12 com supervisor dedicado de `exec/process` (lifecycle, timeout e cancelamento deterministico).
 
 ### 2026-03-03 - Fase 11: extracao do command router com testes unitarios
 

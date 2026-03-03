@@ -1,6 +1,6 @@
 # Arquitetura - Fase 11 (Reply Orchestrator Lite)
 
-Status: em andamento
+Status: concluida
 
 ## Objetivo
 
@@ -31,4 +31,4 @@ mesmo quando o engine principal estiver em modo `pi`.
 ## Proximos incrementos recomendados
 
 1. Adicionar dedupe/fila leve por `sessionKey` para reduzir colisao de requests concorrentes.
-2. Expor telemetria de fast-path vs turno LLM no health/events.
+2. Evoluir telemetria de roteamento para dashboards/alertas operacionais (SSE/health ja expostos).
