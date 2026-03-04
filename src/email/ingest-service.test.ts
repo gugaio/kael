@@ -18,7 +18,7 @@ describe("EmailIngestService", () => {
       init: async () => undefined,
       poll,
     };
-    const handleMessage = vi.fn(async () => ({
+    const handleMessage = vi.fn(async (_input: unknown) => ({
       user: {} as never,
       assistant: {} as never,
       reply: "ok",
@@ -74,5 +74,42 @@ describe("EmailIngestService", () => {
         replyText: "Resposta Kael",
       }),
     );
+  });
+
+  it("sanitiza blocos base64 de email antes de enviar ao chat", async () => {
+    const provider: EmailProvider = {
+      init: async () => undefined,
+      poll: async () => [
+        {
+          id: "m-3",
+          from: "Carol <carol@example.com>",
+          fromEmail: "carol@example.com",
+          subject: "Foto",
+          body: [
+            "Content-Type: image/jpeg; name=\"surf.jpg\"",
+            "Content-Transfer-Encoding: base64",
+            "",
+            "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=",
+            "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=",
+            "--boundary123",
+          ].join("\n"),
+        },
+      ],
+    };
+    const handleMessage = vi.fn(async () => ({
+      user: {} as never,
+      assistant: {} as never,
+      reply: "ok",
+    }));
+    const chat = { handleMessage } as never;
+    const service = new EmailIngestService(provider, chat);
+
+    await service.pollNow();
+
+    const payload = (handleMessage as unknown as { mock: { calls: Array<Array<unknown>> } }).mock.calls[0]?.[0] as
+      | { message: string }
+      | undefined;
+    expect(payload?.message).toContain("[[base64_omitted_lines:");
+    expect(payload?.message).not.toContain("QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=");
   });
 });

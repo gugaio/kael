@@ -14,7 +14,12 @@ completo (descricao de imagem e transcricao de audio).
 - Pass-through de anexos no fluxo `API -> ChatService -> TurnOrchestrator -> Engine`.
 - Ingest de anexos no Discord com download controlado (limites de tamanho/timeout).
 - Persistencia de hint textual de anexos no transcript da sessao para continuidade.
-- Base para etapa seguinte de `media-understanding` (providers de visao/transcricao).
+- `MediaUnderstandingService` com implementacao `noop` e implementacao inicial `openai`:
+  - descricao de imagem;
+  - transcricao de audio.
+- Injecao do contexto multimodal no turno LLM via bloco `[media_context]`.
+- Telemetria de runtime multimodal em `/health` (`mediaRuntime`).
+- Saida multimodal inicial: artifacts de imagem gerada (`image_generate`) enviados como anexo em reply de email SMTP.
 
 ## Decisao arquitetural
 
@@ -24,6 +29,6 @@ completo (descricao de imagem e transcricao de audio).
 
 ## Pendencias da fase
 
-1. Implementar `MediaUnderstandingService` com providers de imagem/audio.
-2. Injetar resultado multimodal no contexto do turno sem poluir `CommandBody`.
-3. Expor observabilidade de anexos processados/erros no `/health`.
+1. Melhorar robustez de parsing de resposta de modelos vision em formatos alternativos.
+2. Adicionar fallback opcional para provider de audio dedicado (ex.: Deepgram) no mesmo contrato.
+3. Adicionar sanitizacao/normalizacao de MIME mais rigorosa para anexos (data URL/base64 malformado).

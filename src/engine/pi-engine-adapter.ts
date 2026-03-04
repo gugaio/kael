@@ -10,7 +10,13 @@ import { retry } from "../infra/retry.js";
 import { normalizePiError, PiEngineError } from "./pi-errors.js";
 import { createPiShellTools } from "./pi-tools.js";
 import { ToolLoopGuard } from "./tool-loop-guard.js";
-import type { AgentEngine, EngineRuntimeTelemetry, EngineTurnInput, EngineTurnOutput } from "./types.js";
+import type {
+  AgentEngine,
+  EngineOutputArtifact,
+  EngineRuntimeTelemetry,
+  EngineTurnInput,
+  EngineTurnOutput,
+} from "./types.js";
 
 type PiAgentLike = {
   prompt: (prompt: string) => Promise<void>;
@@ -359,6 +365,7 @@ export class PiEngineAdapter implements AgentEngine {
           blockedCalls: 0,
           lastBlockedReason: "",
           webEvidence: [] as string[],
+          artifacts: [] as EngineOutputArtifact[],
         };
         const { agent, abortController } = this.createSdkAgent(input, {
           turnId,
@@ -390,6 +397,9 @@ export class PiEngineAdapter implements AgentEngine {
               if (attemptStats.webEvidence.length > 5) {
                 attemptStats.webEvidence = attemptStats.webEvidence.slice(-5);
               }
+            }
+            if (event.phase === "end" && event.artifact) {
+              attemptStats.artifacts.push(event.artifact);
             }
           },
         });
@@ -533,7 +543,7 @@ export class PiEngineAdapter implements AgentEngine {
                 eventCounts: Object.fromEntries(eventCounts.entries()),
                 replyChars: text.length,
               });
-              resolve({ reply: text });
+              resolve({ reply: text, artifacts: attemptStats.artifacts });
             });
           });
           if (typeof unsub === "function") {
@@ -585,6 +595,7 @@ export class PiEngineAdapter implements AgentEngine {
         blocked?: boolean;
         reason?: string;
         summary?: string;
+        artifact?: EngineOutputArtifact;
       }) => void;
     },
   ): CreatedPiAgent {

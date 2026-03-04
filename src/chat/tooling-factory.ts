@@ -3,6 +3,7 @@ import type { JobManager } from "../jobs/manager.js";
 import type { MemoryService } from "../memory/service.js";
 import type { PlannerService } from "../planner/service.js";
 import type { ResearchService } from "../research/service.js";
+import type { ImageGeneratorService } from "../media/image-generator.js";
 import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
 import type { VideoInspectToolService } from "../tools/video/video-inspect-tool-service.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
@@ -15,6 +16,7 @@ type ChatToolingDeps = {
   workspace: WorkspaceInspector;
   research: ResearchService;
   planner: PlannerService;
+  imageGenerator: ImageGeneratorService;
 };
 
 export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
@@ -81,6 +83,7 @@ export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
         domainsBlock,
         signal,
       }),
+    imageGenerate: ({ prompt, size }) => deps.imageGenerator.generate({ prompt, size }),
     planCreate: ({ sessionKey, title, steps }) => deps.planner.create({ sessionKey, title, steps }),
     planGenerate: ({ sessionKey, objective, maxSteps }) =>
       deps.planner.generate({ sessionKey, objective, maxSteps }),
@@ -164,6 +167,9 @@ export function createChatOnlyTooling(tooling: EngineTooling): EngineTooling {
     },
     processCommand: async () => {
       throw new Error("chat-only mode: process disabled");
+    },
+    imageGenerate: async () => {
+      throw new Error("chat-only mode: image_generate disabled");
     },
     planCreate: async () => {
       throw new Error("chat-only mode: plan_create disabled");

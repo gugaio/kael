@@ -322,6 +322,7 @@ export class DiscordChatOnlyBot {
         sessionKey,
         message: content,
         attachments,
+        source: "discord",
         requestId: `discord:${msg.id}`,
       });
       for (const chunk of splitDiscordMessage(turn.reply)) {

@@ -26,6 +26,8 @@ import { LocalProcessRunner } from "./tools/system/process-runner.js";
 import { ShellToolService, type ShellRuntime } from "./tools/system/shell-tool-service.js";
 import { VideoJobService } from "./tools/video/video-job-service.js";
 import { VideoInspectToolService } from "./tools/video/video-inspect-tool-service.js";
+import { NoopMediaUnderstandingService, OpenAiMediaUnderstandingService } from "./media/service.js";
+import { NoopImageGeneratorService, OpenAiImageGeneratorService } from "./media/image-generator.js";
 
 export type KaelApp = {
   config: KaelConfig;
@@ -123,11 +125,36 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     workspace,
     research,
     planner,
+    imageGenerator:
+      config.media.enabled && !!config.media.apiKey
+        ? new OpenAiImageGeneratorService({
+            apiKey: config.media.apiKey,
+            baseUrl: config.media.baseUrl,
+            timeoutMs: config.media.imageGenerationTimeoutMs,
+            model: process.env.KAEL_IMAGE_GENERATION_MODEL?.trim() || "gpt-image-1",
+          })
+        : new NoopImageGeneratorService(),
   });
   const chat = new ChatService(
     sessions,
     shell,
     orchestrator,
+    config.media.enabled
+      ? new OpenAiMediaUnderstandingService({
+          enabled: config.media.enabled,
+          apiKey: config.media.apiKey,
+          baseUrl: config.media.baseUrl,
+          timeoutMs: config.media.timeoutMs,
+          maxAttachmentBytes: config.media.maxAttachmentBytes,
+          maxTotalBytesPerMessage: config.media.maxTotalBytesPerMessage,
+          maxProcessingMsPerMessage: config.media.maxProcessingMsPerMessage,
+          maxAttachmentsPerMessage: config.media.maxAttachmentsPerMessage,
+          maxAttachmentsBySource: config.media.maxAttachmentsBySource,
+          imageModel: config.media.imageModel,
+          imagePrompt: config.media.imagePrompt,
+          audioModel: config.media.audioModel,
+        })
+      : new NoopMediaUnderstandingService(),
     memory,
     tooling,
     createChatOnlyTooling(tooling),

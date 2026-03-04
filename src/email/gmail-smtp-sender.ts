@@ -1,5 +1,6 @@
 import tls from "node:tls";
-import type { EmailSender, InboundEmailMessage } from "./types.js";
+import { randomUUID } from "node:crypto";
+import type { EmailSender, InboundEmailAttachment, InboundEmailMessage } from "./types.js";
 
 type GmailSmtpSenderConfig = {
   address: string;
@@ -17,7 +18,11 @@ type SmtpResponse = {
 export class GmailSmtpSender implements EmailSender {
   constructor(private readonly cfg: GmailSmtpSenderConfig) {}
 
-  async sendReply(params: { original: InboundEmailMessage; replyText: string }): Promise<void> {
+  async sendReply(params: {
+    original: InboundEmailMessage;
+    replyText: string;
+    attachments?: InboundEmailAttachment[];
+  }): Promise<void> {
     const recipient = params.original.fromEmail?.trim();
     if (!recipient) {
       return;
@@ -60,6 +65,7 @@ export class GmailSmtpSender implements EmailSender {
         to: recipient,
         subject,
         body: params.replyText,
+        attachments: params.attachments,
       });
       await writeRaw(socket, `${message}\r\n.\r\n`);
       await expectCode(await readResponse(socket), [250], "DATA end");
@@ -90,18 +96,85 @@ function buildMessage(params: {
   to: string;
   subject: string;
   body: string;
+  attachments?: InboundEmailAttachment[];
 }): string {
   const safeBody = dotStuff(params.body);
-  return [
+  const attachments = (params.attachments ?? []).filter((item) => item.dataBase64?.trim());
+  if (attachments.length === 0) {
+    return [
+      `From: <${params.from}>`,
+      `To: <${params.to}>`,
+      `Subject: ${params.subject}`,
+      "MIME-Version: 1.0",
+      "Content-Type: text/plain; charset=UTF-8",
+      "Content-Transfer-Encoding: 8bit",
+      "",
+      safeBody,
+    ].join("\r\n");
+  }
+
+  const boundary = `kael-mixed-${randomUUID()}`;
+  const lines: string[] = [
     `From: <${params.from}>`,
     `To: <${params.to}>`,
     `Subject: ${params.subject}`,
     "MIME-Version: 1.0",
+    `Content-Type: multipart/mixed; boundary=\"${boundary}\"`,
+    "",
+    `--${boundary}`,
     "Content-Type: text/plain; charset=UTF-8",
     "Content-Transfer-Encoding: 8bit",
     "",
     safeBody,
-  ].join("\r\n");
+  ];
+
+  for (const attachment of attachments) {
+    const mimeType = attachment.mimeType?.trim() || defaultMimeByKind(attachment.kind);
+    const fileName = attachment.fileName?.trim() || defaultFileName(attachment.kind, mimeType);
+    lines.push(`--${boundary}`);
+    lines.push(`Content-Type: ${mimeType}; name=\"${fileName}\"`);
+    lines.push(`Content-Disposition: attachment; filename=\"${fileName}\"`);
+    lines.push("Content-Transfer-Encoding: base64");
+    lines.push("");
+    lines.push(foldBase64ForSmtp(attachment.dataBase64));
+  }
+
+  lines.push(`--${boundary}--`);
+  return lines.join("\r\n");
+}
+
+function defaultMimeByKind(kind: InboundEmailAttachment["kind"]): string {
+  if (kind === "audio") return "audio/ogg";
+  return "image/png";
+}
+
+function defaultFileName(kind: InboundEmailAttachment["kind"], mimeType: string): string {
+  const ext = mimeTypeToExt(mimeType);
+  return `${kind}-${randomUUID().slice(0, 8)}.${ext}`;
+}
+
+function mimeTypeToExt(mimeType: string): string {
+  const lower = mimeType.toLowerCase();
+  if (lower.includes("jpeg")) return "jpg";
+  if (lower.includes("webp")) return "webp";
+  if (lower.includes("gif")) return "gif";
+  if (lower.includes("bmp")) return "bmp";
+  if (lower.includes("audio/mpeg")) return "mp3";
+  if (lower.includes("audio/wav")) return "wav";
+  if (lower.includes("audio/mp4")) return "m4a";
+  if (lower.includes("audio/flac")) return "flac";
+  if (lower.includes("audio/ogg")) return "ogg";
+  if (lower.includes("png")) return "png";
+  return "bin";
+}
+
+function foldBase64ForSmtp(input: string): string {
+  const normalized = input.replace(/\s+/g, "");
+  const chunks: string[] = [];
+  for (let i = 0; i < normalized.length; i += 76) {
+    chunks.push(normalized.slice(i, i + 76));
+  }
+  return chunks.join("\r\n");
 }
 
 function dotStuff(body: string): string {

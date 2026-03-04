@@ -72,6 +72,27 @@ export type KaelConfig = {
     fetchMaxRedirects: number;
     fetchMaxResponseBytes: number;
   };
+  media: {
+    enabled: boolean;
+    provider: "openai";
+    apiKey?: string;
+    baseUrl: string;
+    timeoutMs: number;
+    imageGenerationTimeoutMs: number;
+    maxAttachmentBytes: number;
+    maxTotalBytesPerMessage: number;
+    maxProcessingMsPerMessage: number;
+    maxAttachmentsPerMessage: number;
+    maxAttachmentsBySource: {
+      api: number;
+      discord: number;
+      email: number;
+      unknown: number;
+    };
+    imageModel: string;
+    imagePrompt: string;
+    audioModel: string;
+  };
   email: {
     enabled: boolean;
     pollIntervalMs: number;
@@ -234,6 +255,42 @@ function validateConfig(config: KaelConfig): void {
 
   if (config.research.enabled && !config.research.apiKey) {
     issues.push("KAEL_RESEARCH_API_KEY e obrigatorio quando KAEL_RESEARCH_ENABLED=true");
+  }
+
+  if (config.media.enabled) {
+    if (config.media.provider === "openai" && !config.media.apiKey?.trim()) {
+      issues.push("KAEL_MEDIA_OPENAI_API_KEY (ou KAEL_PI_API_KEY) e obrigatorio quando KAEL_MEDIA_ENABLED=true");
+    }
+    if (!config.media.baseUrl.trim()) {
+      issues.push("KAEL_MEDIA_BASE_URL nao pode ser vazio");
+    }
+    if (!Number.isFinite(config.media.timeoutMs) || config.media.timeoutMs <= 0) {
+      issues.push("KAEL_MEDIA_TIMEOUT_MS deve ser um numero positivo");
+    }
+    if (
+      !Number.isFinite(config.media.imageGenerationTimeoutMs) ||
+      config.media.imageGenerationTimeoutMs <= 0
+    ) {
+      issues.push("KAEL_IMAGE_GENERATION_TIMEOUT_MS deve ser um numero positivo");
+    }
+    if (!Number.isFinite(config.media.maxAttachmentBytes) || config.media.maxAttachmentBytes <= 0) {
+      issues.push("KAEL_MEDIA_MAX_ATTACHMENT_BYTES deve ser um numero positivo");
+    }
+    if (
+      !Number.isFinite(config.media.maxTotalBytesPerMessage) ||
+      config.media.maxTotalBytesPerMessage <= 0
+    ) {
+      issues.push("KAEL_MEDIA_MAX_TOTAL_BYTES_PER_MESSAGE deve ser um numero positivo");
+    }
+    if (
+      !Number.isFinite(config.media.maxProcessingMsPerMessage) ||
+      config.media.maxProcessingMsPerMessage <= 0
+    ) {
+      issues.push("KAEL_MEDIA_MAX_PROCESSING_MS_PER_MESSAGE deve ser um numero positivo");
+    }
+    if (!Number.isFinite(config.media.maxAttachmentsPerMessage) || config.media.maxAttachmentsPerMessage <= 0) {
+      issues.push("KAEL_MEDIA_MAX_ATTACHMENTS_PER_MESSAGE deve ser um numero positivo");
+    }
   }
 
   if (!Number.isFinite(config.research.defaultMaxResults) || config.research.defaultMaxResults <= 0) {
@@ -549,6 +606,43 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       : 2_000_000;
   const researchApiKey = process.env.KAEL_RESEARCH_API_KEY?.trim();
 
+  const mediaEnabledRaw = process.env.KAEL_MEDIA_ENABLED?.trim() ?? "false";
+  const mediaEnabled = mediaEnabledRaw.toLowerCase() === "true";
+  const mediaProviderRaw = process.env.KAEL_MEDIA_PROVIDER?.trim().toLowerCase() || "openai";
+  const mediaProvider: "openai" = "openai";
+  if (mediaProviderRaw !== "openai") {
+    throw new ConfigValidationError([
+      `KAEL_MEDIA_PROVIDER invalido: "${mediaProviderRaw}". Valores aceitos: openai`,
+    ]);
+  }
+  const mediaTimeoutRaw = Number(process.env.KAEL_MEDIA_TIMEOUT_MS ?? "20000");
+  const mediaTimeoutMs =
+    Number.isFinite(mediaTimeoutRaw) && mediaTimeoutRaw > 0 ? Math.floor(mediaTimeoutRaw) : 20000;
+  const mediaImageGenerationTimeoutRaw = Number(
+    process.env.KAEL_IMAGE_GENERATION_TIMEOUT_MS ?? String(mediaTimeoutMs),
+  );
+  const mediaImageGenerationTimeoutMs =
+    Number.isFinite(mediaImageGenerationTimeoutRaw) && mediaImageGenerationTimeoutRaw > 0
+      ? Math.floor(mediaImageGenerationTimeoutRaw)
+      : mediaTimeoutMs;
+  const mediaMaxAttachmentBytesRaw = Number(process.env.KAEL_MEDIA_MAX_ATTACHMENT_BYTES ?? "8000000");
+  const mediaMaxAttachmentBytes =
+    Number.isFinite(mediaMaxAttachmentBytesRaw) && mediaMaxAttachmentBytesRaw > 0
+      ? Math.floor(mediaMaxAttachmentBytesRaw)
+      : 8_000_000;
+  const mediaMaxAttachmentsRaw = Number(process.env.KAEL_MEDIA_MAX_ATTACHMENTS_PER_MESSAGE ?? "3");
+  const mediaMaxAttachmentsPerMessage =
+    Number.isFinite(mediaMaxAttachmentsRaw) && mediaMaxAttachmentsRaw > 0
+      ? Math.floor(mediaMaxAttachmentsRaw)
+      : 3;
+  const mediaApiKey = process.env.KAEL_MEDIA_OPENAI_API_KEY?.trim() || process.env.KAEL_PI_API_KEY?.trim();
+  const mediaBaseUrl = process.env.KAEL_MEDIA_BASE_URL?.trim() || "https://api.openai.com/v1";
+  const mediaImageModel = process.env.KAEL_MEDIA_IMAGE_MODEL?.trim() || "gpt-4o-mini";
+  const mediaImagePrompt =
+    process.env.KAEL_MEDIA_IMAGE_PROMPT?.trim() ||
+    "Voce e um extrator de contexto visual. Descreva de forma objetiva apenas o que ajuda a responder o pedido.";
+  const mediaAudioModel = process.env.KAEL_MEDIA_AUDIO_MODEL?.trim() || "gpt-4o-mini-transcribe";
+
   const emailEnabledRaw = process.env.KAEL_EMAIL_ENABLED?.trim() ?? "false";
   const emailEnabled = emailEnabledRaw.toLowerCase() === "true";
   const emailPollIntervalRaw = Number(process.env.KAEL_EMAIL_POLL_INTERVAL_MS ?? "60000");
@@ -694,6 +788,22 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       fetchMaxRedirects: researchFetchMaxRedirects,
       fetchMaxResponseBytes: researchFetchMaxResponseBytes,
     },
+    media: {
+      enabled: mediaEnabled,
+      provider: mediaProvider,
+      apiKey: mediaApiKey,
+      baseUrl: mediaBaseUrl,
+      timeoutMs: mediaTimeoutMs,
+      imageGenerationTimeoutMs: mediaImageGenerationTimeoutMs,
+      maxAttachmentBytes: mediaMaxAttachmentBytes,
+      maxTotalBytesPerMessage: mediaMaxTotalBytesPerMessage,
+      maxProcessingMsPerMessage: mediaMaxProcessingMsPerMessage,
+      maxAttachmentsPerMessage: mediaMaxAttachmentsPerMessage,
+      maxAttachmentsBySource: mediaMaxAttachmentsBySource,
+      imageModel: mediaImageModel,
+      imagePrompt: mediaImagePrompt,
+      audioModel: mediaAudioModel,
+    },
     email: {
       enabled: emailEnabled,
       pollIntervalMs: emailPollIntervalMs,
@@ -717,3 +827,35 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
   validateConfig(config);
   return config;
 }
+  const mediaMaxTotalBytesRaw = Number(process.env.KAEL_MEDIA_MAX_TOTAL_BYTES_PER_MESSAGE ?? "12000000");
+  const mediaMaxTotalBytesPerMessage =
+    Number.isFinite(mediaMaxTotalBytesRaw) && mediaMaxTotalBytesRaw > 0
+      ? Math.floor(mediaMaxTotalBytesRaw)
+      : 12_000_000;
+  const mediaMaxProcessingMsRaw = Number(process.env.KAEL_MEDIA_MAX_PROCESSING_MS_PER_MESSAGE ?? "15000");
+  const mediaMaxProcessingMsPerMessage =
+    Number.isFinite(mediaMaxProcessingMsRaw) && mediaMaxProcessingMsRaw > 0
+      ? Math.floor(mediaMaxProcessingMsRaw)
+      : 15_000;
+  const mediaMaxAttachmentsApiRaw = Number(process.env.KAEL_MEDIA_MAX_ATTACHMENTS_API ?? "3");
+  const mediaMaxAttachmentsDiscordRaw = Number(process.env.KAEL_MEDIA_MAX_ATTACHMENTS_DISCORD ?? "2");
+  const mediaMaxAttachmentsEmailRaw = Number(process.env.KAEL_MEDIA_MAX_ATTACHMENTS_EMAIL ?? "1");
+  const mediaMaxAttachmentsUnknownRaw = Number(process.env.KAEL_MEDIA_MAX_ATTACHMENTS_UNKNOWN ?? "2");
+  const mediaMaxAttachmentsBySource = {
+    api:
+      Number.isFinite(mediaMaxAttachmentsApiRaw) && mediaMaxAttachmentsApiRaw > 0
+        ? Math.floor(mediaMaxAttachmentsApiRaw)
+        : 3,
+    discord:
+      Number.isFinite(mediaMaxAttachmentsDiscordRaw) && mediaMaxAttachmentsDiscordRaw > 0
+        ? Math.floor(mediaMaxAttachmentsDiscordRaw)
+        : 2,
+    email:
+      Number.isFinite(mediaMaxAttachmentsEmailRaw) && mediaMaxAttachmentsEmailRaw > 0
+        ? Math.floor(mediaMaxAttachmentsEmailRaw)
+        : 1,
+    unknown:
+      Number.isFinite(mediaMaxAttachmentsUnknownRaw) && mediaMaxAttachmentsUnknownRaw > 0
+        ? Math.floor(mediaMaxAttachmentsUnknownRaw)
+        : 2,
+  };

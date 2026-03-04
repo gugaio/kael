@@ -237,6 +237,11 @@ export type EngineTooling = {
     domainsBlock?: string[];
     signal?: AbortSignal;
   }) => Promise<WebResearchResult>;
+  imageGenerate?: (params: {
+    sessionKey: string;
+    prompt: string;
+    size?: "1024x1024" | "1536x1024" | "1024x1536";
+  }) => Promise<EngineOutputArtifact>;
   planCreate: (params: {
     sessionKey: string;
     title: string;
@@ -397,6 +402,14 @@ export type EngineInboundAttachment = {
 
 export type EngineTurnOutput = {
   reply: string;
+  artifacts?: EngineOutputArtifact[];
+};
+
+export type EngineOutputArtifact = {
+  kind: "image";
+  dataBase64: string;
+  mimeType: string;
+  fileName: string;
 };
 
 export type EngineRuntimeTelemetry = {

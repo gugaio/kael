@@ -331,11 +331,195 @@ Definition of Done (checklist):
 - [x] `POST /chat` aceitando anexos opcionais no formato canônico.
 - [x] Discord ingerindo anexos de imagem/audio com limites de download/tamanho.
 - [x] Persistencia de hint de anexos no transcript da sessao.
-- [ ] `MediaUnderstandingService` (descricao de imagem + transcricao de audio).
-- [ ] Injecao do resultado multimodal no contexto do turno.
-- [ ] Metricas operacionais multimodais no `/health`.
+- [x] `MediaUnderstandingService` (descricao de imagem + transcricao de audio).
+- [x] Injecao do resultado multimodal no contexto do turno.
+- [x] Metricas operacionais multimodais no `/health`.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-04 - Fase 15: image_generate + artifacts de turno + envio de anexo no email reply
+
+Resumo:
+- Adicionada capacidade de output multimodal no core:
+  - `EngineTurnOutput` agora suporta `artifacts[]` (MVP: imagem gerada).
+- Implementada tool `image_generate` no runtime PI:
+  - chama provider de geracao de imagem;
+  - retorna resumo textual para o modelo;
+  - publica artifact para o turno.
+- `PiEngineAdapter` passou a coletar artifacts emitidos por tools e devolve-los no resultado do turno.
+- Integrado `ImageGeneratorService`:
+  - `OpenAiImageGeneratorService` (`/images/generations`, `response_format=b64_json`);
+  - `NoopImageGeneratorService` para fallback seguro.
+- `EmailIngestService` passou a encaminhar artifacts do turno para o sender SMTP.
+- `GmailSmtpSender` evoluido para `multipart/mixed` com anexos em base64 (alem de corpo textual).
+- `GmailPop3Provider` ja em modo `RETR` + parse MIME segue entregando anexos de entrada no mesmo contrato.
+
+Arquivos-chave:
+- `src/engine/types.ts`
+- `src/engine/pi-tools.ts`
+- `src/engine/pi-engine-adapter.ts`
+- `src/media/image-generator.ts`
+- `src/chat/tooling-factory.ts`
+- `src/app.ts`
+- `src/chat/service.ts`
+- `src/email/types.ts`
+- `src/email/ingest-service.ts`
+- `src/email/gmail-smtp-sender.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/email/gmail-pop3-provider.test.ts src/email/ingest-service.test.ts src/api/server.test.ts src/media/service.test.ts src/engine/pi-engine-adapter.test.ts`
+
+Pendencias:
+- Discord/web ainda nao usam artifacts de saida; apenas email reply envia anexo por enquanto.
+
+Proximo passo recomendado:
+- Expor artifacts de resposta na API (`POST /chat`) para clientes externos consumirem output multimodal diretamente.
+
+### 2026-03-04 - Fase 14/15: email com parse MIME real de anexos (RETR + attachments[])
+
+Resumo:
+- Provider Gmail POP3 deixou de usar `TOP` para leitura parcial e passou a usar `RETR` (mensagem completa).
+- Implementado parse MIME multipart basico no provider para extrair:
+  - corpo textual (`text/plain`/fallback html simplificado);
+  - anexos `image/*` e `audio/*` em `attachments[]` com `base64` completo.
+- `EmailIngestService` agora encaminha `message.attachments` ao `ChatService` (`source=email`), habilitando pipeline multimodal real em emails.
+- Mantido hardening de corpo para evitar poluicao por blobs base64 residuais.
+- Adicionados testes do parser MIME (`parseRetrResponse`) e de ingest.
+
+Arquivos-chave:
+- `src/email/gmail-pop3-provider.ts`
+- `src/email/gmail-pop3-provider.test.ts`
+- `src/email/types.ts`
+- `src/email/ingest-service.ts`
+- `src/email/ingest-service.test.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/email/gmail-pop3-provider.test.ts src/email/ingest-service.test.ts`
+
+Pendencias:
+- Parser MIME ainda e propositalmente basico; pode evoluir para casos mais exoticos (encodings raros/anexos inline complexos).
+
+Proximo passo recomendado:
+- Adicionar metrica de anexos extraidos por email e taxa de falha de parse no `/health`.
+
+### 2026-03-04 - Fase 14/15: hardening do ingest de email contra base64 truncado
+
+Resumo:
+- `EmailIngestService` agora sanitiza blocos base64/MIME no corpo de email antes de enviar ao `ChatService`.
+- Remocao de blobs base64 evita que o modelo tente interpretar anexos truncados recebidos via POP3 `TOP`.
+- Mantem metadados textuais relevantes e adiciona marcador (`[[base64_omitted_lines:N]]`) quando blob e omitido.
+- Adicionado teste unitario cobrindo sanitizacao de bloco `Content-Transfer-Encoding: base64`.
+
+Arquivos-chave:
+- `src/email/ingest-service.ts`
+- `src/email/ingest-service.test.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/email/ingest-service.test.ts`
+
+Pendencias:
+- Ainda nao ha parse completo de anexos MIME de email para virar `attachments[]` multimodais reais.
+
+Proximo passo recomendado:
+- Implementar parse MIME (multipart) no provider para extrair anexos de imagem/audio como `attachments`.
+
+### 2026-03-04 - Fase 15: interface de chat (CLI) com suporte a anexos
+
+Resumo:
+- Comando `chat` da CLI agora aceita anexos com flag repetivel `--attach <path>`.
+- CLI converte arquivo local para `base64`, infere `mimeType` por extensao e envia no payload `attachments[]` para `POST /chat`.
+- Validacao restringe a anexos `image/*` e `audio/*` na interface CLI.
+
+Arquivos-chave:
+- `src/cli/index.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+
+Pendencias:
+- Inferencia de MIME no CLI ainda e por extensao; pode evoluir para sniffing de bytes.
+
+Proximo passo recomendado:
+- Expor upload/anexo na interface web/chat visual (quando essa interface estiver ativa no runtime).
+
+### 2026-03-04 - Fase 15: hardening de budget multimodal por origem (API/Discord/Email)
+
+Resumo:
+- `MediaUnderstandingService` passou a aplicar orcamento por mensagem e por origem:
+  - limite de anexos por `source` (`api`, `discord`, `email`, `unknown`);
+  - limite total de bytes multimodais por mensagem;
+  - deadline de processamento multimodal por turno.
+- `ChatService` agora propaga `source` para o preprocessamento multimodal (`api`, `discord`, `email`).
+- `config` expandido com novos `KAEL_MEDIA_*` para controle fino de budget.
+- Telemetria multimodal ganhou contadores de skip/controle de budget:
+  - `processedAttachments`, `skippedTooLarge`, `skippedBySourceLimit`,
+    `skippedByTotalBytesBudget`, `skippedByProcessingBudget`.
+- Testes cobrindo limite por origem e ajustes de mocks/config em API e jobs e2e.
+
+Arquivos-chave:
+- `src/media/service.ts`
+- `src/media/service.test.ts`
+- `src/chat/service.ts`
+- `src/config.ts`
+- `src/app.ts`
+- `src/api/server.ts`
+- `src/integrations/discord/discord-bot.ts`
+- `src/email/ingest-service.ts`
+- `src/api/server.test.ts`
+- `src/api/jobs.e2e.test.ts`
+- `docs/architecture/phases/phase-15.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/media/service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- Ainda faltam fallback multi-provider de audio e parser vision mais robusto.
+
+Proximo passo recomendado:
+- Adicionar fallback de transcricao (provider secundario) no mesmo contrato de `MediaUnderstandingService`.
+
+### 2026-03-04 - Fase 15: media-understanding inicial (OpenAI) + contexto no turno + metricas
+
+Resumo:
+- Criado `MediaUnderstandingService` com duas implementacoes:
+  - `NoopMediaUnderstandingService` (fallback seguro);
+  - `OpenAiMediaUnderstandingService` (descricao de imagem via `/chat/completions` + transcricao de audio via `/audio/transcriptions`).
+- `ChatService` passou a executar preprocessamento multimodal antes do turno LLM e injetar bloco `[media_context]` na mensagem efetiva do modelo.
+- Adicionada telemetria de runtime multimodal (`processedRequests`, `appliedRequests`, `imageDescribed`, `audioTranscribed`, `failures`) exposta em `GET /health`.
+- `createKaelApp` integra automaticamente `noop` vs `openai` por config.
+- `KaelConfig` expandido com bloco `media` e variaveis `KAEL_MEDIA_*`.
+- Adicionados testes unitarios da camada multimodal e ajuste de mocks de API para novo contrato de config/telemetria.
+
+Arquivos-chave:
+- `src/media/service.ts`
+- `src/media/service.test.ts`
+- `src/chat/service.ts`
+- `src/app.ts`
+- `src/config.ts`
+- `src/api/server.ts`
+- `src/api/server.test.ts`
+- `src/api/jobs.e2e.test.ts`
+- `docs/architecture/phases/phase-15.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/media/service.test.ts src/api/server.test.ts src/chat/turn-orchestrator.test.ts`
+
+Pendencias:
+- Falta hardening de budget/custo por anexo e fallback multi-provider de audio.
+
+Proximo passo recomendado:
+- Adicionar controle de budget multimodal por turno (max anexos processados e early-stop por timeout parcial), com telemetria por canal.
 
 ### 2026-03-03 - Fase 15: ingress multimodal base (contrato + API + Discord)
 

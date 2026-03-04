@@ -1,4 +1,6 @@
 import { Command } from "commander";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { createKaelApp } from "../app.js";
 import { startApiServer } from "../api/server.js";
 import { loadConfig } from "../config.js";
@@ -61,16 +63,84 @@ async function commandInit(force: boolean): Promise<void> {
 
 type ChatOptions = UrlOption & {
   session: string;
+  attach?: string[];
 };
+
+type ChatAttachmentPayload = {
+  kind: "image" | "audio";
+  dataBase64: string;
+  mimeType?: string;
+  fileName?: string;
+};
+
+const MIME_BY_EXT: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".bmp": "image/bmp",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+  ".oga": "audio/ogg",
+  ".m4a": "audio/mp4",
+  ".aac": "audio/aac",
+  ".flac": "audio/flac",
+};
+
+function inferMimeByPath(filePath: string): string | null {
+  const ext = path.extname(filePath).trim().toLowerCase();
+  return MIME_BY_EXT[ext] ?? null;
+}
+
+function inferKindByMime(mimeType: string): "image" | "audio" | null {
+  const normalized = mimeType.trim().toLowerCase();
+  if (normalized.startsWith("image/")) return "image";
+  if (normalized.startsWith("audio/")) return "audio";
+  return null;
+}
+
+async function loadChatAttachments(filePaths: string[] | undefined): Promise<ChatAttachmentPayload[]> {
+  if (!filePaths || filePaths.length === 0) {
+    return [];
+  }
+  const out: ChatAttachmentPayload[] = [];
+  for (const rawPath of filePaths) {
+    const filePath = rawPath.trim();
+    if (!filePath) {
+      continue;
+    }
+    const mimeType = inferMimeByPath(filePath);
+    if (!mimeType) {
+      throw new Error(
+        `nao foi possivel inferir tipo do anexo: ${filePath}. Use extensao de imagem/audio suportada.`,
+      );
+    }
+    const kind = inferKindByMime(mimeType);
+    if (!kind) {
+      throw new Error(`anexo nao suportado (apenas image/audio): ${filePath}`);
+    }
+    const bytes = await fs.readFile(filePath);
+    out.push({
+      kind,
+      dataBase64: bytes.toString("base64"),
+      mimeType,
+      fileName: path.basename(filePath),
+    });
+  }
+  return out;
+}
 
 async function commandChat(message: string, options: ChatOptions): Promise<void> {
   const sessionKey = options.session;
   const url = await resolveUrl(options.url);
+  const attachments = await loadChatAttachments(options.attach);
 
   const response = await fetch(`${url}/chat`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ sessionKey, message }),
+    body: JSON.stringify({ sessionKey, message, attachments }),
   });
 
   const data = (await response.json()) as { ok: boolean; reply?: string; error?: unknown };
@@ -327,6 +397,12 @@ async function main(): Promise<void> {
     .description("Envia mensagem para /chat")
     .requiredOption("-m, --message <text>", "mensagem do usuario")
     .option("-s, --session <sessionKey>", "chave da sessao", "main")
+    .option(
+      "-a, --attach <path>",
+      "anexa arquivo de imagem/audio (repita a flag para multiplos anexos)",
+      (value: string, previous: string[] = []) => [...previous, value],
+      [],
+    )
     .option("-u, --url <url>", "url base da API (ex: http://127.0.0.1:3210)")
     .action(async (options: ChatOptions & { message: string }) => {
       await commandChat(options.message, options);

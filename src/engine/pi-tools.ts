@@ -1,6 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { kaelLogger } from "../infra/logger.js";
-import type { EngineTooling } from "./types.js";
+import type { EngineOutputArtifact, EngineTooling } from "./types.js";
 import type { ToolLoopGuard } from "./tool-loop-guard.js";
 
 type TextBlock = {
@@ -54,6 +54,7 @@ export function createPiShellTools(params: {
     blocked?: boolean;
     reason?: string;
     summary?: string;
+    artifact?: EngineOutputArtifact;
   }) => void;
 }): AgentTool[] {
   let toolCalls = 0;
@@ -61,11 +62,13 @@ export function createPiShellTools(params: {
   let webFetchCalls = 0;
   let webSearchCalls = 0;
   let webResearchCalls = 0;
+  let imageGenerateCalls = 0;
   const maxToolCalls = Math.max(1, Math.floor(params.budget?.maxToolCalls ?? 12));
   const maxExecCalls = Math.max(1, Math.floor(params.budget?.maxExecCalls ?? 6));
   const maxWebFetchCalls = Math.max(1, Math.floor(params.budget?.maxWebFetchCalls ?? 5));
   const maxWebSearchCalls = Math.max(1, Math.floor(params.budget?.maxWebSearchCalls ?? 3));
   const maxWebResearchCalls = Math.max(1, Math.floor(params.budget?.maxWebResearchCalls ?? 2));
+  const maxImageGenerateCalls = 1;
 
   const inferIntent = (tool: string, rawParams: unknown): string => {
     if (tool === "memory_search") return "memory:search";
@@ -127,6 +130,7 @@ export function createPiShellTools(params: {
     result: unknown,
     startedAtMs: number,
     summary?: string,
+    artifact?: EngineOutputArtifact,
   ): void => {
     const typed = (result ?? {}) as {
       status?: unknown;
@@ -139,6 +143,9 @@ export function createPiShellTools(params: {
     const status = typeof typed.status === "string" ? typed.status : "unknown";
     const blocked = typed.blocked === true;
     const reason = typeof typed.reason === "string" ? typed.reason : undefined;
+    const error = typeof (typed as { error?: unknown }).error === "string"
+      ? (typed as { error: string }).error
+      : undefined;
     const resultCount = typeof typed.resultCount === "number" ? typed.resultCount : undefined;
     const topPaths = Array.isArray(typed.topPaths)
       ? typed.topPaths.filter((v): v is string => typeof v === "string").slice(0, 5)
@@ -154,12 +161,14 @@ export function createPiShellTools(params: {
       status,
       blocked,
       reason,
+      error,
       resultCount,
       topPaths,
       path,
+      summary: summary ? summary.slice(0, 220) : undefined,
       durationMs: Date.now() - startedAtMs,
     });
-    params.onToolEvent?.({ phase: "end", tool, status, blocked, reason, summary });
+    params.onToolEvent?.({ phase: "end", tool, status, blocked, reason, summary, artifact });
   };
 
   const summarizeWebSearch = (result: { answer?: string; sources?: Array<{ title?: string; url?: string }> }) => {
@@ -1313,6 +1322,98 @@ export function createPiShellTools(params: {
     },
   };
 
+  const imageGenerateTool: AgentTool = {
+    name: "image_generate",
+    label: "Image Generate",
+    description:
+      "Gera uma imagem a partir de prompt e retorna referencia para envio em canais que suportam anexo.",
+    parameters: {
+      type: "object",
+      properties: {
+        prompt: { type: "string", description: "Descricao da imagem a gerar" },
+        size: {
+          type: "string",
+          enum: ["1024x1024", "1536x1024", "1024x1536"],
+        },
+      },
+      required: ["prompt"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      if (toolCalls >= maxToolCalls) {
+        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+        params.onToolEvent?.({ phase: "end", tool: "image_generate", status: "blocked", blocked: true, reason });
+        return {
+          content: textResult(`blocked=true\nreason=${reason}`),
+          details: { blocked: true, reason, status: "blocked" },
+        };
+      }
+      if (imageGenerateCalls >= maxImageGenerateCalls) {
+        const reason = `image_generate_budget_exceeded:${imageGenerateCalls}/${maxImageGenerateCalls}`;
+        params.onToolEvent?.({ phase: "end", tool: "image_generate", status: "blocked", blocked: true, reason });
+        return {
+          content: textResult(`blocked=true\nreason=${reason}`),
+          details: { blocked: true, reason, status: "blocked" },
+        };
+      }
+      toolCalls += 1;
+      imageGenerateCalls += 1;
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as {
+        prompt: string;
+        size?: "1024x1024" | "1536x1024" | "1024x1536";
+      };
+      const intent = logToolStart("image_generate", args);
+      if (!params.tooling.imageGenerate) {
+        const reason = "image_generate_unavailable";
+        const details = { blocked: true, reason, status: "blocked" };
+        logToolEnd("image_generate", intent, details, startedAtMs);
+        return {
+          content: textResult(`blocked=true\nreason=${reason}`),
+          details,
+        };
+      }
+      try {
+        const artifact = await params.tooling.imageGenerate({
+          sessionKey: params.sessionKey,
+          prompt: args.prompt,
+          size: args.size,
+        });
+        const details = {
+          status: "completed",
+          kind: artifact.kind,
+          fileName: artifact.fileName,
+          mimeType: artifact.mimeType,
+        };
+        logToolEnd(
+          "image_generate",
+          intent,
+          details,
+          startedAtMs,
+          `image_generated file=${artifact.fileName} mime=${artifact.mimeType}`,
+          artifact,
+        );
+        return {
+          content: textResult(`ok=true\nimage_generated=${artifact.fileName}\nmime=${artifact.mimeType}`),
+          details,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const details = {
+          status: "failed",
+          blocked: false,
+          reason: "image_generate_failed",
+          error: message,
+        };
+        logToolEnd("image_generate", intent, details, startedAtMs, `image_generate_failed error=${message}`);
+        return {
+          content: textResult(`ok=false\nreason=image_generate_failed\nerror=${message}`),
+          details,
+        };
+      }
+    },
+  };
+
   return [
     execTool,
     processTool,
@@ -1326,6 +1427,7 @@ export function createPiShellTools(params: {
     webSearchTool,
     webFetchTool,
     webResearchTool,
+    imageGenerateTool,
     planCreateTool,
     planGenerateTool,
     planListTool,

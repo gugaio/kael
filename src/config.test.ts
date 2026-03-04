@@ -261,3 +261,56 @@ describe('loadConfig validation', () => {
     }
   });
 });
+
+describe('loadConfig media image generation timeout', () => {
+  it('deve usar KAEL_IMAGE_GENERATION_TIMEOUT_MS quando informado', async () => {
+    const previousEngineMode = process.env.KAEL_ENGINE_MODE;
+    const previousPiApiKey = process.env.KAEL_PI_API_KEY;
+    const previousMediaEnabled = process.env.KAEL_MEDIA_ENABLED;
+    const previousMediaKey = process.env.KAEL_MEDIA_OPENAI_API_KEY;
+    const previousImageTimeout = process.env.KAEL_IMAGE_GENERATION_TIMEOUT_MS;
+    const previousMediaTimeout = process.env.KAEL_MEDIA_TIMEOUT_MS;
+    try {
+      process.env.KAEL_ENGINE_MODE = 'simple';
+      process.env.KAEL_PI_API_KEY = '';
+      process.env.KAEL_MEDIA_ENABLED = 'true';
+      process.env.KAEL_MEDIA_OPENAI_API_KEY = 'test-key';
+      process.env.KAEL_MEDIA_TIMEOUT_MS = '15000';
+      process.env.KAEL_IMAGE_GENERATION_TIMEOUT_MS = '42000';
+      const cfg = await loadConfig('/tmp/kael-config-test');
+      expect(cfg.media.imageGenerationTimeoutMs).toBe(42000);
+      expect(cfg.media.timeoutMs).toBe(15000);
+    } finally {
+      if (previousEngineMode === undefined) {
+        delete process.env.KAEL_ENGINE_MODE;
+      } else {
+        process.env.KAEL_ENGINE_MODE = previousEngineMode;
+      }
+      if (previousPiApiKey === undefined) {
+        delete process.env.KAEL_PI_API_KEY;
+      } else {
+        process.env.KAEL_PI_API_KEY = previousPiApiKey;
+      }
+      if (previousMediaEnabled === undefined) {
+        delete process.env.KAEL_MEDIA_ENABLED;
+      } else {
+        process.env.KAEL_MEDIA_ENABLED = previousMediaEnabled;
+      }
+      if (previousMediaKey === undefined) {
+        delete process.env.KAEL_MEDIA_OPENAI_API_KEY;
+      } else {
+        process.env.KAEL_MEDIA_OPENAI_API_KEY = previousMediaKey;
+      }
+      if (previousImageTimeout === undefined) {
+        delete process.env.KAEL_IMAGE_GENERATION_TIMEOUT_MS;
+      } else {
+        process.env.KAEL_IMAGE_GENERATION_TIMEOUT_MS = previousImageTimeout;
+      }
+      if (previousMediaTimeout === undefined) {
+        delete process.env.KAEL_MEDIA_TIMEOUT_MS;
+      } else {
+        process.env.KAEL_MEDIA_TIMEOUT_MS = previousMediaTimeout;
+      }
+    }
+  });
+});

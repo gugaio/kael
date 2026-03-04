@@ -1,4 +1,4 @@
-import type { EngineInboundAttachment, EngineTooling } from "../engine/types.js";
+import type { EngineInboundAttachment, EngineOutputArtifact, EngineTooling } from "../engine/types.js";
 import { normalizePiError } from "../engine/pi-errors.js";
 import type { MemoryService } from "../memory/service.js";
 import type { SessionStore } from "../session/store.js";
@@ -9,6 +9,7 @@ import { TurnOrchestrator } from "./turn-orchestrator.js";
 import { MemoryOrchestrator } from "../memory/orchestrator.js";
 import { CommandRouter } from "./command-router.js";
 import { ChatRoutingTelemetry, type ChatRoutingTelemetrySnapshot } from "./routing-telemetry.js";
+import type { MediaRuntimeTelemetry, MediaUnderstandingService } from "../media/service.js";
 
 function shouldResetSessionOnEngineError(error: unknown): boolean {
   const normalized = normalizePiError(error);
@@ -62,6 +63,7 @@ export class ChatService {
     private readonly sessions: SessionStore,
     private readonly shell: ShellRuntime,
     private readonly orchestrator: TurnOrchestrator,
+    private readonly media: MediaUnderstandingService,
     memory: MemoryService,
     tooling: EngineTooling,
     chatOnlyTooling: EngineTooling,
@@ -75,8 +77,9 @@ export class ChatService {
     sessionKey: string;
     message: string;
     attachments?: EngineInboundAttachment[];
+    source?: "api" | "discord" | "email" | "unknown";
     requestId?: string;
-  }): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string }> {
+  }): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string; artifacts: EngineOutputArtifact[] }> {
     return this.handleMessageInternal(input, this.tooling, { allowOperationalShortcuts: true });
   }
 
@@ -84,8 +87,9 @@ export class ChatService {
     sessionKey: string;
     message: string;
     attachments?: EngineInboundAttachment[];
+    source?: "api" | "discord" | "email" | "unknown";
     requestId?: string;
-  }): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string }> {
+  }): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string; artifacts: EngineOutputArtifact[] }> {
     return this.handleMessageInternal(input, this.chatOnlyTooling, { allowOperationalShortcuts: false });
   }
 
@@ -101,16 +105,21 @@ export class ChatService {
     return this.orchestrator.getEngineRuntimeTelemetrySnapshot();
   }
 
+  getMediaRuntimeTelemetrySnapshot(): MediaRuntimeTelemetry {
+    return this.media.getRuntimeTelemetrySnapshot();
+  }
+
   private async handleMessageInternal(
     input: {
       sessionKey: string;
       message: string;
       attachments?: EngineInboundAttachment[];
+      source?: "api" | "discord" | "email" | "unknown";
       requestId?: string;
     },
     tooling: EngineTooling,
     opts: { allowOperationalShortcuts: boolean },
-  ): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string }> {
+  ): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string; artifacts: EngineOutputArtifact[] }> {
     const storedUserMessage = buildStoredUserMessage(input.message, input.attachments);
     let user = await this.sessions.appendMessage(input.sessionKey, "user", storedUserMessage);
     if (this.memoryOrchestrator.isCompactCommand(input.message)) {
@@ -131,6 +140,7 @@ export class ChatService {
         user,
         assistant,
         reply: result.reply,
+        artifacts: [],
       };
     }
 
@@ -156,12 +166,29 @@ export class ChatService {
           user,
           assistant,
           reply: commandRoute.reply,
+          artifacts: [],
         };
+      }
+
+      const mediaPreprocess = await this.media.preprocess({
+        sessionKey: input.sessionKey,
+        message: input.message,
+        attachments: input.attachments,
+        source: input.source ?? "unknown",
+        requestId: input.requestId,
+      });
+      const llmMessage = mediaPreprocess.message;
+      if (mediaPreprocess.applied) {
+        kaelLogger.info("media.preprocess.applied", {
+          sessionKey: input.sessionKey,
+          requestId: input.requestId ?? null,
+          details: mediaPreprocess.details,
+        });
       }
 
       await this.memoryOrchestrator.runAutoCompactionWithMemoryFlushIfNeeded({
         sessionKey: input.sessionKey,
-        currentMessage: input.message,
+        currentMessage: llmMessage,
         tooling,
         requestId: input.requestId,
       });
@@ -173,12 +200,13 @@ export class ChatService {
       });
       const turn = await this.orchestrator.runConversationTurn({
         sessionKey: input.sessionKey,
-        message: input.message,
+        message: llmMessage,
         attachments: input.attachments,
         requestId: input.requestId,
         tooling,
       });
       const reply = turn.reply;
+      const artifacts = turn.artifacts ?? [];
 
       const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", reply);
 
@@ -186,6 +214,7 @@ export class ChatService {
         user,
         assistant,
         reply,
+        artifacts,
       };
     } catch (error) {
       const normalized = normalizePiError(error);
@@ -220,6 +249,7 @@ export class ChatService {
           user,
           assistant,
           reply,
+          artifacts: [],
         };
       }
 
@@ -243,6 +273,7 @@ export class ChatService {
         user,
         assistant,
         reply: turn.reply,
+        artifacts: turn.artifacts ?? [],
       };
     }
   }
