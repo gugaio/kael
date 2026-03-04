@@ -1,5 +1,42 @@
-import { describe, expect, it } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { describe, expect, it, vi } from "vitest";
 import { BrowserToolService } from "./service.js";
+
+const playwrightMocks = vi.hoisted(() => {
+  const page = {
+    goto: vi.fn(async () => {}),
+    url: vi.fn(() => "https://example.com/"),
+    title: vi.fn(async () => "Example Domain"),
+    evaluate: vi.fn(async () => "Example Domain This domain is for use in illustrative examples."),
+    screenshot: vi.fn(async (opts: { path?: string }) => {
+      if (opts.path) {
+        await fs.writeFile(opts.path, "fake-png-data", "utf-8");
+      }
+    }),
+  };
+  const context = {
+    newPage: vi.fn(async () => page),
+    close: vi.fn(async () => {}),
+  };
+  const browser = {
+    newContext: vi.fn(async () => context),
+    close: vi.fn(async () => {}),
+  };
+  return {
+    chromium: {
+      launch: vi.fn(async () => browser),
+    },
+    page,
+    context,
+    browser,
+  };
+});
+
+vi.mock("playwright", () => ({
+  chromium: playwrightMocks.chromium,
+}));
 
 describe("BrowserToolService", () => {
   it("retorna disabled quando browser runtime esta desabilitado", async () => {
@@ -26,26 +63,94 @@ describe("BrowserToolService", () => {
     expect(telemetry.enabled).toBe(false);
   });
 
-  it("retorna not_implemented quando habilitado na fase 16.0", async () => {
+  it("executa fluxo read-only com start/open/snapshot/screenshot/close", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-browser-test-"));
+    const artifactsDir = path.join(root, "artifacts");
     const service = new BrowserToolService({
       enabled: true,
       headless: true,
       defaultTimeoutMs: 30_000,
       actionTimeoutMs: 12_000,
       maxScreenshotsPerTurn: 3,
-      artifactDir: "/tmp/kael-browser-artifacts",
+      artifactDir: artifactsDir,
     });
 
-    const result = await service.command({
+    const started = await service.command({
       sessionKey: "s1",
       action: "start",
     });
+    expect(started.ok).toBe(true);
+    expect(started.status).toBe("started");
 
-    expect(result.ok).toBe(false);
-    expect(result.status).toBe("not_implemented");
+    const opened = await service.command({
+      sessionKey: "s1",
+      action: "open",
+      url: "https://example.com",
+    });
+    expect(opened.ok).toBe(true);
+    expect(opened.status).toBe("navigated");
+
+    const snapshot = await service.command({
+      sessionKey: "s1",
+      action: "snapshot_text",
+    });
+    expect(snapshot.ok).toBe(true);
+    expect(snapshot.status).toBe("snapshotted");
+    expect(snapshot.textPreview).toContain("Example Domain");
+
+    const screenshot = await service.command({
+      sessionKey: "s1",
+      action: "screenshot",
+    });
+    expect(screenshot.ok).toBe(true);
+    expect(screenshot.status).toBe("screenshot_saved");
+    expect(screenshot.screenshotPath).toBeTruthy();
+    const stat = await fs.stat(String(screenshot.screenshotPath));
+    expect(stat.isFile()).toBe(true);
+
+    const closed = await service.command({
+      sessionKey: "s1",
+      action: "close",
+    });
+    expect(closed.ok).toBe(true);
+    expect(closed.status).toBe("closed");
+
     const telemetry = service.getRuntimeTelemetrySnapshot();
-    expect(telemetry.commands).toBe(1);
-    expect(telemetry.failures).toBe(1);
+    expect(telemetry.commands).toBe(5);
+    expect(telemetry.failures).toBe(0);
+    expect(telemetry.sessionsStarted).toBe(1);
+    expect(telemetry.sessionsClosed).toBe(1);
+    expect(telemetry.activeSessions).toBe(0);
     expect(telemetry.enabled).toBe(true);
+  });
+
+  it("aplica limite de screenshots por sessao", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-browser-limit-"));
+    const service = new BrowserToolService({
+      enabled: true,
+      headless: true,
+      defaultTimeoutMs: 30_000,
+      actionTimeoutMs: 12_000,
+      maxScreenshotsPerTurn: 1,
+      artifactDir: path.join(root, "artifacts"),
+    });
+
+    await service.command({
+      sessionKey: "s2",
+      action: "start",
+    });
+
+    const first = await service.command({
+      sessionKey: "s2",
+      action: "screenshot",
+    });
+    const second = await service.command({
+      sessionKey: "s2",
+      action: "screenshot",
+    });
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(false);
+    expect(second.message).toContain("limite de screenshots");
   });
 });

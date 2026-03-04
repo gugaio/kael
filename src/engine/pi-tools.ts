@@ -1149,9 +1149,19 @@ export function createPiShellTools(params: {
       );
       return {
         content: textResult(
-          [`ok=${result.ok}`, `action=${result.action}`, `status=${result.status}`, `message=${result.message}`].join(
-            "\n",
-          ),
+          [
+            `ok=${result.ok}`,
+            `action=${result.action}`,
+            `status=${result.status}`,
+            `message=${result.message}`,
+            result.targetId ? `targetId=${result.targetId}` : "",
+            result.url ? `url=${result.url}` : "",
+            result.title ? `title=${result.title}` : "",
+            result.screenshotPath ? `screenshotPath=${result.screenshotPath}` : "",
+            result.textPreview ? `textPreview=${result.textPreview}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n"),
         ),
         details: result,
       };

@@ -95,7 +95,7 @@ function createToolingStub(): EngineTooling {
     browserCommand: async ({ action }) => ({
       ok: false,
       action,
-      status: "not_implemented",
+      status: "failed",
       message: "stub",
     }),
     browserRuntimeTelemetry: () => ({

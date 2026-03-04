@@ -346,7 +346,7 @@ Objetivos:
 
 Definition of Done (checklist):
 - [x] Foundations: contrato/wiring/config/telemetria base de browser runtime.
-- [ ] Read-only: `start|open|navigate|snapshot_text|screenshot|close`.
+- [x] Read-only: `start|open|navigate|snapshot_text|screenshot|close`.
 - [ ] Interacao: `click|type|press|wait_for`.
 - [ ] Hardening: cleanup de sessoes, budget anti-loop e metrica por acao/erro.
 
@@ -378,14 +378,46 @@ Arquivos-chave:
 - `src/config.ts`
 
 Checklist de validacao:
-- [ ] `npm run check`
-- [ ] `npm test -- src/tools/browser/service.test.ts src/api/server.test.ts src/engine/simple-engine.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts`
+- [x] `npm run check`
+- [x] `npm test -- src/tools/browser/service.test.ts src/api/server.test.ts src/engine/simple-engine.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts`
 
 Pendencias:
 - Acoes browser ainda nao implementadas (fase 16.1 em diante).
 
 Proximo passo recomendado:
 - Implementar Fase 16.1 (read-only): `start/open/navigate/snapshot_text/screenshot/close` com persistencia de artifacts em `.kael-data/browser/artifacts`.
+
+### 2026-03-04 - Fase 16.1: browser read-only funcional (start/open/navigate/snapshot/screenshot/close)
+
+Resumo:
+- Runtime de browser evoluido para read-only real com Playwright.
+- Implementadas acoes:
+  - `start` (inicia sessao por `sessionKey`);
+  - `open|navigate` (navegacao com validacao de URL http/https);
+  - `snapshot_text` (coleta titulo + preview textual da pagina);
+  - `screenshot` (salva PNG em `KAEL_BROWSER_ARTIFACT_DIR`);
+  - `close` (encerra sessao e limpa recursos).
+- Tool `browser` no PI passou a retornar metadados uteis no texto/detalhes (`targetId`, `url`, `title`, `screenshotPath`, `textPreview`).
+- Adicionado limite de screenshots por sessao (`KAEL_BROWSER_MAX_SCREENSHOTS_PER_TURN`) como guardrail inicial.
+- Dependencia `playwright@1.58.2` adicionada ao projeto.
+
+Arquivos-chave:
+- `src/tools/browser/service.ts`
+- `src/tools/browser/service.test.ts`
+- `src/engine/pi-tools.ts`
+- `package.json`
+- `docs/architecture/phases/phase-16.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/tools/browser/service.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/engine/simple-engine.test.ts src/config.test.ts`
+
+Pendencias:
+- Acoes de interacao (`click|type|press|wait_for`) ainda nao implementadas.
+- Falta lifecycle avancado de sessoes (TTL/cleanup proativo) para fase de hardening.
+
+Proximo passo recomendado:
+- Implementar Fase 16.2 com interacao UI (`click|type|press|wait_for`) e testes de fluxo funcional de site.
 
 ### 2026-03-04 - Fase 15: image_generate + artifacts de turno + envio de anexo no email reply
 

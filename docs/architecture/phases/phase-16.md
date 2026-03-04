@@ -39,10 +39,11 @@ Como testar:
 
 ### Fase 16.1 - Browser read-only (navegacao + evidencia)
 
-Entregas planejadas:
+Entregas implementadas:
 - Acoes `start|open|navigate|snapshot_text|screenshot|close`.
 - Sessao de browser por `sessionKey`.
 - Persistencia de screenshots em `./.kael-data/browser/artifacts`.
+- Limite de screenshots por sessao (`KAEL_BROWSER_MAX_SCREENSHOTS_PER_TURN`).
 
 O que sera possivel fazer:
 - Abrir site, navegar, extrair snapshot textual e gerar screenshot.
