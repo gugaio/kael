@@ -22,6 +22,20 @@ Esta pasta descreve a evolucao arquitetural do Kael de forma incremental.
 - `docs/architecture/phases/phase-14.md` - Email ingress MVP (provider desacoplado + polling POP3)
 - `docs/architecture/phases/phase-15.md` - Multimodal ingress MVP (imagem/audio no fluxo core)
 
+## Diagramas
+
+Visões UML em Mermaid para entender a arquitetura do Kael de forma top-down:
+
+- `docs/architecture/diagrams/overview-components.md` - **Visão Geral de Componentes (Nível 1)**<br/>Processo único, camadas (Gateway/Orchestration/Domain/Storage) e relacionamentos com clientes externos.
+- `docs/architecture/diagrams/detailed-components.md` - **Componentes Detalhados (Nível 2)**<br/>Todos os serviços de domínio, contratos principais (AgentEngine, EmailProvider, ShellRuntime, etc.) e suas interações.
+- `docs/architecture/diagrams/sequence-chat-flow.md` - **Sequência de Chat Principal**<br/>Fluxo completo de uma mensagem desde POST /chat até a resposta, incluindo pipeline multimodal e persistência.
+
+**Como usar os diagramas:**
+1. Comece pelo **Nível 1** para entender a visão geral e as camadas.
+2. Aprofunde no **Nível 2** para entender cada componente e seus contratos.
+3. Veja o **diagrama de sequência** para entender o fluxo real de execução.
+4. Consulte as fases para entender a evolução histórica da arquitetura.
+
 ## Como usar
 
 1. Ler da fase menor para a maior.
