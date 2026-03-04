@@ -7,6 +7,7 @@ import type { ImageGeneratorService } from "../media/image-generator.js";
 import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
 import type { VideoInspectToolService } from "../tools/video/video-inspect-tool-service.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
+import type { BrowserRuntime } from "../tools/browser/service.js";
 
 type ChatToolingDeps = {
   jobs: JobManager;
@@ -17,6 +18,7 @@ type ChatToolingDeps = {
   research: ResearchService;
   planner: PlannerService;
   imageGenerator: ImageGeneratorService;
+  browser: BrowserRuntime;
 };
 
 export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
@@ -83,6 +85,18 @@ export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
         domainsBlock,
         signal,
       }),
+    browserCommand: ({ sessionKey, action, targetId, url, selector, text, key, timeoutMs }) =>
+      deps.browser.command({
+        sessionKey,
+        action,
+        targetId,
+        url,
+        selector,
+        text,
+        key,
+        timeoutMs,
+      }),
+    browserRuntimeTelemetry: () => deps.browser.getRuntimeTelemetrySnapshot(),
     imageGenerate: ({ prompt, size }) => deps.imageGenerator.generate({ prompt, size }),
     planCreate: ({ sessionKey, title, steps }) => deps.planner.create({ sessionKey, title, steps }),
     planGenerate: ({ sessionKey, objective, maxSteps }) =>
@@ -168,6 +182,17 @@ export function createChatOnlyTooling(tooling: EngineTooling): EngineTooling {
     processCommand: async () => {
       throw new Error("chat-only mode: process disabled");
     },
+    browserCommand: async () => {
+      throw new Error("chat-only mode: browser disabled");
+    },
+    browserRuntimeTelemetry: () => ({
+      enabled: false,
+      commands: 0,
+      failures: 0,
+      sessionsStarted: 0,
+      sessionsClosed: 0,
+      activeSessions: 0,
+    }),
     imageGenerate: async () => {
       throw new Error("chat-only mode: image_generate disabled");
     },

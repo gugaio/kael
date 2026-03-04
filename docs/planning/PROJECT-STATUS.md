@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-03-03**
+Ultima atualizacao: **2026-03-04**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -335,7 +335,57 @@ Definition of Done (checklist):
 - [x] Injecao do resultado multimodal no contexto do turno.
 - [x] Metricas operacionais multimodais no `/health`.
 
+### Fase 16 - Browser Control para teste de sites
+
+Status: **Em andamento**
+
+Objetivos:
+- Introduzir controle de browser por tool dedicada no runtime PI.
+- Entregar automacao web incremental (read-only -> interacao) com observabilidade no `/health`.
+- Manter arquitetura simples e desacoplada no contrato `EngineTooling`.
+
+Definition of Done (checklist):
+- [x] Foundations: contrato/wiring/config/telemetria base de browser runtime.
+- [ ] Read-only: `start|open|navigate|snapshot_text|screenshot|close`.
+- [ ] Interacao: `click|type|press|wait_for`.
+- [ ] Hardening: cleanup de sessoes, budget anti-loop e metrica por acao/erro.
+
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-04 - Fase 16.0: foundations de browser runtime (contrato + wiring + health)
+
+Resumo:
+- Registrada arquitetura da Fase 16 em documento dedicado com plano incremental e roteiro de testes por fase.
+- Introduzido dominio de browser runtime com `BrowserToolService` (MVP foundation) e telemetria base.
+- Estendido contrato `EngineTooling` com:
+  - `browserCommand(...)`;
+  - `browserRuntimeTelemetry()`.
+- Wiring completo no app/chat:
+  - `createKaelApp()` instancia `BrowserToolService`;
+  - `createChatTooling()` delega para runtime de browser;
+  - `createChatOnlyTooling()` bloqueia browser por politica.
+- `GET /health` passou a expor `metrics.browserRuntime`.
+- Integrada tool `browser` no runtime PI com resposta controlada de readiness (`disabled|not_implemented`) na fase foundation.
+
+Arquivos-chave:
+- `docs/architecture/phases/phase-16.md`
+- `src/tools/browser/service.ts`
+- `src/engine/types.ts`
+- `src/chat/tooling-factory.ts`
+- `src/app.ts`
+- `src/engine/pi-tools.ts`
+- `src/api/server.ts`
+- `src/config.ts`
+
+Checklist de validacao:
+- [ ] `npm run check`
+- [ ] `npm test -- src/tools/browser/service.test.ts src/api/server.test.ts src/engine/simple-engine.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts`
+
+Pendencias:
+- Acoes browser ainda nao implementadas (fase 16.1 em diante).
+
+Proximo passo recomendado:
+- Implementar Fase 16.1 (read-only): `start/open/navigate/snapshot_text/screenshot/close` com persistencia de artifacts em `.kael-data/browser/artifacts`.
 
 ### 2026-03-04 - Fase 15: image_generate + artifacts de turno + envio de anexo no email reply
 
@@ -2193,3 +2243,48 @@ Pendencias:
 
 Proximo passo recomendado:
 - Exibir `emailIngest` na UI de health/ops com alertas para crescimento de `duplicateSkipped` e `inFlightSkipped`.
+
+### 2026-03-04 - UI Ops/Health: telemetria de email ingest com alertas
+
+Resumo:
+- Atualizado contrato de frontend (`HealthSchema`) para incluir `metrics.emailIngest`.
+- `OpsPage` agora exibe contadores de ingest de email e sinaliza alerta quando `duplicateSkipped`/`inFlightSkipped` passam do limiar.
+- `HealthPage` ganhou painel dedicado `Email Ingest` com `polls`, `messagesSeen`, `processed`, `duplicateSkipped`, `inFlightSkipped` e `lastPollAt`.
+
+Arquivos-chave:
+- `ui/src/lib/api.ts`
+- `ui/src/pages/OpsPage.tsx`
+- `ui/src/pages/HealthPage.tsx`
+
+Checklist de validacao:
+- [x] `npm --prefix ui run check`
+- [x] `npm --prefix ui run build`
+
+Pendencias:
+- Limiar de alerta ainda e estatico na UI; ideal mover para config remota/feature flag.
+
+Proximo passo recomendado:
+- Adicionar cards de tendencia (janela temporal) para dedupe/in-flight usando historico de eventos.
+
+### 2026-03-04 - UI Ops/Health: limiares de alerta configuraveis por env
+
+Resumo:
+- Extraida leitura de limiares de alerta de email ingest para helper unico no frontend.
+- `OpsPage` e `HealthPage` agora usam configuracao por env com fallback seguro.
+- Novas envs de UI: `VITE_EMAIL_DUPLICATE_ALERT_THRESHOLD` e `VITE_EMAIL_INFLIGHT_ALERT_THRESHOLD`.
+
+Arquivos-chave:
+- `ui/src/lib/email-ingest-alerts.ts`
+- `ui/src/pages/OpsPage.tsx`
+- `ui/src/pages/HealthPage.tsx`
+- `ui/src/vite-env.d.ts`
+
+Checklist de validacao:
+- [x] `npm --prefix ui run check`
+- [x] `npm --prefix ui run build`
+
+Pendencias:
+- Ainda falta historico temporal para reduzir falso-positivo de alerta por pico pontual.
+
+Proximo passo recomendado:
+- Incluir tendencia (ultimos N polls) no backend e renderizar sparkline simples na UI de Ops.

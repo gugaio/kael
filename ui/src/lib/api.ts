@@ -51,6 +51,16 @@ const HealthSchema = z.object({
       queuedJobs: z.number(),
       maxConcurrentJobs: z.number(),
     }),
+    emailIngest: z
+      .object({
+        polls: z.number(),
+        messagesSeen: z.number(),
+        processed: z.number(),
+        duplicateSkipped: z.number(),
+        inFlightSkipped: z.number(),
+        lastPollAt: z.string().optional(),
+      })
+      .nullable(),
     schedules: z.object({
       total: z.number(),
       enabled: z.number(),

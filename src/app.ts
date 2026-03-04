@@ -30,6 +30,7 @@ import { VideoJobService } from "./tools/video/video-job-service.js";
 import { VideoInspectToolService } from "./tools/video/video-inspect-tool-service.js";
 import { NoopMediaUnderstandingService, OpenAiMediaUnderstandingService } from "./media/service.js";
 import { NoopImageGeneratorService, OpenAiImageGeneratorService } from "./media/image-generator.js";
+import { BrowserToolService } from "./tools/browser/service.js";
 
 export type KaelApp = {
   config: KaelConfig;
@@ -98,6 +99,14 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     maxFileChars: 100_000,
     maxSearchResults: 12,
   });
+  const browser = new BrowserToolService({
+    enabled: config.browser.enabled,
+    headless: config.browser.headless,
+    defaultTimeoutMs: config.browser.defaultTimeoutMs,
+    actionTimeoutMs: config.browser.actionTimeoutMs,
+    maxScreenshotsPerTurn: config.browser.maxScreenshotsPerTurn,
+    artifactDir: config.browser.artifactDir,
+  });
   const searchProvider = config.research.enabled && config.research.apiKey
     ? new TavilySearchProvider(config.research.apiKey)
     : new DisabledSearchProvider();
@@ -130,6 +139,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     workspace,
     research,
     planner,
+    browser,
     imageGenerator:
       config.media.enabled && !!config.media.apiKey
         ? new OpenAiImageGeneratorService({

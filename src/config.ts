@@ -93,6 +93,14 @@ export type KaelConfig = {
     imagePrompt: string;
     audioModel: string;
   };
+  browser: {
+    enabled: boolean;
+    headless: boolean;
+    defaultTimeoutMs: number;
+    actionTimeoutMs: number;
+    maxScreenshotsPerTurn: number;
+    artifactDir: string;
+  };
   email: {
     enabled: boolean;
     pollIntervalMs: number;
@@ -336,6 +344,21 @@ function validateConfig(config: KaelConfig): void {
     }
     if (!Number.isFinite(config.media.maxAttachmentsPerMessage) || config.media.maxAttachmentsPerMessage <= 0) {
       issues.push("KAEL_MEDIA_MAX_ATTACHMENTS_PER_MESSAGE deve ser um numero positivo");
+    }
+  }
+
+  if (config.browser.enabled) {
+    if (!Number.isFinite(config.browser.defaultTimeoutMs) || config.browser.defaultTimeoutMs <= 0) {
+      issues.push("KAEL_BROWSER_DEFAULT_TIMEOUT_MS deve ser um numero positivo");
+    }
+    if (!Number.isFinite(config.browser.actionTimeoutMs) || config.browser.actionTimeoutMs <= 0) {
+      issues.push("KAEL_BROWSER_ACTION_TIMEOUT_MS deve ser um numero positivo");
+    }
+    if (!Number.isFinite(config.browser.maxScreenshotsPerTurn) || config.browser.maxScreenshotsPerTurn <= 0) {
+      issues.push("KAEL_BROWSER_MAX_SCREENSHOTS_PER_TURN deve ser um numero positivo");
+    }
+    if (!config.browser.artifactDir.trim()) {
+      issues.push("KAEL_BROWSER_ARTIFACT_DIR nao pode ser vazio");
     }
   }
 
@@ -680,6 +703,28 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     process.env.KAEL_MEDIA_IMAGE_PROMPT?.trim() ||
     "Voce e um extrator de contexto visual. Descreva de forma objetiva apenas o que ajuda a responder o pedido.";
   const mediaAudioModel = process.env.KAEL_MEDIA_AUDIO_MODEL?.trim() || "gpt-4o-mini-transcribe";
+  const browserEnabledRaw = process.env.KAEL_BROWSER_ENABLED?.trim() ?? "false";
+  const browserEnabled = browserEnabledRaw.toLowerCase() === "true";
+  const browserHeadlessRaw = process.env.KAEL_BROWSER_HEADLESS?.trim() ?? "true";
+  const browserHeadless = browserHeadlessRaw.toLowerCase() !== "false";
+  const browserDefaultTimeoutRaw = Number(process.env.KAEL_BROWSER_DEFAULT_TIMEOUT_MS ?? "30000");
+  const browserDefaultTimeoutMs =
+    Number.isFinite(browserDefaultTimeoutRaw) && browserDefaultTimeoutRaw > 0
+      ? Math.floor(browserDefaultTimeoutRaw)
+      : 30_000;
+  const browserActionTimeoutRaw = Number(process.env.KAEL_BROWSER_ACTION_TIMEOUT_MS ?? "12000");
+  const browserActionTimeoutMs =
+    Number.isFinite(browserActionTimeoutRaw) && browserActionTimeoutRaw > 0
+      ? Math.floor(browserActionTimeoutRaw)
+      : 12_000;
+  const browserMaxScreenshotsRaw = Number(process.env.KAEL_BROWSER_MAX_SCREENSHOTS_PER_TURN ?? "3");
+  const browserMaxScreenshotsPerTurn =
+    Number.isFinite(browserMaxScreenshotsRaw) && browserMaxScreenshotsRaw > 0
+      ? Math.floor(browserMaxScreenshotsRaw)
+      : 3;
+  const browserArtifactDir = path.resolve(
+    process.env.KAEL_BROWSER_ARTIFACT_DIR?.trim() || path.join(dataDir, "browser", "artifacts"),
+  );
 
   const emailEnabledRaw = process.env.KAEL_EMAIL_ENABLED?.trim() ?? "false";
   const emailEnabled = emailEnabledRaw.toLowerCase() === "true";
@@ -834,6 +879,14 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       imageModel: mediaImageModel,
       imagePrompt: mediaImagePrompt,
       audioModel: mediaAudioModel,
+    },
+    browser: {
+      enabled: browserEnabled,
+      headless: browserHeadless,
+      defaultTimeoutMs: browserDefaultTimeoutMs,
+      actionTimeoutMs: browserActionTimeoutMs,
+      maxScreenshotsPerTurn: browserMaxScreenshotsPerTurn,
+      artifactDir: browserArtifactDir,
     },
     email: {
       enabled: emailEnabled,

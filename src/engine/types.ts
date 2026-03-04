@@ -1,5 +1,10 @@
 import type { VideoJob } from "../types.js";
 import type { WebFetchResult, WebResearchResult, WebSearchResult } from "../research/types.js";
+import type {
+  BrowserCommandAction,
+  BrowserCommandResult,
+  BrowserRuntimeTelemetry,
+} from "../tools/browser/service.js";
 
 export type EngineTooling = {
   startTranscode: (params: {
@@ -237,6 +242,17 @@ export type EngineTooling = {
     domainsBlock?: string[];
     signal?: AbortSignal;
   }) => Promise<WebResearchResult>;
+  browserCommand: (params: {
+    sessionKey: string;
+    action: BrowserCommandAction;
+    targetId?: string;
+    url?: string;
+    selector?: string;
+    text?: string;
+    key?: string;
+    timeoutMs?: number;
+  }) => Promise<BrowserCommandResult>;
+  browserRuntimeTelemetry: () => BrowserRuntimeTelemetry;
   imageGenerate?: (params: {
     sessionKey: string;
     prompt: string;

@@ -92,6 +92,20 @@ function createToolingStub(): EngineTooling {
       evidence: [],
       notes: [],
     }),
+    browserCommand: async ({ action }) => ({
+      ok: false,
+      action,
+      status: "not_implemented",
+      message: "stub",
+    }),
+    browserRuntimeTelemetry: () => ({
+      enabled: false,
+      commands: 0,
+      failures: 0,
+      sessionsStarted: 0,
+      sessionsClosed: 0,
+      activeSessions: 0,
+    }),
     planCreate: async () => ({
       id: "p1",
       sessionKey: "s1",

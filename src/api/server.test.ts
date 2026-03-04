@@ -87,6 +87,14 @@ function makeFakeApp(): KaelApp {
         imagePrompt: "test",
         audioModel: "gpt-4o-mini-transcribe",
       },
+      browser: {
+        enabled: false,
+        headless: true,
+        defaultTimeoutMs: 30_000,
+        actionTimeoutMs: 12_000,
+        maxScreenshotsPerTurn: 3,
+        artifactDir: ".kael-data/browser/artifacts",
+      },
       email: {
         enabled: false,
         pollIntervalMs: 60_000,
@@ -322,6 +330,14 @@ function makeFakeApp(): KaelApp {
         skippedByTotalBytesBudget: 0,
         skippedByProcessingBudget: 0,
       }),
+      getBrowserRuntimeTelemetrySnapshot: () => ({
+        enabled: false,
+        commands: 0,
+        failures: 0,
+        sessionsStarted: 0,
+        sessionsClosed: 0,
+        activeSessions: 0,
+      }),
       // only for test assertions in this fake
       __getLastInput: () => lastChatInput,
     } as unknown as KaelApp["chat"],
@@ -476,6 +492,8 @@ describe("API integration", () => {
     expect(body.metrics.engineRuntime.timeouts).toBe(2);
     expect(body.metrics.engineRuntime.toolCallsByName.web_search).toBe(7);
     expect(body.metrics.engineRuntime.blockedCallsByTool.web_search).toBe(1);
+    expect(body.metrics.browserRuntime.enabled).toBe(false);
+    expect(body.metrics.browserRuntime.commands).toBe(0);
     expect(body.metrics.emailIngest.processed).toBe(3);
     expect(body.metrics.emailIngest.duplicateSkipped).toBe(2);
     expect(body.metrics.emailIngest.inFlightSkipped).toBe(1);

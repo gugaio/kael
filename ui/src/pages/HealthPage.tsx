@@ -1,10 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { Panel } from "../components/Panel";
 import { getHealth } from "../lib/api";
+import { getEmailIngestAlertThresholds } from "../lib/email-ingest-alerts";
 import { formatDate } from "../lib/format";
 
 export function HealthPage(): JSX.Element {
   const health = useQuery({ queryKey: ["health"], queryFn: getHealth });
+  const emailIngest = health.data?.metrics.emailIngest ?? null;
+  const { duplicateSkipped: duplicateAlertThreshold, inFlightSkipped: inflightAlertThreshold } =
+    getEmailIngestAlertThresholds();
+  const hasEmailAlert = Boolean(
+    emailIngest &&
+      (emailIngest.duplicateSkipped >= duplicateAlertThreshold ||
+        emailIngest.inFlightSkipped >= inflightAlertThreshold),
+  );
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -28,6 +37,25 @@ export function HealthPage(): JSX.Element {
             <p>queuedJobs: {health.data.metrics.runtimeJobs.queuedJobs}</p>
             <p>enabledSchedules: {health.data.metrics.schedules.enabled}</p>
           </div>
+        )}
+      </Panel>
+      <Panel title="Email Ingest">
+        {emailIngest ? (
+          <div className="space-y-2 text-sm">
+            <p>polls: {emailIngest.polls}</p>
+            <p>messagesSeen: {emailIngest.messagesSeen}</p>
+            <p>processed: {emailIngest.processed}</p>
+            <p>duplicateSkipped: {emailIngest.duplicateSkipped}</p>
+            <p>inFlightSkipped: {emailIngest.inFlightSkipped}</p>
+            {emailIngest.lastPollAt && <p>lastPollAt: {formatDate(emailIngest.lastPollAt)}</p>}
+            {hasEmailAlert && (
+              <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200">
+                Alert: skips acima do limiar (duplicate={duplicateAlertThreshold}, in-flight={inflightAlertThreshold}).
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-kael-muted">Email ingest telemetry unavailable.</p>
         )}
       </Panel>
       <div className="md:col-span-2">

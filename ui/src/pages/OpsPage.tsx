@@ -9,6 +9,7 @@ import {
   getJobs,
   getSchedules,
 } from "../lib/api";
+import { getEmailIngestAlertThresholds } from "../lib/email-ingest-alerts";
 import { formatDate, statusTone } from "../lib/format";
 
 export function OpsPage(): JSX.Element {
@@ -34,6 +35,14 @@ export function OpsPage(): JSX.Element {
   });
 
   const runningJobs = (jobs.data ?? []).filter((job) => job.status === "running" || job.status === "queued");
+  const emailIngest = health.data?.metrics.emailIngest ?? null;
+  const { duplicateSkipped: duplicateAlertThreshold, inFlightSkipped: inflightAlertThreshold } =
+    getEmailIngestAlertThresholds();
+  const hasEmailAlert = Boolean(
+    emailIngest &&
+      (emailIngest.duplicateSkipped >= duplicateAlertThreshold ||
+        emailIngest.inFlightSkipped >= inflightAlertThreshold),
+  );
 
   return (
     <div className="grid gap-4 md:grid-cols-4">
@@ -59,6 +68,28 @@ export function OpsPage(): JSX.Element {
                 {health.data.metrics.schedules.enabled} enabled / {health.data.metrics.schedules.total} total
               </span>
             </p>
+            {emailIngest && (
+              <>
+                <p>
+                  Email ingest:{" "}
+                  <span className="font-semibold">
+                    {emailIngest.processed} processed / {emailIngest.messagesSeen} seen
+                  </span>
+                </p>
+                <p>
+                  Email dedupe:{" "}
+                  <span className={hasEmailAlert ? "font-semibold text-amber-300" : "font-semibold"}>
+                    {emailIngest.duplicateSkipped} duplicate / {emailIngest.inFlightSkipped} in-flight
+                  </span>
+                </p>
+              </>
+            )}
+            {!emailIngest && <p className="text-xs text-kael-muted">Email ingest telemetry unavailable.</p>}
+            {hasEmailAlert && (
+              <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200">
+                Alert: duplicate/in-flight skips acima do limiar. Verificar workers concorrentes e intervalo do poll.
+              </p>
+            )}
           </div>
         )}
       </Panel>

@@ -129,6 +129,13 @@ export function createPiShellTools(params: {
     if (tool === "web_research") {
       return "web:research";
     }
+    if (tool === "browser") {
+      const action =
+        rawParams && typeof rawParams === "object"
+          ? String((rawParams as { action?: unknown }).action ?? "")
+          : "";
+      return action ? `browser:${action}` : "browser:unknown";
+    }
     const command =
       rawParams && typeof rawParams === "object"
         ? String((rawParams as { command?: unknown }).command ?? "").toLowerCase()
@@ -1063,6 +1070,94 @@ export function createPiShellTools(params: {
     },
   };
 
+  const browserTool: AgentTool = {
+    name: "browser",
+    label: "Browser",
+    description:
+      "Controla runtime de browser do Kael. Nesta fase inicial o runtime responde estado de disponibilidade e readiness de implementacao.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: [
+            "start",
+            "open",
+            "navigate",
+            "snapshot_text",
+            "screenshot",
+            "click",
+            "type",
+            "press",
+            "wait_for",
+            "close",
+          ],
+        },
+        targetId: { type: "string" },
+        url: { type: "string" },
+        selector: { type: "string" },
+        text: { type: "string" },
+        key: { type: "string" },
+        timeoutMs: { type: "number" },
+      },
+      required: ["action"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      if (toolCalls >= maxToolCalls) {
+        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+        return blockByBudget({ tool: "browser", reason, emitEvent: true });
+      }
+      toolCalls += 1;
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as {
+        action:
+          | "start"
+          | "open"
+          | "navigate"
+          | "snapshot_text"
+          | "screenshot"
+          | "click"
+          | "type"
+          | "press"
+          | "wait_for"
+          | "close";
+        targetId?: string;
+        url?: string;
+        selector?: string;
+        text?: string;
+        key?: string;
+        timeoutMs?: number;
+      };
+      const intent = logToolStart("browser", args);
+      const result = await params.tooling.browserCommand({
+        sessionKey: params.sessionKey,
+        action: args.action,
+        targetId: args.targetId,
+        url: args.url,
+        selector: args.selector,
+        text: args.text,
+        key: args.key,
+        timeoutMs: args.timeoutMs,
+      });
+      logToolEnd(
+        "browser",
+        intent,
+        result,
+        startedAtMs,
+        `browser action=${result.action} status=${result.status}`,
+      );
+      return {
+        content: textResult(
+          [`ok=${result.ok}`, `action=${result.action}`, `status=${result.status}`, `message=${result.message}`].join(
+            "\n",
+          ),
+        ),
+        details: result,
+      };
+    },
+  };
+
   const planCreateTool: AgentTool = {
     name: "plan_create",
     label: "Plan Create",
@@ -1422,6 +1517,7 @@ export function createPiShellTools(params: {
     webSearchTool,
     webFetchTool,
     webResearchTool,
+    browserTool,
     imageGenerateTool,
     planCreateTool,
     planGenerateTool,

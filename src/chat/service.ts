@@ -10,6 +10,7 @@ import { MemoryOrchestrator } from "../memory/orchestrator.js";
 import { CommandRouter } from "./command-router.js";
 import { ChatRoutingTelemetry, type ChatRoutingTelemetrySnapshot } from "./routing-telemetry.js";
 import type { MediaRuntimeTelemetry, MediaUnderstandingService } from "../media/service.js";
+import type { BrowserRuntimeTelemetry } from "../tools/browser/service.js";
 
 function shouldResetSessionOnEngineError(error: unknown): boolean {
   const normalized = normalizePiError(error);
@@ -107,6 +108,10 @@ export class ChatService {
 
   getMediaRuntimeTelemetrySnapshot(): MediaRuntimeTelemetry {
     return this.media.getRuntimeTelemetrySnapshot();
+  }
+
+  getBrowserRuntimeTelemetrySnapshot(): BrowserRuntimeTelemetry {
+    return this.tooling.browserRuntimeTelemetry();
   }
 
   private async handleMessageInternal(
