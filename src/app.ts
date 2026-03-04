@@ -18,6 +18,7 @@ import { SessionStore } from "./session/store.js";
 import { EmailIngestService } from "./email/ingest-service.js";
 import { GmailPop3Provider } from "./email/gmail-pop3-provider.js";
 import { GmailSmtpSender } from "./email/gmail-smtp-sender.js";
+import { FileEmailIngestDedupeStore } from "./email/ingest-dedupe-store.js";
 import { ChatService } from "./chat/service.js";
 import { createChatOnlyTooling, createChatTooling } from "./chat/tooling-factory.js";
 import { TurnOrchestrator } from "./chat/turn-orchestrator.js";
@@ -181,7 +182,14 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
           timeoutMs: config.email.gmail.smtpTimeoutMs,
         })
       : undefined;
-    emailIngest = new EmailIngestService(provider, chat, sender);
+    emailIngest = new EmailIngestService(
+      provider,
+      chat,
+      sender,
+      new FileEmailIngestDedupeStore({
+        rootDir: path.join(config.dataDir, "email", "ingest-dedupe"),
+      }),
+    );
     await emailIngest.init();
   }
   const scheduler = new PersistentScheduler(

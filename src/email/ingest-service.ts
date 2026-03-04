@@ -1,6 +1,7 @@
 import { kaelLogger } from "../infra/logger.js";
 import type { ChatService } from "../chat/service.js";
 import type { EmailProvider, EmailSender, InboundEmailMessage } from "./types.js";
+import type { EmailIngestDedupeStore } from "./ingest-dedupe-store.js";
 
 export class EmailIngestService {
   private pollInFlight: Promise<{ processed: number; skipped?: boolean }> | null = null;
@@ -9,10 +10,14 @@ export class EmailIngestService {
     private readonly provider: EmailProvider,
     private readonly chat: ChatService,
     private readonly sender?: EmailSender,
+    private readonly dedupe?: EmailIngestDedupeStore,
   ) {}
 
   async init(): Promise<void> {
     await this.provider.init();
+    if (this.dedupe) {
+      await this.dedupe.init();
+    }
   }
 
   async pollNow(): Promise<{ processed: number; skipped?: boolean }> {
@@ -28,12 +33,37 @@ export class EmailIngestService {
     }
   }
 
-  private async pollNowInternal(): Promise<{ processed: number }> {
+  private async pollNowInternal(): Promise<{ processed: number; skippedDuplicates?: number }> {
     const messages = await this.provider.poll();
+    let processed = 0;
+    let skippedDuplicates = 0;
     for (const message of messages) {
-      await this.processSingleEmail(message);
+      const dedupeKey = buildEmailDedupeKey("gmail_pop3", message.id);
+      const claimResult = this.dedupe ? await this.dedupe.claim(dedupeKey) : "claimed";
+      if (claimResult !== "claimed") {
+        skippedDuplicates += 1;
+        kaelLogger.info("email.ingest.duplicate_skipped", {
+          emailId: message.id,
+          reason: claimResult,
+        });
+        continue;
+      }
+      try {
+        await this.processSingleEmail(message);
+        if (this.dedupe) {
+          await this.dedupe.markProcessed(dedupeKey);
+        }
+        processed += 1;
+      } finally {
+        if (this.dedupe) {
+          await this.dedupe.release(dedupeKey);
+        }
+      }
     }
-    return { processed: messages.length };
+    return {
+      processed,
+      ...(skippedDuplicates > 0 ? { skippedDuplicates } : {}),
+    };
   }
 
   private async processSingleEmail(message: InboundEmailMessage): Promise<void> {
@@ -134,4 +164,10 @@ function buildEmailSessionKey(fromValue: string): string {
   const normalized = fromValue.trim().toLowerCase();
   const safe = normalized.replace(/[^a-z0-9._@-]+/g, "-").slice(0, 120) || "unknown";
   return `email:gmail:${safe}`;
+}
+
+function buildEmailDedupeKey(provider: string, messageId: string): string {
+  const safeProvider = provider.trim().toLowerCase() || "unknown";
+  const safeMessageId = messageId.trim();
+  return `${safeProvider}:${safeMessageId}`;
 }

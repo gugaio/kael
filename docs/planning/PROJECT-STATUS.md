@@ -2143,3 +2143,27 @@ Pendencias:
 
 Proximo passo recomendado:
 - Refactor 3: lock distribuido de ingest de email para evitar processamento duplicado em multiplos workers.
+
+### 2026-03-04 - Refactor pre-fase: lock distribuido no email ingest
+
+Resumo:
+- Implementado `FileEmailIngestDedupeStore` com lock atomico por mensagem (`provider:id`) e marcador persistente de processado.
+- Integrado no `EmailIngestService` com skip explicito de duplicados (`duplicate`/`in_flight`) e log estruturado `email.ingest.duplicate_skipped`.
+- `createKaelApp()` agora inicializa dedupe store em `dataDir/email/ingest-dedupe` para evitar processamento duplicado quando ha mais de um worker/processo ativo.
+
+Arquivos-chave:
+- `src/email/ingest-dedupe-store.ts`
+- `src/email/ingest-service.ts`
+- `src/email/ingest-service.test.ts`
+- `src/app.ts`
+- `docs/architecture/phases/phase-14.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/email/ingest-service.test.ts src/email/gmail-pop3-provider.test.ts src/api/server.test.ts`
+
+Pendencias:
+- Ainda falta expor metricas de dedupe no `/health` para observabilidade de producao.
+
+Proximo passo recomendado:
+- Incluir contadores de dedupe/inflight no `health` e painel de observabilidade.

@@ -15,6 +15,7 @@ integração push (Gmail Pub/Sub) depois.
 - Provider inicial `GmailPop3Provider` (polling POP3 com estado de UIDs vistos).
 - Agendamento persistente `email_poll` no scheduler já existente.
 - Guard de concorrencia no ingest (`pollInFlight`) para evitar processamento duplicado em ticks sobrepostos.
+- Dedupe/lock persistente por mensagem (`provider:id`) no ingest para evitar processamento duplicado entre multiplos processos/workers.
 - Sender SMTP opcional (`GmailSmtpSender`) para auto-reply por email usando a mesma conta dedicada.
 
 ## Decisao arquitetural
@@ -27,4 +28,4 @@ integração push (Gmail Pub/Sub) depois.
 ## Pendencias da fase
 
 1. Adicionar provider de Gmail API/PubSub (modo push) mantendo o mesmo contrato.
-2. Adicionar comandos/observabilidade de email ingest no `/health` e eventos.
+2. Expor metricas de dedupe (`duplicate_skipped`, `in_flight`) no `/health` para tuning operacional.

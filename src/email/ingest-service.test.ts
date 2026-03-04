@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { EmailIngestService } from "./ingest-service.js";
+import { FileEmailIngestDedupeStore } from "./ingest-dedupe-store.js";
 import type { EmailProvider, EmailSender, InboundEmailMessage } from "./types.js";
 
 describe("EmailIngestService", () => {
@@ -111,5 +115,85 @@ describe("EmailIngestService", () => {
       | undefined;
     expect(payload?.message).toContain("[[base64_omitted_lines:");
     expect(payload?.message).not.toContain("QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=");
+  });
+
+  it("nao processa mensagem duplicada em polls consecutivos", async () => {
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "kael-email-dedupe-"));
+    try {
+      const message: InboundEmailMessage = {
+        id: "dup-1",
+        from: "Alice <alice@example.com>",
+        fromEmail: "alice@example.com",
+        subject: "Teste",
+        body: "Ola",
+      };
+      const provider: EmailProvider = {
+        init: async () => undefined,
+        poll: async () => [message],
+      };
+      const handleMessage = vi.fn(async () => ({
+        user: {} as never,
+        assistant: {} as never,
+        reply: "ok",
+      }));
+      const service = new EmailIngestService(
+        provider,
+        { handleMessage } as never,
+        undefined,
+        new FileEmailIngestDedupeStore({ rootDir }),
+      );
+      await service.init();
+
+      const first = await service.pollNow();
+      const second = await service.pollNow();
+
+      expect(first.processed).toBe(1);
+      expect(second.processed).toBe(0);
+      expect(second).toMatchObject({ skippedDuplicates: 1 });
+      expect(handleMessage).toHaveBeenCalledTimes(1);
+    } finally {
+      await fs.rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it("evita processamento duplicado entre duas instancias concorrentes", async () => {
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "kael-email-dedupe-"));
+    try {
+      const message: InboundEmailMessage = {
+        id: "dup-race-1",
+        from: "Bob <bob@example.com>",
+        fromEmail: "bob@example.com",
+        subject: "Teste concorrencia",
+        body: "Ola",
+      };
+      const providerA: EmailProvider = {
+        init: async () => undefined,
+        poll: async () => [message],
+      };
+      const providerB: EmailProvider = {
+        init: async () => undefined,
+        poll: async () => [message],
+      };
+      const handleMessage = vi.fn(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        return {
+          user: {} as never,
+          assistant: {} as never,
+          reply: "ok",
+        };
+      });
+      const dedupeA = new FileEmailIngestDedupeStore({ rootDir });
+      const dedupeB = new FileEmailIngestDedupeStore({ rootDir });
+      const serviceA = new EmailIngestService(providerA, { handleMessage } as never, undefined, dedupeA);
+      const serviceB = new EmailIngestService(providerB, { handleMessage } as never, undefined, dedupeB);
+      await Promise.all([serviceA.init(), serviceB.init()]);
+
+      const [resultA, resultB] = await Promise.all([serviceA.pollNow(), serviceB.pollNow()]);
+
+      expect(resultA.processed + resultB.processed).toBe(1);
+      expect(handleMessage).toHaveBeenCalledTimes(1);
+    } finally {
+      await fs.rm(rootDir, { recursive: true, force: true });
+    }
   });
 });
