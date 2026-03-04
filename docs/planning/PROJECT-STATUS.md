@@ -2120,3 +2120,26 @@ Pendencias:
 
 Proximo passo recomendado:
 - Refactor 2: politica de timeout central por tipo de operacao (`pi`, `media`, `image_generation`, `email`).
+
+### 2026-03-04 - Refactor pre-fase: politica de timeout centralizada
+
+Resumo:
+- Centralizado parsing/resolucao de timeouts em `resolveTimeoutPolicy()` no `config.ts`.
+- Unificada a politica de timeout para operacoes criticas: `pi`, `research`, `media`, `image_generation`, `email_pop3`, `email_smtp`.
+- Mantidas as mesmas env vars existentes (`KAEL_PI_TIMEOUT_MS`, `KAEL_MEDIA_TIMEOUT_MS`, `KAEL_IMAGE_GENERATION_TIMEOUT_MS`, `KAEL_EMAIL_GMAIL_TIMEOUT_MS`, `KAEL_EMAIL_GMAIL_SMTP_TIMEOUT_MS`, `KAEL_RESEARCH_TIMEOUT_MS`), sem quebra de compatibilidade.
+
+Arquivos-chave:
+- `src/config.ts`
+- `src/config.test.ts`
+- `src/api/server.test.ts`
+- `src/api/jobs.e2e.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/config.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- Timeouts de shell/video ainda usam politica propria (intencional); pode haver convergencia futura em um timeout registry unico.
+
+Proximo passo recomendado:
+- Refactor 3: lock distribuido de ingest de email para evitar processamento duplicado em multiplos workers.

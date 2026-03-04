@@ -179,6 +179,52 @@ function parseEngineMode(raw: string | undefined): EngineMode {
   ]);
 }
 
+type TimeoutPolicy = {
+  piTurnMs: number;
+  researchMs: number;
+  mediaMs: number;
+  imageGenerationMs: number;
+  emailPop3Ms: number;
+  emailSmtpMs: number;
+};
+
+function readPositiveTimeoutMs(raw: string | undefined, fallbackMs: number): number {
+  const parsed = Number(raw ?? "");
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.floor(parsed);
+  }
+  return Math.floor(fallbackMs);
+}
+
+function resolveTimeoutPolicy(params: {
+  env: NodeJS.ProcessEnv;
+  globalConfig: Awaited<ReturnType<typeof loadGlobalConfig>>;
+}): TimeoutPolicy {
+  const defaultPiTurnMs = params.globalConfig?.defaults.pi.timeoutMs ?? 45_000;
+  const piTurnMs = readPositiveTimeoutMs(params.env.KAEL_PI_TIMEOUT_MS, defaultPiTurnMs);
+
+  const defaultResearchMs = params.globalConfig?.defaults.research?.timeoutMs ?? 12_000;
+  const researchMs = readPositiveTimeoutMs(params.env.KAEL_RESEARCH_TIMEOUT_MS, defaultResearchMs);
+
+  const mediaMs = readPositiveTimeoutMs(params.env.KAEL_MEDIA_TIMEOUT_MS, 20_000);
+  const imageGenerationMs = readPositiveTimeoutMs(
+    params.env.KAEL_IMAGE_GENERATION_TIMEOUT_MS,
+    mediaMs,
+  );
+
+  const emailPop3Ms = readPositiveTimeoutMs(params.env.KAEL_EMAIL_GMAIL_TIMEOUT_MS, 15_000);
+  const emailSmtpMs = readPositiveTimeoutMs(params.env.KAEL_EMAIL_GMAIL_SMTP_TIMEOUT_MS, 15_000);
+
+  return {
+    piTurnMs,
+    researchMs,
+    mediaMs,
+    imageGenerationMs,
+    emailPop3Ms,
+    emailSmtpMs,
+  };
+}
+
 function validateConfig(config: KaelConfig): void {
   const issues: string[] = [];
 
@@ -354,6 +400,10 @@ function validateConfig(config: KaelConfig): void {
 export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
   const globalConfig = await loadGlobalConfig();
   const soulPrompt = await loadSoulPrompt(cwd);
+  const timeoutPolicy = resolveTimeoutPolicy({
+    env: process.env,
+    globalConfig,
+  });
 
   const defaultPort = globalConfig?.defaults.port ?? 3210;
   const envPort = Number(process.env.KAEL_PORT ?? String(defaultPort));
@@ -567,11 +617,7 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
   );
   const researchMaxLimit =
     Number.isFinite(researchMaxLimitRaw) && researchMaxLimitRaw > 0 ? Math.floor(researchMaxLimitRaw) : 10;
-  const researchTimeoutRaw = Number(
-    process.env.KAEL_RESEARCH_TIMEOUT_MS ?? String(globalConfig?.defaults.research?.timeoutMs ?? 12000),
-  );
-  const researchTimeoutMs =
-    Number.isFinite(researchTimeoutRaw) && researchTimeoutRaw > 0 ? Math.floor(researchTimeoutRaw) : 12000;
+  const researchTimeoutMs = timeoutPolicy.researchMs;
   const researchFetchMaxCharsRaw = Number(
     process.env.KAEL_RESEARCH_FETCH_MAX_CHARS ??
       String(globalConfig?.defaults.research?.fetchMaxChars ?? 12000),
@@ -615,16 +661,8 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       `KAEL_MEDIA_PROVIDER invalido: "${mediaProviderRaw}". Valores aceitos: openai`,
     ]);
   }
-  const mediaTimeoutRaw = Number(process.env.KAEL_MEDIA_TIMEOUT_MS ?? "20000");
-  const mediaTimeoutMs =
-    Number.isFinite(mediaTimeoutRaw) && mediaTimeoutRaw > 0 ? Math.floor(mediaTimeoutRaw) : 20000;
-  const mediaImageGenerationTimeoutRaw = Number(
-    process.env.KAEL_IMAGE_GENERATION_TIMEOUT_MS ?? String(mediaTimeoutMs),
-  );
-  const mediaImageGenerationTimeoutMs =
-    Number.isFinite(mediaImageGenerationTimeoutRaw) && mediaImageGenerationTimeoutRaw > 0
-      ? Math.floor(mediaImageGenerationTimeoutRaw)
-      : mediaTimeoutMs;
+  const mediaTimeoutMs = timeoutPolicy.mediaMs;
+  const mediaImageGenerationTimeoutMs = timeoutPolicy.imageGenerationMs;
   const mediaMaxAttachmentBytesRaw = Number(process.env.KAEL_MEDIA_MAX_ATTACHMENT_BYTES ?? "8000000");
   const mediaMaxAttachmentBytes =
     Number.isFinite(mediaMaxAttachmentBytesRaw) && mediaMaxAttachmentBytesRaw > 0
@@ -660,9 +698,7 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
   const emailGmailPortRaw = Number(process.env.KAEL_EMAIL_GMAIL_PORT ?? "995");
   const emailGmailPort =
     Number.isFinite(emailGmailPortRaw) && emailGmailPortRaw > 0 ? Math.floor(emailGmailPortRaw) : 995;
-  const emailGmailTimeoutRaw = Number(process.env.KAEL_EMAIL_GMAIL_TIMEOUT_MS ?? "15000");
-  const emailGmailTimeoutMs =
-    Number.isFinite(emailGmailTimeoutRaw) && emailGmailTimeoutRaw > 0 ? Math.floor(emailGmailTimeoutRaw) : 15000;
+  const emailGmailTimeoutMs = timeoutPolicy.emailPop3Ms;
   const emailGmailTopLinesRaw = Number(process.env.KAEL_EMAIL_GMAIL_TOP_LINES ?? "40");
   const emailGmailTopLines =
     Number.isFinite(emailGmailTopLinesRaw) && emailGmailTopLinesRaw > 0
@@ -678,13 +714,8 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
   const emailSmtpPortRaw = Number(process.env.KAEL_EMAIL_GMAIL_SMTP_PORT ?? "465");
   const emailSmtpPort =
     Number.isFinite(emailSmtpPortRaw) && emailSmtpPortRaw > 0 ? Math.floor(emailSmtpPortRaw) : 465;
-  const emailSmtpTimeoutRaw = Number(process.env.KAEL_EMAIL_GMAIL_SMTP_TIMEOUT_MS ?? "15000");
-  const emailSmtpTimeoutMs =
-    Number.isFinite(emailSmtpTimeoutRaw) && emailSmtpTimeoutRaw > 0 ? Math.floor(emailSmtpTimeoutRaw) : 15000;
-
-  const defaultTimeout = globalConfig?.defaults.pi.timeoutMs ?? 45000;
-  const timeoutRaw = Number(process.env.KAEL_PI_TIMEOUT_MS ?? String(defaultTimeout));
-  const timeoutMs = Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? timeoutRaw : defaultTimeout;
+  const emailSmtpTimeoutMs = timeoutPolicy.emailSmtpMs;
+  const timeoutMs = timeoutPolicy.piTurnMs;
 
   const provider =
     process.env.KAEL_PI_PROVIDER?.trim() || globalConfig?.defaults.pi.provider || "openai";
