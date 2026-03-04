@@ -33,8 +33,12 @@ describe("EmailIngestService", () => {
 
     const service = new EmailIngestService(provider, chat);
     const result = await service.pollNow();
+    const telemetry = service.getRuntimeTelemetrySnapshot();
 
     expect(result.processed).toBe(1);
+    expect(telemetry.polls).toBe(1);
+    expect(telemetry.messagesSeen).toBe(1);
+    expect(telemetry.processed).toBe(1);
     expect(handleMessage).toHaveBeenCalledTimes(1);
     expect(handleMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -146,10 +150,12 @@ describe("EmailIngestService", () => {
 
       const first = await service.pollNow();
       const second = await service.pollNow();
+      const telemetry = service.getRuntimeTelemetrySnapshot();
 
       expect(first.processed).toBe(1);
       expect(second.processed).toBe(0);
       expect(second).toMatchObject({ skippedDuplicates: 1 });
+      expect(telemetry.duplicateSkipped).toBe(1);
       expect(handleMessage).toHaveBeenCalledTimes(1);
     } finally {
       await fs.rm(rootDir, { recursive: true, force: true });

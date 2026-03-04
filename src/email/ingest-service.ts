@@ -3,8 +3,25 @@ import type { ChatService } from "../chat/service.js";
 import type { EmailProvider, EmailSender, InboundEmailMessage } from "./types.js";
 import type { EmailIngestDedupeStore } from "./ingest-dedupe-store.js";
 
+export type EmailIngestRuntimeTelemetry = {
+  polls: number;
+  messagesSeen: number;
+  processed: number;
+  duplicateSkipped: number;
+  inFlightSkipped: number;
+  lastPollAt?: string;
+};
+
 export class EmailIngestService {
   private pollInFlight: Promise<{ processed: number; skipped?: boolean }> | null = null;
+  private readonly telemetry = {
+    polls: 0,
+    messagesSeen: 0,
+    processed: 0,
+    duplicateSkipped: 0,
+    inFlightSkipped: 0,
+    lastPollAt: undefined as string | undefined,
+  };
 
   constructor(
     private readonly provider: EmailProvider,
@@ -33,8 +50,22 @@ export class EmailIngestService {
     }
   }
 
+  getRuntimeTelemetrySnapshot(): EmailIngestRuntimeTelemetry {
+    return {
+      polls: this.telemetry.polls,
+      messagesSeen: this.telemetry.messagesSeen,
+      processed: this.telemetry.processed,
+      duplicateSkipped: this.telemetry.duplicateSkipped,
+      inFlightSkipped: this.telemetry.inFlightSkipped,
+      ...(this.telemetry.lastPollAt ? { lastPollAt: this.telemetry.lastPollAt } : {}),
+    };
+  }
+
   private async pollNowInternal(): Promise<{ processed: number; skippedDuplicates?: number }> {
     const messages = await this.provider.poll();
+    this.telemetry.polls += 1;
+    this.telemetry.messagesSeen += messages.length;
+    this.telemetry.lastPollAt = new Date().toISOString();
     let processed = 0;
     let skippedDuplicates = 0;
     for (const message of messages) {
@@ -42,6 +73,11 @@ export class EmailIngestService {
       const claimResult = this.dedupe ? await this.dedupe.claim(dedupeKey) : "claimed";
       if (claimResult !== "claimed") {
         skippedDuplicates += 1;
+        if (claimResult === "duplicate") {
+          this.telemetry.duplicateSkipped += 1;
+        } else {
+          this.telemetry.inFlightSkipped += 1;
+        }
         kaelLogger.info("email.ingest.duplicate_skipped", {
           emailId: message.id,
           reason: claimResult,
@@ -54,6 +90,7 @@ export class EmailIngestService {
           await this.dedupe.markProcessed(dedupeKey);
         }
         processed += 1;
+        this.telemetry.processed += 1;
       } finally {
         if (this.dedupe) {
           await this.dedupe.release(dedupeKey);

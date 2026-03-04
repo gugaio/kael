@@ -384,6 +384,16 @@ function makeFakeApp(): KaelApp {
       listApprovals: async () => [],
       resolveApproval: async () => null,
     } as unknown as KaelApp["shell"],
+    emailIngest: {
+      getRuntimeTelemetrySnapshot: () => ({
+        polls: 4,
+        messagesSeen: 6,
+        processed: 3,
+        duplicateSkipped: 2,
+        inFlightSkipped: 1,
+        lastPollAt: new Date().toISOString(),
+      }),
+    },
   };
 }
 
@@ -466,6 +476,9 @@ describe("API integration", () => {
     expect(body.metrics.engineRuntime.timeouts).toBe(2);
     expect(body.metrics.engineRuntime.toolCallsByName.web_search).toBe(7);
     expect(body.metrics.engineRuntime.blockedCallsByTool.web_search).toBe(1);
+    expect(body.metrics.emailIngest.processed).toBe(3);
+    expect(body.metrics.emailIngest.duplicateSkipped).toBe(2);
+    expect(body.metrics.emailIngest.inFlightSkipped).toBe(1);
     expect(body.metrics.schedules.total).toBeGreaterThan(0);
     await server.close();
   });

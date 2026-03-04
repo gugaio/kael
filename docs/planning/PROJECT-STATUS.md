@@ -2167,3 +2167,29 @@ Pendencias:
 
 Proximo passo recomendado:
 - Incluir contadores de dedupe/inflight no `health` e painel de observabilidade.
+
+### 2026-03-04 - Observabilidade: metricas de email ingest no /health
+
+Resumo:
+- `EmailIngestService` ganhou telemetria de runtime (`polls`, `messagesSeen`, `processed`, `duplicateSkipped`, `inFlightSkipped`, `lastPollAt`).
+- `KaelApp` passa a expor `emailIngest` (opcional) para observabilidade.
+- `/health` agora inclui `metrics.emailIngest` quando o ingest de email estiver ativo.
+- Cobertura de testes atualizada para garantir contrato de metricas no health e contadores no ingest.
+
+Arquivos-chave:
+- `src/email/ingest-service.ts`
+- `src/app.ts`
+- `src/api/server.ts`
+- `src/email/ingest-service.test.ts`
+- `src/api/server.test.ts`
+- `docs/architecture/phases/phase-14.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/api/server.test.ts src/email/ingest-service.test.ts`
+
+Pendencias:
+- Falta levar `metrics.emailIngest` para painel visual/alertas (alem do endpoint).
+
+Proximo passo recomendado:
+- Exibir `emailIngest` na UI de health/ops com alertas para crescimento de `duplicateSkipped` e `inFlightSkipped`.

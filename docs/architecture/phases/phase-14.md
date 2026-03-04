@@ -28,4 +28,4 @@ integração push (Gmail Pub/Sub) depois.
 ## Pendencias da fase
 
 1. Adicionar provider de Gmail API/PubSub (modo push) mantendo o mesmo contrato.
-2. Expor metricas de dedupe (`duplicate_skipped`, `in_flight`) no `/health` para tuning operacional.
+2. Expor essas metricas de dedupe tambem em painéis/alertas operacionais (hoje visiveis no `/health`).

@@ -16,6 +16,7 @@ import { DisabledSearchProvider, TavilySearchProvider } from "./research/provide
 import { ResearchService } from "./research/service.js";
 import { SessionStore } from "./session/store.js";
 import { EmailIngestService } from "./email/ingest-service.js";
+import type { EmailIngestRuntimeTelemetry } from "./email/ingest-service.js";
 import { GmailPop3Provider } from "./email/gmail-pop3-provider.js";
 import { GmailSmtpSender } from "./email/gmail-smtp-sender.js";
 import { FileEmailIngestDedupeStore } from "./email/ingest-dedupe-store.js";
@@ -40,6 +41,9 @@ export type KaelApp = {
   chat: ChatService;
   automation: AutomationService;
   shell: ShellRuntime;
+  emailIngest?: {
+    getRuntimeTelemetrySnapshot(): EmailIngestRuntimeTelemetry;
+  };
 };
 
 export type CreateKaelAppOptions = {
@@ -281,5 +285,6 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     chat,
     automation,
     shell,
+    ...(emailIngest ? { emailIngest } : {}),
   };
 }
