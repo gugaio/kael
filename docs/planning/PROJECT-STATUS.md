@@ -347,7 +347,7 @@ Objetivos:
 Definition of Done (checklist):
 - [x] Foundations: contrato/wiring/config/telemetria base de browser runtime.
 - [x] Read-only: `start|open|navigate|snapshot_text|screenshot|close`.
-- [ ] Interacao: `click|type|press|wait_for`.
+- [x] Interacao: `click|type|press|wait_for`.
 - [ ] Hardening: cleanup de sessoes, budget anti-loop e metrica por acao/erro.
 
 ## Registro de Atualizacoes por Commit
@@ -418,6 +418,36 @@ Pendencias:
 
 Proximo passo recomendado:
 - Implementar Fase 16.2 com interacao UI (`click|type|press|wait_for`) e testes de fluxo funcional de site.
+
+### 2026-03-04 - Fase 16.2: interacao UI no browser runtime (click/type/press/wait_for)
+
+Resumo:
+- Runtime de browser evoluido com acoes de interacao:
+  - `click` (por seletor),
+  - `type` (preenchimento de campo),
+  - `wait_for` (espera por elemento visivel),
+  - `press` (tecla global ou com foco via seletor).
+- Adicionada resolucao de seletor com estrategia simples:
+  - `text=<texto>`;
+  - `label=<texto>`;
+  - `role=<role>|<name-opcional>`;
+  - fallback para CSS puro.
+- Mantido fluxo por `sessionKey` e retorno padronizado no mesmo contrato de browser.
+
+Arquivos-chave:
+- `src/tools/browser/service.ts`
+- `src/tools/browser/service.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/tools/browser/service.test.ts src/engine/pi-tools.test.ts`
+
+Pendencias:
+- Ainda falta robustez de fluxo e2e real para formularios complexos (validacao por smoke manual recomendado).
+- Falta hardening de lifecycle (cleanup proativo de sessoes por TTL) e metrica por tipo de acao/erro.
+
+Proximo passo recomendado:
+- Implementar Fase 16.3 (hardening operacional): cleanup de sessoes, budget anti-loop dedicado por acao browser e telemetria detalhada de erro/latencia.
 
 ### 2026-03-04 - Fase 15: image_generate + artifacts de turno + envio de anexo no email reply
 

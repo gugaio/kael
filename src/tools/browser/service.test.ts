@@ -5,6 +5,11 @@ import { describe, expect, it, vi } from "vitest";
 import { BrowserToolService } from "./service.js";
 
 const playwrightMocks = vi.hoisted(() => {
+  const locator = {
+    click: vi.fn(async () => {}),
+    fill: vi.fn(async () => {}),
+    waitFor: vi.fn(async () => {}),
+  };
   const page = {
     goto: vi.fn(async () => {}),
     url: vi.fn(() => "https://example.com/"),
@@ -15,6 +20,13 @@ const playwrightMocks = vi.hoisted(() => {
         await fs.writeFile(opts.path, "fake-png-data", "utf-8");
       }
     }),
+    locator: vi.fn(() => locator),
+    getByText: vi.fn(() => locator),
+    getByRole: vi.fn(() => locator),
+    getByLabel: vi.fn(() => locator),
+    keyboard: {
+      press: vi.fn(async () => {}),
+    },
   };
   const context = {
     newPage: vi.fn(async () => page),
@@ -28,6 +40,7 @@ const playwrightMocks = vi.hoisted(() => {
     chromium: {
       launch: vi.fn(async () => browser),
     },
+    locator,
     page,
     context,
     browser,
@@ -152,5 +165,60 @@ describe("BrowserToolService", () => {
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(false);
     expect(second.message).toContain("limite de screenshots");
+  });
+
+  it("executa click/type/wait_for/press com seletores", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-browser-actions-"));
+    const service = new BrowserToolService({
+      enabled: true,
+      headless: true,
+      defaultTimeoutMs: 30_000,
+      actionTimeoutMs: 12_000,
+      maxScreenshotsPerTurn: 3,
+      artifactDir: path.join(root, "artifacts"),
+    });
+
+    await service.command({ sessionKey: "s3", action: "start" });
+
+    const clickResult = await service.command({
+      sessionKey: "s3",
+      action: "click",
+      selector: "text=Entrar",
+    });
+    const typeResult = await service.command({
+      sessionKey: "s3",
+      action: "type",
+      selector: "label=Email",
+      text: "user@example.com",
+    });
+    const waitResult = await service.command({
+      sessionKey: "s3",
+      action: "wait_for",
+      selector: "role=button|Enviar",
+    });
+    const pressResult = await service.command({
+      sessionKey: "s3",
+      action: "press",
+      key: "Enter",
+      selector: "#search",
+    });
+
+    expect(clickResult.ok).toBe(true);
+    expect(typeResult.ok).toBe(true);
+    expect(waitResult.ok).toBe(true);
+    expect(pressResult.ok).toBe(true);
+
+    expect(playwrightMocks.page.getByText).toHaveBeenCalledWith("Entrar");
+    expect(playwrightMocks.page.getByLabel).toHaveBeenCalledWith("Email");
+    expect(playwrightMocks.page.getByRole).toHaveBeenCalledWith("button", { name: "Enviar" });
+    expect(playwrightMocks.page.locator).toHaveBeenCalledWith("#search");
+    expect(playwrightMocks.page.keyboard.press).toHaveBeenCalledWith("Enter");
+    expect(playwrightMocks.locator.fill).toHaveBeenCalledWith(
+      "user@example.com",
+      expect.objectContaining({ timeout: expect.any(Number) }),
+    );
+    expect(playwrightMocks.locator.waitFor).toHaveBeenCalledWith(
+      expect.objectContaining({ state: "visible", timeout: expect.any(Number) }),
+    );
   });
 });

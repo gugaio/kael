@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
-import type { Browser, BrowserContext, Page } from "playwright";
+import type { Browser, BrowserContext, Locator, Page } from "playwright";
 
 export type BrowserCommandAction =
   | "start"
@@ -80,6 +80,12 @@ type BrowserSession = {
   startedAt: number;
   updatedAt: number;
 };
+
+type SelectorParse =
+  | { kind: "text"; value: string }
+  | { kind: "role"; role: string; name?: string }
+  | { kind: "label"; value: string }
+  | { kind: "css"; value: string };
 
 export class BrowserToolService implements BrowserRuntime {
   private readonly sessions = new Map<string, BrowserSession>();
@@ -206,6 +212,98 @@ export class BrowserToolService implements BrowserRuntime {
         };
       }
 
+      if (input.action === "click") {
+        const session = await this.ensureSession(input.sessionKey);
+        const locator = this.resolveLocator(session.page, input.selector);
+        await locator.click({
+          timeout: this.resolveTimeoutMs(input.timeoutMs),
+        });
+        session.url = session.page.url();
+        session.title = await session.page.title();
+        session.updatedAt = Date.now();
+        return {
+          ok: true,
+          action: input.action,
+          status: "navigated",
+          message: "click executado",
+          targetId: session.targetId,
+          url: session.url,
+          title: session.title,
+        };
+      }
+
+      if (input.action === "type") {
+        const text = String(input.text ?? "");
+        if (!text.length) {
+          throw new Error("texto obrigatorio para acao type");
+        }
+        const session = await this.ensureSession(input.sessionKey);
+        const locator = this.resolveLocator(session.page, input.selector);
+        await locator.fill(text, {
+          timeout: this.resolveTimeoutMs(input.timeoutMs),
+        });
+        session.url = session.page.url();
+        session.title = await session.page.title();
+        session.updatedAt = Date.now();
+        return {
+          ok: true,
+          action: input.action,
+          status: "navigated",
+          message: "type executado",
+          targetId: session.targetId,
+          url: session.url,
+          title: session.title,
+        };
+      }
+
+      if (input.action === "wait_for") {
+        const session = await this.ensureSession(input.sessionKey);
+        const locator = this.resolveLocator(session.page, input.selector);
+        await locator.waitFor({
+          state: "visible",
+          timeout: this.resolveTimeoutMs(input.timeoutMs),
+        });
+        session.url = session.page.url();
+        session.title = await session.page.title();
+        session.updatedAt = Date.now();
+        return {
+          ok: true,
+          action: input.action,
+          status: "navigated",
+          message: "wait_for concluido",
+          targetId: session.targetId,
+          url: session.url,
+          title: session.title,
+        };
+      }
+
+      if (input.action === "press") {
+        const key = String(input.key ?? "").trim();
+        if (!key.length) {
+          throw new Error("tecla obrigatoria para acao press");
+        }
+        const session = await this.ensureSession(input.sessionKey);
+        if (input.selector?.trim()) {
+          const locator = this.resolveLocator(session.page, input.selector);
+          await locator.click({
+            timeout: this.resolveTimeoutMs(input.timeoutMs),
+          });
+        }
+        await session.page.keyboard.press(key);
+        session.url = session.page.url();
+        session.title = await session.page.title();
+        session.updatedAt = Date.now();
+        return {
+          ok: true,
+          action: input.action,
+          status: "navigated",
+          message: "press executado",
+          targetId: session.targetId,
+          url: session.url,
+          title: session.title,
+        };
+      }
+
       this.telemetry.failures += 1;
       return {
         ok: false,
@@ -302,6 +400,24 @@ export class BrowserToolService implements BrowserRuntime {
     return parsed.toString();
   }
 
+  private resolveLocator(page: Page, selectorRaw: string | undefined): Locator {
+    const selector = String(selectorRaw ?? "").trim();
+    if (!selector.length) {
+      throw new Error("selector obrigatorio para esta acao");
+    }
+    const parsed = parseSelector(selector);
+    if (parsed.kind === "text") {
+      return page.getByText(parsed.value);
+    }
+    if (parsed.kind === "role") {
+      return page.getByRole(parsed.role as never, parsed.name ? { name: parsed.name } : undefined);
+    }
+    if (parsed.kind === "label") {
+      return page.getByLabel(parsed.value);
+    }
+    return page.locator(parsed.value);
+  }
+
   private async snapshotText(page: Page): Promise<{ title: string; preview: string }> {
     const title = await page.title();
     const bodyText = await page.evaluate(() => {
@@ -320,4 +436,26 @@ export class BrowserToolService implements BrowserRuntime {
 function sanitizeForPath(input: string): string {
   const normalized = input.trim().toLowerCase().replace(/[^a-z0-9-_]+/g, "-");
   return normalized.length > 0 ? normalized.slice(0, 42) : "session";
+}
+
+function parseSelector(raw: string): SelectorParse {
+  if (raw.startsWith("text=")) {
+    return { kind: "text", value: raw.slice("text=".length).trim() };
+  }
+  if (raw.startsWith("label=")) {
+    return { kind: "label", value: raw.slice("label=".length).trim() };
+  }
+  if (raw.startsWith("role=")) {
+    const value = raw.slice("role=".length).trim();
+    const [role, name] = value.split("|");
+    if (!role?.trim()) {
+      throw new Error("seletor role invalido: use role=<role>|<name-opcional>");
+    }
+    return {
+      kind: "role",
+      role: role.trim(),
+      name: name?.trim() || undefined,
+    };
+  }
+  return { kind: "css", value: raw };
 }
