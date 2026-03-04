@@ -143,6 +143,9 @@ npx tsx src/cli/index.ts schedule-resume --id heartbeat.main
 npx tsx src/cli/index.ts approvals --status open
 npx tsx src/cli/index.ts approval-approve --id <approvalId>
 npx tsx src/cli/index.ts approval-deny --id <approvalId>
+
+# smoke browser runtime (playwright real)
+npm run test:smoke:browser
 ```
 
 ## Endpoints Principais

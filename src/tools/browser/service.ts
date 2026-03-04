@@ -427,7 +427,7 @@ export class BrowserToolService implements BrowserRuntime {
     } catch {
       throw new Error(`url invalida: ${value}`);
     }
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:" && parsed.protocol !== "data:") {
       throw new Error(`protocolo nao suportado: ${parsed.protocol}`);
     }
     return parsed.toString();

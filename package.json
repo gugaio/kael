@@ -15,7 +15,8 @@
     "start": "node dist/cli/index.js server",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "test:smoke:browser": "KAEL_BROWSER_SMOKE=1 vitest run src/tools/browser/service.smoke.test.ts"
   },
   "engines": {
     "node": ">=22.0.0"

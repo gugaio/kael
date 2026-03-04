@@ -82,6 +82,29 @@ describe("BrowserToolService", () => {
     expect(telemetry.enabled).toBe(false);
   });
 
+  it("aceita data URL para smoke deterministico", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-browser-data-url-"));
+    const service = new BrowserToolService({
+      enabled: true,
+      headless: true,
+      defaultTimeoutMs: 30_000,
+      actionTimeoutMs: 12_000,
+      maxScreenshotsPerTurn: 3,
+      sessionTtlMs: 60_000,
+      maxSessions: 4,
+      artifactDir: path.join(root, "artifacts"),
+    });
+
+    const result = await service.command({
+      sessionKey: "data-url",
+      action: "open",
+      url: "data:text/html,%3Ch1%3Eok%3C%2Fh1%3E",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe("navigated");
+  });
+
   it("executa fluxo read-only com start/open/snapshot/screenshot/close", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-browser-test-"));
     const artifactsDir = path.join(root, "artifacts");

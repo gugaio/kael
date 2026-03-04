@@ -353,6 +353,36 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-04 - Fase 16.4: smoke e2e de browser real (Playwright)
+
+Resumo:
+- Adicionado smoke e2e de browser runtime com Playwright real:
+  - fluxo `open -> type -> press -> wait_for -> snapshot_text -> screenshot -> close`.
+- Smoke usa pagina embutida (`data:` URL), evitando dependencia de servidor externo.
+- Script dedicado de execucao adicionado:
+  - `npm run test:smoke:browser`.
+- Runtime de browser passou a aceitar `data:` URL para permitir cenarios de teste deterministico.
+- Documentacao operacional atualizada com secao de smoke.
+
+Arquivos-chave:
+- `src/tools/browser/service.smoke.test.ts`
+- `src/tools/browser/service.ts`
+- `src/tools/browser/service.test.ts`
+- `package.json`
+- `docs/browser-control.md`
+- `docs/architecture/phases/phase-16.md`
+
+Checklist de validacao:
+- [x] `npm run test:smoke:browser`
+- [x] `npm test -- src/tools/browser/service.test.ts src/engine/simple-engine.test.ts`
+- [x] `npm run check`
+
+Pendencias:
+- Promover smoke para job dedicado de CI em runner que suporte launch de Chromium sem restricoes.
+
+Proximo passo recomendado:
+- Criar etapa opcional de CI (`browser-smoke`) com gate por env para validar fluxo real em ambiente apropriado.
+
 ### 2026-03-04 - Fase 16.3/16.4: hardening operacional + atalhos slash de browser
 
 Resumo:

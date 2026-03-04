@@ -87,3 +87,22 @@ Cheque `GET /health` e valide `metrics.browserRuntime`:
 - `actionFailures`
 - `avgLatencyMsByAction`
 
+## Smoke e2e automatizado
+
+O projeto inclui smoke de browser real com pagina embutida (`data:` URL, sem dependencia externa):
+
+```bash
+npm run test:smoke:browser
+```
+
+Observacao: em ambientes restritos (sandbox/CI sem permissao de launch do Chromium), o smoke pode encerrar sem validar o fluxo para nao quebrar a suite padrao.
+
+Esse teste valida o fluxo:
+
+1. `open` em servidor HTTP local.
+2. `type` em campo `#q`.
+3. `press Enter` com foco no input.
+4. `wait_for #result`.
+5. `snapshot_text` com verificacao de conteudo.
+6. `screenshot` com arquivo salvo.
+7. `close` da sessao.
