@@ -1,4 +1,4 @@
-import type { EngineTooling } from "../engine/types.js";
+import type { EngineInboundAttachment, EngineTooling } from "../engine/types.js";
 import { normalizePiError } from "../engine/pi-errors.js";
 import type { MemoryService } from "../memory/service.js";
 import type { SessionStore } from "../session/store.js";
@@ -32,6 +32,25 @@ function extractPartialWebEvidence(message: string): string[] {
     .slice(0, 5);
 }
 
+function summarizeAttachmentForTranscript(attachment: EngineInboundAttachment): string {
+  const mime = attachment.mimeType?.trim() || "unknown";
+  const name = attachment.fileName?.trim() || "sem_nome";
+  return `- ${attachment.kind}: ${name} (${mime})`;
+}
+
+function buildStoredUserMessage(message: string, attachments?: EngineInboundAttachment[]): string {
+  if (!attachments || attachments.length === 0) {
+    return message;
+  }
+  const lines = [
+    message,
+    "",
+    "[attachments]",
+    ...attachments.map((attachment) => summarizeAttachmentForTranscript(attachment)),
+  ];
+  return lines.join("\n");
+}
+
 export class ChatService {
   private readonly tooling: EngineTooling;
   private readonly chatOnlyTooling: EngineTooling;
@@ -55,6 +74,7 @@ export class ChatService {
   async handleMessage(input: {
     sessionKey: string;
     message: string;
+    attachments?: EngineInboundAttachment[];
     requestId?: string;
   }): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string }> {
     return this.handleMessageInternal(input, this.tooling, { allowOperationalShortcuts: true });
@@ -63,6 +83,7 @@ export class ChatService {
   async handleMessageChatOnly(input: {
     sessionKey: string;
     message: string;
+    attachments?: EngineInboundAttachment[];
     requestId?: string;
   }): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string }> {
     return this.handleMessageInternal(input, this.chatOnlyTooling, { allowOperationalShortcuts: false });
@@ -84,12 +105,14 @@ export class ChatService {
     input: {
       sessionKey: string;
       message: string;
+      attachments?: EngineInboundAttachment[];
       requestId?: string;
     },
     tooling: EngineTooling,
     opts: { allowOperationalShortcuts: boolean },
   ): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string }> {
-    let user = await this.sessions.appendMessage(input.sessionKey, "user", input.message);
+    const storedUserMessage = buildStoredUserMessage(input.message, input.attachments);
+    let user = await this.sessions.appendMessage(input.sessionKey, "user", storedUserMessage);
     if (this.memoryOrchestrator.isCompactCommand(input.message)) {
       this.routingTelemetry.record("compact");
       kaelLogger.info("chat.route.selected", {
@@ -151,6 +174,7 @@ export class ChatService {
       const turn = await this.orchestrator.runConversationTurn({
         sessionKey: input.sessionKey,
         message: input.message,
+        attachments: input.attachments,
         requestId: input.requestId,
         tooling,
       });
@@ -205,10 +229,11 @@ export class ChatService {
 
       // Falha irrecuperavel: recria sessao e tenta novamente uma vez sem historico antigo.
       await this.sessions.resetSession(input.sessionKey);
-      user = await this.sessions.appendMessage(input.sessionKey, "user", input.message);
+      user = await this.sessions.appendMessage(input.sessionKey, "user", storedUserMessage);
       const turn = await this.orchestrator.runConversationTurn({
         sessionKey: input.sessionKey,
         message: input.message,
+        attachments: input.attachments,
         requestId: input.requestId,
         tooling,
       });

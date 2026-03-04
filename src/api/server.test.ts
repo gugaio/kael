@@ -6,6 +6,13 @@ import { createApiServer } from "./server.js";
 function makeFakeApp(): KaelApp {
   const schedules = new Map<string, SchedulerJob>();
   let chatCallCount = 0;
+  let lastChatInput:
+    | {
+        sessionKey: string;
+        message: string;
+        attachments?: Array<{ kind: "image" | "audio"; dataBase64: string; mimeType?: string; fileName?: string }>;
+      }
+    | null = null;
 
   schedules.set("heartbeat.main", {
     id: "heartbeat.main",
@@ -226,8 +233,26 @@ function makeFakeApp(): KaelApp {
     research: {} as KaelApp["research"],
     memory: {} as KaelApp["memory"],
     chat: {
-      handleMessage: async ({ message }: { message: string }) => {
+      handleMessage: async ({
+        sessionKey,
+        message,
+        attachments,
+      }: {
+        sessionKey: string;
+        message: string;
+        attachments?: Array<{
+          kind: "image" | "audio";
+          dataBase64: string;
+          mimeType?: string;
+          fileName?: string;
+        }>;
+      }) => {
         chatCallCount += 1;
+        lastChatInput = {
+          sessionKey,
+          message,
+          attachments,
+        };
         return {
           reply: `echo:${message}`,
           user: {
@@ -265,6 +290,8 @@ function makeFakeApp(): KaelApp {
           web_search: 1,
         },
       }),
+      // only for test assertions in this fake
+      __getLastInput: () => lastChatInput,
     } as unknown as KaelApp["chat"],
     automation: {
       listSchedules: () => Array.from(schedules.values()),
@@ -344,6 +371,43 @@ describe("API integration", () => {
     expect(body.error.status).toBe(400);
     expect(typeof body.error.message).toBe("string");
     expect(typeof body.error.requestId).toBe("string");
+    await server.close();
+  });
+
+  it("accepts chat attachments payload and forwards to chat service", async () => {
+    const app = makeFakeApp();
+    const server = createApiServer(app);
+    const response = await server.inject({
+      method: "POST",
+      url: "/chat",
+      payload: {
+        sessionKey: "s1",
+        message: "analisa isso",
+        attachments: [
+          {
+            kind: "image",
+            dataBase64: "aGVsbG8=",
+            mimeType: "image/png",
+            fileName: "img.png",
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.ok).toBe(true);
+    expect(body.reply).toBe("echo:analisa isso");
+    const lastInput = (app.chat as unknown as { __getLastInput: () => unknown }).__getLastInput() as {
+      attachments?: Array<{ kind: string; mimeType?: string; fileName?: string; dataBase64: string }>;
+    } | null;
+    expect(lastInput?.attachments?.length).toBe(1);
+    expect(lastInput?.attachments?.[0]).toMatchObject({
+      kind: "image",
+      mimeType: "image/png",
+      fileName: "img.png",
+      dataBase64: "aGVsbG8=",
+    });
     await server.close();
   });
 

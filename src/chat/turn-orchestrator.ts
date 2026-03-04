@@ -11,6 +11,7 @@ type TurnOrchestratorConfig = {
 type OrchestratedTurnInput = {
   sessionKey: string;
   message: string;
+  attachments?: EngineTurnInput["attachments"];
   requestId?: string;
   tooling: EngineTooling;
 };
@@ -18,6 +19,7 @@ type OrchestratedTurnInput = {
 type UtilityTurnInput = {
   sessionKey: string;
   message: string;
+  attachments?: EngineTurnInput["attachments"];
   requestId?: string;
   tooling: EngineTooling;
   excludeCurrentMessage?: string | null;
@@ -83,6 +85,7 @@ export class TurnOrchestrator {
     return this.engine.runTurn({
       sessionKey: input.sessionKey,
       message: input.message,
+      attachments: input.attachments,
       requestId: input.requestId,
       contextMessages,
       tooling: input.tooling,
@@ -107,6 +110,7 @@ export class TurnOrchestrator {
     return this.engine.runTurn({
       sessionKey: input.sessionKey,
       message: input.message,
+      attachments: input.attachments,
       requestId: input.requestId,
       contextMessages,
       tooling: input.tooling,

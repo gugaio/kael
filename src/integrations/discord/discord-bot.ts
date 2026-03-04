@@ -1,6 +1,7 @@
 import WebSocket from "ws";
 import type { KaelApp } from "../../app.js";
 import { kaelLogger } from "../../infra/logger.js";
+import type { EngineInboundAttachment } from "../../engine/types.js";
 
 type DiscordGatewayHello = {
   op: 10;
@@ -27,8 +28,18 @@ type DiscordMessage = {
   content: string;
   author: DiscordMessageAuthor;
   mentions?: Array<{ id: string }>;
+  attachments?: Array<{
+    id?: string;
+    filename?: string;
+    content_type?: string;
+    url?: string;
+    size?: number;
+  }>;
   type?: number;
 };
+
+const DISCORD_MEDIA_MAX_BYTES = 8_000_000;
+const DISCORD_MEDIA_MAX_ATTACHMENTS = 3;
 
 type DiscordBotConfig = {
   token: string;
@@ -305,10 +316,12 @@ export class DiscordChatOnlyBot {
       void this.safeSendTyping(msg.channel_id, sessionKey);
     }, 8000);
     try {
+      const attachments = await this.extractInboundAttachments(msg, sessionKey);
       await this.safeSendTyping(msg.channel_id, sessionKey);
       const turn = await this.app.chat.handleMessageChatOnly({
         sessionKey,
         message: content,
+        attachments,
         requestId: `discord:${msg.id}`,
       });
       for (const chunk of splitDiscordMessage(turn.reply)) {
@@ -434,5 +447,81 @@ export class DiscordChatOnlyBot {
 
   private async sleep(ms: number): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async extractInboundAttachments(
+    msg: DiscordMessage,
+    sessionKey: string,
+  ): Promise<EngineInboundAttachment[]> {
+    const input = Array.isArray(msg.attachments) ? msg.attachments : [];
+    if (input.length === 0) {
+      return [];
+    }
+    const out: EngineInboundAttachment[] = [];
+    for (const attachment of input.slice(0, DISCORD_MEDIA_MAX_ATTACHMENTS)) {
+      const mime = attachment.content_type?.trim().toLowerCase() || "";
+      const url = attachment.url?.trim();
+      if (!url) {
+        continue;
+      }
+      const kind: EngineInboundAttachment["kind"] | null = mime.startsWith("image/")
+        ? "image"
+        : mime.startsWith("audio/")
+          ? "audio"
+          : null;
+      if (!kind) {
+        continue;
+      }
+      const declaredSize = typeof attachment.size === "number" ? attachment.size : null;
+      if (declaredSize != null && declaredSize > DISCORD_MEDIA_MAX_BYTES) {
+        kaelLogger.warn("discord.attachment.skipped", {
+          reason: "too_large_declared",
+          sessionKey,
+          messageId: msg.id,
+          fileName: attachment.filename ?? null,
+          size: declaredSize,
+        });
+        continue;
+      }
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15_000);
+        let response: Response;
+        try {
+          response = await fetch(url, { signal: controller.signal });
+        } finally {
+          clearTimeout(timeout);
+        }
+        if (!response.ok) {
+          throw new Error(`http ${response.status}`);
+        }
+        const bytes = Buffer.from(await response.arrayBuffer());
+        if (bytes.length <= 0 || bytes.length > DISCORD_MEDIA_MAX_BYTES) {
+          kaelLogger.warn("discord.attachment.skipped", {
+            reason: "too_large_downloaded",
+            sessionKey,
+            messageId: msg.id,
+            fileName: attachment.filename ?? null,
+            size: bytes.length,
+          });
+          continue;
+        }
+        out.push({
+          kind,
+          dataBase64: bytes.toString("base64"),
+          mimeType: mime || undefined,
+          fileName: attachment.filename?.trim() || undefined,
+        });
+      } catch (error) {
+        kaelLogger.warn("discord.attachment.download_failed", {
+          sessionKey,
+          messageId: msg.id,
+          fileName: attachment.filename ?? null,
+          url,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return out;
   }
 }

@@ -86,7 +86,7 @@ flowchart TD
 ### Chat & Sessions
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | /chat | Send chat message |
+| POST | /chat | Send chat message (texto + anexos opcionais image/audio em base64) |
 | GET | /sessions/:sessionKey/messages | Get session messages |
 
 ### Plans

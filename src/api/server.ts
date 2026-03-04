@@ -3,6 +3,7 @@ import { createKaelApp, type KaelApp } from "../app.js";
 import { IdempotencyConflictError, IdempotencyStore, stableStringify } from "../infra/idempotency-store.js";
 import { kaelLogger } from "../infra/logger.js";
 import { ApiError, asApiError, sendApiError } from "./errors.js";
+import type { EngineInboundAttachment } from "../engine/types.js";
 
 type RequestWithStart = {
   _kaelStartNs?: bigint;
@@ -147,6 +148,37 @@ function bodySessionKey(body: unknown): string | null {
   }
   const trimmed = value.trim();
   return trimmed || null;
+}
+
+function normalizeInboundAttachments(raw: unknown): EngineInboundAttachment[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const out: EngineInboundAttachment[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") {
+      throw new ApiError(400, "BAD_REQUEST", "attachments invalidos");
+    }
+    const kindRaw = (item as { kind?: unknown }).kind;
+    const kind = kindRaw === "image" || kindRaw === "audio" ? kindRaw : null;
+    const dataBase64 = (item as { dataBase64?: unknown }).dataBase64;
+    if (!kind || typeof dataBase64 !== "string" || !dataBase64.trim()) {
+      throw new ApiError(
+        400,
+        "BAD_REQUEST",
+        "attachment invalido: use {kind: image|audio, dataBase64: string}",
+      );
+    }
+    const mimeTypeRaw = (item as { mimeType?: unknown }).mimeType;
+    const fileNameRaw = (item as { fileName?: unknown }).fileName;
+    out.push({
+      kind,
+      dataBase64: dataBase64.trim(),
+      mimeType: typeof mimeTypeRaw === "string" ? mimeTypeRaw.trim() || undefined : undefined,
+      fileName: typeof fileNameRaw === "string" ? fileNameRaw.trim() || undefined : undefined,
+    });
+  }
+  return out;
 }
 
 async function withIdempotency<T>(params: {
@@ -376,11 +408,21 @@ export function createApiServer(app: KaelApp): FastifyInstance {
   });
 
   server.post<{
-    Body: { sessionKey?: string; message?: string };
+    Body: {
+      sessionKey?: string;
+      message?: string;
+      attachments?: Array<{
+        kind?: "image" | "audio";
+        dataBase64?: string;
+        mimeType?: string;
+        fileName?: string;
+      }>;
+    };
     Querystring: { includeMessages?: string };
   }>("/chat", async (request, reply) => {
     const sessionKey = request.body.sessionKey?.trim() || "main";
     const message = request.body.message?.trim();
+    const attachments = normalizeInboundAttachments(request.body.attachments);
     const includeMessages = request.query.includeMessages?.trim().toLowerCase() === "true";
 
     if (!message) {
@@ -394,9 +436,14 @@ export function createApiServer(app: KaelApp): FastifyInstance {
         enabled: app.config.idempotency.enabled,
         scope: "chat",
         idempotencyKey,
-        signature: stableStringify({ sessionKey, message, includeMessages }),
+        signature: stableStringify({ sessionKey, message, attachments, includeMessages }),
         execute: async () => {
-          const result = await app.chat.handleMessage({ sessionKey, message, requestId: request.id });
+          const result = await app.chat.handleMessage({
+            sessionKey,
+            message,
+            attachments,
+            requestId: request.id,
+          });
           const response: {
             ok: true;
             sessionKey: string;

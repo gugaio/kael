@@ -317,7 +317,55 @@ Definition of Done (checklist):
 - [x] Auto-reply opcional via SMTP Gmail (`KAEL_EMAIL_AUTO_REPLY_ENABLED`).
 - [ ] Evoluir provider push (Gmail API/PubSub) mantendo o mesmo contrato.
 
+### Fase 15 - Multimodal Ingress MVP (imagem/audio)
+
+Status: **Em andamento**
+
+Objetivos:
+- Permitir entrada multimodal em canais suportados sem acoplar ao canal.
+- Introduzir contrato canônico de anexos no core e manter backward compatibility.
+- Preparar base para etapa seguinte de entendimento multimodal por provider.
+
+Definition of Done (checklist):
+- [x] Contrato de anexos (`image|audio`) no fluxo core (`ChatService`/`EngineTurnInput`).
+- [x] `POST /chat` aceitando anexos opcionais no formato canônico.
+- [x] Discord ingerindo anexos de imagem/audio com limites de download/tamanho.
+- [x] Persistencia de hint de anexos no transcript da sessao.
+- [ ] `MediaUnderstandingService` (descricao de imagem + transcricao de audio).
+- [ ] Injecao do resultado multimodal no contexto do turno.
+- [ ] Metricas operacionais multimodais no `/health`.
+
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-03 - Fase 15: ingress multimodal base (contrato + API + Discord)
+
+Resumo:
+- Adicionado contrato canônico de anexos de entrada (`EngineInboundAttachment`) no `EngineTurnInput`.
+- `ChatService` e `TurnOrchestrator` agora aceitam/encaminham anexos opcionalmente sem quebrar o fluxo textual existente.
+- `POST /chat` foi estendido para receber `attachments[]` (image/audio + base64), com validacao de payload e idempotency signature incluindo anexos.
+- Integracao Discord passou a baixar anexos de `image/*` e `audio/*` (com timeout/limite), convertendo para base64 e enviando ao chat.
+- Transcript da sessao agora registra um resumo textual dos anexos recebidos (`[attachments]`) para continuidade de contexto.
+- Registrada arquitetura da Fase 15 em documento dedicado.
+
+Arquivos-chave:
+- `src/engine/types.ts`
+- `src/chat/service.ts`
+- `src/chat/turn-orchestrator.ts`
+- `src/api/server.ts`
+- `src/integrations/discord/discord-bot.ts`
+- `docs/architecture/phases/phase-15.md`
+- `docs/core/START-HERE.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [ ] `npm run check`
+- [ ] testes alvo de API/chat/discord
+
+Pendencias:
+- Ainda nao ha entendimento multimodal (descricao/transcricao); esta entrega cobre apenas ingress e transporte dos anexos.
+
+Proximo passo recomendado:
+- Implementar `MediaUnderstandingService` inicial (OpenAI: image describe + audio transcription) e injetar saida no prompt do turno.
 
 ### 2026-03-03 - Observabilidade: metricas de timeout/bloqueio por tool no /health
 

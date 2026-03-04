@@ -39,6 +39,7 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 11: concluida (reply orchestrator lite com fast-path deterministico + roteador dedicado + telemetria de rota).
 - Fase 12: concluida (supervisor dedicado para lifecycle de `exec/process` + testes de corrida baseline).
 - Fase 14: em andamento (email ingress MVP via provider desacoplado + polling POP3 Gmail).
+- Fase 15: em andamento (multimodal ingress MVP: anexos imagem/audio no fluxo core).
 
 ## Estudos e referencias tecnicas
 

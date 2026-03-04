@@ -378,6 +378,7 @@ export type EngineTooling = {
 export type EngineTurnInput = {
   sessionKey: string;
   message: string;
+  attachments?: EngineInboundAttachment[];
   requestId?: string;
   contextMessages?: Array<{
     role: "user" | "assistant" | "system";
@@ -385,6 +386,13 @@ export type EngineTurnInput = {
     createdAt: string;
   }>;
   tooling: EngineTooling;
+};
+
+export type EngineInboundAttachment = {
+  kind: "image" | "audio";
+  dataBase64: string;
+  mimeType?: string;
+  fileName?: string;
 };
 
 export type EngineTurnOutput = {
