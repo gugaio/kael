@@ -105,6 +105,8 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     defaultTimeoutMs: config.browser.defaultTimeoutMs,
     actionTimeoutMs: config.browser.actionTimeoutMs,
     maxScreenshotsPerTurn: config.browser.maxScreenshotsPerTurn,
+    sessionTtlMs: config.browser.sessionTtlMs,
+    maxSessions: config.browser.maxSessions,
     artifactDir: config.browser.artifactDir,
   });
   const searchProvider = config.research.enabled && config.research.apiKey

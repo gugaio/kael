@@ -99,6 +99,8 @@ export type KaelConfig = {
     defaultTimeoutMs: number;
     actionTimeoutMs: number;
     maxScreenshotsPerTurn: number;
+    sessionTtlMs: number;
+    maxSessions: number;
     artifactDir: string;
   };
   email: {
@@ -356,6 +358,12 @@ function validateConfig(config: KaelConfig): void {
     }
     if (!Number.isFinite(config.browser.maxScreenshotsPerTurn) || config.browser.maxScreenshotsPerTurn <= 0) {
       issues.push("KAEL_BROWSER_MAX_SCREENSHOTS_PER_TURN deve ser um numero positivo");
+    }
+    if (!Number.isFinite(config.browser.sessionTtlMs) || config.browser.sessionTtlMs <= 0) {
+      issues.push("KAEL_BROWSER_SESSION_TTL_MS deve ser um numero positivo");
+    }
+    if (!Number.isFinite(config.browser.maxSessions) || config.browser.maxSessions <= 0) {
+      issues.push("KAEL_BROWSER_MAX_SESSIONS deve ser um numero positivo");
     }
     if (!config.browser.artifactDir.trim()) {
       issues.push("KAEL_BROWSER_ARTIFACT_DIR nao pode ser vazio");
@@ -722,6 +730,16 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     Number.isFinite(browserMaxScreenshotsRaw) && browserMaxScreenshotsRaw > 0
       ? Math.floor(browserMaxScreenshotsRaw)
       : 3;
+  const browserSessionTtlRaw = Number(process.env.KAEL_BROWSER_SESSION_TTL_MS ?? String(20 * 60 * 1000));
+  const browserSessionTtlMs =
+    Number.isFinite(browserSessionTtlRaw) && browserSessionTtlRaw > 0
+      ? Math.floor(browserSessionTtlRaw)
+      : 20 * 60 * 1000;
+  const browserMaxSessionsRaw = Number(process.env.KAEL_BROWSER_MAX_SESSIONS ?? "4");
+  const browserMaxSessions =
+    Number.isFinite(browserMaxSessionsRaw) && browserMaxSessionsRaw > 0
+      ? Math.floor(browserMaxSessionsRaw)
+      : 4;
   const browserArtifactDir = path.resolve(
     process.env.KAEL_BROWSER_ARTIFACT_DIR?.trim() || path.join(dataDir, "browser", "artifacts"),
   );
@@ -886,6 +904,8 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       defaultTimeoutMs: browserDefaultTimeoutMs,
       actionTimeoutMs: browserActionTimeoutMs,
       maxScreenshotsPerTurn: browserMaxScreenshotsPerTurn,
+      sessionTtlMs: browserSessionTtlMs,
+      maxSessions: browserMaxSessions,
       artifactDir: browserArtifactDir,
     },
     email: {

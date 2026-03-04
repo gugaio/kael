@@ -15,6 +15,30 @@ export function isSlashCommand(message: string): boolean {
   return message.trim().startsWith("/");
 }
 
+function formatBrowserReply(result: {
+  ok: boolean;
+  action: string;
+  status: string;
+  message: string;
+  targetId?: string;
+  url?: string;
+  title?: string;
+  textPreview?: string;
+  screenshotPath?: string;
+}): string {
+  const lines = [
+    `browser action=${result.action} status=${result.status}`,
+    `ok=${result.ok ? "true" : "false"}`,
+    `message=${result.message}`,
+    result.targetId ? `targetId=${result.targetId}` : "",
+    result.url ? `url=${result.url}` : "",
+    result.title ? `title=${result.title}` : "",
+    result.screenshotPath ? `screenshot=${result.screenshotPath}` : "",
+    result.textPreview ? `preview=${result.textPreview.slice(0, 240)}` : "",
+  ].filter(Boolean);
+  return lines.join("\n");
+}
+
 function extractUrl(text: string): string | null {
   const match = text.match(/https?:\/\/\S+/i);
   if (!match?.[0]) {
@@ -37,7 +61,7 @@ export class SimpleCommandEngine implements AgentEngine {
     if (parsed.name === "/help") {
       return {
         reply:
-          "Comandos: /transcode <input> <output> | /hls <input> <playlist.m3u8> [segmentSeconds] | /capture <url> <output> [durationSeconds] | /probe <input> | /vlc <input|url> | /jobs | /help",
+          "Comandos: /transcode <input> <output> | /hls <input> <playlist.m3u8> [segmentSeconds] | /capture <url> <output> [durationSeconds] | /probe <input> | /vlc <input|url> | /jobs | /browser-start | /browser-open <url> | /browser-snapshot | /browser-shot | /browser-click <selector> | /browser-type <selector> <texto> | /browser-press <tecla> [selector] | /browser-wait <selector> [timeoutMs] | /browser-close | /help",
       };
     }
 
@@ -124,6 +148,117 @@ export class SimpleCommandEngine implements AgentEngine {
         input: inputTarget,
       });
       return { reply: `VLC iniciado. jobId=${job.id}` };
+    }
+
+    if (parsed.name === "/browser-start") {
+      const result = await input.tooling.browserCommand({
+        sessionKey: input.sessionKey,
+        action: "start",
+      });
+      return { reply: formatBrowserReply(result) };
+    }
+
+    if (parsed.name === "/browser-open" || parsed.name === "/browser-navigate") {
+      const url = parsed.args[0];
+      if (!url) {
+        return { reply: "Uso: /browser-open <url>" };
+      }
+      const result = await input.tooling.browserCommand({
+        sessionKey: input.sessionKey,
+        action: "open",
+        url,
+      });
+      return { reply: formatBrowserReply(result) };
+    }
+
+    if (parsed.name === "/browser-snapshot") {
+      const result = await input.tooling.browserCommand({
+        sessionKey: input.sessionKey,
+        action: "snapshot_text",
+      });
+      return { reply: formatBrowserReply(result) };
+    }
+
+    if (parsed.name === "/browser-shot" || parsed.name === "/browser-screenshot") {
+      const result = await input.tooling.browserCommand({
+        sessionKey: input.sessionKey,
+        action: "screenshot",
+      });
+      return { reply: formatBrowserReply(result) };
+    }
+
+    if (parsed.name === "/browser-click") {
+      const selector = parsed.args.join(" ").trim();
+      if (!selector) {
+        return { reply: "Uso: /browser-click <selector>" };
+      }
+      const result = await input.tooling.browserCommand({
+        sessionKey: input.sessionKey,
+        action: "click",
+        selector,
+      });
+      return { reply: formatBrowserReply(result) };
+    }
+
+    if (parsed.name === "/browser-type") {
+      if (parsed.args.length < 2) {
+        return { reply: "Uso: /browser-type <selector> <texto>" };
+      }
+      const selector = parsed.args[0];
+      const text = parsed.args.slice(1).join(" ").trim();
+      if (!text) {
+        return { reply: "Uso: /browser-type <selector> <texto>" };
+      }
+      const result = await input.tooling.browserCommand({
+        sessionKey: input.sessionKey,
+        action: "type",
+        selector,
+        text,
+      });
+      return { reply: formatBrowserReply(result) };
+    }
+
+    if (parsed.name === "/browser-press") {
+      const key = parsed.args[0]?.trim();
+      if (!key) {
+        return { reply: "Uso: /browser-press <tecla> [selector]" };
+      }
+      const selector = parsed.args.slice(1).join(" ").trim() || undefined;
+      const result = await input.tooling.browserCommand({
+        sessionKey: input.sessionKey,
+        action: "press",
+        key,
+        selector,
+      });
+      return { reply: formatBrowserReply(result) };
+    }
+
+    if (parsed.name === "/browser-wait") {
+      const selector = parsed.args[0];
+      if (!selector) {
+        return { reply: "Uso: /browser-wait <selector> [timeoutMs]" };
+      }
+      const timeoutRaw = parsed.args[1];
+      const parsedTimeout = timeoutRaw ? Number(timeoutRaw) : undefined;
+      const timeoutMs =
+        parsedTimeout != null && Number.isFinite(parsedTimeout) && parsedTimeout > 0
+          ? Math.floor(parsedTimeout)
+          : undefined;
+      const result = await input.tooling.browserCommand({
+        sessionKey: input.sessionKey,
+        action: "wait_for",
+        selector,
+        timeoutMs,
+      });
+      return { reply: formatBrowserReply(result) };
+    }
+
+    if (parsed.name === "/browser-close") {
+      const result = await input.tooling.browserCommand({
+        sessionKey: input.sessionKey,
+        action: "close",
+      });
+      return { reply: formatBrowserReply(result) };
     }
 
     return { reply: "Comando desconhecido. Use /help." };

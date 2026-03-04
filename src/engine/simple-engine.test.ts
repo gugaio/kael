@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { SimpleCommandEngine } from "./simple-engine.js";
 import type { EngineTurnInput, EngineTooling } from "./types.js";
 
-function createTooling(execImpl?: EngineTooling["execCommand"]): EngineTooling {
+function createTooling(
+  execImpl?: EngineTooling["execCommand"],
+  browserImpl?: EngineTooling["browserCommand"],
+): EngineTooling {
   return {
     startTranscode: async () => ({ id: "j1" } as never),
     startConvertHls: async () => ({ id: "j2" } as never),
@@ -59,19 +62,59 @@ function createTooling(execImpl?: EngineTooling["execCommand"]): EngineTooling {
       evidence: [],
       notes: [],
     }),
-    browserCommand: async ({ action }) => ({
-      ok: false,
-      action,
-      status: "failed",
-      message: "stub",
-    }),
+    browserCommand:
+      browserImpl ??
+      (async ({ action }) => ({
+        ok: false,
+        action,
+        status: "failed",
+        message: "stub",
+      })),
     browserRuntimeTelemetry: () => ({
       enabled: false,
       commands: 0,
       failures: 0,
       sessionsStarted: 0,
       sessionsClosed: 0,
+      expiredSessionsClosed: 0,
+      evictedSessions: 0,
       activeSessions: 0,
+      actionCalls: {
+        start: 0,
+        open: 0,
+        navigate: 0,
+        snapshot_text: 0,
+        screenshot: 0,
+        click: 0,
+        type: 0,
+        press: 0,
+        wait_for: 0,
+        close: 0,
+      },
+      actionFailures: {
+        start: 0,
+        open: 0,
+        navigate: 0,
+        snapshot_text: 0,
+        screenshot: 0,
+        click: 0,
+        type: 0,
+        press: 0,
+        wait_for: 0,
+        close: 0,
+      },
+      avgLatencyMsByAction: {
+        start: 0,
+        open: 0,
+        navigate: 0,
+        snapshot_text: 0,
+        screenshot: 0,
+        click: 0,
+        type: 0,
+        press: 0,
+        wait_for: 0,
+        close: 0,
+      },
     }),
     planCreate: async () => ({ id: "p1" } as never),
     planGenerate: async () => ({ id: "p1" } as never),
@@ -109,5 +152,77 @@ describe("SimpleCommandEngine", () => {
 
     expect(startPlayVlc).toHaveBeenCalledTimes(1);
     expect(result.reply).toContain("VLC iniciado. jobId=j-vlc");
+  });
+
+  it("executa /browser-start via fast-path", async () => {
+    const browserCommand = vi.fn(async () => ({
+      ok: true,
+      action: "start" as const,
+      status: "started" as const,
+      message: "browser iniciado",
+      targetId: "browser-1",
+    }));
+    const engine = new SimpleCommandEngine();
+
+    const result = await engine.runTurn(makeInput("/browser-start", createTooling(undefined, browserCommand)));
+
+    expect(browserCommand).toHaveBeenCalledTimes(1);
+    expect(browserCommand).toHaveBeenCalledWith({
+      sessionKey: "main",
+      action: "start",
+    });
+    expect(result.reply).toContain("browser action=start status=started");
+    expect(result.reply).toContain("targetId=browser-1");
+  });
+
+  it("executa /browser-open com URL", async () => {
+    const browserCommand = vi.fn(async () => ({
+      ok: true,
+      action: "open" as const,
+      status: "navigated" as const,
+      message: "navegacao concluida",
+      url: "https://example.com/",
+      title: "Example Domain",
+    }));
+    const engine = new SimpleCommandEngine();
+
+    const result = await engine.runTurn(
+      makeInput("/browser-open https://example.com", createTooling(undefined, browserCommand)),
+    );
+
+    expect(browserCommand).toHaveBeenCalledWith({
+      sessionKey: "main",
+      action: "open",
+      url: "https://example.com",
+    });
+    expect(result.reply).toContain("status=navigated");
+    expect(result.reply).toContain("url=https://example.com/");
+  });
+
+  it("valida uso de /browser-type quando faltam argumentos", async () => {
+    const engine = new SimpleCommandEngine();
+    const result = await engine.runTurn(makeInput("/browser-type #email", createTooling()));
+    expect(result.reply).toBe("Uso: /browser-type <selector> <texto>");
+  });
+
+  it("executa /browser-type com texto composto", async () => {
+    const browserCommand = vi.fn(async () => ({
+      ok: true,
+      action: "type" as const,
+      status: "navigated" as const,
+      message: "type executado",
+    }));
+    const engine = new SimpleCommandEngine();
+
+    await engine.runTurn(
+      makeInput("/browser-type #search best local pizza", createTooling(undefined, browserCommand)),
+    );
+
+    expect(browserCommand).toHaveBeenCalledWith({
+      sessionKey: "main",
+      action: "type",
+      selector: "#search",
+      text: "best local pizza",
+    });
   });
 });

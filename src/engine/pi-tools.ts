@@ -79,6 +79,8 @@ export function createPiShellTools(params: {
     maxWebFetchCalls?: number;
     maxWebSearchCalls?: number;
     maxWebResearchCalls?: number;
+    maxBrowserCalls?: number;
+    maxBrowserInteractionCalls?: number;
   };
   onToolEvent?: (event: {
     phase: "start" | "end";
@@ -95,12 +97,16 @@ export function createPiShellTools(params: {
   let webFetchCalls = 0;
   let webSearchCalls = 0;
   let webResearchCalls = 0;
+  let browserCalls = 0;
+  let browserInteractionCalls = 0;
   let imageGenerateCalls = 0;
   const maxToolCalls = Math.max(1, Math.floor(params.budget?.maxToolCalls ?? 12));
   const maxExecCalls = Math.max(1, Math.floor(params.budget?.maxExecCalls ?? 6));
   const maxWebFetchCalls = Math.max(1, Math.floor(params.budget?.maxWebFetchCalls ?? 5));
   const maxWebSearchCalls = Math.max(1, Math.floor(params.budget?.maxWebSearchCalls ?? 3));
   const maxWebResearchCalls = Math.max(1, Math.floor(params.budget?.maxWebResearchCalls ?? 2));
+  const maxBrowserCalls = Math.max(1, Math.floor(params.budget?.maxBrowserCalls ?? 8));
+  const maxBrowserInteractionCalls = Math.max(1, Math.floor(params.budget?.maxBrowserInteractionCalls ?? 6));
   const maxImageGenerateCalls = 1;
 
   const inferIntent = (tool: string, rawParams: unknown): string => {
@@ -1108,7 +1114,26 @@ export function createPiShellTools(params: {
         const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
         return blockByBudget({ tool: "browser", reason, emitEvent: true });
       }
+      if (browserCalls >= maxBrowserCalls) {
+        const reason = `browser_budget_exceeded:${browserCalls}/${maxBrowserCalls}`;
+        return blockByBudget({ tool: "browser", reason, emitEvent: true });
+      }
+      const actionRaw =
+        rawParams && typeof rawParams === "object"
+          ? String((rawParams as { action?: unknown }).action ?? "")
+          : "";
+      const isInteractionAction =
+        actionRaw === "click" || actionRaw === "type" || actionRaw === "press" || actionRaw === "wait_for";
+      if (isInteractionAction && browserInteractionCalls >= maxBrowserInteractionCalls) {
+        const reason =
+          `browser_interaction_budget_exceeded:${browserInteractionCalls}/${maxBrowserInteractionCalls}`;
+        return blockByBudget({ tool: "browser", reason, emitEvent: true });
+      }
       toolCalls += 1;
+      browserCalls += 1;
+      if (isInteractionAction) {
+        browserInteractionCalls += 1;
+      }
       const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as {
         action:

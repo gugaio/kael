@@ -56,7 +56,7 @@ Como testar:
 
 ### Fase 16.2 - Interacao UI (teste funcional)
 
-Entregas planejadas:
+Entregas implementadas:
 - Acoes `click|type|press|wait_for`.
 - Estrategia de seletor com fallback.
 - Erros operacionais amigaveis (timeout, elemento nao encontrado, etc.).
@@ -72,10 +72,10 @@ Como testar:
 
 ### Fase 16.3 - Hardening operacional
 
-Entregas planejadas:
-- Retry leve para falhas transitorias.
+Entregas implementadas:
 - Limpeza de sessoes orfas por TTL.
-- Budget anti-loop para acoes browser.
+- Eviccao por limite maximo de sessoes.
+- Budget anti-loop dedicado para acoes browser.
 - Telemetria detalhada por acao/erro.
 
 O que sera possivel fazer:
@@ -86,12 +86,26 @@ Como testar:
 2. Validar cleanup de sessoes antigas.
 3. Verificar contadores de erro/timeout no `/health`.
 
+Notas de implementacao atual:
+- Cleanup por TTL de sessao implementado por `KAEL_BROWSER_SESSION_TTL_MS`.
+- Limite de sessoes simultaneas implementado por `KAEL_BROWSER_MAX_SESSIONS` com eviccao da sessao mais antiga.
+- Budget dedicado no PI:
+  - `maxBrowserCalls`;
+  - `maxBrowserInteractionCalls` (`click/type/press/wait_for`).
+- Telemetria de browser runtime agora inclui:
+  - `actionCalls`;
+  - `actionFailures`;
+  - `avgLatencyMsByAction`;
+  - `expiredSessionsClosed`;
+  - `evictedSessions`;
+  - `lastError`.
+
 ### Fase 16.4 - UX e docs operacionais
 
-Entregas planejadas:
+Entregas implementadas:
 - Comandos rapidos opcionais para browser no fast-path.
-- Guia operacional de uso e troubleshooting.
-- Atualizacao de status/arquitetura/API conforme mudancas.
+- Guia operacional de uso via CLI/chat.
+- Atualizacao de status/arquitetura conforme mudancas.
 
 O que sera possivel fazer:
 - Onboarding rapido para operacao do browser control no time.
@@ -108,10 +122,12 @@ Como testar:
 - `KAEL_BROWSER_DEFAULT_TIMEOUT_MS`
 - `KAEL_BROWSER_ACTION_TIMEOUT_MS`
 - `KAEL_BROWSER_MAX_SCREENSHOTS_PER_TURN`
+- `KAEL_BROWSER_SESSION_TTL_MS`
+- `KAEL_BROWSER_MAX_SESSIONS`
 - `KAEL_BROWSER_ARTIFACT_DIR`
 
 ## Pendencias da fase (atual)
 
-1. Implementar acoes read-only da fase 16.1.
-2. Integrar tool `browser` no runtime PI com schema de acoes.
-3. Adicionar testes e2e de navegacao/screenshot.
+1. Adicionar smoke e2e de browser em ambiente real (Playwright + site de teste).
+2. Evoluir parser de argumentos dos atalhos slash para aceitar strings com aspas de forma robusta.
+3. Avaliar estrategia de reutilizacao de browser/context por sessao para reduzir custo de start.

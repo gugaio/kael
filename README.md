@@ -103,6 +103,13 @@ Persistencia:
 - `web_fetch`
 - `web_research`
 
+### Browser Control (teste de sites)
+
+- `browser` tool no runtime PI
+- acoes: `start/open/navigate/snapshot_text/screenshot/click/type/press/wait_for/close`
+- telemetria no `/health` em `metrics.browserRuntime`
+- atalhos slash no chat: `/browser-*` (fast-path deterministico)
+
 ### Planejamento Operacional
 
 - `plan_create`
@@ -173,6 +180,10 @@ Referencia completa: `docs/api.md`
 - `KAEL_RESEARCH_API_KEY` (obrigatoria quando research habilitado)
 - `KAEL_EMAIL_ENABLED` (`true|false`)
 - `KAEL_EMAIL_AUTO_REPLY_ENABLED` (`true|false`)
+- `KAEL_BROWSER_ENABLED` (`true|false`)
+- `KAEL_BROWSER_HEADLESS` (`true|false`)
+- `KAEL_BROWSER_SESSION_TTL_MS`
+- `KAEL_BROWSER_MAX_SESSIONS`
 
 ## Qualidade e Seguranca
 
@@ -190,11 +201,12 @@ Referencia completa: `docs/api.md`
 - `docs/planning/PROJECT-STATUS.md` (status por fase + historico)
 - `docs/architecture/README.md` (arquitetura por fases)
 - `docs/how-jobs-and-heartbeat-work.md`
+- `docs/browser-control.md` (guia de browser control via CLI/chat)
 - `docs/ui/UI-GUIDE.md`
 
 ## Roadmap Atual
 
-Fase ativa: **Fase 14 (Email Ingress MVP)** com evolucoes de robustez em andamento.
+Fase ativa: **Fase 16 (Browser Control para teste de sites)**.
 
 Para detalhes de progresso e proximos passos:
 

@@ -630,6 +630,8 @@ export class PiEngineAdapter implements AgentEngine {
             maxWebFetchCalls: 5,
             maxWebSearchCalls: 3,
             maxWebResearchCalls: 2,
+            maxBrowserCalls: 8,
+            maxBrowserInteractionCalls: 6,
           },
           onToolEvent: trace.onToolEvent,
         }),

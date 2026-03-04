@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserToolService } from "./service.js";
 
 const playwrightMocks = vi.hoisted(() => {
@@ -52,6 +52,10 @@ vi.mock("playwright", () => ({
 }));
 
 describe("BrowserToolService", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("retorna disabled quando browser runtime esta desabilitado", async () => {
     const service = new BrowserToolService({
       enabled: false,
@@ -59,6 +63,8 @@ describe("BrowserToolService", () => {
       defaultTimeoutMs: 30_000,
       actionTimeoutMs: 12_000,
       maxScreenshotsPerTurn: 3,
+      sessionTtlMs: 60_000,
+      maxSessions: 4,
       artifactDir: "/tmp/kael-browser-artifacts",
     });
 
@@ -85,6 +91,8 @@ describe("BrowserToolService", () => {
       defaultTimeoutMs: 30_000,
       actionTimeoutMs: 12_000,
       maxScreenshotsPerTurn: 3,
+      sessionTtlMs: 60_000,
+      maxSessions: 4,
       artifactDir: artifactsDir,
     });
 
@@ -145,6 +153,8 @@ describe("BrowserToolService", () => {
       defaultTimeoutMs: 30_000,
       actionTimeoutMs: 12_000,
       maxScreenshotsPerTurn: 1,
+      sessionTtlMs: 60_000,
+      maxSessions: 4,
       artifactDir: path.join(root, "artifacts"),
     });
 
@@ -175,6 +185,8 @@ describe("BrowserToolService", () => {
       defaultTimeoutMs: 30_000,
       actionTimeoutMs: 12_000,
       maxScreenshotsPerTurn: 3,
+      sessionTtlMs: 60_000,
+      maxSessions: 4,
       artifactDir: path.join(root, "artifacts"),
     });
 
@@ -220,5 +232,51 @@ describe("BrowserToolService", () => {
     expect(playwrightMocks.locator.waitFor).toHaveBeenCalledWith(
       expect.objectContaining({ state: "visible", timeout: expect.any(Number) }),
     );
+  });
+
+  it("fecha sessao expirada por TTL automaticamente", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-browser-ttl-"));
+    const service = new BrowserToolService({
+      enabled: true,
+      headless: true,
+      defaultTimeoutMs: 30_000,
+      actionTimeoutMs: 12_000,
+      maxScreenshotsPerTurn: 3,
+      sessionTtlMs: 1,
+      maxSessions: 4,
+      artifactDir: path.join(root, "artifacts"),
+    });
+
+    await service.command({ sessionKey: "ttl-1", action: "start" });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await service.command({ sessionKey: "ttl-1", action: "start" });
+
+    const telemetry = service.getRuntimeTelemetrySnapshot();
+    expect(telemetry.sessionsStarted).toBe(2);
+    expect(telemetry.expiredSessionsClosed).toBe(1);
+    expect(telemetry.activeSessions).toBe(1);
+  });
+
+  it("evicta sessao mais antiga quando excede maxSessions", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-browser-evict-"));
+    const service = new BrowserToolService({
+      enabled: true,
+      headless: true,
+      defaultTimeoutMs: 30_000,
+      actionTimeoutMs: 12_000,
+      maxScreenshotsPerTurn: 3,
+      sessionTtlMs: 60_000,
+      maxSessions: 1,
+      artifactDir: path.join(root, "artifacts"),
+    });
+
+    await service.command({ sessionKey: "evict-a", action: "start" });
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    await service.command({ sessionKey: "evict-b", action: "start" });
+
+    const telemetry = service.getRuntimeTelemetrySnapshot();
+    expect(telemetry.sessionsStarted).toBe(2);
+    expect(telemetry.evictedSessions).toBe(1);
+    expect(telemetry.activeSessions).toBe(1);
   });
 });

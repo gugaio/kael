@@ -348,9 +348,47 @@ Definition of Done (checklist):
 - [x] Foundations: contrato/wiring/config/telemetria base de browser runtime.
 - [x] Read-only: `start|open|navigate|snapshot_text|screenshot|close`.
 - [x] Interacao: `click|type|press|wait_for`.
-- [ ] Hardening: cleanup de sessoes, budget anti-loop e metrica por acao/erro.
+- [x] Hardening: cleanup de sessoes, budget anti-loop e metrica por acao/erro.
+- [x] UX operacional: atalhos `/browser-*` no fast-path + guia de uso CLI/chat.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-04 - Fase 16.3/16.4: hardening operacional + atalhos slash de browser
+
+Resumo:
+- Browser runtime endurecido com:
+  - cleanup de sessao por TTL;
+  - eviccao por limite de sessoes (`maxSessions`);
+  - telemetria detalhada por acao (calls/failures/latencia media + ultimo erro).
+- PI tools com budget dedicado para browser:
+  - `maxBrowserCalls`;
+  - `maxBrowserInteractionCalls`.
+- Fast-path de comandos slash para browser no `SimpleCommandEngine`:
+  - `/browser-start`, `/browser-open`, `/browser-snapshot`, `/browser-shot`, `/browser-click`,
+  - `/browser-type`, `/browser-press`, `/browser-wait`, `/browser-close`.
+- Guia operacional de browser control criado em `docs/browser-control.md`.
+
+Arquivos-chave:
+- `src/tools/browser/service.ts`
+- `src/engine/pi-tools.ts`
+- `src/engine/pi-engine-adapter.ts`
+- `src/config.ts`
+- `src/engine/simple-engine.ts`
+- `src/engine/simple-engine.test.ts`
+- `docs/architecture/phases/phase-16.md`
+- `docs/browser-control.md`
+- `README.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/engine/simple-engine.test.ts src/chat/command-router.test.ts src/tools/browser/service.test.ts`
+
+Pendencias:
+- Ainda faltam smoke tests e2e em browser real no pipeline automatizado.
+- Parser dos atalhos slash ainda e simples para seletores/textos com espacos/aspas complexas.
+
+Proximo passo recomendado:
+- Implementar smoke e2e real de browser control (fluxo abrir -> interagir -> screenshot -> close) e executar em rotina de validacao.
 
 ### 2026-03-04 - Fase 16.0: foundations de browser runtime (contrato + wiring + health)
 

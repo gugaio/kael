@@ -52,7 +52,17 @@ export type BrowserRuntimeTelemetry = {
   failures: number;
   sessionsStarted: number;
   sessionsClosed: number;
+  expiredSessionsClosed: number;
+  evictedSessions: number;
   activeSessions: number;
+  actionCalls: Record<BrowserCommandAction, number>;
+  actionFailures: Record<BrowserCommandAction, number>;
+  avgLatencyMsByAction: Record<BrowserCommandAction, number>;
+  lastError?: {
+    action: BrowserCommandAction;
+    message: string;
+    at: string;
+  };
 };
 
 export interface BrowserRuntime {
@@ -66,6 +76,8 @@ export type BrowserToolConfig = {
   defaultTimeoutMs: number;
   actionTimeoutMs: number;
   maxScreenshotsPerTurn: number;
+  sessionTtlMs: number;
+  maxSessions: number;
   artifactDir: string;
 };
 
@@ -98,7 +110,12 @@ export class BrowserToolService implements BrowserRuntime {
       failures: 0,
       sessionsStarted: 0,
       sessionsClosed: 0,
+      expiredSessionsClosed: 0,
+      evictedSessions: 0,
       activeSessions: 0,
+      actionCalls: createActionCounter(),
+      actionFailures: createActionCounter(),
+      avgLatencyMsByAction: createActionCounter(),
     };
   }
 
@@ -107,9 +124,19 @@ export class BrowserToolService implements BrowserRuntime {
   }
 
   async command(input: BrowserCommandInput): Promise<BrowserCommandResult> {
+    const startedAt = Date.now();
     this.telemetry.commands += 1;
+    this.telemetry.actionCalls[input.action] = (this.telemetry.actionCalls[input.action] ?? 0) + 1;
+    await this.cleanupExpiredSessions();
     if (!this.cfg.enabled) {
       this.telemetry.failures += 1;
+      this.telemetry.actionFailures[input.action] = (this.telemetry.actionFailures[input.action] ?? 0) + 1;
+      this.telemetry.lastError = {
+        action: input.action,
+        message: "browser runtime desabilitado",
+        at: new Date().toISOString(),
+      };
+      this.recordActionLatency(input.action, Date.now() - startedAt);
       return {
         ok: false,
         action: input.action,
@@ -313,12 +340,20 @@ export class BrowserToolService implements BrowserRuntime {
       };
     } catch (error) {
       this.telemetry.failures += 1;
+      this.telemetry.actionFailures[input.action] = (this.telemetry.actionFailures[input.action] ?? 0) + 1;
+      this.telemetry.lastError = {
+        action: input.action,
+        message: error instanceof Error ? error.message : String(error),
+        at: new Date().toISOString(),
+      };
       return {
         ok: false,
         action: input.action,
         status: "failed",
         message: error instanceof Error ? error.message : String(error),
       };
+    } finally {
+      this.recordActionLatency(input.action, Date.now() - startedAt);
     }
   }
 
@@ -331,6 +366,7 @@ export class BrowserToolService implements BrowserRuntime {
   }
 
   private async ensureSession(sessionKey: string): Promise<BrowserSession> {
+    await this.evictOldestIfNeeded();
     const existing = this.sessions.get(sessionKey);
     if (existing) {
       existing.updatedAt = Date.now();
@@ -367,12 +403,9 @@ export class BrowserToolService implements BrowserRuntime {
       };
     }
     try {
-      await existing.context.close();
-      await existing.browser.close();
+      await this.closeAndDeleteSession(sessionKey, existing);
     } finally {
-      this.sessions.delete(sessionKey);
-      this.telemetry.sessionsClosed += 1;
-      this.telemetry.activeSessions = this.sessions.size;
+      // no-op
     }
     return {
       ok: true,
@@ -431,11 +464,85 @@ export class BrowserToolService implements BrowserRuntime {
       preview,
     };
   }
+
+  private recordActionLatency(action: BrowserCommandAction, durationMs: number): void {
+    const count = Math.max(1, this.telemetry.actionCalls[action] ?? 1);
+    const prevAvg = this.telemetry.avgLatencyMsByAction[action] ?? 0;
+    const nextAvg = prevAvg + (durationMs - prevAvg) / count;
+    this.telemetry.avgLatencyMsByAction[action] = Math.max(0, Math.round(nextAvg));
+  }
+
+  private async cleanupExpiredSessions(): Promise<void> {
+    if (this.sessions.size === 0) {
+      return;
+    }
+    const now = Date.now();
+    const expired: Array<{ key: string; session: BrowserSession }> = [];
+    for (const [key, session] of this.sessions.entries()) {
+      if (now - session.updatedAt > this.cfg.sessionTtlMs) {
+        expired.push({ key, session });
+      }
+    }
+    for (const item of expired) {
+      await this.closeAndDeleteSession(item.key, item.session);
+      this.telemetry.expiredSessionsClosed += 1;
+    }
+  }
+
+  private async evictOldestIfNeeded(): Promise<void> {
+    if (this.cfg.maxSessions <= 0) {
+      return;
+    }
+    while (this.sessions.size >= this.cfg.maxSessions) {
+      let oldest: { key: string; session: BrowserSession } | null = null;
+      for (const [key, session] of this.sessions.entries()) {
+        if (!oldest || session.updatedAt < oldest.session.updatedAt) {
+          oldest = { key, session };
+        }
+      }
+      if (!oldest) {
+        return;
+      }
+      await this.closeAndDeleteSession(oldest.key, oldest.session);
+      this.telemetry.evictedSessions += 1;
+    }
+  }
+
+  private async closeAndDeleteSession(sessionKey: string, session: BrowserSession): Promise<void> {
+    try {
+      await session.context.close();
+    } catch {
+      // best-effort cleanup
+    }
+    try {
+      await session.browser.close();
+    } catch {
+      // best-effort cleanup
+    }
+    this.sessions.delete(sessionKey);
+    this.telemetry.sessionsClosed += 1;
+    this.telemetry.activeSessions = this.sessions.size;
+  }
 }
 
 function sanitizeForPath(input: string): string {
   const normalized = input.trim().toLowerCase().replace(/[^a-z0-9-_]+/g, "-");
   return normalized.length > 0 ? normalized.slice(0, 42) : "session";
+}
+
+function createActionCounter(): Record<BrowserCommandAction, number> {
+  return {
+    start: 0,
+    open: 0,
+    navigate: 0,
+    snapshot_text: 0,
+    screenshot: 0,
+    click: 0,
+    type: 0,
+    press: 0,
+    wait_for: 0,
+    close: 0,
+  };
 }
 
 function parseSelector(raw: string): SelectorParse {
