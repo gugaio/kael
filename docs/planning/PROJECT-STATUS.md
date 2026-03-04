@@ -2098,3 +2098,25 @@ Pendencias:
 
 Proximo passo recomendado:
 - UI-2/SSE para atualizacao de plano e jobs em tempo real sem polling.
+
+### 2026-03-04 - Refactor pre-fase: budget/blocked guard unificado nas PI tools
+
+Resumo:
+- Refatorada a criacao de respostas bloqueadas (`blocked=true`) para um helper unico em `pi-tools`.
+- Unificado o guard de budget para `exec`, `process`, `web_search`, `web_fetch`, `web_research`, `image_generate` (reduz repeticao e risco de divergencia).
+- Mantido comportamento atual de bloqueio/log, incluindo `nextAction` nos tools web e telemetria `onToolEvent`.
+
+Arquivos-chave:
+- `src/engine/pi-tools.ts`
+- `src/engine/pi-tools.test.ts`
+- `src/engine/pi-engine-adapter.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/engine/pi-tools.test.ts src/engine/pi-engine-adapter.test.ts`
+
+Pendencias:
+- Ainda ha repeticao de padroes de loop-guard entre tools; proximo passo e extrair helper dedicado para esse trecho.
+
+Proximo passo recomendado:
+- Refactor 2: politica de timeout central por tipo de operacao (`pi`, `media`, `image_generation`, `email`).

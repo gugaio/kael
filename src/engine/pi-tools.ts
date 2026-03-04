@@ -12,6 +12,39 @@ function textResult(text: string) {
   return [{ type: "text", text } satisfies TextBlock];
 }
 
+type BlockedToolResult = {
+  content: TextBlock[];
+  details: {
+    blocked: true;
+    reason: string;
+    status: "blocked";
+    retryAfterMs?: number;
+  };
+};
+
+function makeBlockedResult(params: {
+  reason: string;
+  retryAfterMs?: number;
+  nextAction?: string;
+}): BlockedToolResult {
+  const lines = [`blocked=true`, `reason=${params.reason}`];
+  if (typeof params.retryAfterMs === "number") {
+    lines.push(`retryAfterMs=${params.retryAfterMs}`);
+  }
+  if (params.nextAction) {
+    lines.push(`nextAction=${params.nextAction}`);
+  }
+  return {
+    content: textResult(lines.join("\n")),
+    details: {
+      blocked: true,
+      reason: params.reason,
+      status: "blocked",
+      ...(typeof params.retryAfterMs === "number" ? { retryAfterMs: params.retryAfterMs } : {}),
+    },
+  };
+}
+
 function formatSession(session: {
   id: string;
   status: string;
@@ -219,6 +252,27 @@ export function createPiShellTools(params: {
       .join(" | ");
   };
 
+  const blockByBudget = (paramsInput: {
+    tool: string;
+    reason: string;
+    emitEvent?: boolean;
+    nextAction?: string;
+  }): BlockedToolResult => {
+    if (paramsInput.emitEvent) {
+      params.onToolEvent?.({
+        phase: "end",
+        tool: paramsInput.tool,
+        status: "blocked",
+        blocked: true,
+        reason: paramsInput.reason,
+      });
+    }
+    return makeBlockedResult({
+      reason: paramsInput.reason,
+      nextAction: paramsInput.nextAction,
+    });
+  };
+
   const execTool: AgentTool = {
     name: "exec",
     label: "Exec",
@@ -248,19 +302,11 @@ export function createPiShellTools(params: {
     execute: async (_toolCallId, rawParams) => {
       if (toolCalls >= maxToolCalls) {
         const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        params.onToolEvent?.({ phase: "end", tool: "exec", status: "blocked", blocked: true, reason });
-        return {
-          content: textResult(`blocked=true\nreason=${reason}`),
-          details: { blocked: true, reason, status: "blocked" },
-        };
+        return blockByBudget({ tool: "exec", reason, emitEvent: true });
       }
       if (execCalls >= maxExecCalls) {
         const reason = `exec_call_budget_exceeded:${execCalls}/${maxExecCalls}`;
-        params.onToolEvent?.({ phase: "end", tool: "exec", status: "blocked", blocked: true, reason });
-        return {
-          content: textResult(`blocked=true\nreason=${reason}`),
-          details: { blocked: true, reason, status: "blocked" },
-        };
+        return blockByBudget({ tool: "exec", reason, emitEvent: true });
       }
       toolCalls += 1;
       execCalls += 1;
@@ -280,16 +326,10 @@ export function createPiShellTools(params: {
         params: args,
       });
       if (decision && !decision.allowed) {
-        const blockedResult = {
-          content: textResult(
-            `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}`,
-          ),
-          details: {
-            blocked: true,
-            reason: decision.reason,
-            retryAfterMs: decision.retryAfterMs,
-          },
-        };
+        const blockedResult = makeBlockedResult({
+          reason: decision.reason,
+          retryAfterMs: decision.retryAfterMs,
+        });
         logToolEnd("exec", intent, blockedResult.details, startedAtMs);
         return blockedResult;
       }
@@ -345,11 +385,7 @@ export function createPiShellTools(params: {
     execute: async (_toolCallId, rawParams) => {
       if (toolCalls >= maxToolCalls) {
         const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        params.onToolEvent?.({ phase: "end", tool: "process", status: "blocked", blocked: true, reason });
-        return {
-          content: textResult(`blocked=true\nreason=${reason}`),
-          details: { blocked: true, reason, status: "blocked" },
-        };
+        return blockByBudget({ tool: "process", reason, emitEvent: true });
       }
       toolCalls += 1;
       const startedAtMs = Date.now();
@@ -366,16 +402,10 @@ export function createPiShellTools(params: {
         params: args,
       });
       if (decision && !decision.allowed) {
-        const blockedResult = {
-          content: textResult(
-            `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}`,
-          ),
-          details: {
-            blocked: true,
-            reason: decision.reason,
-            retryAfterMs: decision.retryAfterMs,
-          },
-        };
+        const blockedResult = makeBlockedResult({
+          reason: decision.reason,
+          retryAfterMs: decision.retryAfterMs,
+        });
         logToolEnd("process", intent, blockedResult.details, startedAtMs);
         return blockedResult;
       }
@@ -439,10 +469,7 @@ export function createPiShellTools(params: {
     execute: async (_toolCallId, rawParams) => {
       if (toolCalls >= maxToolCalls) {
         const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        return {
-          content: textResult(`blocked=true\nreason=${reason}`),
-          details: { blocked: true, reason, status: "blocked" },
-        };
+        return blockByBudget({ tool: "video_hls_inspect", reason });
       }
       toolCalls += 1;
       const startedAtMs = Date.now();
@@ -495,10 +522,7 @@ export function createPiShellTools(params: {
     execute: async (_toolCallId, rawParams) => {
       if (toolCalls >= maxToolCalls) {
         const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        return {
-          content: textResult(`blocked=true\nreason=${reason}`),
-          details: { blocked: true, reason, status: "blocked" },
-        };
+        return blockByBudget({ tool: "video_probe", reason });
       }
       toolCalls += 1;
       const startedAtMs = Date.now();
@@ -756,23 +780,21 @@ export function createPiShellTools(params: {
     execute: async (_toolCallId, rawParams) => {
       if (toolCalls >= maxToolCalls) {
         const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        params.onToolEvent?.({ phase: "end", tool: "web_search", status: "blocked", blocked: true, reason });
-        return {
-          content: textResult(
-            `blocked=true\nreason=${reason}\nnextAction=finalize_answer_with_available_evidence`,
-          ),
-          details: { blocked: true, reason, status: "blocked" },
-        };
+        return blockByBudget({
+          tool: "web_search",
+          reason,
+          emitEvent: true,
+          nextAction: "finalize_answer_with_available_evidence",
+        });
       }
       if (webSearchCalls >= maxWebSearchCalls) {
         const reason = `web_search_budget_exceeded:${webSearchCalls}/${maxWebSearchCalls}`;
-        params.onToolEvent?.({ phase: "end", tool: "web_search", status: "blocked", blocked: true, reason });
-        return {
-          content: textResult(
-            `blocked=true\nreason=${reason}\nnextAction=finalize_answer_with_available_evidence`,
-          ),
-          details: { blocked: true, reason, status: "blocked" },
-        };
+        return blockByBudget({
+          tool: "web_search",
+          reason,
+          emitEvent: true,
+          nextAction: "finalize_answer_with_available_evidence",
+        });
       }
       toolCalls += 1;
       webSearchCalls += 1;
@@ -791,16 +813,11 @@ export function createPiShellTools(params: {
         params: args,
       });
       if (decision && !decision.allowed) {
-        const blockedResult = {
-          content: textResult(
-            `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}\nnextAction=finalize_answer_with_available_evidence`,
-          ),
-          details: {
-            blocked: true,
-            reason: decision.reason,
-            retryAfterMs: decision.retryAfterMs,
-          },
-        };
+        const blockedResult = makeBlockedResult({
+          reason: decision.reason,
+          retryAfterMs: decision.retryAfterMs,
+          nextAction: "finalize_answer_with_available_evidence",
+        });
         logToolEnd("web_search", intent, blockedResult.details, startedAtMs);
         return blockedResult;
       }
@@ -860,23 +877,21 @@ export function createPiShellTools(params: {
     execute: async (_toolCallId, rawParams) => {
       if (toolCalls >= maxToolCalls) {
         const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        params.onToolEvent?.({ phase: "end", tool: "web_fetch", status: "blocked", blocked: true, reason });
-        return {
-          content: textResult(
-            `blocked=true\nreason=${reason}\nnextAction=finalize_answer_with_available_evidence`,
-          ),
-          details: { blocked: true, reason, status: "blocked" },
-        };
+        return blockByBudget({
+          tool: "web_fetch",
+          reason,
+          emitEvent: true,
+          nextAction: "finalize_answer_with_available_evidence",
+        });
       }
       if (webFetchCalls >= maxWebFetchCalls) {
         const reason = `web_fetch_budget_exceeded:${webFetchCalls}/${maxWebFetchCalls}`;
-        params.onToolEvent?.({ phase: "end", tool: "web_fetch", status: "blocked", blocked: true, reason });
-        return {
-          content: textResult(
-            `blocked=true\nreason=${reason}\nnextAction=finalize_answer_with_available_evidence`,
-          ),
-          details: { blocked: true, reason, status: "blocked" },
-        };
+        return blockByBudget({
+          tool: "web_fetch",
+          reason,
+          emitEvent: true,
+          nextAction: "finalize_answer_with_available_evidence",
+        });
       }
       toolCalls += 1;
       webFetchCalls += 1;
@@ -889,16 +904,11 @@ export function createPiShellTools(params: {
         params: args,
       });
       if (decision && !decision.allowed) {
-        const blockedResult = {
-          content: textResult(
-            `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}\nnextAction=finalize_answer_with_available_evidence`,
-          ),
-          details: {
-            blocked: true,
-            reason: decision.reason,
-            retryAfterMs: decision.retryAfterMs,
-          },
-        };
+        const blockedResult = makeBlockedResult({
+          reason: decision.reason,
+          retryAfterMs: decision.retryAfterMs,
+          nextAction: "finalize_answer_with_available_evidence",
+        });
         logToolEnd("web_fetch", intent, blockedResult.details, startedAtMs);
         return blockedResult;
       }
@@ -962,23 +972,21 @@ export function createPiShellTools(params: {
     execute: async (_toolCallId, rawParams) => {
       if (toolCalls >= maxToolCalls) {
         const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        params.onToolEvent?.({ phase: "end", tool: "web_research", status: "blocked", blocked: true, reason });
-        return {
-          content: textResult(
-            `blocked=true\nreason=${reason}\nnextAction=finalize_answer_with_available_evidence`,
-          ),
-          details: { blocked: true, reason, status: "blocked" },
-        };
+        return blockByBudget({
+          tool: "web_research",
+          reason,
+          emitEvent: true,
+          nextAction: "finalize_answer_with_available_evidence",
+        });
       }
       if (webResearchCalls >= maxWebResearchCalls) {
         const reason = `web_research_budget_exceeded:${webResearchCalls}/${maxWebResearchCalls}`;
-        params.onToolEvent?.({ phase: "end", tool: "web_research", status: "blocked", blocked: true, reason });
-        return {
-          content: textResult(
-            `blocked=true\nreason=${reason}\nnextAction=finalize_answer_with_available_evidence`,
-          ),
-          details: { blocked: true, reason, status: "blocked" },
-        };
+        return blockByBudget({
+          tool: "web_research",
+          reason,
+          emitEvent: true,
+          nextAction: "finalize_answer_with_available_evidence",
+        });
       }
       toolCalls += 1;
       webResearchCalls += 1;
@@ -999,16 +1007,11 @@ export function createPiShellTools(params: {
         params: args,
       });
       if (decision && !decision.allowed) {
-        const blockedResult = {
-          content: textResult(
-            `blocked=true\nreason=${decision.reason}\nretryAfterMs=${decision.retryAfterMs}\nnextAction=finalize_answer_with_available_evidence`,
-          ),
-          details: {
-            blocked: true,
-            reason: decision.reason,
-            retryAfterMs: decision.retryAfterMs,
-          },
-        };
+        const blockedResult = makeBlockedResult({
+          reason: decision.reason,
+          retryAfterMs: decision.retryAfterMs,
+          nextAction: "finalize_answer_with_available_evidence",
+        });
         logToolEnd("web_research", intent, blockedResult.details, startedAtMs);
         return blockedResult;
       }
@@ -1342,19 +1345,11 @@ export function createPiShellTools(params: {
     execute: async (_toolCallId, rawParams) => {
       if (toolCalls >= maxToolCalls) {
         const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        params.onToolEvent?.({ phase: "end", tool: "image_generate", status: "blocked", blocked: true, reason });
-        return {
-          content: textResult(`blocked=true\nreason=${reason}`),
-          details: { blocked: true, reason, status: "blocked" },
-        };
+        return blockByBudget({ tool: "image_generate", reason, emitEvent: true });
       }
       if (imageGenerateCalls >= maxImageGenerateCalls) {
         const reason = `image_generate_budget_exceeded:${imageGenerateCalls}/${maxImageGenerateCalls}`;
-        params.onToolEvent?.({ phase: "end", tool: "image_generate", status: "blocked", blocked: true, reason });
-        return {
-          content: textResult(`blocked=true\nreason=${reason}`),
-          details: { blocked: true, reason, status: "blocked" },
-        };
+        return blockByBudget({ tool: "image_generate", reason, emitEvent: true });
       }
       toolCalls += 1;
       imageGenerateCalls += 1;
@@ -1366,7 +1361,7 @@ export function createPiShellTools(params: {
       const intent = logToolStart("image_generate", args);
       if (!params.tooling.imageGenerate) {
         const reason = "image_generate_unavailable";
-        const details = { blocked: true, reason, status: "blocked" };
+        const details = makeBlockedResult({ reason }).details;
         logToolEnd("image_generate", intent, details, startedAtMs);
         return {
           content: textResult(`blocked=true\nreason=${reason}`),
