@@ -128,6 +128,6 @@ Como testar:
 
 ## Pendencias da fase (atual)
 
-1. Tornar smoke e2e de browser obrigatorio em ambiente com permissao de launch (job dedicado de CI runner).
+1. Ativar `KAEL_CI_BROWSER_SMOKE=true` no ambiente CI alvo para executar o job opcional `browser-smoke` em rotina.
 2. Evoluir parser de argumentos dos atalhos slash para aceitar strings com aspas de forma robusta.
 3. Avaliar estrategia de reutilizacao de browser/context por sessao para reduzir custo de start.

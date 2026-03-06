@@ -97,6 +97,11 @@ npm run test:smoke:browser
 
 Observacao: em ambientes restritos (sandbox/CI sem permissao de launch do Chromium), o smoke pode encerrar sem validar o fluxo para nao quebrar a suite padrao.
 
+No CI (GitHub Actions), existe um job opcional `browser-smoke` com gate:
+
+- variavel de repositorio `KAEL_CI_BROWSER_SMOKE=true`; ou
+- disparo manual do workflow com `browser_smoke=true`.
+
 Esse teste valida o fluxo:
 
 1. `open` em servidor HTTP local.

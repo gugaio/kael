@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-03-04**
+Ultima atualizacao: **2026-03-06**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -352,6 +352,30 @@ Definition of Done (checklist):
 - [x] UX operacional: atalhos `/browser-*` no fast-path + guia de uso CLI/chat.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-06 - CI: job opcional browser-smoke no GitHub Actions
+
+Resumo:
+- Pipeline de CI criada em `.github/workflows/ci.yml` com jobs `check` e `test`.
+- Job opcional `browser-smoke` adicionado com gate por variavel de repositorio (`KAEL_CI_BROWSER_SMOKE=true`) ou disparo manual do workflow.
+- Job de smoke instala Chromium via Playwright e executa `npm run test:smoke:browser`.
+- Documentacao de browser/arquitetura atualizada para refletir o gate operacional no CI.
+
+Arquivos-chave:
+- `.github/workflows/ci.yml`
+- `docs/browser-control.md`
+- `docs/architecture/phases/phase-16.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [ ] execucao do workflow no GitHub Actions (pendente de push no repositorio remoto)
+
+Pendencias:
+- Ativar `KAEL_CI_BROWSER_SMOKE=true` no ambiente CI que tenha permissao para launch do Chromium.
+
+Proximo passo recomendado:
+- Validar primeira execucao do workflow remoto e promover `browser-smoke` para gate obrigatorio onde o runner suportar Playwright.
 
 ### 2026-03-04 - Fase 16.4: smoke e2e de browser real (Playwright)
 
