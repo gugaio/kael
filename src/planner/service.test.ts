@@ -272,6 +272,76 @@ describe("PlannerService", () => {
     expect(updated?.steps[0].status).toBe("failed");
   });
 
+  it("prioritizes wait_execution control step and completes both steps when target exec finishes", async () => {
+    const { planner } = await makePlanner({
+      generateDrafts: async () => [
+        { title: "Executar comando shell: sleep 5", action: { kind: "exec", params: { command: "sleep 5" } } },
+        { title: "Aguardar execucao do step anterior", action: { kind: "wait_execution", params: { targetStepIndex: 0 } } },
+      ],
+    });
+    const plan = await planner.generate({
+      sessionKey: "s1",
+      objective: "run and wait",
+    });
+    await planner.executeNext({
+      planId: plan.id,
+      runtime: {
+        execCommand: async ({ command }) => ({ id: "exec-wait", status: "running", command, cwd: "." }),
+      },
+    });
+
+    const result = await planner.executeNext({
+      planId: plan.id,
+      runtime: {
+        pollExec: async (sessionId: string) =>
+          sessionId === "exec-wait" ? { status: "completed", message: "done" } : null,
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("expected successful wait step");
+    }
+    expect(result.action).toBe("wait_execution");
+    expect(result.plan.steps[0].status).toBe("completed");
+    expect(result.plan.steps[1].status).toBe("completed");
+  });
+
+  it("cancels in_progress execution through cancel_execution control step", async () => {
+    const { planner } = await makePlanner({
+      generateDrafts: async () => [
+        { title: "Executar comando shell: tail -f /tmp/a.log", action: { kind: "exec", params: { command: "tail -f /tmp/a.log" } } },
+        { title: "cancel_execution do step anterior", action: { kind: "cancel_execution", params: { targetStepIndex: 0 } } },
+      ],
+    });
+    const plan = await planner.generate({
+      sessionKey: "s1",
+      objective: "run and cancel",
+    });
+    await planner.executeNext({
+      planId: plan.id,
+      runtime: {
+        execCommand: async ({ command }) => ({ id: "exec-cancel", status: "running", command, cwd: "." }),
+      },
+    });
+
+    const result = await planner.executeNext({
+      planId: plan.id,
+      runtime: {
+        cancelExec: async (sessionId: string) =>
+          sessionId === "exec-cancel" ? { canceled: true, status: "canceled" } : { canceled: false },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("expected successful cancel step");
+    }
+    expect(result.action).toBe("cancel_execution");
+    expect(result.plan.steps[0].status).toBe("canceled");
+    expect(result.plan.steps[1].status).toBe("completed");
+  });
+
   it("cancels whole plan and marks all steps as canceled", async () => {
     const { planner } = await makePlanner();
     const plan = await planner.create({

@@ -359,13 +359,14 @@ export type EngineTooling = {
       cwd?: string;
       timeoutMs?: number;
       background?: boolean;
+      targetStepIndex?: number;
     };
   }) => Promise<{
     ok: boolean;
     reason?: string;
     message?: string;
     stepIndex?: number;
-    action?: "probe" | "capture" | "transcode" | "hls" | "exec";
+    action?: "probe" | "capture" | "transcode" | "hls" | "exec" | "wait_execution" | "cancel_execution";
     plan?: {
       id: string;
       sessionKey: string;

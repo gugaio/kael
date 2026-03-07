@@ -41,6 +41,7 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 14: em andamento (email ingress MVP via provider desacoplado + polling POP3 Gmail).
 - Fase 15: em andamento (multimodal ingress MVP: anexos imagem/audio no fluxo core).
 - Fase 16: em andamento (browser control em fases para teste de sites: foundations -> read-only -> interacao).
+- Fase 17: em andamento (orquestracao de planos: controle de execucao, validacoes e branching leve).
 
 ## Estudos e referencias tecnicas
 

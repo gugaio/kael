@@ -1383,6 +1383,7 @@ export function createPiShellTools(params: {
             cwd: { type: "string" },
             timeoutMs: { type: "number" },
             background: { type: "boolean" },
+            targetStepIndex: { type: "number" },
           },
           additionalProperties: false,
         },
@@ -1405,6 +1406,7 @@ export function createPiShellTools(params: {
           cwd?: string;
           timeoutMs?: number;
           background?: boolean;
+          targetStepIndex?: number;
         };
       };
       const result = await params.tooling.planExecuteNext({

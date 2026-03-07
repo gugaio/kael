@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-03-06**
+Ultima atualizacao: **2026-03-07**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -351,7 +351,77 @@ Definition of Done (checklist):
 - [x] Hardening: cleanup de sessoes, budget anti-loop e metrica por acao/erro.
 - [x] UX operacional: atalhos `/browser-*` no fast-path + guia de uso CLI/chat.
 
+### Fase 17 - Orquestracao de Planos v2
+
+Status: **Em andamento**
+
+Objetivos:
+- Evoluir planos para suportar controle operacional de lifecycle (`wait`, `approve`, `cancel`) de execucoes.
+- Adicionar etapas de validacao de saida para reduzir falso-positivo de "executou mas nao entregou".
+- Introduzir branching leve de falha (`retry|skip|stop`) com limite de tentativas por step.
+
+Definition of Done (checklist):
+- [x] Novas acoes de controle de execucao no planner (`wait_execution`, `cancel_execution`).
+- [ ] Completar action de controle pendente (`approve_execution`).
+- [ ] Novas acoes de validacao (`assert_file_exists`, `assert_hls_ok`, `assert_duration`).
+- [ ] `on_fail` + `maxRetries` por step com persistencia no plano.
+- [ ] Telemetria de retries/falhas de plano no `/health` e logs estruturados.
+- [ ] Atualizacao de docs de arquitetura/API/PI tools para a nova superficie de actions.
+
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-07 - Fase 17.0: controle inicial de execucao em planos (`wait_execution` + `cancel_execution`)
+
+Resumo:
+- Planner ganhou novas actions `wait_execution` e `cancel_execution`.
+- Runtime de `executeNext` foi ampliado para observar/cancelar runtime externo (`getJob`, `pollExec`, `cancelJob`, `cancelExec`).
+- `nextAction` passou a priorizar step de controle pendente quando houver step anterior em `in_progress`.
+- API/tooling/PI schema atualizados para aceitar `inputs.targetStepIndex`.
+- Testes do planner adicionados para fluxo de wait/cancel.
+
+Arquivos-chave:
+- `src/planner/service.ts`
+- `src/planner/service.test.ts`
+- `src/chat/tooling-factory.ts`
+- `src/api/server.ts`
+- `src/engine/types.ts`
+- `src/engine/pi-tools.ts`
+- `docs/architecture/phases/phase-17.md`
+- `docs/planning/PROJECT-STATUS.md`
+- `docs/core/START-HERE.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/planner/service.test.ts`
+
+Pendencias:
+- Implementar `approve_execution` para fechar trilha completa de controle.
+- Evoluir actions de validacao (`assert_*`) e branching (`on_fail`, `maxRetries`).
+
+Proximo passo recomendado:
+- Implementar `approve_execution` com integracao a approvals de shell e reconcile imediato do step alvo.
+
+### 2026-03-07 - Planejamento da Fase 17 (orquestracao de planos v2)
+
+Resumo:
+- Fase 17 adicionada ao roadmap para evoluir a execucao de planos com controle de lifecycle.
+- Escopo inicial da fase definido com validacoes de saida e branching leve por step.
+- Documento arquitetural dedicado da fase criado.
+
+Arquivos-chave:
+- `docs/planning/PROJECT-STATUS.md`
+- `docs/architecture/phases/phase-17.md`
+- `docs/core/START-HERE.md`
+
+Checklist de validacao:
+- [x] alinhamento de escopo com foco atual (CLI + API + engine + jobs de video)
+- [x] consistencia de status entre `START-HERE` e `PROJECT-STATUS`
+
+Pendencias:
+- Transformar os itens da fase em tarefas implementaveis (ordem sugerida: controle -> validacao -> branching).
+
+Proximo passo recomendado:
+- Implementar primeiro `wait_execution` e `cancel_execution` para fechar o loop operacional minimo dos planos.
 
 ### 2026-03-06 - CI: job opcional browser-smoke no GitHub Actions
 

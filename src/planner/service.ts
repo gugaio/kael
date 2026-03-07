@@ -4,7 +4,14 @@ import { ensureDir, readJsonFile, writeJsonFile } from "../infra/fs.js";
 
 export type PlanStepStatus = "pending" | "in_progress" | "completed" | "blocked" | "failed" | "canceled";
 export type PlanStatus = "active" | "completed" | "blocked" | "failed" | "canceled";
-export type PlanActionKind = "probe" | "capture" | "transcode" | "hls" | "exec";
+export type PlanActionKind =
+  | "probe"
+  | "capture"
+  | "transcode"
+  | "hls"
+  | "exec"
+  | "wait_execution"
+  | "cancel_execution";
 
 export type PlanStepCheckpoint = {
   at: string;
@@ -24,6 +31,7 @@ export type PlanExecutionInputs = {
   cwd?: string;
   timeoutMs?: number;
   background?: boolean;
+  targetStepIndex?: number;
 };
 
 export type PlanStepAction = {
@@ -355,6 +363,10 @@ export class PlannerService {
     if (!plan) {
       return null;
     }
+    const controlStep = findPendingControlStepForInProgressExecution(plan);
+    if (controlStep) {
+      return controlStep;
+    }
     const index = plan.steps.findIndex((step) => step.status === "pending" || step.status === "in_progress");
     if (index < 0) {
       return null;
@@ -400,6 +412,10 @@ export class PlannerService {
         outputTail?: string;
         exitCode?: number | null;
       }>;
+      getJob?: (jobId: string) => Promise<{ status: string; error?: string } | null>;
+      pollExec?: (sessionId: string) => Promise<{ status: string; message?: string } | null>;
+      cancelJob?: (jobId: string) => Promise<{ canceled: boolean; status?: string; message?: string }>;
+      cancelExec?: (sessionId: string) => Promise<{ canceled: boolean; status?: string; message?: string }>;
     };
   }): Promise<PlanExecuteNextResult> {
     const plan = this.get(params.planId);
@@ -508,6 +524,161 @@ export class PlannerService {
           refId: job.id,
           status: job.status,
           startedAt: new Date().toISOString(),
+        };
+      } else if (action === "wait_execution") {
+        const target = resolveTargetExecution(plan, next.stepIndex, inputs);
+        if (!target) {
+          const updated = await this.updateStep({
+            planId: plan.id,
+            stepIndex: next.stepIndex,
+            status: "blocked",
+            notes: "Executor: wait_execution sem execucao alvo (use targetStepIndex ou mantenha um step anterior em andamento).",
+          });
+          return {
+            ok: false,
+            reason: "missing_input",
+            message: "missing execution target",
+            plan: updated ?? plan,
+            stepIndex: next.stepIndex,
+            action,
+          };
+        }
+        const canObserve =
+          (target.execution.kind === "job" && Boolean(params.runtime.getJob)) ||
+          (target.execution.kind === "exec" && Boolean(params.runtime.pollExec));
+        if (!canObserve) {
+          return runtimeNotAvailable(action, plan, next.stepIndex);
+        }
+        const resolution = await resolveExecutionStatus(target.execution, {
+          getJob: params.runtime.getJob,
+          pollExec: params.runtime.pollExec,
+        });
+        if (!resolution) {
+          const waiting = await this.updateStep({
+            planId: plan.id,
+            stepIndex: next.stepIndex,
+            status: "in_progress",
+            notes: `Executor: aguardando execucao ${target.execution.kind}:${target.execution.refId} finalizar.`,
+          });
+          return {
+            ok: true,
+            plan: waiting ?? plan,
+            stepIndex: next.stepIndex,
+            action,
+            execution: target.execution,
+          };
+        }
+        if (plan.steps[target.stepIndex]?.status === "in_progress") {
+          await this.updateStep({
+            planId: plan.id,
+            stepIndex: target.stepIndex,
+            status: resolution.status,
+            notes: `Waiter: execucao ${target.execution.kind}:${target.execution.refId} observada como ${resolution.observedStatus}.`,
+            execution: {
+              ...target.execution,
+              status: resolution.observedStatus,
+            },
+          });
+        }
+        const waitStatus = resolution.status;
+        const waitResult = await this.updateStep({
+          planId: plan.id,
+          stepIndex: next.stepIndex,
+          status: waitStatus,
+          notes: `Executor: wait_execution finalizado com status=${resolution.observedStatus}.`,
+          execution: {
+            ...target.execution,
+            status: resolution.observedStatus,
+          },
+        });
+        if (waitStatus === "completed") {
+          return {
+            ok: true,
+            plan: waitResult ?? plan,
+            stepIndex: next.stepIndex,
+            action,
+            execution: target.execution,
+          };
+        }
+        return {
+          ok: false,
+          reason: "execution_failed",
+          message: `target execution finished with status=${resolution.observedStatus}`,
+          plan: waitResult ?? plan,
+          stepIndex: next.stepIndex,
+          action,
+        };
+      } else if (action === "cancel_execution") {
+        const target = resolveTargetExecution(plan, next.stepIndex, inputs);
+        if (!target) {
+          const updated = await this.updateStep({
+            planId: plan.id,
+            stepIndex: next.stepIndex,
+            status: "blocked",
+            notes: "Executor: cancel_execution sem execucao alvo (use targetStepIndex ou mantenha um step anterior em andamento).",
+          });
+          return {
+            ok: false,
+            reason: "missing_input",
+            message: "missing execution target",
+            plan: updated ?? plan,
+            stepIndex: next.stepIndex,
+            action,
+          };
+        }
+        const cancellation =
+          target.execution.kind === "job"
+            ? params.runtime.cancelJob
+              ? await params.runtime.cancelJob(target.execution.refId)
+              : null
+            : params.runtime.cancelExec
+              ? await params.runtime.cancelExec(target.execution.refId)
+              : null;
+        if (!cancellation) {
+          return runtimeNotAvailable(action, plan, next.stepIndex);
+        }
+        if (!cancellation.canceled) {
+          const failed = await this.updateStep({
+            planId: plan.id,
+            stepIndex: next.stepIndex,
+            status: "failed",
+            notes: `Executor: nao foi possivel cancelar execucao ${target.execution.kind}:${target.execution.refId}.`,
+          });
+          return {
+            ok: false,
+            reason: "execution_failed",
+            message: cancellation.message ?? "cancel request was not accepted",
+            plan: failed ?? plan,
+            stepIndex: next.stepIndex,
+            action,
+          };
+        }
+        await this.updateStep({
+          planId: plan.id,
+          stepIndex: target.stepIndex,
+          status: "canceled",
+          notes: `Canceler: execucao ${target.execution.kind}:${target.execution.refId} cancelada.`,
+          execution: {
+            ...target.execution,
+            status: cancellation.status ?? "canceled",
+          },
+        });
+        const cancelStep = await this.updateStep({
+          planId: plan.id,
+          stepIndex: next.stepIndex,
+          status: "completed",
+          notes: `Executor: cancel_execution concluido para ${target.execution.kind}:${target.execution.refId}.`,
+          execution: {
+            ...target.execution,
+            status: cancellation.status ?? "canceled",
+          },
+        });
+        return {
+          ok: true,
+          plan: cancelStep ?? plan,
+          stepIndex: next.stepIndex,
+          action,
+          execution: target.execution,
         };
       } else {
         if (!params.runtime.execCommand) {
@@ -709,6 +880,9 @@ function requiredInputsForAction(kind: PlanActionKind): string[] {
   if (kind === "hls") {
     return ["inputPath", "outputPlaylistPath"];
   }
+  if (kind === "wait_execution" || kind === "cancel_execution") {
+    return [];
+  }
   return ["command"];
 }
 
@@ -850,8 +1024,86 @@ function deriveStepFromTitle(titleRaw: string): PlanStepDraft {
   if (lower.includes("hls") || lower.includes("playlist") || lower.includes("segment")) {
     return { title, action: createAction("hls") };
   }
+  if (
+    lower.includes("wait_execution") ||
+    lower.includes("aguardar execucao") ||
+    lower.includes("aguardar execução") ||
+    lower.includes("esperar execucao") ||
+    lower.includes("esperar execução")
+  ) {
+    return { title, action: createAction("wait_execution") };
+  }
+  if (
+    lower.includes("cancel_execution") ||
+    lower.includes("cancelar execucao") ||
+    lower.includes("cancelar execução")
+  ) {
+    return { title, action: createAction("cancel_execution") };
+  }
 
   return { title, action: createAction("exec") };
+}
+
+function isControlAction(kind: PlanActionKind): boolean {
+  return kind === "wait_execution" || kind === "cancel_execution";
+}
+
+function findPendingControlStepForInProgressExecution(
+  plan: ExecutionPlan,
+): { stepIndex: number; step: PlanStep } | null {
+  for (let stepIndex = 0; stepIndex < plan.steps.length; stepIndex += 1) {
+    const step = plan.steps[stepIndex];
+    if (step.status !== "in_progress" || !step.execution) {
+      continue;
+    }
+    for (let candidateIndex = stepIndex + 1; candidateIndex < plan.steps.length; candidateIndex += 1) {
+      const candidate = plan.steps[candidateIndex];
+      if (candidate.status !== "pending" || !isControlAction(candidate.action.kind)) {
+        if (candidate.status === "pending") {
+          break;
+        }
+        continue;
+      }
+      const targetStepIndexRaw = candidate.action.params.targetStepIndex;
+      const targetStepIndex =
+        typeof targetStepIndexRaw === "number" && Number.isFinite(targetStepIndexRaw)
+          ? Math.floor(targetStepIndexRaw)
+          : null;
+      if (targetStepIndex !== null && targetStepIndex !== stepIndex) {
+        continue;
+      }
+      return { stepIndex: candidateIndex, step: candidate };
+    }
+  }
+  return null;
+}
+
+function resolveTargetExecution(
+  plan: ExecutionPlan,
+  currentStepIndex: number,
+  inputs: PlanExecutionInputs,
+): { stepIndex: number; execution: NonNullable<PlanStep["execution"]> } | null {
+  const fromInputRaw = inputs.targetStepIndex;
+  const fromInput = typeof fromInputRaw === "number" && Number.isFinite(fromInputRaw) ? Math.floor(fromInputRaw) : null;
+  if (fromInput !== null && fromInput >= 0 && fromInput < plan.steps.length) {
+    const target = plan.steps[fromInput];
+    if (target.execution) {
+      return { stepIndex: fromInput, execution: target.execution };
+    }
+  }
+  for (let index = currentStepIndex - 1; index >= 0; index -= 1) {
+    const step = plan.steps[index];
+    if (step.status === "in_progress" && step.execution) {
+      return { stepIndex: index, execution: step.execution };
+    }
+  }
+  for (let index = currentStepIndex - 1; index >= 0; index -= 1) {
+    const step = plan.steps[index];
+    if (step.execution) {
+      return { stepIndex: index, execution: step.execution };
+    }
+  }
+  return null;
 }
 
 function extractSingleShellCommand(text: string): string | null {

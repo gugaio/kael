@@ -115,6 +115,50 @@ export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
           startTranscode: (args) => deps.jobs.startTranscode(args),
           startConvertHls: (args) => deps.jobs.startConvertHls(args),
           execCommand: (args) => deps.shell.exec(args),
+          getJob: async (jobId) => {
+            const found = deps.jobs.getJob(jobId);
+            if (!found) {
+              return null;
+            }
+            return {
+              status: found.status,
+              error: found.error,
+            };
+          },
+          pollExec: async (sessionId) => {
+            const result = await deps.shell.process({
+              sessionKey: "planner.execute",
+              action: "poll",
+              sessionId,
+            });
+            if (!result.ok || !result.session) {
+              return null;
+            }
+            return {
+              status: result.session.status,
+              message: result.message,
+            };
+          },
+          cancelJob: async (jobId) => {
+            const result = await deps.jobs.cancelJob(jobId);
+            return {
+              canceled: result.canceled,
+              status: result.job?.status,
+              message: result.canceled ? undefined : "job cancel not accepted",
+            };
+          },
+          cancelExec: async (sessionId) => {
+            const result = await deps.shell.process({
+              sessionKey: "planner.execute",
+              action: "kill",
+              sessionId,
+            });
+            return {
+              canceled: result.ok,
+              status: result.session?.status,
+              message: result.message,
+            };
+          },
         },
       }),
     planReconcile: ({ planId, limit }) =>
