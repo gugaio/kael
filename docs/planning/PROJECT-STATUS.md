@@ -370,6 +370,26 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-07 - Teste dedicado do registro central de tool-specs
+
+Resumo:
+- Adicionado teste unitario dedicado para `createPiCapabilityTools`.
+- O teste valida composicao por capability e nomes esperados das tools retornadas.
+
+Arquivos-chave:
+- `src/engine/tool-specs/index.test.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts`
+
+Pendencias:
+- Expandir cobertura com cenarios de erro/budget por capability direto nas factories (opcional).
+
+Proximo passo recomendado:
+- Definir se queremos testes unitarios por factory (`system/web/plans`) focados em branches de bloqueio.
+
 ### 2026-03-07 - Registro central de tool-specs no PI
 
 Resumo:
