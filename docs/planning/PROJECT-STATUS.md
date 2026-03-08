@@ -370,6 +370,28 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-07 - Extracao de tool-specs `video` no PI
+
+Resumo:
+- `video_hls_inspect` e `video_probe` foram extraidos de `pi-tools` para factory dedicada.
+- Novo modulo `src/engine/tool-specs/video.ts` introduzido.
+- `pi-tools` manteve budgets/log/ordem de tools e passou a compor a tool de video via registro.
+
+Arquivos-chave:
+- `src/engine/tool-specs/video.ts`
+- `src/engine/pi-tools.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+
+Pendencias:
+- Continuar migracao de tools restantes para `tool-specs/*` para reduzir hardcode de `pi-tools`.
+
+Proximo passo recomendado:
+- Extrair bloco `web_search/web_fetch/web_research` para `src/engine/tool-specs/web.ts`.
+
 ### 2026-03-07 - Extracao de tool-specs (`jobs`/`browser`) no PI
 
 Resumo:
