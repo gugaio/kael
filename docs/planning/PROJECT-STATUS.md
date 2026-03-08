@@ -370,6 +370,32 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-07 - Extracao de tool-specs (`jobs`/`browser`) no PI
+
+Resumo:
+- `pi-tools` passou a consumir factories dedicadas para tools de `jobs` e `browser`.
+- Novos modulos:
+  - `src/engine/tool-specs/jobs.ts`;
+  - `src/engine/tool-specs/browser.ts`.
+- Mantida a mesma superficie externa de tools, budgets e telemetria.
+- Reduzida duplicidade local em `pi-tools` para schema/execute dessas capacidades.
+
+Arquivos-chave:
+- `src/engine/pi-tools.ts`
+- `src/engine/tool-specs/jobs.ts`
+- `src/engine/tool-specs/browser.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+
+Pendencias:
+- Expandir mesmo padrao de tool-spec para outras ferramentas ainda hardcoded no `pi-tools`.
+
+Proximo passo recomendado:
+- Extrair `video_hls_inspect`/`video_probe` para `tool-specs/video.ts` mantendo o mesmo contrato.
+
 ### 2026-03-07 - Deduplicacao inicial entre `pi-tools` e `tooling-factory` (browser/jobs)
 
 Resumo:

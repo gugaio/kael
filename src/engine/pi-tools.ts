@@ -1,16 +1,7 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import {
-  BROWSER_ACTION_VALUES,
-  type BrowserCommandAction,
-  formatBrowserToolText,
-  isBrowserInteractionAction,
-} from "../capabilities/browser/index.js";
 import { kaelLogger } from "../infra/logger.js";
-import {
-  formatJobDetailsText,
-  formatJobLogText,
-  formatJobsListText,
-} from "../jobs/tooling.js";
+import { createBrowserPiTool, isInteractionActionRaw } from "./tool-specs/browser.js";
+import { createJobsPiTools } from "./tool-specs/jobs.js";
 import type { EngineOutputArtifact, EngineTooling } from "./types.js";
 import type { ToolLoopGuard } from "./tool-loop-guard.js";
 
@@ -295,6 +286,37 @@ export function createPiShellTools(params: {
       reason: paramsInput.reason,
       nextAction: paramsInput.nextAction,
     });
+  };
+
+  const reserveToolCall = (tool: string): { blocked: BlockedToolResult } | null => {
+    if (toolCalls >= maxToolCalls) {
+      const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+      return { blocked: blockByBudget({ tool, reason, emitEvent: true }) };
+    }
+    toolCalls += 1;
+    return null;
+  };
+
+  const reserveBrowserCall = (actionRaw: string): { blocked: BlockedToolResult } | null => {
+    const generic = reserveToolCall("browser");
+    if (generic) {
+      return generic;
+    }
+    if (browserCalls >= maxBrowserCalls) {
+      const reason = `browser_budget_exceeded:${browserCalls}/${maxBrowserCalls}`;
+      return { blocked: blockByBudget({ tool: "browser", reason, emitEvent: true }) };
+    }
+    const isInteractionAction = isInteractionActionRaw(actionRaw);
+    if (isInteractionAction && browserInteractionCalls >= maxBrowserInteractionCalls) {
+      const reason =
+        `browser_interaction_budget_exceeded:${browserInteractionCalls}/${maxBrowserInteractionCalls}`;
+      return { blocked: blockByBudget({ tool: "browser", reason, emitEvent: true }) };
+    }
+    browserCalls += 1;
+    if (isInteractionAction) {
+      browserInteractionCalls += 1;
+    }
+    return null;
   };
 
   const execTool: AgentTool = {
@@ -587,142 +609,14 @@ export function createPiShellTools(params: {
     },
   };
 
-  const jobsListTool: AgentTool = {
-    name: "jobs_list",
-    label: "Jobs List",
-    description:
-      "Lista jobs existentes com filtros opcionais (sessionKey, capability, action, status). Use para perguntas sobre jobs recentes/anteriores.",
-    parameters: {
-      type: "object",
-      properties: {
-        sessionKey: { type: "string" },
-        capability: { type: "string" },
-        action: { type: "string" },
-        status: { type: "string" },
-        limit: { type: "number" },
-      },
-      additionalProperties: false,
-    } as unknown as AgentTool["parameters"],
-    execute: async (_toolCallId, rawParams) => {
-      if (toolCalls >= maxToolCalls) {
-        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        return blockByBudget({ tool: "jobs_list", reason, emitEvent: true });
-      }
-      toolCalls += 1;
-      const startedAtMs = Date.now();
-      const args = (rawParams ?? {}) as {
-        sessionKey?: string;
-        capability?: string;
-        action?: string;
-        status?: string;
-        limit?: number;
-      };
-      const intent = logToolStart("jobs_list", args);
-      const jobs = params.tooling.listJobs({
-        sessionKey: args.sessionKey,
-        capability: args.capability,
-        action: args.action,
-        status: args.status,
-        limit: args.limit,
-      });
-      const text = formatJobsListText(jobs);
-      const details = { jobs };
-      logToolEnd(
-        "jobs_list",
-        intent,
-        { status: "completed", resultCount: jobs.length },
-        startedAtMs,
-      );
-      return {
-        content: textResult(text),
-        details,
-      };
-    },
-  };
-
-  const jobsGetTool: AgentTool = {
-    name: "jobs_get",
-    label: "Jobs Get",
-    description: "Busca detalhes completos de um job por id.",
-    parameters: {
-      type: "object",
-      properties: {
-        jobId: { type: "string" },
-      },
-      required: ["jobId"],
-      additionalProperties: false,
-    } as unknown as AgentTool["parameters"],
-    execute: async (_toolCallId, rawParams) => {
-      if (toolCalls >= maxToolCalls) {
-        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        return blockByBudget({ tool: "jobs_get", reason, emitEvent: true });
-      }
-      toolCalls += 1;
-      const startedAtMs = Date.now();
-      const args = (rawParams ?? {}) as { jobId: string };
-      const intent = logToolStart("jobs_get", args);
-      const job = params.tooling.getJob({ jobId: args.jobId });
-      if (!job) {
-        const details = { status: "not_found", jobId: args.jobId };
-        logToolEnd("jobs_get", intent, details, startedAtMs);
-        return {
-          content: textResult(`found=false\njobId=${args.jobId}`),
-          details,
-        };
-      }
-      const text = formatJobDetailsText(job);
-      const details = { status: "completed", job };
-      logToolEnd("jobs_get", intent, details, startedAtMs);
-      return {
-        content: textResult(text),
-        details,
-      };
-    },
-  };
-
-  const jobsLogTailTool: AgentTool = {
-    name: "jobs_log_tail",
-    label: "Jobs Log Tail",
-    description: "Le cauda do log de um job por id.",
-    parameters: {
-      type: "object",
-      properties: {
-        jobId: { type: "string" },
-        tailChars: { type: "number" },
-      },
-      required: ["jobId"],
-      additionalProperties: false,
-    } as unknown as AgentTool["parameters"],
-    execute: async (_toolCallId, rawParams) => {
-      if (toolCalls >= maxToolCalls) {
-        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        return blockByBudget({ tool: "jobs_log_tail", reason, emitEvent: true });
-      }
-      toolCalls += 1;
-      const startedAtMs = Date.now();
-      const args = (rawParams ?? {}) as { jobId: string; tailChars?: number };
-      const intent = logToolStart("jobs_log_tail", args);
-      const result = await params.tooling.getJobLog({
-        jobId: args.jobId,
-        tailChars: args.tailChars,
-      });
-      if (!result.found) {
-        const details = { status: "not_found", jobId: args.jobId };
-        logToolEnd("jobs_log_tail", intent, details, startedAtMs);
-        return {
-          content: textResult(`found=false\njobId=${args.jobId}`),
-          details,
-        };
-      }
-      const text = formatJobLogText({ jobId: args.jobId, log: result.log ?? "" });
-      const details = { status: "completed", jobId: args.jobId, chars: result.log?.length ?? 0 };
-      logToolEnd("jobs_log_tail", intent, details, startedAtMs);
-      return {
-        content: textResult(text),
-        details,
-      };
-    },
-  };
+  const [jobsListTool, jobsGetTool, jobsLogTailTool] = createJobsPiTools({
+    tooling: params.tooling,
+    textResult,
+    reserveToolCall,
+    logToolStart,
+    logToolEnd: (tool, intent, result, startedAtMs, summary) =>
+      logToolEnd(tool, intent, result, startedAtMs, summary),
+  });
 
   const memorySearchTool: AgentTool = {
     name: "memory_search",
@@ -1224,86 +1118,15 @@ export function createPiShellTools(params: {
     },
   };
 
-  const browserTool: AgentTool = {
-    name: "browser",
-    label: "Browser",
-    description:
-      "Controla runtime de browser do Kael. Nesta fase inicial o runtime responde estado de disponibilidade e readiness de implementacao.",
-    parameters: {
-      type: "object",
-      properties: {
-        action: {
-          type: "string",
-          enum: BROWSER_ACTION_VALUES,
-        },
-        targetId: { type: "string" },
-        url: { type: "string" },
-        selector: { type: "string" },
-        text: { type: "string" },
-        key: { type: "string" },
-        timeoutMs: { type: "number" },
-      },
-      required: ["action"],
-      additionalProperties: false,
-    } as unknown as AgentTool["parameters"],
-    execute: async (_toolCallId, rawParams) => {
-      if (toolCalls >= maxToolCalls) {
-        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        return blockByBudget({ tool: "browser", reason, emitEvent: true });
-      }
-      if (browserCalls >= maxBrowserCalls) {
-        const reason = `browser_budget_exceeded:${browserCalls}/${maxBrowserCalls}`;
-        return blockByBudget({ tool: "browser", reason, emitEvent: true });
-      }
-      const actionRaw =
-        rawParams && typeof rawParams === "object"
-          ? String((rawParams as { action?: unknown }).action ?? "")
-          : "";
-      const isInteractionAction = isBrowserInteractionAction(actionRaw);
-      if (isInteractionAction && browserInteractionCalls >= maxBrowserInteractionCalls) {
-        const reason =
-          `browser_interaction_budget_exceeded:${browserInteractionCalls}/${maxBrowserInteractionCalls}`;
-        return blockByBudget({ tool: "browser", reason, emitEvent: true });
-      }
-      toolCalls += 1;
-      browserCalls += 1;
-      if (isInteractionAction) {
-        browserInteractionCalls += 1;
-      }
-      const startedAtMs = Date.now();
-      const args = (rawParams ?? {}) as {
-        action: BrowserCommandAction;
-        targetId?: string;
-        url?: string;
-        selector?: string;
-        text?: string;
-        key?: string;
-        timeoutMs?: number;
-      };
-      const intent = logToolStart("browser", args);
-      const result = await params.tooling.browserCommand({
-        sessionKey: params.sessionKey,
-        action: args.action,
-        targetId: args.targetId,
-        url: args.url,
-        selector: args.selector,
-        text: args.text,
-        key: args.key,
-        timeoutMs: args.timeoutMs,
-      });
-      logToolEnd(
-        "browser",
-        intent,
-        result,
-        startedAtMs,
-        `browser action=${result.action} status=${result.status}`,
-      );
-      return {
-        content: textResult(formatBrowserToolText(result)),
-        details: result,
-      };
-    },
-  };
+  const browserTool = createBrowserPiTool({
+    sessionKey: params.sessionKey,
+    tooling: params.tooling,
+    textResult,
+    reserveBrowserCall,
+    logToolStart,
+    logToolEnd: (tool, intent, result, startedAtMs, summary) =>
+      logToolEnd(tool, intent, result, startedAtMs, summary),
+  });
 
   const planCreateTool: AgentTool = {
     name: "plan_create",
