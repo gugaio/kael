@@ -3,6 +3,7 @@ import { kaelLogger } from "../infra/logger.js";
 import { createBrowserPiTool, isInteractionActionRaw } from "./tool-specs/browser.js";
 import { createJobsPiTools } from "./tool-specs/jobs.js";
 import { createVideoPiTools } from "./tool-specs/video.js";
+import { createWebPiTools } from "./tool-specs/web.js";
 import type { EngineOutputArtifact, EngineTooling } from "./types.js";
 import type { ToolLoopGuard } from "./tool-loop-guard.js";
 
@@ -220,54 +221,6 @@ export function createPiShellTools(params: {
     params.onToolEvent?.({ phase: "end", tool, status, blocked, reason, summary, artifact });
   };
 
-  const summarizeWebSearch = (result: { answer?: string; sources?: Array<{ title?: string; url?: string }> }) => {
-    const top = (result.sources ?? [])
-      .slice(0, 3)
-      .map((item) => `${item.title ?? "fonte"} | ${item.url ?? "n/a"}`);
-    if (top.length === 0) {
-      return "";
-    }
-    const answer = typeof result.answer === "string" ? result.answer.replace(/\s+/g, " ").slice(0, 180) : "";
-    return [`web_search`, ...top, answer ? `resumo=${answer}` : ""].filter(Boolean).join(" | ");
-  };
-
-  const summarizeWebFetch = (result: {
-    title?: string;
-    finalUrl?: string;
-    excerpt?: string;
-  }) => {
-    const excerpt =
-      typeof result.excerpt === "string" ? result.excerpt.replace(/\s+/g, " ").slice(0, 180) : "";
-    return [
-      "web_fetch",
-      result.title ? `titulo=${result.title.slice(0, 80)}` : "",
-      result.finalUrl ? `url=${result.finalUrl}` : "",
-      excerpt ? `trecho=${excerpt}` : "",
-    ]
-      .filter(Boolean)
-      .join(" | ");
-  };
-
-  const summarizeWebResearch = (result: {
-    summary?: string;
-    confidence?: number;
-    evidence?: Array<{ source?: { title?: string; url?: string } }>;
-  }) => {
-    const evidence = (result.evidence ?? [])
-      .slice(0, 3)
-      .map((item) => `${item.source?.title ?? "fonte"} | ${item.source?.url ?? "n/a"}`);
-    const summary =
-      typeof result.summary === "string" ? result.summary.replace(/\s+/g, " ").slice(0, 180) : "";
-    return [
-      "web_research",
-      typeof result.confidence === "number" ? `confianca=${result.confidence}` : "",
-      ...evidence,
-      summary ? `resumo=${summary}` : "",
-    ]
-      .filter(Boolean)
-      .join(" | ");
-  };
-
   const blockByBudget = (paramsInput: {
     tool: string;
     reason: string;
@@ -316,6 +269,64 @@ export function createPiShellTools(params: {
     browserCalls += 1;
     if (isInteractionAction) {
       browserInteractionCalls += 1;
+    }
+    return null;
+  };
+
+  const reserveWebCall = (
+    tool: "web_search" | "web_fetch" | "web_research",
+  ): { blocked: BlockedToolResult } | null => {
+    if (toolCalls >= maxToolCalls) {
+      const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+      return {
+        blocked: blockByBudget({
+          tool,
+          reason,
+          emitEvent: true,
+          nextAction: "finalize_answer_with_available_evidence",
+        }),
+      };
+    }
+    if (tool === "web_search" && webSearchCalls >= maxWebSearchCalls) {
+      const reason = `web_search_budget_exceeded:${webSearchCalls}/${maxWebSearchCalls}`;
+      return {
+        blocked: blockByBudget({
+          tool,
+          reason,
+          emitEvent: true,
+          nextAction: "finalize_answer_with_available_evidence",
+        }),
+      };
+    }
+    if (tool === "web_fetch" && webFetchCalls >= maxWebFetchCalls) {
+      const reason = `web_fetch_budget_exceeded:${webFetchCalls}/${maxWebFetchCalls}`;
+      return {
+        blocked: blockByBudget({
+          tool,
+          reason,
+          emitEvent: true,
+          nextAction: "finalize_answer_with_available_evidence",
+        }),
+      };
+    }
+    if (tool === "web_research" && webResearchCalls >= maxWebResearchCalls) {
+      const reason = `web_research_budget_exceeded:${webResearchCalls}/${maxWebResearchCalls}`;
+      return {
+        blocked: blockByBudget({
+          tool,
+          reason,
+          emitEvent: true,
+          nextAction: "finalize_answer_with_available_evidence",
+        }),
+      };
+    }
+    toolCalls += 1;
+    if (tool === "web_search") {
+      webSearchCalls += 1;
+    } else if (tool === "web_fetch") {
+      webFetchCalls += 1;
+    } else {
+      webResearchCalls += 1;
     }
     return null;
   };
@@ -714,308 +725,18 @@ export function createPiShellTools(params: {
     },
   };
 
-  const webSearchTool: AgentTool = {
-    name: "web_search",
-    label: "Web Search",
-    description:
-      "Pesquisa na web com citacao de fontes. Use para fatos atuais, confirmacao externa e comparacao de opcoes.",
-    parameters: {
-      type: "object",
-      properties: {
-        query: { type: "string", description: "Consulta de pesquisa" },
-        maxResults: { type: "number", description: "Quantidade maxima de fontes" },
-        recencyDays: { type: "number", description: "Recencia em dias (opcional)" },
-        domainsAllow: { type: "array", items: { type: "string" } },
-        domainsBlock: { type: "array", items: { type: "string" } },
-      },
-      required: ["query"],
-      additionalProperties: false,
-    } as unknown as AgentTool["parameters"],
-    execute: async (_toolCallId, rawParams) => {
-      if (toolCalls >= maxToolCalls) {
-        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        return blockByBudget({
-          tool: "web_search",
-          reason,
-          emitEvent: true,
-          nextAction: "finalize_answer_with_available_evidence",
-        });
-      }
-      if (webSearchCalls >= maxWebSearchCalls) {
-        const reason = `web_search_budget_exceeded:${webSearchCalls}/${maxWebSearchCalls}`;
-        return blockByBudget({
-          tool: "web_search",
-          reason,
-          emitEvent: true,
-          nextAction: "finalize_answer_with_available_evidence",
-        });
-      }
-      toolCalls += 1;
-      webSearchCalls += 1;
-      const startedAtMs = Date.now();
-      const args = (rawParams ?? {}) as {
-        query: string;
-        maxResults?: number;
-        recencyDays?: number;
-        domainsAllow?: string[];
-        domainsBlock?: string[];
-      };
-      const intent = logToolStart("web_search", args);
-      const decision = params.loopGuard?.beforeCall({
-        sessionKey: params.sessionKey,
-        tool: "web_search",
-        params: args,
-      });
-      if (decision && !decision.allowed) {
-        const blockedResult = makeBlockedResult({
-          reason: decision.reason,
-          retryAfterMs: decision.retryAfterMs,
-          nextAction: "finalize_answer_with_available_evidence",
-        });
-        logToolEnd("web_search", intent, blockedResult.details, startedAtMs);
-        return blockedResult;
-      }
-      const result = await params.tooling.webSearch({
-        sessionKey: params.sessionKey,
-        query: args.query,
-        maxResults: args.maxResults,
-        recencyDays: args.recencyDays,
-        domainsAllow: args.domainsAllow,
-        domainsBlock: args.domainsBlock,
-        signal: params.turnSignal,
-      });
-      params.loopGuard?.afterCall({
-        sessionKey: params.sessionKey,
-        tool: "web_search",
-        params: args,
-        result,
-      });
-      const text = [
-        `sources=${result.sources.length}`,
-        "answer:",
-        result.answer,
-        "",
-        "sources_list:",
-        ...result.sources.map((item, idx) => `${idx + 1}. ${item.title} | ${item.url}`),
-        ...(result.notes.length > 0 ? ["", "notes:", ...result.notes.map((item) => `- ${item}`)] : []),
-      ].join("\n");
-      const response = {
-        content: textResult(text),
-        details: result,
-      };
-      logToolEnd(
-        "web_search",
-        intent,
-        { status: "completed", ...result },
-        startedAtMs,
-        summarizeWebSearch(result),
-      );
-      return response;
-    },
-  };
-
-  const webFetchTool: AgentTool = {
-    name: "web_fetch",
-    label: "Web Fetch",
-    description:
-      "Baixa uma URL e extrai texto limpo para leitura resumida. Use para aprofundar uma fonte do web_search.",
-    parameters: {
-      type: "object",
-      properties: {
-        url: { type: "string", description: "URL http/https para extrair conteudo" },
-        maxChars: { type: "number", description: "Limite maximo de caracteres de conteudo" },
-      },
-      required: ["url"],
-      additionalProperties: false,
-    } as unknown as AgentTool["parameters"],
-    execute: async (_toolCallId, rawParams) => {
-      if (toolCalls >= maxToolCalls) {
-        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        return blockByBudget({
-          tool: "web_fetch",
-          reason,
-          emitEvent: true,
-          nextAction: "finalize_answer_with_available_evidence",
-        });
-      }
-      if (webFetchCalls >= maxWebFetchCalls) {
-        const reason = `web_fetch_budget_exceeded:${webFetchCalls}/${maxWebFetchCalls}`;
-        return blockByBudget({
-          tool: "web_fetch",
-          reason,
-          emitEvent: true,
-          nextAction: "finalize_answer_with_available_evidence",
-        });
-      }
-      toolCalls += 1;
-      webFetchCalls += 1;
-      const startedAtMs = Date.now();
-      const args = (rawParams ?? {}) as { url: string; maxChars?: number };
-      const intent = logToolStart("web_fetch", args);
-      const decision = params.loopGuard?.beforeCall({
-        sessionKey: params.sessionKey,
-        tool: "web_fetch",
-        params: args,
-      });
-      if (decision && !decision.allowed) {
-        const blockedResult = makeBlockedResult({
-          reason: decision.reason,
-          retryAfterMs: decision.retryAfterMs,
-          nextAction: "finalize_answer_with_available_evidence",
-        });
-        logToolEnd("web_fetch", intent, blockedResult.details, startedAtMs);
-        return blockedResult;
-      }
-      const result = await params.tooling.webFetch({
-        sessionKey: params.sessionKey,
-        url: args.url,
-        maxChars: args.maxChars,
-        signal: params.turnSignal,
-      });
-      params.loopGuard?.afterCall({
-        sessionKey: params.sessionKey,
-        tool: "web_fetch",
-        params: args,
-        result,
-      });
-      const text = [
-        `url=${result.url}`,
-        `finalUrl=${result.finalUrl}`,
-        `cached=${result.cached}`,
-        result.title ? `title=${result.title}` : "",
-        result.contentType ? `contentType=${result.contentType}` : "",
-        "excerpt:",
-        result.excerpt,
-      ]
-        .filter(Boolean)
-        .join("\n");
-      const response = {
-        content: textResult(text),
-        details: result,
-      };
-      logToolEnd(
-        "web_fetch",
-        intent,
-        { status: "completed", ...result },
-        startedAtMs,
-        summarizeWebFetch(result),
-      );
-      return response;
-    },
-  };
-
-  const webResearchTool: AgentTool = {
-    name: "web_research",
-    label: "Web Research",
-    description:
-      "Executa pesquisa completa (search + fetch de fontes) e retorna resumo com evidencias e nivel de confianca.",
-    parameters: {
-      type: "object",
-      properties: {
-        query: { type: "string", description: "Pergunta/tema de pesquisa" },
-        maxResults: { type: "number", description: "Quantidade maxima de fontes de busca" },
-        fetchTop: { type: "number", description: "Quantidade de fontes para web_fetch automatico" },
-        fetchMaxChars: { type: "number", description: "Limite de texto por fonte fetched" },
-        recencyDays: { type: "number", description: "Recencia em dias (opcional)" },
-        domainsAllow: { type: "array", items: { type: "string" } },
-        domainsBlock: { type: "array", items: { type: "string" } },
-      },
-      required: ["query"],
-      additionalProperties: false,
-    } as unknown as AgentTool["parameters"],
-    execute: async (_toolCallId, rawParams) => {
-      if (toolCalls >= maxToolCalls) {
-        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        return blockByBudget({
-          tool: "web_research",
-          reason,
-          emitEvent: true,
-          nextAction: "finalize_answer_with_available_evidence",
-        });
-      }
-      if (webResearchCalls >= maxWebResearchCalls) {
-        const reason = `web_research_budget_exceeded:${webResearchCalls}/${maxWebResearchCalls}`;
-        return blockByBudget({
-          tool: "web_research",
-          reason,
-          emitEvent: true,
-          nextAction: "finalize_answer_with_available_evidence",
-        });
-      }
-      toolCalls += 1;
-      webResearchCalls += 1;
-      const startedAtMs = Date.now();
-      const args = (rawParams ?? {}) as {
-        query: string;
-        maxResults?: number;
-        fetchTop?: number;
-        fetchMaxChars?: number;
-        recencyDays?: number;
-        domainsAllow?: string[];
-        domainsBlock?: string[];
-      };
-      const intent = logToolStart("web_research", args);
-      const decision = params.loopGuard?.beforeCall({
-        sessionKey: params.sessionKey,
-        tool: "web_research",
-        params: args,
-      });
-      if (decision && !decision.allowed) {
-        const blockedResult = makeBlockedResult({
-          reason: decision.reason,
-          retryAfterMs: decision.retryAfterMs,
-          nextAction: "finalize_answer_with_available_evidence",
-        });
-        logToolEnd("web_research", intent, blockedResult.details, startedAtMs);
-        return blockedResult;
-      }
-      const result = await params.tooling.webResearch({
-        sessionKey: params.sessionKey,
-        query: args.query,
-        maxResults: args.maxResults,
-        fetchTop: args.fetchTop,
-        fetchMaxChars: args.fetchMaxChars,
-        recencyDays: args.recencyDays,
-        domainsAllow: args.domainsAllow,
-        domainsBlock: args.domainsBlock,
-        signal: params.turnSignal,
-      });
-      params.loopGuard?.afterCall({
-        sessionKey: params.sessionKey,
-        tool: "web_research",
-        params: args,
-        result,
-      });
-      const text = [
-        `confidence=${result.confidence}`,
-        `confidenceReason=${result.confidenceReason}`,
-        "",
-        "summary:",
-        result.summary,
-        "",
-        "evidence:",
-        ...result.evidence
-          .slice(0, 6)
-          .map(
-            (item, idx) =>
-              `${idx + 1}. ${item.source.title} | ${item.source.url}${item.fetch ? " | fetched=true" : ""}`,
-          ),
-        ...(result.notes.length > 0 ? ["", "notes:", ...result.notes.map((item) => `- ${item}`)] : []),
-      ].join("\n");
-      const response = {
-        content: textResult(text),
-        details: result,
-      };
-      logToolEnd(
-        "web_research",
-        intent,
-        { status: "completed", ...result },
-        startedAtMs,
-        summarizeWebResearch(result),
-      );
-      return response;
-    },
-  };
+  const [webSearchTool, webFetchTool, webResearchTool] = createWebPiTools({
+    sessionKey: params.sessionKey,
+    tooling: params.tooling,
+    turnSignal: params.turnSignal,
+    loopGuard: params.loopGuard,
+    textResult,
+    makeBlockedResult,
+    reserveWebCall,
+    logToolStart,
+    logToolEnd: (tool, intent, result, startedAtMs, summary) =>
+      logToolEnd(tool, intent, result, startedAtMs, summary),
+  });
 
   const browserTool = createBrowserPiTool({
     sessionKey: params.sessionKey,
