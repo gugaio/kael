@@ -1,9 +1,11 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { kaelLogger } from "../infra/logger.js";
 import { createBrowserPiTool, isInteractionActionRaw } from "./tool-specs/browser.js";
+import { createImagePiTool } from "./tool-specs/image.js";
 import { createJobsPiTools } from "./tool-specs/jobs.js";
 import { createMemoryPiTools } from "./tool-specs/memory.js";
 import { createPlanPiTools } from "./tool-specs/plans.js";
+import { createSystemPiTools } from "./tool-specs/system.js";
 import { createVideoPiTools } from "./tool-specs/video.js";
 import { createWebPiTools } from "./tool-specs/web.js";
 import { createWorkspacePiTools } from "./tool-specs/workspace.js";
@@ -334,183 +336,55 @@ export function createPiShellTools(params: {
     return null;
   };
 
-  const execTool: AgentTool = {
-    name: "exec",
-    label: "Exec",
-    description:
-      "Executa comando shell local. Suporta background, timeout, policy de seguranca e aprovacao. Para encerrar sessoes iniciadas por exec, prefira a tool process com action=kill.",
-    parameters: {
-      type: "object",
-      properties: {
-        command: { type: "string", description: "Comando shell a executar" },
-        cwd: { type: "string", description: "Diretorio relativo ao workspace" },
-        timeoutMs: { type: "number", description: "Timeout em milissegundos" },
-        background: { type: "boolean", description: "Executa em background" },
-        security: {
-          type: "string",
-          enum: ["deny", "allowlist", "full"],
-          description: "Override temporario de politica de seguranca",
-        },
-        ask: {
-          type: "string",
-          enum: ["off", "on-miss", "always"],
-          description: "Override temporario de politica de aprovacao",
-        },
-      },
-      required: ["command"],
-      additionalProperties: false,
-    } as unknown as AgentTool["parameters"],
-    execute: async (_toolCallId, rawParams) => {
-      if (toolCalls >= maxToolCalls) {
-        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        return blockByBudget({ tool: "exec", reason, emitEvent: true });
-      }
-      if (execCalls >= maxExecCalls) {
-        const reason = `exec_call_budget_exceeded:${execCalls}/${maxExecCalls}`;
-        return blockByBudget({ tool: "exec", reason, emitEvent: true });
-      }
-      toolCalls += 1;
-      execCalls += 1;
-      const startedAtMs = Date.now();
-      const args = (rawParams ?? {}) as {
-        command: string;
-        cwd?: string;
-        timeoutMs?: number;
-        background?: boolean;
-        security?: "deny" | "allowlist" | "full";
-        ask?: "off" | "on-miss" | "always";
-      };
-      const intent = logToolStart("exec", args);
-      const decision = params.loopGuard?.beforeCall({
-        sessionKey: params.sessionKey,
-        tool: "exec",
-        params: args,
-      });
-      if (decision && !decision.allowed) {
-        const blockedResult = makeBlockedResult({
-          reason: decision.reason,
-          retryAfterMs: decision.retryAfterMs,
-        });
-        logToolEnd("exec", intent, blockedResult.details, startedAtMs);
-        return blockedResult;
-      }
-
-      const session = await params.tooling.execCommand({
-        sessionKey: params.sessionKey,
-        command: args.command,
-        cwd: args.cwd,
-        timeoutMs: args.timeoutMs,
-        background: args.background,
-        security: args.security,
-        ask: args.ask,
-      });
-      params.loopGuard?.afterCall({
-        sessionKey: params.sessionKey,
-        tool: "exec",
-        params: args,
-        result: session,
-      });
-
-      const result = {
-        content: textResult(formatSession(session)),
-        details: session,
-      };
-      logToolEnd("exec", intent, session, startedAtMs);
-      return result;
-    },
+  const reserveExecCall = (): { blocked: BlockedToolResult } | null => {
+    if (toolCalls >= maxToolCalls) {
+      const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+      return { blocked: blockByBudget({ tool: "exec", reason, emitEvent: true }) };
+    }
+    if (execCalls >= maxExecCalls) {
+      const reason = `exec_call_budget_exceeded:${execCalls}/${maxExecCalls}`;
+      return { blocked: blockByBudget({ tool: "exec", reason, emitEvent: true }) };
+    }
+    toolCalls += 1;
+    execCalls += 1;
+    return null;
   };
 
-  const processTool: AgentTool = {
-    name: "process",
-    label: "Process",
-    description:
-      "Gerencia sessoes de execucao shell. Acoes: list, poll, log, kill e remove.",
-    parameters: {
-      type: "object",
-      properties: {
-        action: {
-          type: "string",
-          enum: ["list", "poll", "log", "kill", "remove"],
-          description: "Acao da sessao",
-        },
-        sessionId: {
-          type: "string",
-          description: "ID da sessao para poll/log/kill/remove",
-        },
-        offset: { type: "number", description: "Offset de leitura para action=log" },
-        limit: { type: "number", description: "Limite de caracteres para action=log" },
-      },
-      required: ["action"],
-      additionalProperties: false,
-    } as unknown as AgentTool["parameters"],
-    execute: async (_toolCallId, rawParams) => {
-      if (toolCalls >= maxToolCalls) {
-        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        return blockByBudget({ tool: "process", reason, emitEvent: true });
-      }
-      toolCalls += 1;
-      const startedAtMs = Date.now();
-      const args = (rawParams ?? {}) as {
-        action: "list" | "poll" | "log" | "kill" | "remove";
-        sessionId?: string;
-        offset?: number;
-        limit?: number;
-      };
-      const intent = logToolStart("process", args);
-      const decision = params.loopGuard?.beforeCall({
-        sessionKey: params.sessionKey,
-        tool: "process",
-        params: args,
-      });
-      if (decision && !decision.allowed) {
-        const blockedResult = makeBlockedResult({
-          reason: decision.reason,
-          retryAfterMs: decision.retryAfterMs,
-        });
-        logToolEnd("process", intent, blockedResult.details, startedAtMs);
-        return blockedResult;
-      }
-      const result = await params.tooling.processCommand({
-        sessionKey: params.sessionKey,
-        action: args.action,
-        sessionId: args.sessionId,
-        offset: args.offset,
-        limit: args.limit,
-      });
-      params.loopGuard?.afterCall({
-        sessionKey: params.sessionKey,
-        tool: "process",
-        params: args,
-        result,
-      });
-
-      const text =
-        args.action === "list"
-          ? `ok=${result.ok}\nsessions=${(result.sessions ?? []).length}`
-          : args.action === "log"
-            ? [
-                `ok=${result.ok}`,
-                result.message ? `message=${result.message}` : "",
-                result.output ? `output:\n${result.output}` : "",
-              ]
-                .filter(Boolean)
-                .join("\n")
-          : [
-              `ok=${result.ok}`,
-              result.message ? `message=${result.message}` : "",
-              result.session ? formatSession(result.session) : "",
-            ]
-              .filter(Boolean)
-              .join("\n");
-
-      const toolResult = {
-        content: textResult(text),
-        details: result,
-      };
-      logToolEnd("process", intent, result, startedAtMs);
-      return toolResult;
-    },
+  const reserveProcessCall = (): { blocked: BlockedToolResult } | null => {
+    const reserved = reserveToolCall("process");
+    if (reserved) {
+      return { blocked: reserved.blocked };
+    }
+    return null;
   };
+
+  const reserveImageCall = (): { blocked: BlockedToolResult } | null => {
+    if (toolCalls >= maxToolCalls) {
+      const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+      return { blocked: blockByBudget({ tool: "image_generate", reason, emitEvent: true }) };
+    }
+    if (imageGenerateCalls >= maxImageGenerateCalls) {
+      const reason = `image_generate_budget_exceeded:${imageGenerateCalls}/${maxImageGenerateCalls}`;
+      return { blocked: blockByBudget({ tool: "image_generate", reason, emitEvent: true }) };
+    }
+    toolCalls += 1;
+    imageGenerateCalls += 1;
+    return null;
+  };
+
+  const [execTool, processTool] = createSystemPiTools({
+    sessionKey: params.sessionKey,
+    tooling: params.tooling,
+    loopGuard: params.loopGuard,
+    textResult,
+    formatSession,
+    makeBlockedResult,
+    reserveExecCall,
+    reserveProcessCall,
+    logToolStart,
+    logToolEnd: (tool, intent, result, startedAtMs, summary) =>
+      logToolEnd(tool, intent, result, startedAtMs, summary),
+  });
 
   const [videoHlsInspectTool, videoProbeTool] = createVideoPiTools({
     sessionKey: params.sessionKey,
@@ -582,89 +456,16 @@ export function createPiShellTools(params: {
     textResult,
   });
 
-  const imageGenerateTool: AgentTool = {
-    name: "image_generate",
-    label: "Image Generate",
-    description:
-      "Gera uma imagem a partir de prompt e retorna referencia para envio em canais que suportam anexo.",
-    parameters: {
-      type: "object",
-      properties: {
-        prompt: { type: "string", description: "Descricao da imagem a gerar" },
-        size: {
-          type: "string",
-          enum: ["1024x1024", "1536x1024", "1024x1536"],
-        },
-      },
-      required: ["prompt"],
-      additionalProperties: false,
-    } as unknown as AgentTool["parameters"],
-    execute: async (_toolCallId, rawParams) => {
-      if (toolCalls >= maxToolCalls) {
-        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
-        return blockByBudget({ tool: "image_generate", reason, emitEvent: true });
-      }
-      if (imageGenerateCalls >= maxImageGenerateCalls) {
-        const reason = `image_generate_budget_exceeded:${imageGenerateCalls}/${maxImageGenerateCalls}`;
-        return blockByBudget({ tool: "image_generate", reason, emitEvent: true });
-      }
-      toolCalls += 1;
-      imageGenerateCalls += 1;
-      const startedAtMs = Date.now();
-      const args = (rawParams ?? {}) as {
-        prompt: string;
-        size?: "1024x1024" | "1536x1024" | "1024x1536";
-      };
-      const intent = logToolStart("image_generate", args);
-      if (!params.tooling.imageGenerate) {
-        const reason = "image_generate_unavailable";
-        const details = makeBlockedResult({ reason }).details;
-        logToolEnd("image_generate", intent, details, startedAtMs);
-        return {
-          content: textResult(`blocked=true\nreason=${reason}`),
-          details,
-        };
-      }
-      try {
-        const artifact = await params.tooling.imageGenerate({
-          sessionKey: params.sessionKey,
-          prompt: args.prompt,
-          size: args.size,
-        });
-        const details = {
-          status: "completed",
-          kind: artifact.kind,
-          fileName: artifact.fileName,
-          mimeType: artifact.mimeType,
-        };
-        logToolEnd(
-          "image_generate",
-          intent,
-          details,
-          startedAtMs,
-          `image_generated file=${artifact.fileName} mime=${artifact.mimeType}`,
-          artifact,
-        );
-        return {
-          content: textResult(`ok=true\nimage_generated=${artifact.fileName}\nmime=${artifact.mimeType}`),
-          details,
-        };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const details = {
-          status: "failed",
-          blocked: false,
-          reason: "image_generate_failed",
-          error: message,
-        };
-        logToolEnd("image_generate", intent, details, startedAtMs, `image_generate_failed error=${message}`);
-        return {
-          content: textResult(`ok=false\nreason=image_generate_failed\nerror=${message}`),
-          details,
-        };
-      }
-    },
-  };
+  const imageGenerateTool = createImagePiTool({
+    sessionKey: params.sessionKey,
+    tooling: params.tooling,
+    textResult,
+    makeBlockedResult,
+    reserveImageCall,
+    logToolStart,
+    logToolEnd: (tool, intent, result, startedAtMs, summary, artifact) =>
+      logToolEnd(tool, intent, result, startedAtMs, summary, artifact),
+  });
 
   return [
     execTool,

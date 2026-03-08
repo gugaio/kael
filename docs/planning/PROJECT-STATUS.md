@@ -370,6 +370,32 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-07 - Extracao de tool-specs `system` e `image` no PI
+
+Resumo:
+- `exec` e `process` foram extraidos de `pi-tools` para factory dedicada.
+- `image_generate` foi extraido para factory dedicada.
+- Novos modulos:
+  - `src/engine/tool-specs/system.ts`;
+  - `src/engine/tool-specs/image.ts`.
+- `pi-tools` manteve budgets/loop guard/logging e passou a compor essas tools por registro.
+
+Arquivos-chave:
+- `src/engine/tool-specs/system.ts`
+- `src/engine/tool-specs/image.ts`
+- `src/engine/pi-tools.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+
+Pendencias:
+- Padronizar/exportar indice de `tool-specs` para reduzir wiring manual em `pi-tools`.
+
+Proximo passo recomendado:
+- Criar `src/engine/tool-specs/index.ts` e usar registro central para composicao das tools.
+
 ### 2026-03-07 - Extracao de tool-specs `plans` no PI
 
 Resumo:
