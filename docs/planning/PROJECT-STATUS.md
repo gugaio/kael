@@ -370,6 +370,28 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-07 - Extracao de tool-specs `memory` no PI
+
+Resumo:
+- `memory_search`, `memory_get` e `memory_write` foram extraidos de `pi-tools` para factory dedicada.
+- Novo modulo `src/engine/tool-specs/memory.ts` introduzido.
+- `pi-tools` manteve logs/telemetria e passou a compor tools de memoria via registro.
+
+Arquivos-chave:
+- `src/engine/tool-specs/memory.ts`
+- `src/engine/pi-tools.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+
+Pendencias:
+- Extrair blocos restantes (`workspace`, `plan_*`, `exec/process`) para reduzir hardcode residual no `pi-tools`.
+
+Proximo passo recomendado:
+- Migrar `workspace_search/read` para `src/engine/tool-specs/workspace.ts`.
+
 ### 2026-03-07 - Extracao de tool-specs `web` no PI
 
 Resumo:
