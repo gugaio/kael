@@ -1,4 +1,9 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
+import {
+  BROWSER_ACTIONS,
+  BROWSER_ACTION_VALUES,
+  type BrowserCommandAction,
+} from "../capabilities/browser/index.js";
 import { kaelLogger } from "../infra/logger.js";
 import type { EngineOutputArtifact, EngineTooling } from "./types.js";
 import type { ToolLoopGuard } from "./tool-loop-guard.js";
@@ -576,6 +581,175 @@ export function createPiShellTools(params: {
     },
   };
 
+  const jobsListTool: AgentTool = {
+    name: "jobs_list",
+    label: "Jobs List",
+    description:
+      "Lista jobs existentes com filtros opcionais (sessionKey, capability, action, status). Use para perguntas sobre jobs recentes/anteriores.",
+    parameters: {
+      type: "object",
+      properties: {
+        sessionKey: { type: "string" },
+        capability: { type: "string" },
+        action: { type: "string" },
+        status: { type: "string" },
+        limit: { type: "number" },
+      },
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      if (toolCalls >= maxToolCalls) {
+        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+        return blockByBudget({ tool: "jobs_list", reason, emitEvent: true });
+      }
+      toolCalls += 1;
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as {
+        sessionKey?: string;
+        capability?: string;
+        action?: string;
+        status?: string;
+        limit?: number;
+      };
+      const intent = logToolStart("jobs_list", args);
+      const jobs = params.tooling.listJobs({
+        sessionKey: args.sessionKey,
+        capability: args.capability,
+        action: args.action,
+        status: args.status,
+        limit: args.limit,
+      });
+      const text =
+        jobs.length === 0
+          ? "jobs=0"
+          : [
+              `jobs=${jobs.length}`,
+              ...jobs.map(
+                (job) =>
+                  `${job.id} | ${job.capability}/${job.action} | ${job.status} | createdAt=${job.createdAt}`,
+              ),
+            ].join("\n");
+      const details = { jobs };
+      logToolEnd(
+        "jobs_list",
+        intent,
+        { status: "completed", resultCount: jobs.length },
+        startedAtMs,
+      );
+      return {
+        content: textResult(text),
+        details,
+      };
+    },
+  };
+
+  const jobsGetTool: AgentTool = {
+    name: "jobs_get",
+    label: "Jobs Get",
+    description: "Busca detalhes completos de um job por id.",
+    parameters: {
+      type: "object",
+      properties: {
+        jobId: { type: "string" },
+      },
+      required: ["jobId"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      if (toolCalls >= maxToolCalls) {
+        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+        return blockByBudget({ tool: "jobs_get", reason, emitEvent: true });
+      }
+      toolCalls += 1;
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as { jobId: string };
+      const intent = logToolStart("jobs_get", args);
+      const job = params.tooling.getJob({ jobId: args.jobId });
+      if (!job) {
+        const details = { status: "not_found", jobId: args.jobId };
+        logToolEnd("jobs_get", intent, details, startedAtMs);
+        return {
+          content: textResult(`found=false\njobId=${args.jobId}`),
+          details,
+        };
+      }
+      const text = [
+        "found=true",
+        `jobId=${job.id}`,
+        `capability=${job.capability}`,
+        `action=${job.action}`,
+        `status=${job.status}`,
+        `sessionKey=${job.sessionKey}`,
+        `command=${job.command}`,
+        `input=${job.input}`,
+        job.output ? `output=${job.output}` : "",
+        `createdAt=${job.createdAt}`,
+        job.startedAt ? `startedAt=${job.startedAt}` : "",
+        job.endedAt ? `endedAt=${job.endedAt}` : "",
+        job.exitCode !== undefined ? `exitCode=${String(job.exitCode)}` : "",
+        job.error ? `error=${job.error}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const details = { status: "completed", job };
+      logToolEnd("jobs_get", intent, details, startedAtMs);
+      return {
+        content: textResult(text),
+        details,
+      };
+    },
+  };
+
+  const jobsLogTailTool: AgentTool = {
+    name: "jobs_log_tail",
+    label: "Jobs Log Tail",
+    description: "Le cauda do log de um job por id.",
+    parameters: {
+      type: "object",
+      properties: {
+        jobId: { type: "string" },
+        tailChars: { type: "number" },
+      },
+      required: ["jobId"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      if (toolCalls >= maxToolCalls) {
+        const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+        return blockByBudget({ tool: "jobs_log_tail", reason, emitEvent: true });
+      }
+      toolCalls += 1;
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as { jobId: string; tailChars?: number };
+      const intent = logToolStart("jobs_log_tail", args);
+      const result = await params.tooling.getJobLog({
+        jobId: args.jobId,
+        tailChars: args.tailChars,
+      });
+      if (!result.found) {
+        const details = { status: "not_found", jobId: args.jobId };
+        logToolEnd("jobs_log_tail", intent, details, startedAtMs);
+        return {
+          content: textResult(`found=false\njobId=${args.jobId}`),
+          details,
+        };
+      }
+      const text = [
+        "found=true",
+        `jobId=${args.jobId}`,
+        `chars=${result.log?.length ?? 0}`,
+        "log:",
+        result.log ?? "",
+      ].join("\n");
+      const details = { status: "completed", jobId: args.jobId, chars: result.log?.length ?? 0 };
+      logToolEnd("jobs_log_tail", intent, details, startedAtMs);
+      return {
+        content: textResult(text),
+        details,
+      };
+    },
+  };
+
   const memorySearchTool: AgentTool = {
     name: "memory_search",
     label: "Memory Search",
@@ -1086,18 +1260,7 @@ export function createPiShellTools(params: {
       properties: {
         action: {
           type: "string",
-          enum: [
-            "start",
-            "open",
-            "navigate",
-            "snapshot_text",
-            "screenshot",
-            "click",
-            "type",
-            "press",
-            "wait_for",
-            "close",
-          ],
+          enum: BROWSER_ACTION_VALUES,
         },
         targetId: { type: "string" },
         url: { type: "string" },
@@ -1123,7 +1286,10 @@ export function createPiShellTools(params: {
           ? String((rawParams as { action?: unknown }).action ?? "")
           : "";
       const isInteractionAction =
-        actionRaw === "click" || actionRaw === "type" || actionRaw === "press" || actionRaw === "wait_for";
+        actionRaw === BROWSER_ACTIONS.click ||
+        actionRaw === BROWSER_ACTIONS.type ||
+        actionRaw === BROWSER_ACTIONS.press ||
+        actionRaw === BROWSER_ACTIONS.waitFor;
       if (isInteractionAction && browserInteractionCalls >= maxBrowserInteractionCalls) {
         const reason =
           `browser_interaction_budget_exceeded:${browserInteractionCalls}/${maxBrowserInteractionCalls}`;
@@ -1136,17 +1302,7 @@ export function createPiShellTools(params: {
       }
       const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as {
-        action:
-          | "start"
-          | "open"
-          | "navigate"
-          | "snapshot_text"
-          | "screenshot"
-          | "click"
-          | "type"
-          | "press"
-          | "wait_for"
-          | "close";
+        action: BrowserCommandAction;
         targetId?: string;
         url?: string;
         selector?: string;
@@ -1254,6 +1410,7 @@ export function createPiShellTools(params: {
     parameters: {
       type: "object",
       properties: {
+        sessionKey: { type: "string" },
         status: {
           type: "string",
           enum: ["active", "completed", "blocked", "failed", "canceled"],
@@ -1264,11 +1421,12 @@ export function createPiShellTools(params: {
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
       const args = (rawParams ?? {}) as {
+        sessionKey?: string;
         status?: "active" | "completed" | "blocked" | "failed" | "canceled";
         limit?: number;
       };
       const plans = params.tooling.planList({
-        sessionKey: params.sessionKey,
+        sessionKey: args.sessionKey,
         status: args.status,
         limit: args.limit,
       });
@@ -1282,6 +1440,42 @@ export function createPiShellTools(params: {
       return {
         content: textResult(text),
         details: { plans },
+      };
+    },
+  };
+
+  const planGetTool: AgentTool = {
+    name: "plan_get",
+    label: "Plan Get",
+    description: "Retorna detalhes completos de um plano por id.",
+    parameters: {
+      type: "object",
+      properties: {
+        planId: { type: "string" },
+      },
+      required: ["planId"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const args = (rawParams ?? {}) as { planId: string };
+      const plan = params.tooling.planGet({ planId: args.planId });
+      if (!plan) {
+        return {
+          content: textResult("found=false"),
+          details: { found: false, planId: args.planId },
+        };
+      }
+      const text = [
+        "found=true",
+        `planId=${plan.id}`,
+        `sessionKey=${plan.sessionKey}`,
+        `status=${plan.status}`,
+        `title=${plan.title}`,
+        `steps=${plan.steps.length}`,
+      ].join("\n");
+      return {
+        content: textResult(text),
+        details: { found: true, plan },
       };
     },
   };
@@ -1546,6 +1740,9 @@ export function createPiShellTools(params: {
     processTool,
     videoHlsInspectTool,
     videoProbeTool,
+    jobsListTool,
+    jobsGetTool,
+    jobsLogTailTool,
     memorySearchTool,
     memoryGetTool,
     memoryWriteTool,
@@ -1559,6 +1756,7 @@ export function createPiShellTools(params: {
     planCreateTool,
     planGenerateTool,
     planListTool,
+    planGetTool,
     planUpdateStepTool,
     planNextTool,
     planExecuteNextTool,

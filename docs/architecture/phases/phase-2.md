@@ -12,7 +12,7 @@ Acoplar um engine de IA real sem perder operacao local deterministica para coman
 - Pi adapter (`src/engine/pi-engine-adapter.ts`)
 - Bootstrap de prompt/identidade via `SOUL.md` (`src/config.ts`)
 - Engine hibrida (`src/engine/hybrid-engine.ts`)
-- Video job service (`src/tools/video/video-job-service.ts`)
+- Video capability runtime (`src/capabilities/video/job-service.ts`)
 - Config global/home (`src/global-config.ts`, `src/config.ts`)
 
 ## Modos de engine

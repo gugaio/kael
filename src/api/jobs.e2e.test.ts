@@ -10,7 +10,7 @@ import type { KaelApp } from "../app.js";
 import { createApiServer } from "./server.js";
 import { JobManager } from "../jobs/manager.js";
 import { JobStore } from "../jobs/store.js";
-import { VideoJobService } from "../tools/video/video-job-service.js";
+import { VideoCapability, VideoJobService } from "../capabilities/video/index.js";
 import type { ProcessRunner } from "../tools/system/process-runner.js";
 
 function sleep(ms: number): Promise<void> {
@@ -61,7 +61,7 @@ async function createJobsServer(params: {
     jobTimeoutMs: params.jobTimeoutMs ?? 60_000,
     killGraceMs: 10,
   });
-  const jobs = new JobManager(store, video);
+  const jobs = new JobManager(store, [new VideoCapability(video)]);
 
   const app: KaelApp = {
     config: {
@@ -371,7 +371,7 @@ describe("Jobs E2E API", () => {
     expect(created.statusCode).toBe(200);
     const body = created.json();
     expect(body.ok).toBe(true);
-    expect(body.job.type).toBe("play_vlc");
+    expect(body.job.action).toBe("play_vlc");
     expect(body.job.command).toBe("vlc");
     await server.close();
   });

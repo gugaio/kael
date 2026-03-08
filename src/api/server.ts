@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { createKaelApp, type KaelApp } from "../app.js";
+import { VIDEO_JOB_ACTIONS } from "../capabilities/video/index.js";
 import { IdempotencyConflictError, IdempotencyStore, stableStringify } from "../infra/idempotency-store.js";
 import { kaelLogger } from "../infra/logger.js";
 import { ApiError, asApiError, sendApiError } from "./errors.js";
@@ -78,10 +79,10 @@ type PlannerReconcileRuntime = {
 
 function createPlannerExecuteRuntime(app: KaelApp): PlannerExecuteRuntime {
   return {
-    startProbeMedia: (args) => app.jobs.startProbeMedia(args),
-    startCaptureStream: (args) => app.jobs.startCaptureStream(args),
-    startTranscode: (args) => app.jobs.startTranscode(args),
-    startConvertHls: (args) => app.jobs.startConvertHls(args),
+    startProbeMedia: (args) => app.jobs.startAction(VIDEO_JOB_ACTIONS.probeMedia, args),
+    startCaptureStream: (args) => app.jobs.startAction(VIDEO_JOB_ACTIONS.captureStream, args),
+    startTranscode: (args) => app.jobs.startAction(VIDEO_JOB_ACTIONS.transcode, args),
+    startConvertHls: (args) => app.jobs.startAction(VIDEO_JOB_ACTIONS.convertHls, args),
     execCommand: (args) =>
       app.shell.exec({
         sessionKey: args.sessionKey,
@@ -930,7 +931,12 @@ export function createApiServer(app: KaelApp): FastifyInstance {
         idempotencyKey,
         signature: stableStringify({ sessionKey, inputPath, outputPath, args }),
         execute: async () => {
-          const job = await app.jobs.startTranscode({ sessionKey, inputPath, outputPath, args });
+          const job = await app.jobs.startAction(VIDEO_JOB_ACTIONS.transcode, {
+            sessionKey,
+            inputPath,
+            outputPath,
+            args,
+          });
           return { ok: true, job };
         },
       });
@@ -968,7 +974,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
         idempotencyKey,
         signature: stableStringify({ sessionKey, input }),
         execute: async () => {
-          const job = await app.jobs.startPlayVlc({ sessionKey, input });
+          const job = await app.jobs.startAction(VIDEO_JOB_ACTIONS.playVlc, { sessionKey, input });
           return { ok: true, job };
         },
       });
@@ -1010,7 +1016,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
         idempotencyKey,
         signature: stableStringify({ sessionKey, inputPath, outputPlaylistPath, segmentTime }),
         execute: async () => {
-          const job = await app.jobs.startConvertHls({
+          const job = await app.jobs.startAction(VIDEO_JOB_ACTIONS.convertHls, {
             sessionKey,
             inputPath,
             outputPlaylistPath,
@@ -1057,7 +1063,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
         idempotencyKey,
         signature: stableStringify({ sessionKey, streamUrl, outputPath, durationSeconds }),
         execute: async () => {
-          const job = await app.jobs.startCaptureStream({
+          const job = await app.jobs.startAction(VIDEO_JOB_ACTIONS.captureStream, {
             sessionKey,
             streamUrl,
             outputPath,
@@ -1100,7 +1106,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
         idempotencyKey,
         signature: stableStringify({ sessionKey, streamUrl }),
         execute: async () => {
-          const job = await app.jobs.startProbeUrl({ sessionKey, streamUrl });
+          const job = await app.jobs.startAction(VIDEO_JOB_ACTIONS.probeUrl, { sessionKey, streamUrl });
           return { ok: true, job };
         },
       });
@@ -1138,7 +1144,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
         idempotencyKey,
         signature: stableStringify({ sessionKey, inputPath }),
         execute: async () => {
-          const job = await app.jobs.startProbeMedia({ sessionKey, inputPath });
+          const job = await app.jobs.startAction(VIDEO_JOB_ACTIONS.probeMedia, { sessionKey, inputPath });
           return { ok: true, job };
         },
       });

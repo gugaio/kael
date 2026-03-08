@@ -6,8 +6,8 @@ import path from "node:path";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { JobStore } from "../../jobs/store.js";
-import type { ProcessRunner } from "../system/process-runner.js";
-import { VideoJobService } from "./video-job-service.js";
+import type { ProcessRunner } from "../../tools/system/process-runner.js";
+import { VideoJobService } from "./job-service.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

@@ -5,7 +5,7 @@ import type { Readable, Writable } from "node:stream";
 import type { JobStore } from "../../jobs/store.js";
 import type { VideoJob, VideoJobType } from "../../types.js";
 import { kaelLogger } from "../../infra/logger.js";
-import type { ProcessRunner } from "../system/process-runner.js";
+import type { ProcessRunner } from "../../tools/system/process-runner.js";
 import {
   validateExistingInputPath,
   validateOutputPath,
@@ -15,7 +15,7 @@ import {
 
 type StartJobParams = {
   id: string;
-  type: VideoJobType;
+  action: VideoJobType;
   sessionKey: string;
   command: "ffmpeg" | "ffprobe" | "vlc";
   input: string;
@@ -72,7 +72,7 @@ export class VideoJobService {
     const userArgs = validateUserArgs(params.args, this.safety.maxJobArgs);
     const codecArgs = userArgs.length > 0 ? userArgs : ["-c:v", "libx264", "-c:a", "aac"];
     return this.startJob({
-      type: "transcode",
+      action: "transcode",
       sessionKey: params.sessionKey,
       command: "ffmpeg",
       input: params.inputPath,
@@ -105,7 +105,7 @@ export class VideoJobService {
       : 10;
 
     return this.startJob({
-      type: "convert_hls",
+      action: "convert_hls",
       sessionKey: params.sessionKey,
       command: "ffmpeg",
       input: params.inputPath,
@@ -149,7 +149,7 @@ export class VideoJobService {
         : [];
 
     return this.startJob({
-      type: "capture_stream",
+      action: "capture_stream",
       sessionKey: params.sessionKey,
       command: "ffmpeg",
       input: params.streamUrl,
@@ -169,7 +169,7 @@ export class VideoJobService {
       safePathsEnabled: this.safety.safePathsEnabled,
     });
     return this.startJob({
-      type: "probe_media",
+      action: "probe_media",
       sessionKey: params.sessionKey,
       command: "ffprobe",
       input: params.inputPath,
@@ -191,7 +191,7 @@ export class VideoJobService {
   }): Promise<VideoJob> {
     validateStreamUrl(params.streamUrl);
     return this.startJob({
-      type: "probe_media",
+      action: "probe_media",
       sessionKey: params.sessionKey,
       command: "ffprobe",
       input: params.streamUrl,
@@ -227,7 +227,7 @@ export class VideoJobService {
     }
 
     return this.startJob({
-      type: "play_vlc",
+      action: "play_vlc",
       sessionKey: params.sessionKey,
       command: "vlc",
       input: value,
@@ -249,12 +249,12 @@ export class VideoJobService {
         endedAt: new Date().toISOString(),
         error: "job canceled by user",
       });
-      return { job: updated ?? this.jobs.get(jobId), canceled: true };
+      return { job: (updated ?? this.jobs.get(jobId)) as VideoJob | null, canceled: true };
     }
 
     const running = this.activeJobs.get(jobId);
     if (!running) {
-      return { job: this.jobs.get(jobId), canceled: false };
+      return { job: this.jobs.get(jobId) as VideoJob | null, canceled: false };
     }
 
     this.canceledJobs.add(jobId);
@@ -266,7 +266,7 @@ export class VideoJobService {
     }, this.safety.killGraceMs);
     forceHandle.unref();
 
-    return { job: this.jobs.get(jobId), canceled: true };
+    return { job: this.jobs.get(jobId) as VideoJob | null, canceled: true };
   }
 
   private async startJob(params: Omit<StartJobParams, "id">): Promise<VideoJob> {
@@ -275,7 +275,8 @@ export class VideoJobService {
 
     const initial: VideoJob = {
       id,
-      type: params.type,
+      capability: "video",
+      action: params.action,
       sessionKey: params.sessionKey,
       command: params.command,
       input: params.input,
@@ -351,7 +352,7 @@ export class VideoJobService {
         logStream.end(`\n[process-error] ${error.message}\n`);
         kaelLogger.error("jobs.execution.failed", {
           jobId: params.id,
-          type: params.type,
+          type: params.action,
           reason: canceled ? "canceled_process_error" : "process_error",
           message: error.message,
         });
@@ -380,7 +381,7 @@ export class VideoJobService {
 
         kaelLogger.info("jobs.execution.finished", {
           jobId: params.id,
-          type: params.type,
+          type: params.action,
           exitCode: code,
           timedOut,
           canceled,
@@ -396,7 +397,7 @@ export class VideoJobService {
       });
       kaelLogger.error("jobs.execution.failed", {
         jobId: params.id,
-        type: params.type,
+        type: params.action,
         reason: "setup_error",
         message: error instanceof Error ? error.message : String(error),
       });

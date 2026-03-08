@@ -124,6 +124,49 @@ flowchart TD
 | POST | /jobs/probe | Probe local media |
 | POST | /jobs/probe-url | Probe URL/stream |
 
+#### Jobs Payload Contract
+
+`Job` now uses capability-based fields:
+
+- `capability`: dominio dono do job (ex.: `video`)
+- `action`: acao executada no dominio (ex.: `transcode`, `convert_hls`)
+
+`type` nao faz mais parte do payload atual.
+
+Exemplo de `job` retornado por `GET /jobs/:jobId`:
+
+```json
+{
+  "ok": true,
+  "job": {
+    "id": "a1b2c3d4",
+    "capability": "video",
+    "action": "transcode",
+    "sessionKey": "main",
+    "command": "ffmpeg",
+    "input": "/videos/input.mp4",
+    "output": "/videos/output.mp4",
+    "args": ["-y", "-i", "/videos/input.mp4", "-c:v", "libx264", "-c:a", "aac", "/videos/output.mp4"],
+    "status": "running",
+    "createdAt": "2026-03-07T12:00:00.000Z",
+    "startedAt": "2026-03-07T12:00:01.000Z",
+    "logPath": "/.kael-data/jobs/logs/a1b2c3d4.log"
+  }
+}
+```
+
+Exemplo resumido de item em `GET /jobs`:
+
+```json
+{
+  "id": "a1b2c3d4",
+  "capability": "video",
+  "action": "probe_media",
+  "status": "succeeded",
+  "output": "/videos/probe.json"
+}
+```
+
 ### Schedules (Automation)
 | Method | Path | Description |
 |--------|------|-------------|

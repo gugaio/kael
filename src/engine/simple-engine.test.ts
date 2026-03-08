@@ -29,6 +29,8 @@ function createTooling(
       errors: [],
     }),
     listJobs: () => [],
+    getJob: () => null,
+    getJobLog: async ({ jobId }) => ({ jobId, found: false }),
     execCommand:
       execImpl ??
       (async () => ({
@@ -119,6 +121,7 @@ function createTooling(
     planCreate: async () => ({ id: "p1" } as never),
     planGenerate: async () => ({ id: "p1" } as never),
     planList: () => [],
+    planGet: () => null,
     planUpdateStep: async () => null,
     planNextAction: () => null,
     planExecuteNext: async () => ({ ok: false, reason: "no_next_step", message: "none" }),

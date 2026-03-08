@@ -370,6 +370,66 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-07 - Fase 16.x: BrowserCapability com actions tipadas
+
+Resumo:
+- Introduzida `BrowserCapability` com `BROWSER_ACTIONS`/`BROWSER_ACTION_VALUES` para padronizar o mesmo estilo de extensao por capability usado no video.
+- `createKaelApp` agora instancia `BrowserToolService` (runtime) e encapsula em `BrowserCapability`.
+- `createChatTooling` passou a depender da capability (e nao do runtime direto), mantendo contrato externo `browserCommand`.
+- `pi-tools` e `simple-engine` passaram a usar constants de actions de browser para reduzir string solta e manter consistencia.
+
+Arquivos-chave:
+- `src/capabilities/browser/capability.ts`
+- `src/capabilities/browser/index.ts`
+- `src/capabilities/browser/capability.test.ts`
+- `src/app.ts`
+- `src/chat/tooling-factory.ts`
+- `src/engine/pi-tools.ts`
+- `src/engine/simple-engine.ts`
+- `docs/architecture/phases/phase-16.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/capabilities/browser/capability.test.ts src/capabilities/browser/service.test.ts src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+
+Pendencias:
+- Aplicar padrao análogo para `system` separando capability de alto nivel e runtime interno.
+
+Proximo passo recomendado:
+- Definir contrato `SystemCapability` antes da migracao de `src/tools/system`.
+
+### 2026-03-07 - Fase 16.x: migracao do browser runtime para `capabilities`
+
+Resumo:
+- Browser runtime migrado de `src/tools/browser` para `src/capabilities/browser`.
+- Imports do core (app/chat/engine) atualizados para o novo namespace.
+- Barrel `src/capabilities/browser/index.ts` adicionado para padronizar consumo por capability.
+- Docs de arquitetura ativa atualizadas para refletir o novo caminho.
+
+Arquivos-chave:
+- `src/capabilities/browser/service.ts`
+- `src/capabilities/browser/service.test.ts`
+- `src/capabilities/browser/service.smoke.test.ts`
+- `src/capabilities/browser/index.ts`
+- `src/app.ts`
+- `src/chat/service.ts`
+- `src/chat/tooling-factory.ts`
+- `src/engine/types.ts`
+- `docs/architecture/phases/phase-16.md`
+- `docs/architecture/diagrams/detailed-components.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/capabilities/browser/service.test.ts src/engine/simple-engine.test.ts`
+
+Pendencias:
+- Avaliar migracao de `system` separando capability (`exec/process`) de runtime interno de processos.
+
+Proximo passo recomendado:
+- Definir desenho alvo de `src/capabilities/system` + `src/runtime/system` antes de mover arquivos.
+
 ### 2026-03-07 - Fase 17.0: controle inicial de execucao em planos (`wait_execution` + `cancel_execution`)
 
 Resumo:

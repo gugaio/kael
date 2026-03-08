@@ -1,4 +1,5 @@
 import type { AgentEngine, EngineTurnInput, EngineTurnOutput } from "./types.js";
+import { BROWSER_ACTIONS } from "../capabilities/browser/index.js";
 
 function parseCommand(message: string): { name: string; args: string[] } | null {
   const trimmed = message.trim();
@@ -72,7 +73,10 @@ export class SimpleCommandEngine implements AgentEngine {
       }
 
       const summary = jobs
-        .map((job) => `- ${job.id} | ${job.type} | ${job.status} | ${job.output ?? "(sem output)"}`)
+        .map(
+          (job) =>
+            `- ${job.id} | ${job.capability}/${job.action} | ${job.status} | ${job.output ?? "(sem output)"}`,
+        )
         .join("\n");
 
       return { reply: `Ultimos jobs:\n${summary}` };
@@ -153,7 +157,7 @@ export class SimpleCommandEngine implements AgentEngine {
     if (parsed.name === "/browser-start") {
       const result = await input.tooling.browserCommand({
         sessionKey: input.sessionKey,
-        action: "start",
+        action: BROWSER_ACTIONS.start,
       });
       return { reply: formatBrowserReply(result) };
     }
@@ -165,7 +169,7 @@ export class SimpleCommandEngine implements AgentEngine {
       }
       const result = await input.tooling.browserCommand({
         sessionKey: input.sessionKey,
-        action: "open",
+        action: BROWSER_ACTIONS.open,
         url,
       });
       return { reply: formatBrowserReply(result) };
@@ -174,7 +178,7 @@ export class SimpleCommandEngine implements AgentEngine {
     if (parsed.name === "/browser-snapshot") {
       const result = await input.tooling.browserCommand({
         sessionKey: input.sessionKey,
-        action: "snapshot_text",
+        action: BROWSER_ACTIONS.snapshotText,
       });
       return { reply: formatBrowserReply(result) };
     }
@@ -182,7 +186,7 @@ export class SimpleCommandEngine implements AgentEngine {
     if (parsed.name === "/browser-shot" || parsed.name === "/browser-screenshot") {
       const result = await input.tooling.browserCommand({
         sessionKey: input.sessionKey,
-        action: "screenshot",
+        action: BROWSER_ACTIONS.screenshot,
       });
       return { reply: formatBrowserReply(result) };
     }
@@ -194,7 +198,7 @@ export class SimpleCommandEngine implements AgentEngine {
       }
       const result = await input.tooling.browserCommand({
         sessionKey: input.sessionKey,
-        action: "click",
+        action: BROWSER_ACTIONS.click,
         selector,
       });
       return { reply: formatBrowserReply(result) };
@@ -211,7 +215,7 @@ export class SimpleCommandEngine implements AgentEngine {
       }
       const result = await input.tooling.browserCommand({
         sessionKey: input.sessionKey,
-        action: "type",
+        action: BROWSER_ACTIONS.type,
         selector,
         text,
       });
@@ -226,7 +230,7 @@ export class SimpleCommandEngine implements AgentEngine {
       const selector = parsed.args.slice(1).join(" ").trim() || undefined;
       const result = await input.tooling.browserCommand({
         sessionKey: input.sessionKey,
-        action: "press",
+        action: BROWSER_ACTIONS.press,
         key,
         selector,
       });
@@ -246,7 +250,7 @@ export class SimpleCommandEngine implements AgentEngine {
           : undefined;
       const result = await input.tooling.browserCommand({
         sessionKey: input.sessionKey,
-        action: "wait_for",
+        action: BROWSER_ACTIONS.waitFor,
         selector,
         timeoutMs,
       });
@@ -256,7 +260,7 @@ export class SimpleCommandEngine implements AgentEngine {
     if (parsed.name === "/browser-close") {
       const result = await input.tooling.browserCommand({
         sessionKey: input.sessionKey,
-        action: "close",
+        action: BROWSER_ACTIONS.close,
       });
       return { reply: formatBrowserReply(result) };
     }

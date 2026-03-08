@@ -26,11 +26,10 @@ import { TurnOrchestrator } from "./chat/turn-orchestrator.js";
 import { WorkspaceInspector } from "./workspace/inspector.js";
 import { LocalProcessRunner } from "./tools/system/process-runner.js";
 import { ShellToolService, type ShellRuntime } from "./tools/system/shell-tool-service.js";
-import { VideoJobService } from "./tools/video/video-job-service.js";
-import { VideoInspectToolService } from "./tools/video/video-inspect-tool-service.js";
+import { VideoCapability, VideoInspectToolService, VideoJobService } from "./capabilities/video/index.js";
 import { NoopMediaUnderstandingService, OpenAiMediaUnderstandingService } from "./media/service.js";
 import { NoopImageGeneratorService, OpenAiImageGeneratorService } from "./media/image-generator.js";
-import { BrowserToolService } from "./tools/browser/service.js";
+import { BrowserCapability, BrowserToolService } from "./capabilities/browser/index.js";
 
 export type KaelApp = {
   config: KaelConfig;
@@ -71,7 +70,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     jobTimeoutMs: config.execution.jobTimeoutMs,
     killGraceMs: config.execution.killGraceMs,
   });
-  const jobs = new JobManager(jobStore, video);
+  const jobs = new JobManager(jobStore, [new VideoCapability(video)]);
   const videoInspect = new VideoInspectToolService();
   const shell = new ShellToolService({
     workspaceRoot: config.shell.workspaceRoot,
@@ -99,7 +98,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     maxFileChars: 100_000,
     maxSearchResults: 12,
   });
-  const browser = new BrowserToolService({
+  const browserRuntime = new BrowserToolService({
     enabled: config.browser.enabled,
     headless: config.browser.headless,
     defaultTimeoutMs: config.browser.defaultTimeoutMs,
@@ -109,6 +108,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     maxSessions: config.browser.maxSessions,
     artifactDir: config.browser.artifactDir,
   });
+  const browser = new BrowserCapability(browserRuntime);
   const searchProvider = config.research.enabled && config.research.apiKey
     ? new TavilySearchProvider(config.research.apiKey)
     : new DisabledSearchProvider();

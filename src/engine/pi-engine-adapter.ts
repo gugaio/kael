@@ -134,6 +134,37 @@ function buildWebToolingDisciplineInstruction(): string[] {
   ];
 }
 
+function isRuntimeStateQuestion(message: string): boolean {
+  const text = message.toLowerCase();
+  const triggers = [
+    "ultimo job",
+    "último job",
+    "jobs",
+    "transcode",
+    "hls",
+    "capture",
+    "probe",
+    "status do job",
+    "log do job",
+    "plano",
+    "planos",
+    "status do plano",
+    "etapa do plano",
+  ];
+  return triggers.some((token) => text.includes(token));
+}
+
+function buildRuntimeStateInstruction(): string[] {
+  return [
+    "Pergunta sobre estado historico de jobs/planos detectada.",
+    "Priorize tools de estado antes de shell/exec:",
+    "1) Para jobs: use jobs_list, jobs_get e jobs_log_tail.",
+    "2) Para planos: use plan_list e plan_get.",
+    "3) So use exec/process se as tools de estado nao forem suficientes.",
+    "",
+  ];
+}
+
 export function buildPrompt(input: EngineTurnInput): string {
   const context = input.contextMessages ?? [];
   const needsMemoryRecall = isMemoryRecallQuestion(input.message);
@@ -148,6 +179,9 @@ export function buildPrompt(input: EngineTurnInput): string {
         "Antes de responder, investigue o workspace com workspace_search e workspace_read e responda com evidencias (arquivo:linha).",
         "",
       );
+    }
+    if (isRuntimeStateQuestion(input.message)) {
+      leadingInstructions.push(...buildRuntimeStateInstruction());
     }
     leadingInstructions.push(...buildWebToolingDisciplineInstruction());
     if (leadingInstructions.length === 0) {
@@ -172,6 +206,7 @@ export function buildPrompt(input: EngineTurnInput): string {
           "",
         ]
       : []),
+    ...(isRuntimeStateQuestion(input.message) ? buildRuntimeStateInstruction() : []),
     ...buildWebToolingDisciplineInstruction(),
     ...(needsMemoryRecall ? buildMemoryRecallInstruction(input.message) : []),
     "Instrucao critica: responda a MENSAGEM ATUAL do usuario. Nao continue tarefas antigas sem pedido explicito.",

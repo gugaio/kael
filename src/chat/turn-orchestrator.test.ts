@@ -45,6 +45,8 @@ function createToolingStub(): EngineTooling {
       errors: [],
     }),
     listJobs: () => [],
+    getJob: () => null,
+    getJobLog: async ({ jobId }) => ({ jobId, found: false }),
     execCommand: async () => ({
       id: "1",
       command: "true",
@@ -163,6 +165,7 @@ function createToolingStub(): EngineTooling {
       steps: [],
     }),
     planList: () => [],
+    planGet: () => null,
     planUpdateStep: async () => null,
     planNextAction: () => null,
     planExecuteNext: async () => ({ ok: false, reason: "no_next_step", message: "none" }),

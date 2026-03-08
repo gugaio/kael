@@ -1,10 +1,10 @@
-import type { VideoJob } from "../types.js";
+import type { JobRecord } from "../types.js";
 import type { WebFetchResult, WebResearchResult, WebSearchResult } from "../research/types.js";
 import type {
   BrowserCommandAction,
   BrowserCommandResult,
   BrowserRuntimeTelemetry,
-} from "../tools/browser/service.js";
+} from "../capabilities/browser/index.js";
 
 export type EngineTooling = {
   startTranscode: (params: {
@@ -12,27 +12,27 @@ export type EngineTooling = {
     inputPath: string;
     outputPath: string;
     args?: string[];
-  }) => Promise<VideoJob>;
+  }) => Promise<JobRecord>;
   startConvertHls: (params: {
     sessionKey: string;
     inputPath: string;
     outputPlaylistPath: string;
     segmentTime?: number;
-  }) => Promise<VideoJob>;
+  }) => Promise<JobRecord>;
   startCaptureStream: (params: {
     sessionKey: string;
     streamUrl: string;
     outputPath: string;
     durationSeconds?: number;
-  }) => Promise<VideoJob>;
+  }) => Promise<JobRecord>;
   startProbeMedia: (params: {
     sessionKey: string;
     inputPath: string;
-  }) => Promise<VideoJob>;
+  }) => Promise<JobRecord>;
   startPlayVlc?: (params: {
     sessionKey: string;
     input: string;
-  }) => Promise<VideoJob>;
+  }) => Promise<JobRecord>;
   videoHlsInspect: (params: {
     sessionKey: string;
     url: string;
@@ -95,12 +95,45 @@ export type EngineTooling = {
     };
     errors: string[];
   }>;
-  listJobs: () => {
+  listJobs: (params?: {
+    sessionKey?: string;
+    capability?: string;
+    action?: string;
+    status?: string;
+    limit?: number;
+  }) => {
     id: string;
+    capability: string;
+    action: string;
     status: string;
-    type: string;
     output?: string;
+    createdAt: string;
+    startedAt?: string;
+    endedAt?: string;
+    error?: string;
   }[];
+  getJob: (params: { jobId: string }) => {
+    id: string;
+    capability: string;
+    action: string;
+    status: string;
+    sessionKey: string;
+    command: string;
+    input: string;
+    output?: string;
+    args: string[];
+    createdAt: string;
+    startedAt?: string;
+    endedAt?: string;
+    exitCode?: number | null;
+    error?: string;
+    logPath: string;
+  } | null;
+  getJobLog: (params: { jobId: string; tailChars?: number }) => Promise<{
+    jobId: string;
+    found: boolean;
+    log?: string;
+  }>;
   execCommand: (params: {
     sessionKey: string;
     command: string;
@@ -315,6 +348,21 @@ export type EngineTooling = {
       updatedAt: string;
     }>;
   }>;
+  planGet: (params: { planId: string }) => {
+    id: string;
+    sessionKey: string;
+    title: string;
+    status: "active" | "completed" | "blocked" | "failed" | "canceled";
+    createdAt: string;
+    updatedAt: string;
+    steps: Array<{
+      id: string;
+      title: string;
+      status: "pending" | "in_progress" | "completed" | "blocked" | "failed" | "canceled";
+      notes?: string;
+      updatedAt: string;
+    }>;
+  } | null;
   planUpdateStep: (params: {
     planId: string;
     stepIndex: number;

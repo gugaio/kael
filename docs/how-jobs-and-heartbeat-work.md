@@ -55,22 +55,24 @@ Este documento explica a arquitetura de jobs de vídeo, ciclo de vida e o sistem
 
 ```
 src/
-├── jobs/                          ← Camada de persistência + facade
-│   ├── manager.ts                ← Facade pública (JobManager)
+├── jobs/                          ← Core de jobs (genérico)
+│   ├── manager.ts                ← Orquestrador de capabilities (JobManager)
 │   └── store.ts                  ← Store em JSON (JobStore)
-├── tools/video/                  ← Camada de execução real
-│   └── video-job-service.ts       ← VideoJobService (ffmpeg/ffprobe)
+├── capabilities/video/           ← Capability de vídeo
+│   ├── job-capability.ts         ← Registro de ações de vídeo
+│   ├── job-service.ts            ← VideoJobService (ffmpeg/ffprobe)
+│   └── inspect-service.ts        ← VideoInspectToolService
 └── automation/                   ← Camada de monitoramento
     └── heartbeat-runner.ts         ← HeartbeatRunner
 ```
 
 ### JobManager (`src/jobs/manager.ts`)
 
-**Responsabilidade:** Facade simples que expõe API para operações de jobs.
+**Responsabilidade:** Orquestrador de jobs por capability.
 
 ```typescript
 class JobManager {
-  constructor(store, video) {}
+  constructor(store, capabilities) {}
   
   // Listagem
   listJobs() → store.list()
@@ -79,11 +81,8 @@ class JobManager {
   getJob(jobId) → store.get(jobId)
   getJobLog(jobId) → lê arquivo de log
   
-  // Execução (delega para VideoJobService)
-  startTranscode() → video.startTranscode()
-  startConvertHls() → video.startConvertHls()
-  startCaptureStream() → video.startCaptureStream()
-  startProbeMedia() → video.startProbeMedia()
+  // Execução (roteia por action registrada na capability)
+  startAction(actionName, params) → capability[actionName](params)
 }
 ```
 
@@ -99,7 +98,8 @@ class JobManager {
   "jobs": {
     "abc-123-def-456": {
       "id": "abc-123-def-456",
-      "type": "transcode",
+      "capability": "video",
+      "action": "transcode",
       "status": "queued",
       "sessionKey": "session-1",
       "command": "ffmpeg",
@@ -115,7 +115,8 @@ class JobManager {
     },
     "def-789-ghi-012": {
       "id": "def-789-ghi-012",
-      "type": "capture_stream",
+      "capability": "video",
+      "action": "capture_stream",
       "status": "running",
       ...
     }
@@ -140,7 +141,7 @@ class JobStore {
 }
 ```
 
-### VideoJobService (`src/tools/video/video-job-service.ts`)
+### VideoJobService (`src/capabilities/video/job-service.ts`)
 
 **Responsabilidade:** Executa comandos ffmpeg/ffprobe e gerencia ciclo de vida de jobs.
 
@@ -149,10 +150,10 @@ class VideoJobService {
   constructor(jobs, runner) {}
   
   // Métodos públicos
-  async startTranscode(params) → startJob({ type: "transcode", command: "ffmpeg", ... })
-  async startConvertHls(params) → startJob({ type: "convert_hls", command: "ffmpeg", ... })
-  async startCaptureStream(params) → startJob({ type: "capture_stream", command: "ffmpeg", ... })
-  async startProbeMedia(params) → startJob({ type: "probe_media", command: "ffprobe", ... })
+  async startTranscode(params) → startJob({ action: "transcode", command: "ffmpeg", ... })
+  async startConvertHls(params) → startJob({ action: "convert_hls", command: "ffmpeg", ... })
+  async startCaptureStream(params) → startJob({ action: "capture_stream", command: "ffmpeg", ... })
+  async startProbeMedia(params) → startJob({ action: "probe_media", command: "ffprobe", ... })
   
   // Método privado core
   private async startJob(params) {
@@ -257,7 +258,8 @@ dataDir/jobs/logs/job-id-1.log
 ```json
 {
   "id": "abc-123-def-456",
-  "type": "transcode",
+  "capability": "video",
+  "action": "transcode",
   "status": "succeeded",
   "sessionKey": "session-1",
   "command": "ffmpeg",
@@ -292,7 +294,8 @@ class HeartbeatRunner {
 
 type JobSnapshot = {
   status: string;
-  type: string;
+  capability: string;
+  action: string;
   sessionKey: string;
   output?: string;
 };
@@ -319,7 +322,7 @@ function isRelevantStatus(status: string): boolean {
 │    └─→ heartbeat.runOnce() é chamado                   │
 │       └─→ para cada job, cria snapshot inicial       │
 │       └─→ lastByJobId.set(jobId, {               │
-│              status, type, sessionKey, output })       │
+│              status, capability, action, sessionKey, output }) │
 │                                                     │
 │ 2. CHECAGEM PERIÓDICA (via Scheduler)                │
 │    └─→ Scheduler roda heartbeat.runOnce() em intervalo     │
@@ -337,7 +340,7 @@ function isRelevantStatus(status: string): boolean {
 │                                                     │
 │ 4. NOTIFICAÇÃO                                     │
 │    └─→ sessions.appendMessage(sessionKey, "system",   │
-│       `[heartbeat] job ${id} (${type}) mudou      │
+│       `[heartbeat] job ${id} (${capability}/${action}) mudou │
 │        ${prev} -> ${curr}. output=${output}`)      │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -346,17 +349,17 @@ function isRelevantStatus(status: string): boolean {
 
 **Mudança Relevante (Sucedido):**
 ```
-[heartbeat] job abc-123 (transcode) mudou running -> succeeded. output=/videos/output.mp4
+[heartbeat] job abc-123 (video/transcode) mudou running -> succeeded. output=/videos/output.mp4
 ```
 
 **Mudança Relevante (Falha):**
 ```
-[heartbeat] job def-456 (capture_stream) mudou running -> failed. exit code=1
+[heartbeat] job def-456 (video/capture_stream) mudou running -> failed. exit code=1
 ```
 
 **Mudança NÃO Relevante (Ignorada):**
 ```
-[heartbeat] job xyz-789 (probe_media) mudou queued -> running.
+[heartbeat] job xyz-789 (video/probe_media) mudou queued -> running.
 ← não notifica (running não é status relevante)
 ```
 
@@ -369,7 +372,7 @@ function isRelevantStatus(status: string): boolean {
 ```
 Usuário: /transcode /input/video.mp4 /output/result.mp4
          ↓
-ChatService → jobs.startTranscode()
+ChatService → jobs.startAction("transcode", ...)
          ↓
 VideoJobService → cria job (queued)
          ↓
@@ -393,7 +396,7 @@ JobManager → job aparece em listJobs()
          ↓
 [Heartbeat] NOTIFICA! running → succeeded
          ↓
-Sessão recebe: "[heartbeat] job abc-123 (transcode) mudou running -> succeeded. output=/output/result.mp4"
+Sessão recebe: "[heartbeat] job abc-123 (video/transcode) mudou running -> succeeded. output=/output/result.mp4"
 ```
 
 ### Exemplo 2: Job com Falha
@@ -401,7 +404,7 @@ Sessão recebe: "[heartbeat] job abc-123 (transcode) mudou running -> succeeded.
 ```
 Usuário: /hls /input/broken.mp4 /playlist.m3u8
          ↓
-ChatService → jobs.startConvertHls()
+ChatService → jobs.startAction("convert_hls", ...)
          ↓
 VideoJobService → cria job (queued)
          ↓
@@ -417,7 +420,7 @@ Job muda para failed
          ↓
 [Heartbeat] NOTIFICA! running → failed
          ↓
-Sessão recebe: "[heartbeat] job def-456 (convert_hls) mudou running -> failed. exit code=1"
+Sessão recebe: "[heartbeat] job def-456 (video/convert_hls) mudou running -> failed. exit code=1"
 ```
 
 ### Exemplo 3: Múltiplos Jobs Rodando
@@ -448,9 +451,9 @@ Sessão recebe: "[heartbeat] job def-456 (convert_hls) mudou running -> failed. 
 │   - job3: running → succeeded ✅ (NOTIFICA!)      │
 │                                                     │
 │ Sessão (apenas eventos relevantes):               │
-│   [heartbeat] job1 mudou running -> succeeded... │
-│   [heartbeat] job2 mudou running -> failed...    │
-│   [heartbeat] job3 mudou running -> succeeded... │
+│   [heartbeat] job1 (video/transcode) mudou running -> succeeded... │
+│   [heartbeat] job2 (video/capture_stream) mudou running -> failed... │
+│   [heartbeat] job3 (video/probe_media) mudou running -> succeeded... │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -518,7 +521,8 @@ async runOnce(): Promise<{ notifiedCount: number }> {
     // Cria snapshot inicial
     this.lastByJobId.set(job.id, {
       status: job.status,
-      type: job.type,
+      capability: job.capability,
+      action: job.action,
       sessionKey: job.sessionKey,
       output: job.output,
     });
@@ -556,9 +560,9 @@ private async startJob(params): Promise<VideoJob> {
 
 | Termo | Significado |
 |--------|--------------|
-| **Job** | Unidade de trabalho de vídeo (transcode, HLS, capture, probe) |
+| **Job** | Unidade de trabalho executada por capability (ex.: `video/transcode`) |
 | **JobStore** | Persistência JSON de jobs (`jobs.json`) |
-| **JobManager** | Facade pública para operações de jobs |
+| **JobManager** | Orquestrador de jobs por capability/action |
 | **VideoJobService** | Executor real de comandos ffmpeg/ffprobe |
 | **Heartbeat** | Monitorador periódico de mudanças de status |
 | **HeartbeatRunner** | Implementação do heartbeat |
@@ -593,7 +597,7 @@ private async startJob(params): Promise<VideoJob> {
 
 - `src/jobs/manager.ts` - Facade de jobs
 - `src/jobs/store.ts` - Persistência JSON
-- `src/tools/video/video-job-service.ts` - Executor de ffmpeg
+- `src/capabilities/video/job-service.ts` - Executor de ffmpeg
 - `src/automation/heartbeat-runner.ts` - Monitorador de status
 - `src/automation/persistent-scheduler.ts` - Agendador
 - `src/config.ts` - Configuração de heartbeat/scheduler

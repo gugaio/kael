@@ -11,7 +11,8 @@ em etapas curtas, com observabilidade e risco operacional controlado.
 
 - Reutilizar o padrao atual do core:
   - contrato no `EngineTooling`;
-  - implementacao no dominio (`src/tools/browser`);
+  - capability explicita (`BrowserCapability`) no dominio `src/capabilities/browser`;
+  - runtime de browser (`BrowserToolService`) encapsulado pela capability;
   - wiring no `createKaelApp` e `createChatTooling`;
   - telemetria no `/health`.
 - Evitar copiar a superficie completa do OpenClaw no inicio.

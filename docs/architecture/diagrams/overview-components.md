@@ -32,7 +32,7 @@ graph TB
             Memory[MemoryService<br/>src/memory/service.ts]
             Planner[PlannerService<br/>src/planner/service.ts]
             Research[ResearchService<br/>src/research/service.ts]
-            Video[VideoJobService<br/>src/tools/video/]
+            Video[Video Capability<br/>src/capabilities/video/]
             Shell[ShellToolService<br/>src/tools/system/]
             Media[MediaUnderstandingService<br/>src/media/service.ts]
             EmailIngest[EmailIngestService<br/>src/email/ingest-service.ts]

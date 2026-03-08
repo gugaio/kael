@@ -10,7 +10,7 @@ import { MemoryOrchestrator } from "../memory/orchestrator.js";
 import { CommandRouter } from "./command-router.js";
 import { ChatRoutingTelemetry, type ChatRoutingTelemetrySnapshot } from "./routing-telemetry.js";
 import type { MediaRuntimeTelemetry, MediaUnderstandingService } from "../media/service.js";
-import type { BrowserRuntimeTelemetry } from "../tools/browser/service.js";
+import type { BrowserRuntimeTelemetry } from "../capabilities/browser/index.js";
 
 function shouldResetSessionOnEngineError(error: unknown): boolean {
   const normalized = normalizePiError(error);

@@ -29,8 +29,8 @@ graph TB
         end
 
         subgraph "Video Tools"
-            VideoJob[VideoJobService<br/>src/tools/video/video-job-service.ts<br/>Execução assíncrona de ffmpeg/ffprobe]
-            VideoInspect[VideoInspectToolService<br/>src/tools/video/video-inspect-tool-service.ts<br/>Inspeção de HLS e streams]
+            VideoJob[VideoJobService<br/>src/capabilities/video/job-service.ts<br/>Execução assíncrona de ffmpeg/ffprobe]
+            VideoInspect[VideoInspectToolService<br/>src/capabilities/video/inspect-service.ts<br/>Inspeção de HLS e streams]
         end
 
         subgraph "Shell Tools"
@@ -58,7 +58,7 @@ graph TB
         end
 
         subgraph "Browser Tools"
-            Browser[BrowserToolService<br/>src/tools/browser/service.ts<br/>Comandos de navegador]
+            Browser[BrowserToolService<br/>src/capabilities/browser/service.ts<br/>Comandos de navegador]
         end
 
         subgraph "Image Generation"

@@ -156,7 +156,7 @@ async function commandJobs(options: UrlOption): Promise<void> {
   const response = await fetch(`${url}/jobs`);
   const data = (await response.json()) as {
     ok: boolean;
-    jobs?: Array<{ id: string; status: string; type: string; output?: string }>;
+    jobs?: Array<{ id: string; capability: string; action: string; status: string; output?: string }>;
     error?: unknown;
   };
 
@@ -171,7 +171,7 @@ async function commandJobs(options: UrlOption): Promise<void> {
   }
 
   for (const job of jobs) {
-    console.log(`${job.id} | ${job.type} | ${job.status} | ${job.output ?? "(sem output)"}`);
+    console.log(`${job.id} | ${job.capability}/${job.action} | ${job.status} | ${job.output ?? "(sem output)"}`);
   }
 }
 

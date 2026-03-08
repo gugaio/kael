@@ -23,11 +23,12 @@ export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancele
 
 export type VideoJobType = "transcode" | "convert_hls" | "capture_stream" | "probe_media" | "play_vlc";
 
-export type VideoJob = {
+export type JobRecord = {
   id: string;
-  type: VideoJobType;
+  capability: string;
+  action: string;
   sessionKey: string;
-  command: "ffmpeg" | "ffprobe" | "vlc";
+  command: string;
   input: string;
   output?: string;
   args: string[];
@@ -38,4 +39,10 @@ export type VideoJob = {
   exitCode?: number | null;
   error?: string;
   logPath: string;
+};
+
+export type VideoJob = JobRecord & {
+  capability: "video";
+  action: VideoJobType;
+  command: "ffmpeg" | "ffprobe" | "vlc";
 };

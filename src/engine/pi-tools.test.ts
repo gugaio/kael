@@ -88,3 +88,64 @@ describe("createPiShellTools browser budget", () => {
     expect(secondText).toContain("browser_budget_exceeded:1/1");
   });
 });
+
+describe("createPiShellTools jobs/plans state tools", () => {
+  it("exposes jobs_list and jobs_get using tooling state methods", async () => {
+    const tools = createPiShellTools({
+      sessionKey: "s-jobs",
+      tooling: createTooling({
+        listJobs: () => [
+          {
+            id: "job-1",
+            capability: "video",
+            action: "transcode",
+            status: "succeeded",
+            createdAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        getJob: () =>
+          ({
+            id: "job-1",
+            capability: "video",
+            action: "transcode",
+            status: "succeeded",
+            sessionKey: "s1",
+            command: "ffmpeg",
+            input: "/tmp/in.mp4",
+            args: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            logPath: "/tmp/job-1.log",
+          }) as never,
+      }),
+    });
+    const listTool = tools.find((item) => item.name === "jobs_list");
+    const getTool = tools.find((item) => item.name === "jobs_get");
+    expect(listTool).toBeTruthy();
+    expect(getTool).toBeTruthy();
+
+    const listResult = await listTool!.execute("tc-list", {});
+    const getResult = await getTool!.execute("tc-get", { jobId: "job-1" });
+    const listText = String((listResult.content?.[0] as { text?: unknown })?.text ?? "");
+    const getText = String((getResult.content?.[0] as { text?: unknown })?.text ?? "");
+
+    expect(listText).toContain("jobs=1");
+    expect(listText).toContain("video/transcode");
+    expect(getText).toContain("found=true");
+    expect(getText).toContain("jobId=job-1");
+  });
+
+  it("exposes plan_get and returns not found when plan is absent", async () => {
+    const tools = createPiShellTools({
+      sessionKey: "s-plan",
+      tooling: createTooling({
+        planGet: () => null,
+      }),
+    });
+    const planGetTool = tools.find((item) => item.name === "plan_get");
+    expect(planGetTool).toBeTruthy();
+
+    const result = await planGetTool!.execute("tc-plan", { planId: "plan-404" });
+    const text = String((result.content?.[0] as { text?: unknown })?.text ?? "");
+    expect(text).toContain("found=false");
+  });
+});

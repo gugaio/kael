@@ -1,15 +1,31 @@
 import fs from "node:fs/promises";
-import type { JobStatus, VideoJob } from "../types.js";
+import type { JobRecord, JobStatus } from "../types.js";
 import type { JobStore } from "./store.js";
-import type { VideoJobService } from "../tools/video/video-job-service.js";
+import type { JobActionHandler, JobCapability } from "./capabilities.js";
 
 export class JobManager {
+  private readonly capabilitiesByName: Map<string, JobCapability> = new Map();
+  private readonly actionHandlers: Map<string, { capability: string; handler: JobActionHandler }> = new Map();
+
   constructor(
     private readonly store: JobStore,
-    private readonly video: VideoJobService,
-  ) {}
+    capabilities: JobCapability[],
+  ) {
+    for (const capability of capabilities) {
+      if (this.capabilitiesByName.has(capability.name)) {
+        throw new Error(`duplicate job capability name: ${capability.name}`);
+      }
+      this.capabilitiesByName.set(capability.name, capability);
+      for (const [actionName, handler] of Object.entries(capability.actions)) {
+        if (this.actionHandlers.has(actionName)) {
+          throw new Error(`duplicate job action registered: ${actionName}`);
+        }
+        this.actionHandlers.set(actionName, { capability: capability.name, handler });
+      }
+    }
+  }
 
-  listJobs(): VideoJob[] {
+  listJobs(): JobRecord[] {
     return this.store.list();
   }
 
@@ -18,10 +34,22 @@ export class JobManager {
   }
 
   getRuntimeStats(): { activeJobs: number; queuedJobs: number; maxConcurrentJobs: number } {
-    return this.video.getRuntimeStats();
+    let activeJobs = 0;
+    let queuedJobs = 0;
+    let maxConcurrentJobs = 0;
+    for (const capability of this.capabilitiesByName.values()) {
+      const stats = capability.getRuntimeStats?.();
+      if (!stats) {
+        continue;
+      }
+      activeJobs += stats.activeJobs;
+      queuedJobs += stats.queuedJobs;
+      maxConcurrentJobs += stats.maxConcurrentJobs;
+    }
+    return { activeJobs, queuedJobs, maxConcurrentJobs };
   }
 
-  getJob(jobId: string): VideoJob | null {
+  getJob(jobId: string): JobRecord | null {
     return this.store.get(jobId);
   }
 
@@ -33,55 +61,28 @@ export class JobManager {
     return fs.readFile(job.logPath, "utf-8").catch(() => "");
   }
 
-  async startTranscode(params: {
-    sessionKey: string;
-    inputPath: string;
-    outputPath: string;
-    args?: string[];
-  }): Promise<VideoJob> {
-    return this.video.startTranscode(params);
+  async startAction(actionName: string, params: unknown): Promise<JobRecord> {
+    const registration = this.actionHandlers.get(actionName);
+    if (!registration) {
+      throw new Error(`no capability registered for action: ${actionName}`);
+    }
+    return registration.handler(params);
   }
 
-  async startConvertHls(params: {
-    sessionKey: string;
-    inputPath: string;
-    outputPlaylistPath: string;
-    segmentTime?: number;
-  }): Promise<VideoJob> {
-    return this.video.startConvertHls(params);
+  async cancelJob(jobId: string): Promise<{ job: JobRecord | null; canceled: boolean }> {
+    const job = this.store.get(jobId);
+    if (!job) {
+      return { job: null, canceled: false };
+    }
+    const registration = this.actionHandlers.get(job.action);
+    if (!registration) {
+      return { job, canceled: false };
+    }
+    const capability = this.capabilitiesByName.get(registration.capability);
+    if (!capability) {
+      return { job, canceled: false };
+    }
+    return capability.cancelJob(jobId);
   }
 
-  async startCaptureStream(params: {
-    sessionKey: string;
-    streamUrl: string;
-    outputPath: string;
-    durationSeconds?: number;
-  }): Promise<VideoJob> {
-    return this.video.startCaptureStream(params);
-  }
-
-  async startProbeMedia(params: {
-    sessionKey: string;
-    inputPath: string;
-  }): Promise<VideoJob> {
-    return this.video.startProbeMedia(params);
-  }
-
-  async startPlayVlc(params: {
-    sessionKey: string;
-    input: string;
-  }): Promise<VideoJob> {
-    return this.video.startPlayVlc(params);
-  }
-
-  async startProbeUrl(params: {
-    sessionKey: string;
-    streamUrl: string;
-  }): Promise<VideoJob> {
-    return this.video.startProbeUrl(params);
-  }
-
-  async cancelJob(jobId: string): Promise<{ job: VideoJob | null; canceled: boolean }> {
-    return this.video.cancelJob(jobId);
-  }
 }

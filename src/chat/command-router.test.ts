@@ -26,6 +26,8 @@ function createTooling(): EngineTooling {
       errors: [],
     }),
     listJobs: () => [],
+    getJob: () => null,
+    getJobLog: async ({ jobId }) => ({ jobId, found: false }),
     execCommand: async () => ({
       id: "s1",
       command: "true",
@@ -112,6 +114,7 @@ function createTooling(): EngineTooling {
     planCreate: async () => ({ id: "p1" } as never),
     planGenerate: async () => ({ id: "p1" } as never),
     planList: () => [],
+    planGet: () => null,
     planUpdateStep: async () => null,
     planNextAction: () => null,
     planExecuteNext: async () => ({ ok: false, reason: "no_next_step", message: "none" }),
