@@ -1,5 +1,5 @@
 import type { AgentEngine, EngineTurnInput, EngineTurnOutput } from "./types.js";
-import { BROWSER_ACTIONS } from "../capabilities/browser/index.js";
+import { BROWSER_ACTIONS, formatBrowserReplyText } from "../capabilities/browser/index.js";
 
 function parseCommand(message: string): { name: string; args: string[] } | null {
   const trimmed = message.trim();
@@ -14,30 +14,6 @@ function parseCommand(message: string): { name: string; args: string[] } | null 
 
 export function isSlashCommand(message: string): boolean {
   return message.trim().startsWith("/");
-}
-
-function formatBrowserReply(result: {
-  ok: boolean;
-  action: string;
-  status: string;
-  message: string;
-  targetId?: string;
-  url?: string;
-  title?: string;
-  textPreview?: string;
-  screenshotPath?: string;
-}): string {
-  const lines = [
-    `browser action=${result.action} status=${result.status}`,
-    `ok=${result.ok ? "true" : "false"}`,
-    `message=${result.message}`,
-    result.targetId ? `targetId=${result.targetId}` : "",
-    result.url ? `url=${result.url}` : "",
-    result.title ? `title=${result.title}` : "",
-    result.screenshotPath ? `screenshot=${result.screenshotPath}` : "",
-    result.textPreview ? `preview=${result.textPreview.slice(0, 240)}` : "",
-  ].filter(Boolean);
-  return lines.join("\n");
 }
 
 function extractUrl(text: string): string | null {
@@ -159,7 +135,7 @@ export class SimpleCommandEngine implements AgentEngine {
         sessionKey: input.sessionKey,
         action: BROWSER_ACTIONS.start,
       });
-      return { reply: formatBrowserReply(result) };
+      return { reply: formatBrowserReplyText(result) };
     }
 
     if (parsed.name === "/browser-open" || parsed.name === "/browser-navigate") {
@@ -172,7 +148,7 @@ export class SimpleCommandEngine implements AgentEngine {
         action: BROWSER_ACTIONS.open,
         url,
       });
-      return { reply: formatBrowserReply(result) };
+      return { reply: formatBrowserReplyText(result) };
     }
 
     if (parsed.name === "/browser-snapshot") {
@@ -180,7 +156,7 @@ export class SimpleCommandEngine implements AgentEngine {
         sessionKey: input.sessionKey,
         action: BROWSER_ACTIONS.snapshotText,
       });
-      return { reply: formatBrowserReply(result) };
+      return { reply: formatBrowserReplyText(result) };
     }
 
     if (parsed.name === "/browser-shot" || parsed.name === "/browser-screenshot") {
@@ -188,7 +164,7 @@ export class SimpleCommandEngine implements AgentEngine {
         sessionKey: input.sessionKey,
         action: BROWSER_ACTIONS.screenshot,
       });
-      return { reply: formatBrowserReply(result) };
+      return { reply: formatBrowserReplyText(result) };
     }
 
     if (parsed.name === "/browser-click") {
@@ -201,7 +177,7 @@ export class SimpleCommandEngine implements AgentEngine {
         action: BROWSER_ACTIONS.click,
         selector,
       });
-      return { reply: formatBrowserReply(result) };
+      return { reply: formatBrowserReplyText(result) };
     }
 
     if (parsed.name === "/browser-type") {
@@ -219,7 +195,7 @@ export class SimpleCommandEngine implements AgentEngine {
         selector,
         text,
       });
-      return { reply: formatBrowserReply(result) };
+      return { reply: formatBrowserReplyText(result) };
     }
 
     if (parsed.name === "/browser-press") {
@@ -234,7 +210,7 @@ export class SimpleCommandEngine implements AgentEngine {
         key,
         selector,
       });
-      return { reply: formatBrowserReply(result) };
+      return { reply: formatBrowserReplyText(result) };
     }
 
     if (parsed.name === "/browser-wait") {
@@ -254,7 +230,7 @@ export class SimpleCommandEngine implements AgentEngine {
         selector,
         timeoutMs,
       });
-      return { reply: formatBrowserReply(result) };
+      return { reply: formatBrowserReplyText(result) };
     }
 
     if (parsed.name === "/browser-close") {
@@ -262,7 +238,7 @@ export class SimpleCommandEngine implements AgentEngine {
         sessionKey: input.sessionKey,
         action: BROWSER_ACTIONS.close,
       });
-      return { reply: formatBrowserReply(result) };
+      return { reply: formatBrowserReplyText(result) };
     }
 
     return { reply: "Comando desconhecido. Use /help." };

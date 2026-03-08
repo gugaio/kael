@@ -9,6 +9,7 @@ import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
 import type { VideoInspectToolService } from "../capabilities/video/index.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
 import type { BrowserCapability } from "../capabilities/browser/index.js";
+import { buildJobLogTailResult, selectJobs } from "../jobs/tooling.js";
 
 type ChatToolingDeps = {
   jobs: JobManager;
@@ -33,41 +34,12 @@ export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
       deps.videoInspect.inspectHls({ url, maxSegments, timeoutMs }),
     videoProbe: async ({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }) =>
       deps.videoInspect.probe({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }),
-    listJobs: ({ sessionKey, capability, action, status, limit } = {}) => {
-      const filtered = deps.jobs
-        .listJobs()
-        .filter((job) => (sessionKey ? job.sessionKey === sessionKey : true))
-        .filter((job) => (capability ? job.capability === capability : true))
-        .filter((job) => (action ? job.action === action : true))
-        .filter((job) => (status ? job.status === status : true))
-        .slice(0, Math.max(1, Math.floor(limit ?? 50)));
-      return filtered.map((job) => ({
-        id: job.id,
-        capability: job.capability,
-        action: job.action,
-        status: job.status,
-        output: job.output,
-        createdAt: job.createdAt,
-        startedAt: job.startedAt,
-        endedAt: job.endedAt,
-        error: job.error,
-      }));
-    },
+    listJobs: ({ sessionKey, capability, action, status, limit } = {}) =>
+      selectJobs(deps.jobs.listJobs(), { sessionKey, capability, action, status, limit }),
     getJob: ({ jobId }) => deps.jobs.getJob(jobId),
     getJobLog: async ({ jobId, tailChars }) => {
       const text = await deps.jobs.getJobLog(jobId);
-      if (text === null) {
-        return { jobId, found: false };
-      }
-      if (typeof tailChars === "number" && Number.isFinite(tailChars) && tailChars > 0) {
-        const size = Math.floor(tailChars);
-        return {
-          jobId,
-          found: true,
-          log: text.slice(-size),
-        };
-      }
-      return { jobId, found: true, log: text };
+      return buildJobLogTailResult({ jobId, text, tailChars });
     },
     execCommand: (params) => deps.shell.exec(params),
     processCommand: (params) => deps.shell.process(params),

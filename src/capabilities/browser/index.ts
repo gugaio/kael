@@ -3,6 +3,11 @@ export {
   BROWSER_ACTION_VALUES,
   BrowserCapability,
 } from "./capability.js";
+export {
+  formatBrowserReplyText,
+  formatBrowserToolText,
+  isBrowserInteractionAction,
+} from "./presentation.js";
 
 export {
   BrowserToolService,

@@ -1,10 +1,16 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import {
-  BROWSER_ACTIONS,
   BROWSER_ACTION_VALUES,
   type BrowserCommandAction,
+  formatBrowserToolText,
+  isBrowserInteractionAction,
 } from "../capabilities/browser/index.js";
 import { kaelLogger } from "../infra/logger.js";
+import {
+  formatJobDetailsText,
+  formatJobLogText,
+  formatJobsListText,
+} from "../jobs/tooling.js";
 import type { EngineOutputArtifact, EngineTooling } from "./types.js";
 import type { ToolLoopGuard } from "./tool-loop-guard.js";
 
@@ -619,16 +625,7 @@ export function createPiShellTools(params: {
         status: args.status,
         limit: args.limit,
       });
-      const text =
-        jobs.length === 0
-          ? "jobs=0"
-          : [
-              `jobs=${jobs.length}`,
-              ...jobs.map(
-                (job) =>
-                  `${job.id} | ${job.capability}/${job.action} | ${job.status} | createdAt=${job.createdAt}`,
-              ),
-            ].join("\n");
+      const text = formatJobsListText(jobs);
       const details = { jobs };
       logToolEnd(
         "jobs_list",
@@ -673,24 +670,7 @@ export function createPiShellTools(params: {
           details,
         };
       }
-      const text = [
-        "found=true",
-        `jobId=${job.id}`,
-        `capability=${job.capability}`,
-        `action=${job.action}`,
-        `status=${job.status}`,
-        `sessionKey=${job.sessionKey}`,
-        `command=${job.command}`,
-        `input=${job.input}`,
-        job.output ? `output=${job.output}` : "",
-        `createdAt=${job.createdAt}`,
-        job.startedAt ? `startedAt=${job.startedAt}` : "",
-        job.endedAt ? `endedAt=${job.endedAt}` : "",
-        job.exitCode !== undefined ? `exitCode=${String(job.exitCode)}` : "",
-        job.error ? `error=${job.error}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
+      const text = formatJobDetailsText(job);
       const details = { status: "completed", job };
       logToolEnd("jobs_get", intent, details, startedAtMs);
       return {
@@ -734,13 +714,7 @@ export function createPiShellTools(params: {
           details,
         };
       }
-      const text = [
-        "found=true",
-        `jobId=${args.jobId}`,
-        `chars=${result.log?.length ?? 0}`,
-        "log:",
-        result.log ?? "",
-      ].join("\n");
+      const text = formatJobLogText({ jobId: args.jobId, log: result.log ?? "" });
       const details = { status: "completed", jobId: args.jobId, chars: result.log?.length ?? 0 };
       logToolEnd("jobs_log_tail", intent, details, startedAtMs);
       return {
@@ -1285,11 +1259,7 @@ export function createPiShellTools(params: {
         rawParams && typeof rawParams === "object"
           ? String((rawParams as { action?: unknown }).action ?? "")
           : "";
-      const isInteractionAction =
-        actionRaw === BROWSER_ACTIONS.click ||
-        actionRaw === BROWSER_ACTIONS.type ||
-        actionRaw === BROWSER_ACTIONS.press ||
-        actionRaw === BROWSER_ACTIONS.waitFor;
+      const isInteractionAction = isBrowserInteractionAction(actionRaw);
       if (isInteractionAction && browserInteractionCalls >= maxBrowserInteractionCalls) {
         const reason =
           `browser_interaction_budget_exceeded:${browserInteractionCalls}/${maxBrowserInteractionCalls}`;
@@ -1329,21 +1299,7 @@ export function createPiShellTools(params: {
         `browser action=${result.action} status=${result.status}`,
       );
       return {
-        content: textResult(
-          [
-            `ok=${result.ok}`,
-            `action=${result.action}`,
-            `status=${result.status}`,
-            `message=${result.message}`,
-            result.targetId ? `targetId=${result.targetId}` : "",
-            result.url ? `url=${result.url}` : "",
-            result.title ? `title=${result.title}` : "",
-            result.screenshotPath ? `screenshotPath=${result.screenshotPath}` : "",
-            result.textPreview ? `textPreview=${result.textPreview}` : "",
-          ]
-            .filter(Boolean)
-            .join("\n"),
-        ),
+        content: textResult(formatBrowserToolText(result)),
         details: result,
       };
     },

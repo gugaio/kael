@@ -370,6 +370,37 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-07 - Deduplicacao inicial entre `pi-tools` e `tooling-factory` (browser/jobs)
+
+Resumo:
+- Extraidos modulos compartilhados para reduzir duplicidade de shape/formatacao:
+  - `src/jobs/tooling.ts` (filtros, mapeamento e formatacao de jobs + tail de log);
+  - `src/capabilities/browser/presentation.ts` (deteccao de acoes de interacao e formatacao de resposta).
+- `createChatTooling` passou a reutilizar helper de jobs em vez de manter logica inline.
+- `pi-tools` passou a reutilizar formatters/helpers compartilhados de browser e jobs.
+- `simple-engine` passou a reutilizar formatter compartilhado de browser.
+- Novos testes unitarios adicionados para os modulos extraidos.
+
+Arquivos-chave:
+- `src/jobs/tooling.ts`
+- `src/jobs/tooling.test.ts`
+- `src/capabilities/browser/presentation.ts`
+- `src/capabilities/browser/presentation.test.ts`
+- `src/chat/tooling-factory.ts`
+- `src/engine/pi-tools.ts`
+- `src/engine/simple-engine.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/jobs/tooling.test.ts src/capabilities/browser/presentation.test.ts src/capabilities/browser/capability.test.ts src/capabilities/browser/service.test.ts src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+
+Pendencias:
+- Seguir extraindo specs por capability para reduzir duplicidade restante em definicao de schemas/tools no `pi-tools`.
+
+Proximo passo recomendado:
+- Criar `tool-spec` dedicado para browser/jobs (schema + execute) e fazer `pi-tools` consumir via registro.
+
 ### 2026-03-07 - Fase 16.x: BrowserCapability com actions tipadas
 
 Resumo:
