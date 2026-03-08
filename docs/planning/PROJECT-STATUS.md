@@ -370,6 +370,30 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-07 - Extracao de tool-specs `plans` no PI
+
+Resumo:
+- Bloco completo `plan_*` foi extraido de `pi-tools` para factory dedicada.
+- Novo modulo `src/engine/tool-specs/plans.ts` introduzido com:
+  - `plan_create`, `plan_generate`, `plan_list`, `plan_get`,
+  - `plan_update_step`, `plan_next`, `plan_execute_next`, `plan_reconcile`.
+- `pi-tools` passou a compor tools de plano via registro, mantendo contratos e respostas.
+
+Arquivos-chave:
+- `src/engine/tool-specs/plans.ts`
+- `src/engine/pi-tools.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+
+Pendencias:
+- Extrair `exec/process` e `image_generate` para concluir modularizacao do `pi-tools`.
+
+Proximo passo recomendado:
+- Migrar `exec` + `process` para `src/engine/tool-specs/system.ts`.
+
 ### 2026-03-07 - Extracao de tool-specs `workspace` no PI
 
 Resumo:
