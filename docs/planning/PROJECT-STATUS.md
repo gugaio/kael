@@ -370,6 +370,30 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-07 - Registro central de tool-specs no PI
+
+Resumo:
+- Criado registro central `src/engine/tool-specs/index.ts` com:
+  - exports dos factories por capability;
+  - `createPiCapabilityTools(...)` para composicao unificada.
+- `pi-tools` passou a consumir o registro central, reduzindo wiring manual disperso.
+- Ordem e contratos das tools preservados.
+
+Arquivos-chave:
+- `src/engine/tool-specs/index.ts`
+- `src/engine/pi-tools.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+
+Pendencias:
+- Opcional: adicionar testes unitarios focados no registro `createPiCapabilityTools`.
+
+Proximo passo recomendado:
+- Criar `src/engine/tool-specs/index.test.ts` para validar composicao/ordem de retorno por capability.
+
 ### 2026-03-07 - Extracao de tool-specs `system` e `image` no PI
 
 Resumo:

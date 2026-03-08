@@ -1,14 +1,7 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { kaelLogger } from "../infra/logger.js";
-import { createBrowserPiTool, isInteractionActionRaw } from "./tool-specs/browser.js";
-import { createImagePiTool } from "./tool-specs/image.js";
-import { createJobsPiTools } from "./tool-specs/jobs.js";
-import { createMemoryPiTools } from "./tool-specs/memory.js";
-import { createPlanPiTools } from "./tool-specs/plans.js";
-import { createSystemPiTools } from "./tool-specs/system.js";
-import { createVideoPiTools } from "./tool-specs/video.js";
-import { createWebPiTools } from "./tool-specs/web.js";
-import { createWorkspacePiTools } from "./tool-specs/workspace.js";
+import { createPiCapabilityTools } from "./tool-specs/index.js";
+import { isInteractionActionRaw } from "./tool-specs/browser.js";
 import type { EngineOutputArtifact, EngineTooling } from "./types.js";
 import type { ToolLoopGuard } from "./tool-loop-guard.js";
 
@@ -372,75 +365,93 @@ export function createPiShellTools(params: {
     return null;
   };
 
-  const [execTool, processTool] = createSystemPiTools({
-    sessionKey: params.sessionKey,
-    tooling: params.tooling,
-    loopGuard: params.loopGuard,
-    textResult,
-    formatSession,
-    makeBlockedResult,
-    reserveExecCall,
-    reserveProcessCall,
-    logToolStart,
-    logToolEnd: (tool, intent, result, startedAtMs, summary) =>
-      logToolEnd(tool, intent, result, startedAtMs, summary),
+  const capabilityTools = createPiCapabilityTools({
+    system: {
+      sessionKey: params.sessionKey,
+      tooling: params.tooling,
+      loopGuard: params.loopGuard,
+      textResult,
+      formatSession,
+      makeBlockedResult,
+      reserveExecCall,
+      reserveProcessCall,
+      logToolStart,
+      logToolEnd: (tool, intent, result, startedAtMs, summary) =>
+        logToolEnd(tool, intent, result, startedAtMs, summary),
+    },
+    video: {
+      sessionKey: params.sessionKey,
+      tooling: params.tooling,
+      textResult,
+      reserveToolCall,
+      logToolStart,
+      logToolEnd: (tool, intent, result, startedAtMs, summary) =>
+        logToolEnd(tool, intent, result, startedAtMs, summary),
+    },
+    jobs: {
+      tooling: params.tooling,
+      textResult,
+      reserveToolCall,
+      logToolStart,
+      logToolEnd: (tool, intent, result, startedAtMs, summary) =>
+        logToolEnd(tool, intent, result, startedAtMs, summary),
+    },
+    memory: {
+      tooling: params.tooling,
+      textResult,
+      logToolStart,
+      logToolEnd: (tool, intent, result, startedAtMs, summary) =>
+        logToolEnd(tool, intent, result, startedAtMs, summary),
+    },
+    workspace: {
+      tooling: params.tooling,
+      textResult,
+    },
+    web: {
+      sessionKey: params.sessionKey,
+      tooling: params.tooling,
+      turnSignal: params.turnSignal,
+      loopGuard: params.loopGuard,
+      textResult,
+      makeBlockedResult,
+      reserveWebCall,
+      logToolStart,
+      logToolEnd: (tool, intent, result, startedAtMs, summary) =>
+        logToolEnd(tool, intent, result, startedAtMs, summary),
+    },
+    browser: {
+      sessionKey: params.sessionKey,
+      tooling: params.tooling,
+      textResult,
+      reserveBrowserCall,
+      logToolStart,
+      logToolEnd: (tool, intent, result, startedAtMs, summary) =>
+        logToolEnd(tool, intent, result, startedAtMs, summary),
+    },
+    plans: {
+      sessionKey: params.sessionKey,
+      tooling: params.tooling,
+      textResult,
+    },
+    image: {
+      sessionKey: params.sessionKey,
+      tooling: params.tooling,
+      textResult,
+      makeBlockedResult,
+      reserveImageCall,
+      logToolStart,
+      logToolEnd: (tool, intent, result, startedAtMs, summary, artifact) =>
+        logToolEnd(tool, intent, result, startedAtMs, summary, artifact),
+    },
   });
 
-  const [videoHlsInspectTool, videoProbeTool] = createVideoPiTools({
-    sessionKey: params.sessionKey,
-    tooling: params.tooling,
-    textResult,
-    reserveToolCall,
-    logToolStart,
-    logToolEnd: (tool, intent, result, startedAtMs, summary) =>
-      logToolEnd(tool, intent, result, startedAtMs, summary),
-  });
-
-  const [jobsListTool, jobsGetTool, jobsLogTailTool] = createJobsPiTools({
-    tooling: params.tooling,
-    textResult,
-    reserveToolCall,
-    logToolStart,
-    logToolEnd: (tool, intent, result, startedAtMs, summary) =>
-      logToolEnd(tool, intent, result, startedAtMs, summary),
-  });
-
-  const [memorySearchTool, memoryGetTool, memoryWriteTool] = createMemoryPiTools({
-    tooling: params.tooling,
-    textResult,
-    logToolStart,
-    logToolEnd: (tool, intent, result, startedAtMs, summary) =>
-      logToolEnd(tool, intent, result, startedAtMs, summary),
-  });
-
-  const [workspaceSearchTool, workspaceReadTool] = createWorkspacePiTools({
-    tooling: params.tooling,
-    textResult,
-  });
-
-  const [webSearchTool, webFetchTool, webResearchTool] = createWebPiTools({
-    sessionKey: params.sessionKey,
-    tooling: params.tooling,
-    turnSignal: params.turnSignal,
-    loopGuard: params.loopGuard,
-    textResult,
-    makeBlockedResult,
-    reserveWebCall,
-    logToolStart,
-    logToolEnd: (tool, intent, result, startedAtMs, summary) =>
-      logToolEnd(tool, intent, result, startedAtMs, summary),
-  });
-
-  const browserTool = createBrowserPiTool({
-    sessionKey: params.sessionKey,
-    tooling: params.tooling,
-    textResult,
-    reserveBrowserCall,
-    logToolStart,
-    logToolEnd: (tool, intent, result, startedAtMs, summary) =>
-      logToolEnd(tool, intent, result, startedAtMs, summary),
-  });
-
+  const [execTool, processTool] = capabilityTools.system;
+  const [videoHlsInspectTool, videoProbeTool] = capabilityTools.video;
+  const [jobsListTool, jobsGetTool, jobsLogTailTool] = capabilityTools.jobs;
+  const [memorySearchTool, memoryGetTool, memoryWriteTool] = capabilityTools.memory;
+  const [workspaceSearchTool, workspaceReadTool] = capabilityTools.workspace;
+  const [webSearchTool, webFetchTool, webResearchTool] = capabilityTools.web;
+  const browserTool = capabilityTools.browser;
   const [
     planCreateTool,
     planGenerateTool,
@@ -450,22 +461,8 @@ export function createPiShellTools(params: {
     planNextTool,
     planExecuteNextTool,
     planReconcileTool,
-  ] = createPlanPiTools({
-    sessionKey: params.sessionKey,
-    tooling: params.tooling,
-    textResult,
-  });
-
-  const imageGenerateTool = createImagePiTool({
-    sessionKey: params.sessionKey,
-    tooling: params.tooling,
-    textResult,
-    makeBlockedResult,
-    reserveImageCall,
-    logToolStart,
-    logToolEnd: (tool, intent, result, startedAtMs, summary, artifact) =>
-      logToolEnd(tool, intent, result, startedAtMs, summary, artifact),
-  });
+  ] = capabilityTools.plans;
+  const imageGenerateTool = capabilityTools.image;
 
   return [
     execTool,
