@@ -142,3 +142,16 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
   - frontmatter suportado;
   - placeholders de argumentos;
   - regras/guardrails e telemetria.
+
+## Entregas implementadas (incremento 18.3)
+
+- Tuning configuravel por ENV para auto-invocacao:
+  - `KAEL_SKILLS_CATALOG_MAX_CHARS`;
+  - `KAEL_SKILLS_AUTO_MIN_SCORE`;
+  - `KAEL_SKILLS_AUTO_MAX_PER_TURN`.
+- Heuristica de relevancia refinada para reduzir falso-positivo:
+  - filtro de mensagens curtas/genericas;
+  - matching por prefixo para reduzir falso-negativo de variacoes de palavra.
+- Prioridade de configuracao explicita:
+  - opcoes passadas para `SkillService` prevalecem sobre ENV.
+- Cobertura de testes expandida para tuning (threshold, budget, disable auto).

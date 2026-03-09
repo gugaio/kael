@@ -8,6 +8,41 @@ const SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const DEFAULT_DESCRIPTION = "Skill local do workspace.";
 const SKILLS_CATALOG_MAX_CHARS = 4000;
 const AUTO_SKILL_MIN_SCORE = 2;
+const AUTO_SKILL_MAX_PER_TURN = 1;
+const AUTO_SKILL_MIN_MESSAGE_TOKENS = 2;
+const AUTO_SKILL_STOPWORDS = new Set([
+  "por",
+  "para",
+  "com",
+  "sem",
+  "isso",
+  "isto",
+  "essa",
+  "esse",
+  "aqui",
+  "ali",
+  "ainda",
+  "depois",
+  "antes",
+  "pode",
+  "podemos",
+  "quero",
+  "queria",
+  "faz",
+  "fazer",
+  "ajuda",
+  "ajudar",
+  "analisa",
+  "analisar",
+  "coisa",
+  "algo",
+  "sobre",
+  "mim",
+  "pra",
+  "que",
+  "como",
+  "quando",
+]);
 
 const RESERVED_OPERATIONAL_COMMANDS = new Set([
   "/help",
@@ -92,6 +127,12 @@ export type SkillManualInvocationResult =
 export type SkillTurnPreparationResult = {
   promptMessage: string;
   autoAppliedSkillName: string | null;
+};
+
+export type SkillServiceOptions = {
+  catalogMaxChars?: number;
+  autoSkillMinScore?: number;
+  autoSkillMaxPerTurn?: number;
 };
 
 function normalizeSkillName(raw: string): string | null {
@@ -313,24 +354,53 @@ function tokenize(input: string): string[] {
 }
 
 function scoreSkillRelevance(message: string, skill: SkillEntry): number {
-  const messageTokens = new Set(tokenize(message));
-  if (messageTokens.size === 0) {
+  const messageTokensRaw = tokenize(message);
+  const messageTokens = new Set(messageTokensRaw);
+  if (messageTokens.size < AUTO_SKILL_MIN_MESSAGE_TOKENS) {
+    return 0;
+  }
+  const nonGenericTokenCount = [...messageTokens].filter((token) => !AUTO_SKILL_STOPWORDS.has(token)).length;
+  if (nonGenericTokenCount === 0) {
     return 0;
   }
   const skillTokens = new Set([...tokenize(skill.name), ...tokenize(skill.description)]);
+  if (skillTokens.size === 0) {
+    return 0;
+  }
   let score = 0;
+  let overlap = 0;
+  const messageTokenList = [...messageTokens];
   for (const token of skillTokens) {
-    if (messageTokens.has(token)) {
-      score += 1;
+    const exactMatch = messageTokens.has(token);
+    const prefixMatch =
+      !exactMatch &&
+      messageTokenList.some((msgToken) => {
+        if (msgToken.length < 4 || token.length < 4) {
+          return false;
+        }
+        return msgToken.startsWith(token) || token.startsWith(msgToken);
+      });
+    if (exactMatch || prefixMatch) {
+      overlap += 1;
     }
   }
-  if (message.toLowerCase().includes(skill.name.toLowerCase())) {
+  score += overlap;
+  const nameMatched = message.toLowerCase().includes(skill.name.toLowerCase());
+  if (nameMatched) {
     score += 2;
+  }
+  const overlapCoverage = overlap / Math.max(1, Math.min(4, skillTokens.size));
+  if (overlapCoverage >= 0.5) {
+    score += 1;
+  }
+  const genericRatio = 1 - nonGenericTokenCount / Math.max(1, messageTokens.size);
+  if (genericRatio > 0.7 && !nameMatched) {
+    score = Math.max(0, score - 1);
   }
   return score;
 }
 
-function renderCatalog(skills: SkillEntry[]): string {
+function renderCatalog(skills: SkillEntry[], maxChars: number): string {
   if (skills.length === 0) {
     return "";
   }
@@ -342,7 +412,7 @@ function renderCatalog(skills: SkillEntry[]): string {
   for (const skill of skills) {
     const hint = skill.argumentHint ? ` | argumentHint: ${skill.argumentHint}` : "";
     const line = `- name: ${skill.name} | description: ${skill.description}${hint}`;
-    if (usedChars + line.length > SKILLS_CATALOG_MAX_CHARS) {
+    if (usedChars + line.length > maxChars) {
       break;
     }
     lines.push(line);
@@ -360,6 +430,44 @@ type SkillServiceDeps = {
   readFile: (path: string, encoding: "utf-8") => Promise<string>;
 };
 
+function readPositiveInt(raw: string | undefined, fallback: number): number {
+  const value = Number(raw ?? "");
+  if (Number.isFinite(value) && value > 0) {
+    return Math.floor(value);
+  }
+  return fallback;
+}
+
+function readNonNegativeInt(raw: string | undefined, fallback: number): number {
+  const value = Number(raw ?? "");
+  if (Number.isFinite(value) && value >= 0) {
+    return Math.floor(value);
+  }
+  return fallback;
+}
+
+function resolvePositiveIntOption(
+  explicit: number | undefined,
+  envRaw: string | undefined,
+  fallback: number,
+): number {
+  if (explicit != null && Number.isFinite(explicit) && explicit > 0) {
+    return Math.floor(explicit);
+  }
+  return readPositiveInt(envRaw, fallback);
+}
+
+function resolveNonNegativeIntOption(
+  explicit: number | undefined,
+  envRaw: string | undefined,
+  fallback: number,
+): number {
+  if (explicit != null && Number.isFinite(explicit) && explicit >= 0) {
+    return Math.floor(explicit);
+  }
+  return readNonNegativeInt(envRaw, fallback);
+}
+
 export class SkillService {
   private readonly skillsDir: string;
   private readonly telemetry: SkillTelemetry;
@@ -368,10 +476,14 @@ export class SkillService {
     byName: new Map(),
     discoveredAt: new Date(0).toISOString(),
   };
+  private readonly catalogMaxChars: number;
+  private readonly autoSkillMinScore: number;
+  private readonly autoSkillMaxPerTurn: number;
 
   constructor(
     private readonly workspaceRoot: string,
     deps?: Partial<SkillServiceDeps>,
+    options?: SkillServiceOptions,
   ) {
     this.skillsDir = path.join(this.workspaceRoot, DEFAULT_SKILLS_RELATIVE_DIR);
     this.telemetry = {
@@ -387,6 +499,21 @@ export class SkillService {
       readdir: deps?.readdir ?? fs.readdir,
       readFile: deps?.readFile ?? fs.readFile,
     };
+    this.catalogMaxChars = resolvePositiveIntOption(
+      options?.catalogMaxChars,
+      process.env.KAEL_SKILLS_CATALOG_MAX_CHARS,
+      SKILLS_CATALOG_MAX_CHARS,
+    );
+    this.autoSkillMinScore = resolvePositiveIntOption(
+      options?.autoSkillMinScore,
+      process.env.KAEL_SKILLS_AUTO_MIN_SCORE,
+      AUTO_SKILL_MIN_SCORE,
+    );
+    this.autoSkillMaxPerTurn = resolveNonNegativeIntOption(
+      options?.autoSkillMaxPerTurn,
+      process.env.KAEL_SKILLS_AUTO_MAX_PER_TURN,
+      AUTO_SKILL_MAX_PER_TURN,
+    );
   }
 
   getRuntimeTelemetrySnapshot(): SkillsRuntimeTelemetry {
@@ -458,7 +585,7 @@ export class SkillService {
     const autoInvocableSkills = [...snapshot.byName.values()].filter(
       (skill) => !skill.disableModelInvocation,
     );
-    const catalog = renderCatalog(autoInvocableSkills);
+    const catalog = renderCatalog(autoInvocableSkills, this.catalogMaxChars);
     if (catalog.length === 0 || isSlashCommand(message)) {
       return {
         promptMessage: message,
@@ -478,7 +605,7 @@ export class SkillService {
 
     let autoAppliedSkillName: string | null = null;
     const blocks = [catalog];
-    if (bestSkill && bestScore >= AUTO_SKILL_MIN_SCORE) {
+    if (bestSkill && bestScore >= this.autoSkillMinScore && this.autoSkillMaxPerTurn > 0) {
       autoAppliedSkillName = bestSkill.name;
       this.telemetry.autoInvocations += 1;
       blocks.push(

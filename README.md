@@ -194,6 +194,9 @@ Referencia completa: `docs/api.md`
 - `KAEL_BROWSER_HEADLESS` (`true|false`)
 - `KAEL_BROWSER_SESSION_TTL_MS`
 - `KAEL_BROWSER_MAX_SESSIONS`
+- `KAEL_SKILLS_CATALOG_MAX_CHARS`
+- `KAEL_SKILLS_AUTO_MIN_SCORE`
+- `KAEL_SKILLS_AUTO_MAX_PER_TURN`
 
 ## Qualidade e Seguranca
 

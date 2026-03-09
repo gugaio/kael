@@ -389,6 +389,33 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-09 - Fase 18.3: tuning configuravel de skills + heuristica refinada
+
+Resumo:
+- Adicionado tuning por ENV para skills (`KAEL_SKILLS_CATALOG_MAX_CHARS`, `KAEL_SKILLS_AUTO_MIN_SCORE`, `KAEL_SKILLS_AUTO_MAX_PER_TURN`).
+- Heuristica de relevancia de auto-skill refinada para reduzir falso-positivo em mensagens genericas e reduzir falso-negativo por variacao lexical (prefix match).
+- Prioridade de config ajustada para opcoes explicitas do `SkillService` prevalecerem sobre ENV.
+- Testes de skills expandidos para cobrir threshold, budget e desativacao de auto por configuracao.
+
+Arquivos-chave:
+- `src/skills/service.ts`
+- `src/skills/service.test.ts`
+- `docs/skills.md`
+- `README.md`
+- `docs/architecture/phases/phase-18.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/skills/service.test.ts src/api/server.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts`
+
+Pendencias:
+- Tornar a heuristica semanticamente mais robusta (sinonimos/contexto), mantendo custo baixo.
+- Avaliar telemetria adicional de qualidade de auto-selecao (hit/miss por sessao).
+
+Proximo passo recomendado:
+- Entregar incremento 18.4 com telemetria de qualidade e testes de regressao de auto-selecao por cenarios reais.
+
 ### 2026-03-09 - Fase 18.2: parser de frontmatter robusto + guia operacional de skills
 
 Resumo:

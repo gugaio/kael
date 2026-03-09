@@ -45,7 +45,7 @@ description: Explica codigo com diagrama
 Explique o arquivo $0 e compare com $1.
 Contexto completo: $ARGUMENTS`,
     );
-    const skills = new SkillService(root);
+    const skills = new SkillService(root, undefined, { autoSkillMinScore: 2 });
 
     const result = await skills.resolveManualInvocation("/explain-code src/app.ts aeroporto");
     expect(result.matched).toBe(true);
@@ -72,7 +72,7 @@ user-invocable: false
 ---
 Use estas diretrizes apenas automaticamente.`,
     );
-    const skills = new SkillService(root);
+    const skills = new SkillService(root, undefined, { autoSkillMinScore: 2 });
 
     const result = await skills.resolveManualInvocation("/internal-guideline");
     expect(result).toEqual({
@@ -96,7 +96,7 @@ description: deveria perder para comando operacional
 ---
 Liste jobs`,
     );
-    const skills = new SkillService(root);
+    const skills = new SkillService(root, undefined, { autoSkillMinScore: 2, autoSkillMaxPerTurn: 1 });
 
     const result = await skills.resolveManualInvocation("/jobs");
     expect(result).toEqual({ matched: false });
@@ -124,7 +124,7 @@ description: Gera changelog de release
 ---
 Gere notas curtas de release.`,
     );
-    const skills = new SkillService(root);
+    const skills = new SkillService(root, undefined, { autoSkillMinScore: 2, autoSkillMaxPerTurn: 1 });
 
     const result = await skills.prepareTurnMessage("pode revisar esse pull request focando regressao?");
     expect(result.autoAppliedSkillName).toBe("review-pr");
@@ -148,7 +148,7 @@ disable-model-invocation: true
 ---
 Passos de deploy.`,
     );
-    const skills = new SkillService(root);
+    const skills = new SkillService(root, undefined, { autoSkillMinScore: 2, autoSkillMaxPerTurn: 1 });
 
     const result = await skills.prepareTurnMessage("faz deploy da aplicacao");
     expect(result.autoAppliedSkillName).toBe(null);
@@ -173,7 +173,7 @@ argument-hint: "[arquivo] [formato: curto|longo]"
 ---
 Explique o arquivo $0 no formato $1.`,
     );
-    const skills = new SkillService(root);
+    const skills = new SkillService(root, undefined, { autoSkillMinScore: 2, autoSkillMaxPerTurn: 1 });
 
     const prepared = await skills.prepareTurnMessage("preciso de ajuda com documentacao tecnica");
     expect(prepared.promptMessage).toContain("name: docs-assistant");
@@ -204,10 +204,75 @@ tags:
 ---
 Use os padroes ao revisar endpoints.`,
     );
-    const skills = new SkillService(root);
+    const skills = new SkillService(root, undefined, { autoSkillMinScore: 2, autoSkillMaxPerTurn: 1 });
 
     const result = await skills.prepareTurnMessage("quais sao os padroes de api rest?");
     expect(result.autoAppliedSkillName).toBe("api-conventions");
     expect(result.promptMessage).toContain("description: Padroes de API REST Erros consistentes");
+  });
+
+  it("respeita threshold configuravel de auto skill", async () => {
+    const root = await createWorkspace();
+    await writeSkill(
+      root,
+      "review-pr",
+      `---
+name: review-pr
+description: Revisa pull requests
+---
+Liste riscos por severidade.`,
+    );
+    const skills = new SkillService(root, undefined, { autoSkillMinScore: 99 });
+
+    const result = await skills.prepareTurnMessage("pode revisar esse pull request?");
+    expect(result.autoAppliedSkillName).toBe(null);
+    expect(result.promptMessage).toContain("[available_skills]");
+    expect(result.promptMessage).not.toContain("[auto_skill_selected]");
+  });
+
+  it("respeita budget configuravel do catalogo", async () => {
+    const root = await createWorkspace();
+    await writeSkill(
+      root,
+      "a-first",
+      `---
+name: a-first
+description: Skill A para fluxo grande de revisao tecnica com muito texto adicional.
+---
+Instrucao A`,
+    );
+    await writeSkill(
+      root,
+      "b-second",
+      `---
+name: b-second
+description: Skill B para fluxo grande de revisao tecnica com muito texto adicional.
+---
+Instrucao B`,
+    );
+    const skills = new SkillService(root, undefined, { catalogMaxChars: 220 });
+
+    const result = await skills.prepareTurnMessage("quero revisar codigo");
+    expect(result.promptMessage).toContain("name: a-first");
+    expect(result.promptMessage).not.toContain("name: b-second");
+  });
+
+  it("permite desativar auto invocacao por configuracao", async () => {
+    const root = await createWorkspace();
+    await writeSkill(
+      root,
+      "review-pr",
+      `---
+name: review-pr
+description: Revisa pull requests e regressao
+---
+Liste riscos por severidade.`,
+    );
+    const skills = new SkillService(root, undefined, { autoSkillMaxPerTurn: 0 });
+
+    const result = await skills.prepareTurnMessage("revisa esse pull request focando regressao");
+    expect(result.autoAppliedSkillName).toBe(null);
+    expect(result.promptMessage).toContain("[available_skills]");
+    expect(result.promptMessage).not.toContain("[auto_skill_selected]");
   });
 });
