@@ -120,6 +120,13 @@ Persistencia:
 - `plan_execute_next`
 - `plan_reconcile`
 
+### Skills (`.kael/skills`)
+
+- suporte a skills locais por arquivo `SKILL.md`
+- invocacao manual por slash: `/<skill-name> [args]`
+- auto-invocacao conservadora (ate 1 skill por turno)
+- telemetria em `/health` -> `metrics.skillsRuntime`
+
 ## Comandos CLI Mais Usados
 
 ```bash
@@ -204,6 +211,7 @@ Referencia completa: `docs/api.md`
 - `docs/planning/PROJECT-STATUS.md` (status por fase + historico)
 - `docs/architecture/README.md` (arquitetura por fases)
 - `docs/how-jobs-and-heartbeat-work.md`
+- `docs/skills.md` (guia de criacao e operacao de skills em `.kael/skills`)
 - `docs/browser-control.md` (guia de browser control via CLI/chat)
 - `docs/ui/UI-GUIDE.md`
 

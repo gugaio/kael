@@ -129,3 +129,16 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
 - Integracao no `ChatService`:
   - preparacao de mensagem de turno via `SkillService.prepareTurnMessage(...)`
     antes do preprocess multimodal e antes do turno LLM.
+
+## Entregas implementadas (incremento 18.2)
+
+- Parser de frontmatter reforcado no `SkillService`:
+  - suporte a blocos multiline (`|` e `>`);
+  - suporte a listas simples (`key:` + itens `- ...`);
+  - suporte consistente a strings com aspas/colon.
+- Parser segue intencionalmente enxuto (MVP) e orientado aos campos usados no runtime.
+- Guia operacional de skills adicionado em `docs/skills.md` com:
+  - estrutura de pastas em `.kael/skills`;
+  - frontmatter suportado;
+  - placeholders de argumentos;
+  - regras/guardrails e telemetria.

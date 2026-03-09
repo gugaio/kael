@@ -15,6 +15,7 @@ Indice rapido para humanos e onboarding inicial.
 - `docs/architecture/README.md`
 - `docs/ui/UI-GUIDE.md`
 - `docs/how-jobs-and-heartbeat-work.md` (guia de jobs + heartbeat)
+- `docs/skills.md` (guia operacional de skills em `.kael/skills`)
 
 ## Estado atual das fases (resumo rapido)
 

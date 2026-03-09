@@ -66,7 +66,7 @@ type SkillTelemetry = {
 };
 
 type ParseFrontmatterResult = {
-  frontmatter: Record<string, string | boolean>;
+  frontmatter: Record<string, string | boolean | string[]>;
   body: string;
 };
 
@@ -158,22 +158,73 @@ function parseFrontmatter(raw: string): ParseFrontmatterResult {
   }
   const frontmatterRaw = normalized.slice(4, endIdx);
   const body = normalized.slice(endIdx + 5);
-  const frontmatter: Record<string, string | boolean> = {};
-  for (const line of frontmatterRaw.split("\n")) {
-    const trimmed = line.trim();
+  const frontmatter: Record<string, string | boolean | string[]> = {};
+  const lines = frontmatterRaw.split("\n");
+
+  let idx = 0;
+  while (idx < lines.length) {
+    const rawLine = lines[idx];
+    const trimmed = rawLine.trim();
     if (!trimmed || trimmed.startsWith("#")) {
+      idx += 1;
       continue;
     }
-    const sep = trimmed.indexOf(":");
-    if (sep <= 0) {
+    const match = rawLine.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
+    if (!match) {
+      idx += 1;
       continue;
     }
-    const key = trimmed.slice(0, sep).trim().toLowerCase();
-    const value = trimmed.slice(sep + 1).trim();
+    const key = match[1]?.trim().toLowerCase();
+    const valueRaw = (match[2] ?? "").trim();
     if (!key) {
+      idx += 1;
       continue;
     }
-    frontmatter[key] = parseYamlBooleanOrString(value);
+
+    if (valueRaw === "|" || valueRaw === ">") {
+      const blockStyle = valueRaw;
+      const blockLines: string[] = [];
+      idx += 1;
+      while (idx < lines.length) {
+        const line = lines[idx];
+        if (/^\s*$/.test(line)) {
+          blockLines.push("");
+          idx += 1;
+          continue;
+        }
+        if (!/^\s+/.test(line)) {
+          break;
+        }
+        blockLines.push(line.replace(/^\s+/, ""));
+        idx += 1;
+      }
+      frontmatter[key] =
+        blockStyle === ">"
+          ? blockLines.map((line) => line.trim()).filter(Boolean).join(" ")
+          : blockLines.join("\n").trim();
+      continue;
+    }
+
+    if (valueRaw.length === 0) {
+      const items: string[] = [];
+      idx += 1;
+      while (idx < lines.length) {
+        const line = lines[idx];
+        const listMatch = line.match(/^\s*-\s+(.*)$/);
+        if (!listMatch) {
+          break;
+        }
+        items.push(stripQuotes(listMatch[1] ?? "").trim());
+        idx += 1;
+      }
+      if (items.length > 0) {
+        frontmatter[key] = items;
+      }
+      continue;
+    }
+
+    frontmatter[key] = parseYamlBooleanOrString(valueRaw);
+    idx += 1;
   }
   return { frontmatter, body };
 }
@@ -203,11 +254,21 @@ function pickFirstParagraph(markdownBody: string): string {
   return paragraph || DEFAULT_DESCRIPTION;
 }
 
-function toFrontmatterModel(frontmatter: Record<string, string | boolean>): SkillFrontmatter {
-  const name = typeof frontmatter.name === "string" ? frontmatter.name : undefined;
-  const description = typeof frontmatter.description === "string" ? frontmatter.description : undefined;
+function pickStringValue(value: string | boolean | string[] | undefined): string | undefined {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.join(" ").trim() || undefined;
+  }
+  return undefined;
+}
+
+function toFrontmatterModel(frontmatter: Record<string, string | boolean | string[]>): SkillFrontmatter {
+  const name = pickStringValue(frontmatter.name);
+  const description = pickStringValue(frontmatter.description);
   const argumentHint =
-    typeof frontmatter["argument-hint"] === "string" ? frontmatter["argument-hint"] : undefined;
+    pickStringValue(frontmatter["argument-hint"]);
   return {
     name,
     description,

@@ -385,9 +385,36 @@ Definition of Done (checklist):
 - [x] Auto-invocacao com no maximo 1 skill por turno e carga lazy do conteudo completo.
 - [x] Suporte a substituicoes basicas de argumentos (`$ARGUMENTS`, `$0`, `$1`...).
 - [x] Telemetria inicial de skills em `/health`.
-- [ ] Documentacao operacional de skills (estrutura de pastas + exemplos) no repo.
+- [x] Documentacao operacional de skills (estrutura de pastas + exemplos) no repo.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-09 - Fase 18.2: parser de frontmatter robusto + guia operacional de skills
+
+Resumo:
+- Parser de frontmatter de skills reforcado para suportar multiline (`|`/`>`) e listas simples.
+- Cobertura de testes expandida para cenarios de aspas/colon e listas no frontmatter.
+- Guia operacional de skills criado em `docs/skills.md` e referenciado no onboarding/README.
+
+Arquivos-chave:
+- `src/skills/service.ts`
+- `src/skills/service.test.ts`
+- `docs/skills.md`
+- `README.md`
+- `docs/core/START-HERE.md`
+- `docs/architecture/phases/phase-18.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/skills/service.test.ts src/api/server.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts`
+
+Pendencias:
+- Melhorar heuristica de relevancia para reduzir falso-positivo em mensagens curtas/genericas.
+- Tornar thresholds/budgets de skills configuraveis por env (catalogo e score minimo).
+
+Proximo passo recomendado:
+- Entregar incremento 18.3 com tuning configuravel e testes de qualidade de auto-selecao.
 
 ### 2026-03-09 - Fase 18.1: catalogo de skills + auto-invocacao conservadora
 

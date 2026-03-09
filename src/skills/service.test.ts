@@ -158,4 +158,56 @@ Passos de deploy.`,
     const telemetry = skills.getRuntimeTelemetrySnapshot();
     expect(telemetry.autoInvocations).toBe(0);
   });
+
+  it("parseia frontmatter multiline e argumentos com aspas/colon", async () => {
+    const root = await createWorkspace();
+    await writeSkill(
+      root,
+      "docs-assistant",
+      `---
+name: docs-assistant
+description: >
+  Ajuda com documentacao tecnica
+  com foco em exemplos praticos.
+argument-hint: "[arquivo] [formato: curto|longo]"
+---
+Explique o arquivo $0 no formato $1.`,
+    );
+    const skills = new SkillService(root);
+
+    const prepared = await skills.prepareTurnMessage("preciso de ajuda com documentacao tecnica");
+    expect(prepared.promptMessage).toContain("name: docs-assistant");
+    expect(prepared.promptMessage).toContain("description: Ajuda com documentacao tecnica com foco em exemplos praticos.");
+    expect(prepared.promptMessage).toContain("argumentHint: [arquivo] [formato: curto|longo]");
+
+    const manual = await skills.resolveManualInvocation("/docs-assistant README.md longo");
+    expect(manual.matched).toBe(true);
+    if (!manual.matched || manual.blocked) {
+      throw new Error("resultado inesperado");
+    }
+    expect(manual.promptMessage).toContain("Explique o arquivo README.md no formato longo.");
+  });
+
+  it("parseia listas no frontmatter sem quebrar a carga da skill", async () => {
+    const root = await createWorkspace();
+    await writeSkill(
+      root,
+      "api-conventions",
+      `---
+name: api-conventions
+description:
+  - Padroes de API REST
+  - Erros consistentes
+tags:
+  - api
+  - backend
+---
+Use os padroes ao revisar endpoints.`,
+    );
+    const skills = new SkillService(root);
+
+    const result = await skills.prepareTurnMessage("quais sao os padroes de api rest?");
+    expect(result.autoAppliedSkillName).toBe("api-conventions");
+    expect(result.promptMessage).toContain("description: Padroes de API REST Erros consistentes");
+  });
 });
