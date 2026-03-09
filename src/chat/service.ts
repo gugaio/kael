@@ -11,6 +11,7 @@ import { CommandRouter } from "./command-router.js";
 import { ChatRoutingTelemetry, type ChatRoutingTelemetrySnapshot } from "./routing-telemetry.js";
 import type { MediaRuntimeTelemetry, MediaUnderstandingService } from "../media/service.js";
 import type { BrowserRuntimeTelemetry } from "../capabilities/browser/index.js";
+import { SkillService, type SkillsRuntimeTelemetry } from "../skills/service.js";
 
 function shouldResetSessionOnEngineError(error: unknown): boolean {
   const normalized = normalizePiError(error);
@@ -59,6 +60,7 @@ export class ChatService {
   private readonly memoryOrchestrator: MemoryOrchestrator;
   private readonly commandRouter = new CommandRouter();
   private readonly routingTelemetry = new ChatRoutingTelemetry();
+  private readonly skills: SkillService;
 
   constructor(
     private readonly sessions: SessionStore,
@@ -68,10 +70,12 @@ export class ChatService {
     memory: MemoryService,
     tooling: EngineTooling,
     chatOnlyTooling: EngineTooling,
+    skills: SkillService,
   ) {
     this.memoryOrchestrator = new MemoryOrchestrator(this.sessions, memory, this.orchestrator);
     this.tooling = tooling;
     this.chatOnlyTooling = chatOnlyTooling;
+    this.skills = skills;
   }
 
   async handleMessage(input: {
@@ -114,6 +118,10 @@ export class ChatService {
     return this.tooling.browserRuntimeTelemetry();
   }
 
+  getSkillsRuntimeTelemetrySnapshot(): SkillsRuntimeTelemetry {
+    return this.skills.getRuntimeTelemetrySnapshot();
+  }
+
   private async handleMessageInternal(
     input: {
       sessionKey: string;
@@ -127,6 +135,37 @@ export class ChatService {
   ): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string; artifacts: EngineOutputArtifact[] }> {
     const storedUserMessage = buildStoredUserMessage(input.message, input.attachments);
     let user = await this.sessions.appendMessage(input.sessionKey, "user", storedUserMessage);
+    let llmInputMessage = input.message;
+    let skipOperationalFastPath = false;
+
+    const skillInvocation = await this.skills.resolveManualInvocation(input.message);
+    if (skillInvocation.matched) {
+      if (skillInvocation.blocked) {
+        this.routingTelemetry.record("fast_path");
+        kaelLogger.info("chat.route.selected", {
+          route: "fast_path",
+          sessionKey: input.sessionKey,
+          requestId: input.requestId ?? null,
+          reason: "skill_manual_blocked",
+          skillName: skillInvocation.skillName,
+        });
+        const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", skillInvocation.reply);
+        return {
+          user,
+          assistant,
+          reply: skillInvocation.reply,
+          artifacts: [],
+        };
+      }
+      llmInputMessage = skillInvocation.promptMessage;
+      skipOperationalFastPath = true;
+      kaelLogger.info("chat.skill.manual_invocation", {
+        sessionKey: input.sessionKey,
+        requestId: input.requestId ?? null,
+        skillName: skillInvocation.skillName,
+      });
+    }
+
     if (this.memoryOrchestrator.isCompactCommand(input.message)) {
       this.routingTelemetry.record("compact");
       kaelLogger.info("chat.route.selected", {
@@ -150,34 +189,36 @@ export class ChatService {
     }
 
     try {
-      // Fast-path operacional para slash commands, inclusive quando engineMode=pi.
-      // Isso preserva comportamento deterministico para comandos de job/sistema sem depender do LLM.
-      const commandRoute = await this.commandRouter.tryRoute({
-        sessionKey: input.sessionKey,
-        message: input.message,
-        requestId: input.requestId,
-        tooling,
-        allowOperationalShortcuts: opts.allowOperationalShortcuts,
-      });
-      if (commandRoute.handled) {
-        this.routingTelemetry.record("fast_path");
-        kaelLogger.info("chat.route.selected", {
-          route: "fast_path",
+      if (!skipOperationalFastPath) {
+        // Fast-path operacional para slash commands, inclusive quando engineMode=pi.
+        // Isso preserva comportamento deterministico para comandos de job/sistema sem depender do LLM.
+        const commandRoute = await this.commandRouter.tryRoute({
           sessionKey: input.sessionKey,
-          requestId: input.requestId ?? null,
+          message: input.message,
+          requestId: input.requestId,
+          tooling,
+          allowOperationalShortcuts: opts.allowOperationalShortcuts,
         });
-        const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", commandRoute.reply);
-        return {
-          user,
-          assistant,
-          reply: commandRoute.reply,
-          artifacts: [],
-        };
+        if (commandRoute.handled) {
+          this.routingTelemetry.record("fast_path");
+          kaelLogger.info("chat.route.selected", {
+            route: "fast_path",
+            sessionKey: input.sessionKey,
+            requestId: input.requestId ?? null,
+          });
+          const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", commandRoute.reply);
+          return {
+            user,
+            assistant,
+            reply: commandRoute.reply,
+            artifacts: [],
+          };
+        }
       }
 
       const mediaPreprocess = await this.media.preprocess({
         sessionKey: input.sessionKey,
-        message: input.message,
+        message: llmInputMessage,
         attachments: input.attachments,
         source: input.source ?? "unknown",
         requestId: input.requestId,

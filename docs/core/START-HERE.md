@@ -42,6 +42,7 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 15: em andamento (multimodal ingress MVP: anexos imagem/audio no fluxo core).
 - Fase 16: em andamento (browser control em fases para teste de sites: foundations -> read-only -> interacao).
 - Fase 17: em andamento (orquestracao de planos: controle de execucao, validacoes e branching leve).
+- Fase 18: planejada (skills no core com discovery em `.kael/skills` e invocacao manual/automatica controlada).
 
 ## Estudos e referencias tecnicas
 

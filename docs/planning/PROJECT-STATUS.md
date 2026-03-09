@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-03-07**
+Ultima atualizacao: **2026-03-09**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -368,7 +368,81 @@ Definition of Done (checklist):
 - [ ] Telemetria de retries/falhas de plano no `/health` e logs estruturados.
 - [ ] Atualizacao de docs de arquitetura/API/PI tools para a nova superficie de actions.
 
+### Fase 18 - Skills no Core (`.kael/skills`)
+
+Status: **Planejada**
+
+Objetivos:
+- Introduzir skills em arquivo (`SKILL.md`) com discovery nativo em `.kael/skills`.
+- Permitir invocacao manual por slash command e auto-invocacao controlada por frontmatter/descricao.
+- Manter prompt enxuto com carga lazy do conteudo completo da skill apenas quando necessario.
+- Preservar seguranca operacional (sem ampliar permissoes de tools alem da policy global).
+
+Definition of Done (checklist):
+- [x] `SkillDiscoveryService` + parser de frontmatter em `SKILL.md`.
+- [x] Registro de skills com metadados minimos (`name`, `description`, flags de invocacao).
+- [x] Invocacao manual `/<skill-name> [args]` integrada ao fast-path.
+- [ ] Auto-invocacao com no maximo 1 skill por turno e carga lazy do conteudo completo.
+- [x] Suporte a substituicoes basicas de argumentos (`$ARGUMENTS`, `$0`, `$1`...).
+- [x] Telemetria inicial de skills em `/health`.
+- [ ] Documentacao operacional de skills (estrutura de pastas + exemplos) no repo.
+
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-09 - Fase 18.0: skills manuais em `.kael/skills` + telemetria inicial
+
+Resumo:
+- Implementado `SkillService` com discovery/parsing de `SKILL.md` em `.kael/skills`.
+- Integrada invocacao manual de skill por slash no `ChatService` com substituicao de argumentos.
+- Adicionada metrica `skillsRuntime` no `GET /health`.
+- Incluidos testes unitarios de skill service e ajuste de testes de API health.
+
+Arquivos-chave:
+- `src/skills/service.ts`
+- `src/skills/service.test.ts`
+- `src/chat/service.ts`
+- `src/app.ts`
+- `src/api/server.ts`
+- `src/api/server.test.ts`
+- `docs/architecture/phases/phase-18.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/skills/service.test.ts src/api/server.test.ts`
+- [x] `npx vitest run src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts`
+
+Pendencias:
+- Implementar auto-invocacao por relevancia com limite de 1 skill por turno.
+- Documentar guia operacional de autoria de skills em `.kael/skills`.
+- Evoluir parser para suportar YAML multiline/estruturas mais ricas quando necessario.
+
+Proximo passo recomendado:
+- Entregar incremento 18.1 com catalogo de skills no contexto + auto-selecao conservadora.
+
+### 2026-03-09 - Planejamento da Fase 18 (skills em `.kael/skills`)
+
+Resumo:
+- Definida arquitetura inicial da Fase 18 para suporte a skills no core.
+- Diretório base inicial fixado em `.kael/skills`.
+- Definido escopo MVP: discovery, parser, invocacao manual/automatica controlada e telemetria.
+
+Arquivos-chave:
+- `docs/architecture/phases/phase-18.md`
+- `docs/architecture/README.md`
+- `docs/core/START-HERE.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [ ] `npm run check`
+- [x] revisao manual de consistencia entre arquitetura e roadmap
+
+Pendencias:
+- Especificar formato canônico do bloco de skill no prompt.
+- Definir budget de catalogo de skills por turno.
+
+Proximo passo recomendado:
+- Implementar o MVP em incremento pequeno com leitura de `.kael/skills` e slash manual.
 
 ### 2026-03-07 - Teste dedicado do registro central de tool-specs
 

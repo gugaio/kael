@@ -21,6 +21,9 @@ Esta pasta descreve a evolucao arquitetural do Kael de forma incremental.
 - `docs/architecture/phases/phase-12.md` - Supervisor de execucao shell (`exec/process`) para determinismo operacional
 - `docs/architecture/phases/phase-14.md` - Email ingress MVP (provider desacoplado + polling POP3)
 - `docs/architecture/phases/phase-15.md` - Multimodal ingress MVP (imagem/audio no fluxo core)
+- `docs/architecture/phases/phase-16.md` - Browser control para teste de sites (foundations -> read-only -> interacao)
+- `docs/architecture/phases/phase-17.md` - Orquestracao de planos v2 (controle de lifecycle + validacoes)
+- `docs/architecture/phases/phase-18.md` - Skills no core (`.kael/skills`) com invocacao manual/automatica controlada
 
 ## Diagramas
 

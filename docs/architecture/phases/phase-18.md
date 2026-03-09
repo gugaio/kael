@@ -1,0 +1,117 @@
+# Arquitetura - Fase 18 (Skills no Core)
+
+Status: planejada
+
+## Objetivo
+
+Introduzir suporte nativo a skills baseadas em arquivo Markdown, com discovery em
+`.kael/skills`, invocacao manual via slash command e invocacao automatica
+controlada por descricao/frontmatter, sem quebrar o contrato atual de engine.
+
+## Escopo da fase
+
+- Discovery de skills no workspace em `.kael/skills/<skill-name>/SKILL.md`.
+- Parsing de frontmatter YAML + corpo Markdown do `SKILL.md`.
+- Registro de skills disponiveis com metadados minimos para roteamento.
+- Invocacao manual via `/<skill-name> [args]` no fast-path.
+- Auto-invocacao por relevancia (descricao da skill no contexto, carga lazy do
+  conteudo completo somente quando selecionada).
+- Substituicao de argumentos no prompt da skill (`$ARGUMENTS`, `$0`, `$1`, ...).
+- Telemetria operacional de skills no `/health`.
+
+## Fora de escopo desta fase
+
+- Subagentes (`context: fork`) para skills.
+- Hooks de lifecycle por skill.
+- Execucao de injecao dinamica via `!`command`` no `SKILL.md`.
+- Marketplace/distribuicao externa de skills.
+
+## Decisoes arquiteturais
+
+1. **Skill como modulo de prompt, nao como tool**
+   - Skill nao cria endpoint nem capability nova por padrao.
+   - Skill injeta instrucoes no turno do agente quando invocada.
+
+2. **Diretorio oficial inicial**
+   - Path base: `.kael/skills`.
+   - Estrutura canonica:
+     - `.kael/skills/<skill-name>/SKILL.md` (obrigatorio)
+     - arquivos auxiliares opcionais (templates, exemplos, scripts, referencias).
+
+3. **Carregamento em dois niveis**
+   - Nivel 1 (sempre): apenas catalogo resumido (nome + descricao + controles).
+   - Nivel 2 (sob demanda): corpo completo do `SKILL.md` da skill escolhida.
+
+4. **Politica de seguranca conservadora**
+   - Maximo de 1 skill carregada por turno automaticamente.
+   - `disable-model-invocation: true` impede auto-invocacao.
+   - `user-invocable: false` remove skill do menu/comando direto.
+   - `allowed-tools` (quando habilitado) so pode restringir, nunca ampliar
+     permissoes alem da policy global do runtime.
+
+## Desenho de componentes (proposto)
+
+- `SkillDiscoveryService`
+  - encontra skills validas em `.kael/skills`.
+- `SkillParser`
+  - parseia frontmatter e corpo; valida schema minimo.
+- `SkillRegistry`
+  - mantem snapshot de skills disponiveis para o turno.
+- `SkillResolver`
+  - resolve invocacao manual (`/<name>`) e auto-selecao por descricao/relevancia.
+- `SkillPromptAssembler`
+  - aplica substituicoes de argumentos e monta bloco final da skill.
+
+Integracao principal:
+- `ChatService` / `TurnOrchestrator`:
+  - injeta catalogo de skills no contexto base;
+  - carrega skill completa somente quando invocada/selecionada.
+
+## Frontmatter inicial (MVP)
+
+- `name`
+- `description`
+- `argument-hint`
+- `disable-model-invocation`
+- `user-invocable`
+
+Campos para incremento posterior:
+- `allowed-tools`
+- `context`
+- `agent`
+- `model`
+- `hooks`
+
+## Observabilidade e operacao
+
+Metricas previstas em `/health` (`metrics.skillsRuntime`):
+- `enabled` (boolean)
+- `skillsDiscovered`
+- `manualInvocations`
+- `autoInvocations`
+- `invocationBlocked`
+- `lastError`
+
+## Pendencias da fase
+
+1. Definir budget de caracteres do catalogo de skills por turno.
+2. Definir formato canônico do bloco de skill no prompt do engine.
+3. Definir comportamento de conflito de nomes entre skills.
+4. Definir politica de discovery para monorepo (nested dirs) em incremento
+   posterior, sem acoplar ao MVP.
+
+## Entregas implementadas (incremento 18.0)
+
+- `SkillService` adicionado ao core com discovery em `.kael/skills/<skill>/SKILL.md`.
+- Parser inicial de frontmatter + corpo Markdown implementado.
+- Invocacao manual via slash integrada no `ChatService`:
+  - se skill existe e e invocavel pelo usuario, o turno segue para LLM com
+    bloco de skill montado;
+  - se `user-invocable: false`, retorno deterministico de bloqueio.
+- Protecao de conflito com comandos operacionais:
+  - nomes reservados (`/jobs`, `/help`, `/transcode`, etc.) nao sao
+    interceptados por skills.
+- Substituicao de argumentos no corpo da skill:
+  - `$ARGUMENTS`, `$ARGUMENTS[N]`, `$N`.
+- Telemetria inicial de skills exposta em `/health`:
+  - `metrics.skillsRuntime`.

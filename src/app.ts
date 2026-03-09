@@ -30,6 +30,7 @@ import { VideoCapability, VideoInspectToolService, VideoJobService } from "./cap
 import { NoopMediaUnderstandingService, OpenAiMediaUnderstandingService } from "./media/service.js";
 import { NoopImageGeneratorService, OpenAiImageGeneratorService } from "./media/image-generator.js";
 import { BrowserCapability, BrowserToolService } from "./capabilities/browser/index.js";
+import { SkillService } from "./skills/service.js";
 
 export type KaelApp = {
   config: KaelConfig;
@@ -175,6 +176,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     memory,
     tooling,
     createChatOnlyTooling(tooling),
+    new SkillService(config.shell.workspaceRoot),
   );
   const heartbeat = new HeartbeatRunner(jobs, sessions);
   let emailIngest: EmailIngestService | null = null;

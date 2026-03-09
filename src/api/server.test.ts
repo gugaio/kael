@@ -378,6 +378,15 @@ function makeFakeApp(): KaelApp {
           close: 0,
         },
       }),
+      getSkillsRuntimeTelemetrySnapshot: () => ({
+        enabled: true,
+        skillsDir: "/tmp/.kael/skills",
+        skillsDiscovered: 2,
+        manualInvocations: 1,
+        autoInvocations: 0,
+        invocationBlocked: 0,
+        lastError: null,
+      }),
       // only for test assertions in this fake
       __getLastInput: () => lastChatInput,
     } as unknown as KaelApp["chat"],
@@ -534,6 +543,8 @@ describe("API integration", () => {
     expect(body.metrics.engineRuntime.blockedCallsByTool.web_search).toBe(1);
     expect(body.metrics.browserRuntime.enabled).toBe(false);
     expect(body.metrics.browserRuntime.commands).toBe(0);
+    expect(body.metrics.skillsRuntime.enabled).toBe(true);
+    expect(body.metrics.skillsRuntime.skillsDiscovered).toBe(2);
     expect(body.metrics.emailIngest.processed).toBe(3);
     expect(body.metrics.emailIngest.duplicateSkipped).toBe(2);
     expect(body.metrics.emailIngest.inFlightSkipped).toBe(1);
