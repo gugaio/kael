@@ -1,6 +1,6 @@
 # Arquitetura - Fase 18 (Skills no Core)
 
-Status: planejada
+Status: em andamento
 
 ## Objetivo
 
@@ -115,3 +115,17 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
   - `$ARGUMENTS`, `$ARGUMENTS[N]`, `$N`.
 - Telemetria inicial de skills exposta em `/health`:
   - `metrics.skillsRuntime`.
+
+## Entregas implementadas (incremento 18.1)
+
+- Catalogo resumido de skills auto-invocaveis injetado no turno (`[available_skills]`)
+  com budget de caracteres.
+- Auto-invocacao conservadora:
+  - maximo de 1 skill por turno;
+  - selecao heuristica por relevancia entre mensagem e `name/description`.
+- Respeito a `disable-model-invocation: true`:
+  - skill fora do catalogo de auto-invocacao;
+  - sem carga automatica de conteudo.
+- Integracao no `ChatService`:
+  - preparacao de mensagem de turno via `SkillService.prepareTurnMessage(...)`
+    antes do preprocess multimodal e antes do turno LLM.

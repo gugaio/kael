@@ -137,6 +137,7 @@ export class ChatService {
     let user = await this.sessions.appendMessage(input.sessionKey, "user", storedUserMessage);
     let llmInputMessage = input.message;
     let skipOperationalFastPath = false;
+    let skillManualApplied = false;
 
     const skillInvocation = await this.skills.resolveManualInvocation(input.message);
     if (skillInvocation.matched) {
@@ -159,6 +160,7 @@ export class ChatService {
       }
       llmInputMessage = skillInvocation.promptMessage;
       skipOperationalFastPath = true;
+      skillManualApplied = true;
       kaelLogger.info("chat.skill.manual_invocation", {
         sessionKey: input.sessionKey,
         requestId: input.requestId ?? null,
@@ -213,6 +215,18 @@ export class ChatService {
             reply: commandRoute.reply,
             artifacts: [],
           };
+        }
+      }
+
+      if (!skillManualApplied) {
+        const preparedSkillTurn = await this.skills.prepareTurnMessage(llmInputMessage);
+        llmInputMessage = preparedSkillTurn.promptMessage;
+        if (preparedSkillTurn.autoAppliedSkillName) {
+          kaelLogger.info("chat.skill.auto_invocation", {
+            sessionKey: input.sessionKey,
+            requestId: input.requestId ?? null,
+            skillName: preparedSkillTurn.autoAppliedSkillName,
+          });
         }
       }
 

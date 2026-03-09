@@ -103,5 +103,59 @@ Liste jobs`,
     const telemetry = skills.getRuntimeTelemetrySnapshot();
     expect(telemetry.manualInvocations).toBe(0);
   });
-});
 
+  it("injeta catalogo e aplica auto skill quando relevante", async () => {
+    const root = await createWorkspace();
+    await writeSkill(
+      root,
+      "review-pr",
+      `---
+name: review-pr
+description: Revisa pull requests e aponta riscos de regressao
+---
+Sempre listar riscos por severidade com referencia de arquivo.`,
+    );
+    await writeSkill(
+      root,
+      "release-notes",
+      `---
+name: release-notes
+description: Gera changelog de release
+---
+Gere notas curtas de release.`,
+    );
+    const skills = new SkillService(root);
+
+    const result = await skills.prepareTurnMessage("pode revisar esse pull request focando regressao?");
+    expect(result.autoAppliedSkillName).toBe("review-pr");
+    expect(result.promptMessage).toContain("[available_skills]");
+    expect(result.promptMessage).toContain("name: review-pr");
+    expect(result.promptMessage).toContain("[auto_skill_selected]");
+    expect(result.promptMessage).toContain("[skill_instructions]");
+    const telemetry = skills.getRuntimeTelemetrySnapshot();
+    expect(telemetry.autoInvocations).toBe(1);
+  });
+
+  it("nao auto-invoca skill com disable-model-invocation=true", async () => {
+    const root = await createWorkspace();
+    await writeSkill(
+      root,
+      "deploy",
+      `---
+name: deploy
+description: Faz deploy em producao
+disable-model-invocation: true
+---
+Passos de deploy.`,
+    );
+    const skills = new SkillService(root);
+
+    const result = await skills.prepareTurnMessage("faz deploy da aplicacao");
+    expect(result.autoAppliedSkillName).toBe(null);
+    expect(result.promptMessage).toBe("faz deploy da aplicacao");
+    expect(result.promptMessage).not.toContain("[auto_skill_selected]");
+    expect(result.promptMessage).not.toContain("name: deploy");
+    const telemetry = skills.getRuntimeTelemetrySnapshot();
+    expect(telemetry.autoInvocations).toBe(0);
+  });
+});

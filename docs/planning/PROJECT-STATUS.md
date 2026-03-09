@@ -370,7 +370,7 @@ Definition of Done (checklist):
 
 ### Fase 18 - Skills no Core (`.kael/skills`)
 
-Status: **Planejada**
+Status: **Em andamento**
 
 Objetivos:
 - Introduzir skills em arquivo (`SKILL.md`) com discovery nativo em `.kael/skills`.
@@ -382,12 +382,40 @@ Definition of Done (checklist):
 - [x] `SkillDiscoveryService` + parser de frontmatter em `SKILL.md`.
 - [x] Registro de skills com metadados minimos (`name`, `description`, flags de invocacao).
 - [x] Invocacao manual `/<skill-name> [args]` integrada ao fast-path.
-- [ ] Auto-invocacao com no maximo 1 skill por turno e carga lazy do conteudo completo.
+- [x] Auto-invocacao com no maximo 1 skill por turno e carga lazy do conteudo completo.
 - [x] Suporte a substituicoes basicas de argumentos (`$ARGUMENTS`, `$0`, `$1`...).
 - [x] Telemetria inicial de skills em `/health`.
 - [ ] Documentacao operacional de skills (estrutura de pastas + exemplos) no repo.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-09 - Fase 18.1: catalogo de skills + auto-invocacao conservadora
+
+Resumo:
+- `SkillService` evoluido para montar catalogo resumido de skills auto-invocaveis no turno.
+- Implementada auto-invocacao conservadora de ate 1 skill por turno por heuristica de relevancia.
+- Integracao no `ChatService` para preparar mensagem do turno com catalogo/skill selecionada antes do LLM.
+- Incluidos testes unitarios para auto-invocacao e respeito a `disable-model-invocation`.
+
+Arquivos-chave:
+- `src/skills/service.ts`
+- `src/skills/service.test.ts`
+- `src/chat/service.ts`
+- `docs/architecture/phases/phase-18.md`
+- `docs/core/START-HERE.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/skills/service.test.ts src/api/server.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts`
+
+Pendencias:
+- Melhorar algoritmo de relevancia para reduzir falso-positivo em mensagens genericas.
+- Adicionar ajuste configuravel de budget/threshold por env.
+- Documentar guia operacional de autoria de skills em `.kael/skills`.
+
+Proximo passo recomendado:
+- Entregar incremento 18.2 com guia operacional + parser frontmatter mais robusto (YAML multiline/listas).
 
 ### 2026-03-09 - Fase 18.0: skills manuais em `.kael/skills` + telemetria inicial
 

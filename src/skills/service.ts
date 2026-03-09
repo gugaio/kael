@@ -6,6 +6,8 @@ const DEFAULT_SKILLS_RELATIVE_DIR = path.join(".kael", "skills");
 const SKILL_ENTRY_FILE = "SKILL.md";
 const SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const DEFAULT_DESCRIPTION = "Skill local do workspace.";
+const SKILLS_CATALOG_MAX_CHARS = 4000;
+const AUTO_SKILL_MIN_SCORE = 2;
 
 const RESERVED_OPERATIONAL_COMMANDS = new Set([
   "/help",
@@ -86,6 +88,11 @@ export type SkillManualInvocationResult =
       skillName: string;
       promptMessage: string;
     };
+
+export type SkillTurnPreparationResult = {
+  promptMessage: string;
+  autoAppliedSkillName: string | null;
+};
 
 function normalizeSkillName(raw: string): string | null {
   const normalized = raw.trim().toLowerCase();
@@ -240,6 +247,50 @@ function replaceArguments(content: string, args: string[]): string {
   return `${replacedIndexed.trimEnd()}\n\nARGUMENTS: ${argsJoined}`;
 }
 
+function tokenize(input: string): string[] {
+  return (input.toLowerCase().match(/[a-z0-9-]{3,}/g) ?? []).filter(Boolean);
+}
+
+function scoreSkillRelevance(message: string, skill: SkillEntry): number {
+  const messageTokens = new Set(tokenize(message));
+  if (messageTokens.size === 0) {
+    return 0;
+  }
+  const skillTokens = new Set([...tokenize(skill.name), ...tokenize(skill.description)]);
+  let score = 0;
+  for (const token of skillTokens) {
+    if (messageTokens.has(token)) {
+      score += 1;
+    }
+  }
+  if (message.toLowerCase().includes(skill.name.toLowerCase())) {
+    score += 2;
+  }
+  return score;
+}
+
+function renderCatalog(skills: SkillEntry[]): string {
+  if (skills.length === 0) {
+    return "";
+  }
+  const lines: string[] = [
+    "[available_skills]",
+    "Antes de responder: considere as skills abaixo. Use no maximo uma skill automaticamente por turno.",
+  ];
+  let usedChars = lines.join("\n").length;
+  for (const skill of skills) {
+    const hint = skill.argumentHint ? ` | argumentHint: ${skill.argumentHint}` : "";
+    const line = `- name: ${skill.name} | description: ${skill.description}${hint}`;
+    if (usedChars + line.length > SKILLS_CATALOG_MAX_CHARS) {
+      break;
+    }
+    lines.push(line);
+    usedChars += line.length;
+  }
+  lines.push("[/available_skills]");
+  return lines.join("\n");
+}
+
 type SkillServiceDeps = {
   readdir: (
     path: string,
@@ -331,6 +382,65 @@ export class SkillService {
       blocked: false,
       skillName: skill.name,
       promptMessage,
+    };
+  }
+
+  async prepareTurnMessage(message: string): Promise<SkillTurnPreparationResult> {
+    const snapshot = await this.discover();
+    if (snapshot.byName.size === 0) {
+      return {
+        promptMessage: message,
+        autoAppliedSkillName: null,
+      };
+    }
+
+    const autoInvocableSkills = [...snapshot.byName.values()].filter(
+      (skill) => !skill.disableModelInvocation,
+    );
+    const catalog = renderCatalog(autoInvocableSkills);
+    if (catalog.length === 0 || isSlashCommand(message)) {
+      return {
+        promptMessage: message,
+        autoAppliedSkillName: null,
+      };
+    }
+
+    let bestSkill: SkillEntry | null = null;
+    let bestScore = 0;
+    for (const skill of autoInvocableSkills) {
+      const score = scoreSkillRelevance(message, skill);
+      if (score > bestScore) {
+        bestScore = score;
+        bestSkill = skill;
+      }
+    }
+
+    let autoAppliedSkillName: string | null = null;
+    const blocks = [catalog];
+    if (bestSkill && bestScore >= AUTO_SKILL_MIN_SCORE) {
+      autoAppliedSkillName = bestSkill.name;
+      this.telemetry.autoInvocations += 1;
+      blocks.push(
+        [
+          "",
+          "[auto_skill_selected]",
+          `name: ${bestSkill.name}`,
+          `description: ${bestSkill.description}`,
+          `source: ${bestSkill.filePath}`,
+          "[/auto_skill_selected]",
+          "",
+          "[skill_instructions]",
+          bestSkill.content,
+          "[/skill_instructions]",
+        ].join("\n"),
+      );
+    }
+
+    blocks.push("", "[user_request]", message, "[/user_request]");
+
+    return {
+      promptMessage: blocks.join("\n"),
+      autoAppliedSkillName,
     };
   }
 
