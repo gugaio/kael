@@ -97,6 +97,16 @@ type SkillTelemetry = {
   manualInvocations: number;
   autoInvocations: number;
   invocationBlocked: number;
+  autoDecisionCounts: Record<SkillAutoDecisionReason, number>;
+  lastAutoDecision: {
+    at: string | null;
+    reason: SkillAutoDecisionReason | null;
+    skillName: string | null;
+  };
+  sessionAuto: {
+    trackedSessions: number;
+    sessionsWithSelection: number;
+  };
   lastError: string | null;
 };
 
@@ -129,10 +139,28 @@ export type SkillTurnPreparationResult = {
   autoAppliedSkillName: string | null;
 };
 
+type SkillAutoDecisionReason =
+  | "selected"
+  | "slash_message"
+  | "no_discovered_skills"
+  | "no_auto_invocable_skills"
+  | "generic_message"
+  | "below_threshold"
+  | "auto_disabled";
+
+type SkillSessionAutoStats = {
+  attempts: number;
+  selections: number;
+  lastDecisionAt: string;
+  lastDecisionReason: SkillAutoDecisionReason;
+  lastSkillName: string | null;
+};
+
 export type SkillServiceOptions = {
   catalogMaxChars?: number;
   autoSkillMinScore?: number;
   autoSkillMaxPerTurn?: number;
+  sessionStatsLimit?: number;
 };
 
 function normalizeSkillName(raw: string): string | null {
@@ -353,14 +381,28 @@ function tokenize(input: string): string[] {
   return (input.toLowerCase().match(/[a-z0-9-]{3,}/g) ?? []).filter(Boolean);
 }
 
-function scoreSkillRelevance(message: string, skill: SkillEntry): number {
-  const messageTokensRaw = tokenize(message);
-  const messageTokens = new Set(messageTokensRaw);
-  if (messageTokens.size < AUTO_SKILL_MIN_MESSAGE_TOKENS) {
-    return 0;
-  }
-  const nonGenericTokenCount = [...messageTokens].filter((token) => !AUTO_SKILL_STOPWORDS.has(token)).length;
-  if (nonGenericTokenCount === 0) {
+type MessageTokenAnalysis = {
+  tokenSet: Set<string>;
+  tokenList: string[];
+  nonGenericCount: number;
+  isGeneric: boolean;
+};
+
+function analyzeMessageTokens(message: string): MessageTokenAnalysis {
+  const tokenList = tokenize(message);
+  const tokenSet = new Set(tokenList);
+  const nonGenericCount = tokenList.filter((token) => !AUTO_SKILL_STOPWORDS.has(token)).length;
+  return {
+    tokenSet,
+    tokenList,
+    nonGenericCount,
+    isGeneric: tokenSet.size < AUTO_SKILL_MIN_MESSAGE_TOKENS || nonGenericCount === 0,
+  };
+}
+
+function scoreSkillRelevanceFromAnalysis(analysis: MessageTokenAnalysis, message: string, skill: SkillEntry): number {
+  const messageTokens = analysis.tokenSet;
+  if (analysis.isGeneric) {
     return 0;
   }
   const skillTokens = new Set([...tokenize(skill.name), ...tokenize(skill.description)]);
@@ -369,7 +411,7 @@ function scoreSkillRelevance(message: string, skill: SkillEntry): number {
   }
   let score = 0;
   let overlap = 0;
-  const messageTokenList = [...messageTokens];
+  const messageTokenList = analysis.tokenList;
   for (const token of skillTokens) {
     const exactMatch = messageTokens.has(token);
     const prefixMatch =
@@ -393,7 +435,7 @@ function scoreSkillRelevance(message: string, skill: SkillEntry): number {
   if (overlapCoverage >= 0.5) {
     score += 1;
   }
-  const genericRatio = 1 - nonGenericTokenCount / Math.max(1, messageTokens.size);
+  const genericRatio = 1 - analysis.nonGenericCount / Math.max(1, messageTokens.size);
   if (genericRatio > 0.7 && !nameMatched) {
     score = Math.max(0, score - 1);
   }
@@ -479,6 +521,8 @@ export class SkillService {
   private readonly catalogMaxChars: number;
   private readonly autoSkillMinScore: number;
   private readonly autoSkillMaxPerTurn: number;
+  private readonly sessionStatsLimit: number;
+  private readonly sessionAutoStats = new Map<string, SkillSessionAutoStats>();
 
   constructor(
     private readonly workspaceRoot: string,
@@ -493,6 +537,24 @@ export class SkillService {
       manualInvocations: 0,
       autoInvocations: 0,
       invocationBlocked: 0,
+      autoDecisionCounts: {
+        selected: 0,
+        slash_message: 0,
+        no_discovered_skills: 0,
+        no_auto_invocable_skills: 0,
+        generic_message: 0,
+        below_threshold: 0,
+        auto_disabled: 0,
+      },
+      lastAutoDecision: {
+        at: null,
+        reason: null,
+        skillName: null,
+      },
+      sessionAuto: {
+        trackedSessions: 0,
+        sessionsWithSelection: 0,
+      },
       lastError: null,
     };
     this.deps = {
@@ -513,6 +575,11 @@ export class SkillService {
       options?.autoSkillMaxPerTurn,
       process.env.KAEL_SKILLS_AUTO_MAX_PER_TURN,
       AUTO_SKILL_MAX_PER_TURN,
+    );
+    this.sessionStatsLimit = resolvePositiveIntOption(
+      options?.sessionStatsLimit,
+      process.env.KAEL_SKILLS_SESSION_STATS_LIMIT,
+      100,
     );
   }
 
@@ -573,9 +640,14 @@ export class SkillService {
     };
   }
 
-  async prepareTurnMessage(message: string): Promise<SkillTurnPreparationResult> {
+  async prepareTurnMessage(
+    message: string,
+    context?: { sessionKey?: string },
+  ): Promise<SkillTurnPreparationResult> {
+    const sessionKey = context?.sessionKey?.trim() || undefined;
     const snapshot = await this.discover();
     if (snapshot.byName.size === 0) {
+      this.recordAutoDecision("no_discovered_skills", sessionKey, null);
       return {
         promptMessage: message,
         autoAppliedSkillName: null,
@@ -586,9 +658,33 @@ export class SkillService {
       (skill) => !skill.disableModelInvocation,
     );
     const catalog = renderCatalog(autoInvocableSkills, this.catalogMaxChars);
-    if (catalog.length === 0 || isSlashCommand(message)) {
+    if (isSlashCommand(message)) {
+      this.recordAutoDecision("slash_message", sessionKey, null);
       return {
         promptMessage: message,
+        autoAppliedSkillName: null,
+      };
+    }
+    if (catalog.length === 0) {
+      this.recordAutoDecision("no_auto_invocable_skills", sessionKey, null);
+      return {
+        promptMessage: message,
+        autoAppliedSkillName: null,
+      };
+    }
+    if (this.autoSkillMaxPerTurn <= 0) {
+      this.recordAutoDecision("auto_disabled", sessionKey, null);
+      return {
+        promptMessage: [catalog, "", "[user_request]", message, "[/user_request]"].join("\n"),
+        autoAppliedSkillName: null,
+      };
+    }
+
+    const messageAnalysis = analyzeMessageTokens(message);
+    if (messageAnalysis.isGeneric) {
+      this.recordAutoDecision("generic_message", sessionKey, null);
+      return {
+        promptMessage: [catalog, "", "[user_request]", message, "[/user_request]"].join("\n"),
         autoAppliedSkillName: null,
       };
     }
@@ -596,7 +692,7 @@ export class SkillService {
     let bestSkill: SkillEntry | null = null;
     let bestScore = 0;
     for (const skill of autoInvocableSkills) {
-      const score = scoreSkillRelevance(message, skill);
+      const score = scoreSkillRelevanceFromAnalysis(messageAnalysis, message, skill);
       if (score > bestScore) {
         bestScore = score;
         bestSkill = skill;
@@ -605,9 +701,10 @@ export class SkillService {
 
     let autoAppliedSkillName: string | null = null;
     const blocks = [catalog];
-    if (bestSkill && bestScore >= this.autoSkillMinScore && this.autoSkillMaxPerTurn > 0) {
+    if (bestSkill && bestScore >= this.autoSkillMinScore) {
       autoAppliedSkillName = bestSkill.name;
       this.telemetry.autoInvocations += 1;
+      this.recordAutoDecision("selected", sessionKey, bestSkill.name);
       blocks.push(
         [
           "",
@@ -622,6 +719,8 @@ export class SkillService {
           "[/skill_instructions]",
         ].join("\n"),
       );
+    } else {
+      this.recordAutoDecision("below_threshold", sessionKey, null);
     }
 
     blocks.push("", "[user_request]", message, "[/user_request]");
@@ -701,5 +800,42 @@ export class SkillService {
     this.telemetry.skillsDiscovered = byName.size;
     this.telemetry.lastError = lastError;
     return this.snapshot;
+  }
+
+  private recordAutoDecision(
+    reason: SkillAutoDecisionReason,
+    sessionKey: string | undefined,
+    skillName: string | null,
+  ): void {
+    this.telemetry.autoDecisionCounts[reason] += 1;
+    this.telemetry.lastAutoDecision = {
+      at: new Date().toISOString(),
+      reason,
+      skillName,
+    };
+    if (!sessionKey) {
+      return;
+    }
+
+    const current = this.sessionAutoStats.get(sessionKey);
+    const updated: SkillSessionAutoStats = {
+      attempts: (current?.attempts ?? 0) + 1,
+      selections: (current?.selections ?? 0) + (reason === "selected" ? 1 : 0),
+      lastDecisionAt: this.telemetry.lastAutoDecision.at ?? new Date().toISOString(),
+      lastDecisionReason: reason,
+      lastSkillName: skillName,
+    };
+    this.sessionAutoStats.set(sessionKey, updated);
+
+    if (this.sessionAutoStats.size > this.sessionStatsLimit) {
+      const oldestKey = this.sessionAutoStats.keys().next().value as string | undefined;
+      if (oldestKey) {
+        this.sessionAutoStats.delete(oldestKey);
+      }
+    }
+    this.telemetry.sessionAuto = {
+      trackedSessions: this.sessionAutoStats.size,
+      sessionsWithSelection: [...this.sessionAutoStats.values()].filter((item) => item.selections > 0).length,
+    };
   }
 }

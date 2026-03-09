@@ -275,4 +275,39 @@ Liste riscos por severidade.`,
     expect(result.promptMessage).toContain("[available_skills]");
     expect(result.promptMessage).not.toContain("[auto_skill_selected]");
   });
+
+  it("registra telemetria de qualidade de auto-selecao por motivo e por sessao", async () => {
+    const root = await createWorkspace();
+    await writeSkill(
+      root,
+      "review-pr",
+      `---
+name: review-pr
+description: Revisa pull requests e regressao
+---
+Liste riscos por severidade.`,
+    );
+    const skills = new SkillService(root, undefined, { autoSkillMinScore: 2, autoSkillMaxPerTurn: 1 });
+
+    const selected = await skills.prepareTurnMessage("revisa esse pull request focando regressao", {
+      sessionKey: "s1",
+    });
+    expect(selected.autoAppliedSkillName).toBe("review-pr");
+
+    const generic = await skills.prepareTurnMessage("pode ajudar?", { sessionKey: "s1" });
+    expect(generic.autoAppliedSkillName).toBe(null);
+
+    const belowThreshold = await skills.prepareTurnMessage("quero discutir arquitetura kubernetes", {
+      sessionKey: "s2",
+    });
+    expect(belowThreshold.autoAppliedSkillName).toBe(null);
+
+    const telemetry = skills.getRuntimeTelemetrySnapshot();
+    expect(telemetry.autoDecisionCounts.selected).toBe(1);
+    expect(telemetry.autoDecisionCounts.generic_message).toBe(1);
+    expect(telemetry.autoDecisionCounts.below_threshold).toBe(1);
+    expect(telemetry.sessionAuto.trackedSessions).toBe(2);
+    expect(telemetry.sessionAuto.sessionsWithSelection).toBe(1);
+    expect(telemetry.lastAutoDecision.reason).toBe("below_threshold");
+  });
 });

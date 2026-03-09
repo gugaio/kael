@@ -155,3 +155,13 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
 - Prioridade de configuracao explicita:
   - opcoes passadas para `SkillService` prevalecem sobre ENV.
 - Cobertura de testes expandida para tuning (threshold, budget, disable auto).
+
+## Entregas implementadas (incremento 18.4)
+
+- Telemetria de qualidade de auto-selecao adicionada em `skillsRuntime`:
+  - `autoDecisionCounts` por motivo (`selected`, `below_threshold`, etc.);
+  - `lastAutoDecision` com timestamp/motivo/skill;
+  - `sessionAuto` com agregacao de sessoes rastreadas e sessoes com selecao.
+- Tracking por sessao no `SkillService.prepareTurnMessage(...)` via `sessionKey`.
+- Integracao no `ChatService` para repassar `sessionKey` ao preparar turno de skills.
+- Novos testes cobrindo motivos de decisao e agregacao por sessao.

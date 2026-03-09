@@ -100,6 +100,9 @@ Observacao:
 - `manualInvocations`
 - `autoInvocations`
 - `invocationBlocked`
+- `autoDecisionCounts` (motivos da decisao de auto-skill)
+- `lastAutoDecision` (`at`, `reason`, `skillName`)
+- `sessionAuto` (`trackedSessions`, `sessionsWithSelection`)
 - `lastError`
 
 ## Configuracao por ENV (tuning 18.3)
@@ -113,7 +116,27 @@ Observacao:
 - `KAEL_SKILLS_AUTO_MAX_PER_TURN`
   - maximo de skills auto por turno (atualmente efetivo para `0|1`)
   - default: `1`
+- `KAEL_SKILLS_SESSION_STATS_LIMIT`
+  - limite de sessoes rastreadas na telemetria de qualidade
+  - default: `100`
 
 Observacoes:
 - `KAEL_SKILLS_AUTO_MAX_PER_TURN=0` desativa auto-invocacao.
 - Invocacao manual por slash continua funcionando mesmo com auto desativada.
+
+## Skill de diagnostico (recomendada)
+
+Foi adicionada a skill:
+
+- `.kael/skills/skill-routing-check/SKILL.md`
+
+Como validar rapidamente:
+
+1. Envie uma mensagem como:
+   - `quero validar se o roteamento de skills foi correto`
+2. Verifique se a resposta comeca com:
+   - `[skill-routing-check]`
+3. Verifique em `/health`:
+   - `metrics.skillsRuntime.autoInvocations`
+   - `metrics.skillsRuntime.lastAutoDecision`
+   - `metrics.skillsRuntime.autoDecisionCounts`

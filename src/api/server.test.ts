@@ -385,6 +385,24 @@ function makeFakeApp(): KaelApp {
         manualInvocations: 1,
         autoInvocations: 0,
         invocationBlocked: 0,
+        autoDecisionCounts: {
+          selected: 0,
+          slash_message: 0,
+          no_discovered_skills: 0,
+          no_auto_invocable_skills: 0,
+          generic_message: 0,
+          below_threshold: 1,
+          auto_disabled: 0,
+        },
+        lastAutoDecision: {
+          at: new Date().toISOString(),
+          reason: "below_threshold",
+          skillName: null,
+        },
+        sessionAuto: {
+          trackedSessions: 1,
+          sessionsWithSelection: 0,
+        },
         lastError: null,
       }),
       // only for test assertions in this fake
@@ -545,6 +563,8 @@ describe("API integration", () => {
     expect(body.metrics.browserRuntime.commands).toBe(0);
     expect(body.metrics.skillsRuntime.enabled).toBe(true);
     expect(body.metrics.skillsRuntime.skillsDiscovered).toBe(2);
+    expect(body.metrics.skillsRuntime.autoDecisionCounts.below_threshold).toBe(1);
+    expect(body.metrics.skillsRuntime.sessionAuto.trackedSessions).toBe(1);
     expect(body.metrics.emailIngest.processed).toBe(3);
     expect(body.metrics.emailIngest.duplicateSkipped).toBe(2);
     expect(body.metrics.emailIngest.inFlightSkipped).toBe(1);

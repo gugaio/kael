@@ -389,6 +389,35 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-09 - Fase 18.4: telemetria de qualidade de auto-selecao (motivos + sessao)
+
+Resumo:
+- Expandida telemetria de skills com qualidade de decisao (`autoDecisionCounts`, `lastAutoDecision`, `sessionAuto`).
+- `ChatService` passou a enviar `sessionKey` para preparacao de turno de skills, habilitando agregacao por sessao.
+- Ajustada heuristica/tuning para manter comportamento controlavel por options/ENV.
+- Testes de skills ampliados com cenarios de motivos de decisao e sessao.
+
+Arquivos-chave:
+- `src/skills/service.ts`
+- `src/skills/service.test.ts`
+- `src/chat/service.ts`
+- `src/api/server.test.ts`
+- `docs/skills.md`
+- `README.md`
+- `docs/architecture/phases/phase-18.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/skills/service.test.ts src/api/server.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts`
+
+Pendencias:
+- Expor opcionalmente amostra de sessoes com baixa taxa de selecao para tuning operacional.
+- Avaliar sinal adicional de "user override" (manual slash apos auto miss) para medir falso-negativo.
+
+Proximo passo recomendado:
+- Entregar incremento 18.5 com dashboard minimo de qualidade em `/health`/SSE e thresholds de alerta.
+
 ### 2026-03-09 - Fase 18.3: tuning configuravel de skills + heuristica refinada
 
 Resumo:

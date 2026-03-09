@@ -197,6 +197,7 @@ Referencia completa: `docs/api.md`
 - `KAEL_SKILLS_CATALOG_MAX_CHARS`
 - `KAEL_SKILLS_AUTO_MIN_SCORE`
 - `KAEL_SKILLS_AUTO_MAX_PER_TURN`
+- `KAEL_SKILLS_SESSION_STATS_LIMIT`
 
 ## Qualidade e Seguranca
 

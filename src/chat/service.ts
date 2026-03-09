@@ -219,7 +219,9 @@ export class ChatService {
       }
 
       if (!skillManualApplied) {
-        const preparedSkillTurn = await this.skills.prepareTurnMessage(llmInputMessage);
+        const preparedSkillTurn = await this.skills.prepareTurnMessage(llmInputMessage, {
+          sessionKey: input.sessionKey,
+        });
         llmInputMessage = preparedSkillTurn.promptMessage;
         if (preparedSkillTurn.autoAppliedSkillName) {
           kaelLogger.info("chat.skill.auto_invocation", {
