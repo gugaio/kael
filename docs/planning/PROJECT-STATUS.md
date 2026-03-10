@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-03-09**
+Ultima atualizacao: **2026-03-10**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -388,6 +388,33 @@ Definition of Done (checklist):
 - [x] Documentacao operacional de skills (estrutura de pastas + exemplos) no repo.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-10 - Fase 18.5: skill Youbora (NPAW) com script operacional e ENV dedicada
+
+Resumo:
+- Adicionada skill `youbora` em `.kael/skills` para consultas na API NPAW com assinatura MD5.
+- Adicionado script local `query-youbora.mjs` para montar URL assinada, consultar API e retornar JSON estruturado.
+- Variaveis `KAEL_YOUBORA_*` registradas no `.env` para evitar hardcode no `SKILL.md`.
+- Guia de skills atualizado com secao dedicada de uso da skill Youbora.
+
+Arquivos-chave:
+- `.kael/skills/youbora/SKILL.md`
+- `.kael/skills/youbora/scripts/query-youbora.mjs`
+- `.env`
+- `docs/skills.md`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `node --check .kael/skills/youbora/scripts/query-youbora.mjs`
+- [x] `node .kael/skills/youbora/scripts/query-youbora.mjs` (validacao de uso sem args)
+- [x] `node .kael/skills/youbora/scripts/query-youbora.mjs last24hours views` (erro de rede esperado no sandbox)
+
+Pendencias:
+- Validar consulta real em ambiente com acesso de rede externo.
+- Opcional: adicionar parser de argumentos nomeados para melhorar UX (`--metrics`, `--type`, etc.).
+
+Proximo passo recomendado:
+- Executar teste end-to-end do `/youbora` com servidor Kael rodando e confirmar retorno real da API.
 
 ### 2026-03-09 - Fase 18.4: telemetria de qualidade de auto-selecao (motivos + sessao)
 

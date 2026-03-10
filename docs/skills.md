@@ -140,3 +140,22 @@ Como validar rapidamente:
    - `metrics.skillsRuntime.autoInvocations`
    - `metrics.skillsRuntime.lastAutoDecision`
    - `metrics.skillsRuntime.autoDecisionCounts`
+
+## Skill Youbora (NPAW)
+
+Foi adicionada:
+
+- `.kael/skills/youbora/SKILL.md`
+- `.kael/skills/youbora/scripts/query-youbora.mjs`
+
+Variaveis esperadas no `.env`:
+
+- `KAEL_YOUBORA_HOST`
+- `KAEL_YOUBORA_ACCOUNT_CODE`
+- `KAEL_YOUBORA_API_KEY`
+- `KAEL_YOUBORA_DATE_TOKEN_TTL_MS` (opcional)
+
+Exemplos de uso:
+
+- `/youbora last24hours`
+- `/youbora "2025-03-20 00:00:00" "2025-03-20 17:50:25" views vod hour`
