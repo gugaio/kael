@@ -10,7 +10,15 @@ type RequestWithStart = {
   _kaelStartNs?: bigint;
 };
 
-type LiveResource = "health" | "jobs" | "schedules" | "plans" | "approvals" | "exec_sessions";
+type LiveResource =
+  | "health"
+  | "jobs"
+  | "schedules"
+  | "plans"
+  | "approvals"
+  | "exec_sessions"
+  | "mcp_servers"
+  | "mcp_approvals";
 
 type LiveSyncEvent = {
   type: "sync";
@@ -23,6 +31,8 @@ type LiveSyncEvent = {
     schedules: number;
     approvals: number;
     execSessions: number;
+    mcpServers: number;
+    mcpApprovals: number;
   };
 };
 
@@ -175,6 +185,8 @@ async function buildLiveState(app: KaelApp): Promise<{
   const plans = app.planner.list({ limit: 100 });
   const schedules = app.automation.listSchedules();
   const approvals = await app.shell.listApprovals({ status: "open", limit: 100 });
+  const mcpServers = await app.mcp.listServers();
+  const mcpApprovals = await app.mcp.listApprovals({ status: "open", limit: 100 });
   const execSessionsResult = await app.shell.process({
     sessionKey: "api.events",
     action: "list",
@@ -188,6 +200,7 @@ async function buildLiveState(app: KaelApp): Promise<{
   const mediaRuntime = app.chat.getMediaRuntimeTelemetrySnapshot();
   const browserRuntime = app.chat.getBrowserRuntimeTelemetrySnapshot();
   const skillsRuntime = app.chat.getSkillsRuntimeTelemetrySnapshot();
+  const mcpRuntime = app.mcp.getRuntimeTelemetrySnapshot();
   const emailIngest = app.emailIngest?.getRuntimeTelemetrySnapshot() ?? null;
 
   const healthSignature = stableStringify({
@@ -199,6 +212,7 @@ async function buildLiveState(app: KaelApp): Promise<{
     mediaRuntime,
     browserRuntime,
     skillsRuntime,
+    mcpRuntime,
     emailIngest,
     engineMode: app.config.engineMode,
     piEnabled: app.config.pi.enabled,
@@ -254,6 +268,24 @@ async function buildLiveState(app: KaelApp): Promise<{
       approvalId: session.approvalId ?? null,
     })),
   );
+  const mcpServersSignature = stableStringify(
+    mcpServers.map((server) => ({
+      name: server.name,
+      transport: server.transport,
+      enabled: server.enabled,
+      requireApproval: server.requireApproval,
+      updatedAt: server.updatedAt,
+    })),
+  );
+  const mcpApprovalsSignature = stableStringify(
+    mcpApprovals.map((approval) => ({
+      id: approval.id,
+      serverName: approval.serverName,
+      transport: approval.transport,
+      status: approval.status,
+      decidedAt: approval.decidedAt ?? null,
+    })),
+  );
 
   return {
     signatures: {
@@ -263,6 +295,8 @@ async function buildLiveState(app: KaelApp): Promise<{
       plans: plansSignature,
       approvals: approvalsSignature,
       exec_sessions: execSessionsSignature,
+      mcp_servers: mcpServersSignature,
+      mcp_approvals: mcpApprovalsSignature,
     },
     summary: {
       jobs: jobs.length,
@@ -270,6 +304,8 @@ async function buildLiveState(app: KaelApp): Promise<{
       schedules: schedules.length,
       approvals: approvals.length,
       execSessions: execSessions.length,
+      mcpServers: mcpServers.length,
+      mcpApprovals: mcpApprovals.length,
     },
   };
 }
@@ -412,6 +448,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
     const mediaRuntime = app.chat.getMediaRuntimeTelemetrySnapshot();
     const browserRuntime = app.chat.getBrowserRuntimeTelemetrySnapshot();
     const skillsRuntime = app.chat.getSkillsRuntimeTelemetrySnapshot();
+    const mcpRuntime = app.mcp.getRuntimeTelemetrySnapshot();
     const emailIngest = app.emailIngest?.getRuntimeTelemetrySnapshot() ?? null;
     const schedules = app.automation.listSchedules();
     const enabledSchedules = schedules.filter((item) => item.enabled).length;
@@ -435,6 +472,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
         mediaRuntime,
         browserRuntime,
         skillsRuntime,
+        mcpRuntime,
         emailIngest,
         schedules: {
           total: schedules.length,
@@ -491,7 +529,10 @@ export function createApiServer(app: KaelApp): FastifyInstance {
       });
     };
 
-    writeSync(["health", "jobs", "schedules", "plans", "approvals", "exec_sessions"], previous.summary);
+    writeSync(
+      ["health", "jobs", "schedules", "plans", "approvals", "exec_sessions", "mcp_servers", "mcp_approvals"],
+      previous.summary,
+    );
 
     const syncTimer = setInterval(() => {
       void (async () => {
@@ -850,6 +891,103 @@ export function createApiServer(app: KaelApp): FastifyInstance {
         throw new ApiError(404, "NOT_FOUND", "approval not found");
       }
       await reconcilePlansNow({ limit: 200 });
+      return { ok: true, approval };
+    },
+  );
+
+  server.get<{ Querystring: { name?: string } }>(
+    "/mcp/servers",
+    async (request) => {
+      const name = request.query.name?.trim();
+      if (name) {
+        const found = await app.mcp.getServer(name);
+        return { ok: true, servers: found ? [found] : [] };
+      }
+      const servers = await app.mcp.listServers();
+      return { ok: true, servers };
+    },
+  );
+
+  server.post<{
+    Body: {
+      name?: string;
+      transport?: string;
+      target?: string;
+      enabled?: boolean;
+      requireApproval?: boolean;
+      description?: string;
+    };
+  }>("/mcp/servers", async (request) => {
+    const name = request.body.name?.trim();
+    const transport = request.body.transport?.trim();
+    const target = request.body.target?.trim();
+    if (!name) {
+      throw new ApiError(400, "BAD_REQUEST", "name is required");
+    }
+    if (transport !== "config" && transport !== "http" && transport !== "stdio") {
+      throw new ApiError(400, "BAD_REQUEST", "transport must be config|http|stdio");
+    }
+    if (!target) {
+      throw new ApiError(400, "BAD_REQUEST", "target is required");
+    }
+    const serverEntry = await app.mcp.upsertServer({
+      name,
+      transport,
+      target,
+      ...(typeof request.body.enabled === "boolean" ? { enabled: request.body.enabled } : {}),
+      ...(typeof request.body.requireApproval === "boolean"
+        ? { requireApproval: request.body.requireApproval }
+        : {}),
+      ...(request.body.description?.trim() ? { description: request.body.description.trim() } : {}),
+    });
+    return { ok: true, server: serverEntry };
+  });
+
+  server.get<{ Querystring: { status?: string; limit?: string } }>(
+    "/mcp/approvals",
+    async (request) => {
+      const statusRaw = request.query.status?.trim().toLowerCase();
+      const status =
+        statusRaw === "open" ||
+        statusRaw === "pending" ||
+        statusRaw === "approved" ||
+        statusRaw === "denied" ||
+        statusRaw === "expired"
+          ? statusRaw
+          : undefined;
+      const parsedLimit = Number(request.query.limit ?? "100");
+      const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 100;
+      const approvals = await app.mcp.listApprovals({ status, limit });
+      return { ok: true, approvals };
+    },
+  );
+
+  server.post<{ Params: { approvalId: string } }>(
+    "/mcp/approvals/:approvalId/approve",
+    async (request) => {
+      const approvalId = request.params.approvalId?.trim();
+      if (!approvalId) {
+        throw new ApiError(400, "BAD_REQUEST", "approvalId is required");
+      }
+      const approval = await app.mcp.resolveApproval(approvalId, "approved");
+      if (!approval) {
+        throw new ApiError(404, "NOT_FOUND", "approval not found");
+      }
+      return { ok: true, approval };
+    },
+  );
+
+  server.post<{ Params: { approvalId: string } }>(
+    "/mcp/approvals/:approvalId/deny",
+    async (request) => {
+      const approvalId = request.params.approvalId?.trim();
+      if (!approvalId) {
+        throw new ApiError(400, "BAD_REQUEST", "approvalId is required");
+      }
+      const approval = await app.mcp.resolveApproval(approvalId, "denied");
+      if (!approval) {
+        throw new ApiError(404, "NOT_FOUND", "approval not found");
+      }
       return { ok: true, approval };
     },
   );

@@ -92,12 +92,15 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     enabled: config.mcp.enabled,
     binary: config.mcp.binary,
     configPath: config.mcp.configPath,
+    registryPath: path.join(config.dataDir, "mcp", "registry.json"),
+    approvalsPath: path.join(config.dataDir, "mcp", "approvals.json"),
     workspaceRoot: config.shell.workspaceRoot,
     defaultTimeoutMs: config.mcp.defaultTimeoutMs,
     maxOutputChars: config.mcp.maxOutputChars,
     allowHttp: config.mcp.allowHttp,
     allowStdio: config.mcp.allowStdio,
   });
+  await mcp.init();
   const memory = new MemoryService({
     workspaceRoot: config.shell.workspaceRoot,
     storageRoot: path.join(resolveKaelHome(), "data", "memory"),

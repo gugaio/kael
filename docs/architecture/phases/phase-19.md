@@ -85,9 +85,33 @@ dedicadas no runtime PI e skill operacional no workspace.
 - Testes unitarios para bridge MCP e para wiring das tools.
 - Skill operacional `mcporter` adicionada ao workspace do Kael.
 
+## Entregas implementadas (incremento 19.1)
+
+- Registry persistente de servidores MCP em arquivo local:
+  - `name`
+  - `transport` (`config|http|stdio`)
+  - `target`
+  - `enabled`
+  - `requireApproval`
+- Approvals persistentes por servidor/transport:
+  - primeira chamada pode gerar approval pendente;
+  - decisao aprovada/negada passa a ser reutilizada nas chamadas futuras.
+- Endpoints operacionais para registry/approvals:
+  - `GET /mcp/servers`
+  - `POST /mcp/servers`
+  - `GET /mcp/approvals`
+  - `POST /mcp/approvals/:approvalId/approve`
+  - `POST /mcp/approvals/:approvalId/deny`
+- Telemetria MCP adicionada ao `/health`:
+  - servidores configurados/habilitados
+  - chamadas totais/list/call
+  - bloqueios/falhas
+  - approvals pendentes
+  - distribuicao por transport
+  - ultimo erro / ultima chamada
+
 ## Pendencias da fase
 
-1. Telemetria dedicada de MCP no `/health`.
-2. Fluxos de auth/config (`mcporter auth/config`) com politica de approval explicita.
-3. Possivel API/CLI operacional para inspecionar MCP fora do loop do agente.
-4. Registry persistente de servidores MCP permitidos, se o uso real justificar.
+1. CLI dedicada para operar registry/approvals MCP sem depender da API.
+2. Melhorar ergonomia de `mcp_call` para aliases/tool names com validacao mais rica.
+3. Fluxos de auth/config (`mcporter auth/config`) se surgirem MCPs que exijam autenticacao.

@@ -141,6 +141,12 @@ Fluxo recomendado:
 2. `mcp_list` com `server` + `schema=true` para inspecionar tools.
 3. `mcp_call` com `target` e `argumentsJson` para executar a tool desejada.
 
+Observacao da fase 19.1:
+
+- `mcp_call` agora espera alias registrado no formato `server.tool`.
+- Para MCPs `http` e `stdio`, registre primeiro o servidor via API (`POST /mcp/servers`)
+  e aprove o uso quando surgir approval pendente.
+
 Variaveis de ambiente da fase:
 
 - `KAEL_MCP_ENABLED`

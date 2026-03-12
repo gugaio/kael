@@ -44,6 +44,15 @@ flowchart TD
             API --> SessionLog[GET /exec/sessions/:sessionId/log]
         end
 
+        subgraph MCP ["MCP (registry & approvals)"]
+            direction LR
+            API --> McpServers[GET /mcp/servers]
+            API --> McpUpsert[POST /mcp/servers]
+            API --> McpApprovals[GET /mcp/approvals]
+            API --> McpApprove[POST /mcp/approvals/:approvalId/approve]
+            API --> McpDeny[POST /mcp/approvals/:approvalId/deny]
+        end
+
         subgraph Jobs ["Jobs (media processing)"]
             direction LR
             API --> JobsGET[GET /jobs]
@@ -109,6 +118,15 @@ flowchart TD
 | POST | /exec/approvals/:approvalId/deny | Deny command |
 | GET | /exec/sessions | List exec sessions |
 | GET | /exec/sessions/:sessionId/log | Get session log |
+
+### MCP (Registry & Approvals)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /mcp/servers | List registered MCP servers |
+| POST | /mcp/servers | Create/update MCP server registry entry |
+| GET | /mcp/approvals | List MCP approvals |
+| POST | /mcp/approvals/:approvalId/approve | Approve MCP server usage |
+| POST | /mcp/approvals/:approvalId/deny | Deny MCP server usage |
 
 ### Jobs (Media Processing)
 | Method | Path | Description |

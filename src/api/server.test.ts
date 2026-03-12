@@ -476,6 +476,7 @@ function makeFakeApp(): KaelApp {
       resolveApproval: async () => null,
     } as unknown as KaelApp["shell"],
     mcp: {
+      init: async () => {},
       list: async () => ({ ok: true, command: "mcporter list", schema: false, format: "json", items: [] }),
       call: async () => ({
         ok: true,
@@ -483,6 +484,86 @@ function makeFakeApp(): KaelApp {
         target: "linear.list_issues",
         format: "json",
         output: {},
+      }),
+      listServers: async () => [
+        {
+          name: "local-http",
+          transport: "http",
+          target: "https://example.com/mcp",
+          enabled: true,
+          requireApproval: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+      getServer: async (name: string) =>
+        name === "local-http"
+          ? {
+              name: "local-http",
+              transport: "http",
+              target: "https://example.com/mcp",
+              enabled: true,
+              requireApproval: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }
+          : null,
+      upsertServer: async (entry: {
+        name: string;
+        transport: "config" | "http" | "stdio";
+        target: string;
+        enabled?: boolean;
+        requireApproval?: boolean;
+        description?: string;
+      }) => ({
+        name: entry.name,
+        transport: entry.transport,
+        target: entry.target,
+        enabled: entry.enabled ?? true,
+        requireApproval: entry.requireApproval ?? true,
+        description: entry.description,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
+      listApprovals: async () => [
+        {
+          id: "mcp-ap-1",
+          serverName: "local-http",
+          transport: "http",
+          target: "https://example.com/mcp",
+          createdAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 60000).toISOString(),
+          status: "pending",
+        },
+      ],
+      resolveApproval: async (approvalId: string, decision: "approved" | "denied") => ({
+        id: approvalId,
+        serverName: "local-http",
+        transport: "http",
+        target: "https://example.com/mcp",
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 60000).toISOString(),
+        status: decision,
+        decidedAt: new Date().toISOString(),
+      }),
+      getRuntimeTelemetrySnapshot: () => ({
+        enabled: false,
+        configuredServers: 1,
+        enabledServers: 1,
+        totalCalls: 3,
+        listCalls: 1,
+        callCalls: 2,
+        blockedCalls: 1,
+        failedCalls: 1,
+        approvalPending: 1,
+        approvalsOpen: 1,
+        serversByTransport: {
+          config: 0,
+          http: 1,
+          stdio: 0,
+        },
+        lastError: "mcp_approval_required:mcp-ap-1",
+        lastCallAt: new Date().toISOString(),
       }),
     } as unknown as KaelApp["mcp"],
     emailIngest: {
@@ -583,6 +664,9 @@ describe("API integration", () => {
     expect(body.metrics.skillsRuntime.skillsDiscovered).toBe(2);
     expect(body.metrics.skillsRuntime.autoDecisionCounts.below_threshold).toBe(1);
     expect(body.metrics.skillsRuntime.sessionAuto.trackedSessions).toBe(1);
+    expect(body.metrics.mcpRuntime.configuredServers).toBe(1);
+    expect(body.metrics.mcpRuntime.approvalsOpen).toBe(1);
+    expect(body.metrics.mcpRuntime.serversByTransport.http).toBe(1);
     expect(body.metrics.emailIngest.processed).toBe(3);
     expect(body.metrics.emailIngest.duplicateSkipped).toBe(2);
     expect(body.metrics.emailIngest.inFlightSkipped).toBe(1);
@@ -780,6 +864,47 @@ describe("API integration", () => {
     });
     expect(approved.statusCode).toBe(200);
     expect(approved.json().approval.status).toBe("approved");
+
+    await server.close();
+  });
+
+  it("lists, upserts and resolves MCP approvals through API", async () => {
+    const server = createApiServer(makeFakeApp());
+
+    const listServers = await server.inject({
+      method: "GET",
+      url: "/mcp/servers",
+    });
+    expect(listServers.statusCode).toBe(200);
+    expect(listServers.json().servers[0].name).toBe("local-http");
+
+    const upsert = await server.inject({
+      method: "POST",
+      url: "/mcp/servers",
+      payload: {
+        name: "local-stdio",
+        transport: "stdio",
+        target: "bun run ./mcp.ts",
+        enabled: true,
+        requireApproval: true,
+      },
+    });
+    expect(upsert.statusCode).toBe(200);
+    expect(upsert.json().server.transport).toBe("stdio");
+
+    const listApprovals = await server.inject({
+      method: "GET",
+      url: "/mcp/approvals",
+    });
+    expect(listApprovals.statusCode).toBe(200);
+    expect(listApprovals.json().approvals[0].id).toBe("mcp-ap-1");
+
+    const approve = await server.inject({
+      method: "POST",
+      url: "/mcp/approvals/mcp-ap-1/approve",
+    });
+    expect(approve.statusCode).toBe(200);
+    expect(approve.json().approval.status).toBe("approved");
 
     await server.close();
   });

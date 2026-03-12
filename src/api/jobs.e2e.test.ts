@@ -348,6 +348,7 @@ async function createJobsServer(params: {
       resolveApproval: async () => null,
     } as unknown as KaelApp["shell"],
     mcp: {
+      init: async () => {},
       list: async () => ({ ok: true, command: "mcporter list", schema: false, format: "json", items: [] }),
       call: async () => ({
         ok: true,
@@ -355,6 +356,46 @@ async function createJobsServer(params: {
         target: "linear.list_issues",
         format: "json",
         output: {},
+      }),
+      listServers: async () => [],
+      getServer: async () => null,
+      upsertServer: async (entry: {
+        name: string;
+        transport: "config" | "http" | "stdio";
+        target: string;
+        enabled?: boolean;
+        requireApproval?: boolean;
+        description?: string;
+      }) => ({
+        name: entry.name,
+        transport: entry.transport,
+        target: entry.target,
+        enabled: entry.enabled ?? true,
+        requireApproval: entry.requireApproval ?? true,
+        description: entry.description,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
+      listApprovals: async () => [],
+      resolveApproval: async () => null,
+      getRuntimeTelemetrySnapshot: () => ({
+        enabled: false,
+        configuredServers: 0,
+        enabledServers: 0,
+        totalCalls: 0,
+        listCalls: 0,
+        callCalls: 0,
+        blockedCalls: 0,
+        failedCalls: 0,
+        approvalPending: 0,
+        approvalsOpen: 0,
+        serversByTransport: {
+          config: 0,
+          http: 0,
+          stdio: 0,
+        },
+        lastError: null,
+        lastCallAt: null,
       }),
     } as unknown as KaelApp["mcp"],
   };

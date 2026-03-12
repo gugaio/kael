@@ -402,10 +402,38 @@ Definition of Done (checklist):
 - [x] Wiring em `EngineTooling` + `createChatTooling`.
 - [x] Tools PI `mcp_list` e `mcp_call`.
 - [x] Skill operacional `.kael/skills/mcporter/SKILL.md`.
-- [ ] Telemetria dedicada de MCP no `/health`.
+- [x] Registry persistente de servidores MCP permitidos.
+- [x] Approvals persistentes por servidor/transport.
+- [x] Telemetria dedicada de MCP no `/health`.
 - [ ] Fluxos de `auth/config` do `mcporter` com policy explicita.
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-12 - Fase 19.1: registry MCP + approvals por servidor + telemetria
+
+Resumo:
+- Expandido `McpBridgeService` com registry persistente de servidores MCP (`config|http|stdio`) e approvals persistentes por servidor/transport.
+- Adicionados endpoints operacionais para gerenciar registry e aprovar/negar uso de MCP.
+- `/health` passou a expor `metrics.mcpRuntime`, e o stream de eventos passou a observar mudancas de registry/approvals MCP.
+
+Arquivos-chave:
+- `src/tools/mcp/mcp-bridge-service.ts`
+- `src/api/server.ts`
+- `src/api/server.test.ts`
+- `src/tools/mcp/mcp-bridge-service.test.ts`
+- `docs/api.md`
+- `docs/architecture/phases/phase-19.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/tools/mcp/mcp-bridge-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- Ainda falta CLI dedicada para gerenciar registry/approvals sem passar pela API.
+- `mcp_call` segue exigindo alias registrado no formato `server.tool`.
+
+Proximo passo recomendado:
+- Fase 19.2: adicionar CLI operacional de MCP (`list-servers`, `register`, `approvals`) e ergonomia melhor de aliases/tool names.
 
 ### 2026-03-12 - Fase 19.0: MCP bridge via mcporter no runtime PI
 
