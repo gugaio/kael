@@ -3,6 +3,7 @@ import type { JobManager } from "../jobs/manager.js";
 import { VIDEO_JOB_ACTIONS } from "../capabilities/video/index.js";
 import type { MemoryService } from "../memory/service.js";
 import type { PlannerService } from "../planner/service.js";
+import { createPlannerExecuteRuntime, createPlannerReconcileRuntime } from "../planner/runtime.js";
 import type { ResearchService } from "../research/service.js";
 import type { ImageGeneratorService } from "../media/image-generator.js";
 import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
@@ -117,88 +118,19 @@ export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
       deps.planner.executeNext({
         planId,
         inputs,
-        runtime: {
-          startProbeMedia: (args) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.probeMedia, args),
-          startCaptureStream: (args) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.captureStream, args),
-          startTranscode: (args) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.transcode, args),
-          startConvertHls: (args) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.convertHls, args),
-          execCommand: (args) => deps.shell.exec(args),
-          getJob: async (jobId) => {
-            const found = deps.jobs.getJob(jobId);
-            if (!found) {
-              return null;
-            }
-            return {
-              status: found.status,
-              error: found.error,
-            };
-          },
-          pollExec: async (sessionId) => {
-            const result = await deps.shell.process({
-              sessionKey: "planner.execute",
-              action: "poll",
-              sessionId,
-            });
-            if (!result.ok || !result.session) {
-              return null;
-            }
-            return {
-              status: result.session.status,
-              message: result.message,
-            };
-          },
-          cancelJob: async (jobId) => {
-            const result = await deps.jobs.cancelJob(jobId);
-            return {
-              canceled: result.canceled,
-              status: result.job?.status,
-              message: result.canceled ? undefined : "job cancel not accepted",
-            };
-          },
-          cancelExec: async (sessionId) => {
-            const result = await deps.shell.process({
-              sessionKey: "planner.execute",
-              action: "kill",
-              sessionId,
-            });
-            return {
-              canceled: result.ok,
-              status: result.session?.status,
-              message: result.message,
-            };
-          },
-        },
+        runtime: createPlannerExecuteRuntime({
+          jobs: deps.jobs,
+          shell: deps.shell,
+        }),
       }),
     planReconcile: ({ planId, limit }) =>
       deps.planner.reconcile({
         planId,
         limit,
-        runtime: {
-          getJob: async (jobId) => {
-            const found = deps.jobs.getJob(jobId);
-            if (!found) {
-              return null;
-            }
-            return {
-              status: found.status,
-              error: found.error,
-            };
-          },
-          pollExec: async (sessionId) => {
-            const result = await deps.shell.process({
-              sessionKey: "planner.reconcile",
-              action: "poll",
-              sessionId,
-            });
-            if (!result.ok || !result.session) {
-              return null;
-            }
-            return {
-              status: result.session.status,
-              message: result.message,
-            };
-          },
-        },
+        runtime: createPlannerReconcileRuntime({
+          jobs: deps.jobs,
+          shell: deps.shell,
+        }),
       }),
   };
 }

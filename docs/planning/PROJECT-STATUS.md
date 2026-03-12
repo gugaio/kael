@@ -409,6 +409,28 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-12 - Refactor Fase 17: runtime compartilhado do planner entre API e chat
+
+Resumo:
+- Extraido modulo compartilhado `src/planner/runtime.ts` para montar os runtimes de `executeNext` e `reconcile`.
+- Removida duplicacao de wiring entre `src/api/server.ts` e `src/chat/tooling-factory.ts`.
+- Mantido o contrato desacoplado do planner: `PlannerService` continua recebendo runtime minimo injetado, sem depender de `KaelApp`.
+
+Arquivos-chave:
+- `src/planner/runtime.ts`
+- `src/api/server.ts`
+- `src/chat/tooling-factory.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/api/server.test.ts src/planner/service.test.ts`
+
+Pendencias:
+- Nenhuma funcional desta extracao; proximo passo segue sendo evolucao de actions/validacoes do planner.
+
+Proximo passo recomendado:
+- Continuar Fase 17 com `approve_execution` e validacoes de saida (`assert_*`).
+
 ### 2026-03-12 - Fase 14.x: guard contra loop de email para o proprio remetente
 
 Resumo:
