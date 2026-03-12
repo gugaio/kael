@@ -39,6 +39,7 @@ describe("EmailIngestService", () => {
     expect(telemetry.polls).toBe(1);
     expect(telemetry.messagesSeen).toBe(1);
     expect(telemetry.processed).toBe(1);
+    expect(telemetry.selfSkipped).toBe(0);
     expect(handleMessage).toHaveBeenCalledTimes(1);
     expect(handleMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -82,6 +83,39 @@ describe("EmailIngestService", () => {
         replyText: "Resposta Kael",
       }),
     );
+  });
+
+  it("ignora email enviado pelo proprio endereco para evitar loop", async () => {
+    const provider: EmailProvider = {
+      init: async () => undefined,
+      poll: async () => [
+        {
+          id: "m-self",
+          from: "Kael <maildokael@gmail.com>",
+          fromEmail: "maildokael@gmail.com",
+          subject: "Re: Oi",
+          body: "teste",
+        },
+      ],
+    };
+    const sender: EmailSender = {
+      sendReply: vi.fn(async () => undefined),
+    };
+    const handleMessage = vi.fn(async () => ({
+      user: {} as never,
+      assistant: {} as never,
+      reply: "nao devia",
+    }));
+
+    const service = new EmailIngestService(provider, { handleMessage } as never, sender, undefined, "maildokael@gmail.com");
+    const result = await service.pollNow();
+    const telemetry = service.getRuntimeTelemetrySnapshot();
+
+    expect(result.processed).toBe(0);
+    expect(telemetry.processed).toBe(0);
+    expect(telemetry.selfSkipped).toBe(1);
+    expect(handleMessage).not.toHaveBeenCalled();
+    expect(sender.sendReply).not.toHaveBeenCalled();
   });
 
   it("sanitiza blocos base64 de email antes de enviar ao chat", async () => {

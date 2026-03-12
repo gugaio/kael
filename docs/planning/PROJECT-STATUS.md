@@ -409,6 +409,30 @@ Definition of Done (checklist):
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-12 - Fase 14.x: guard contra loop de email para o proprio remetente
+
+Resumo:
+- `EmailIngestService` agora ignora emails cujo remetente e o proprio endereco configurado da conta Gmail do Kael.
+- O guard atua antes do `chat.handleMessage` e antes do `sendReply`, evitando auto-reply para si mesmo e loops de polling.
+- Telemetria de email ingest ganhou contador `selfSkipped`.
+
+Arquivos-chave:
+- `src/email/ingest-service.ts`
+- `src/email/ingest-service.test.ts`
+- `src/app.ts`
+- `src/api/server.test.ts`
+- `docs/architecture/phases/phase-14.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/email/ingest-service.test.ts src/api/server.test.ts`
+
+Pendencias:
+- O guard atual compara com o endereco configurado da conta; se houver aliases/plus-addressing relevantes, vale expandir a normalizacao.
+
+Proximo passo recomendado:
+- Normalizar aliases conhecidos da conta dedicada e adicionar regra opcional para ignorar `Auto-Submitted`/`Precedence` quando aparecerem.
+
 ### 2026-03-12 - Fase 19.1: registry MCP + approvals por servidor + telemetria
 
 Resumo:

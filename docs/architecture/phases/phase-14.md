@@ -17,6 +17,10 @@ integração push (Gmail Pub/Sub) depois.
 - Guard de concorrencia no ingest (`pollInFlight`) para evitar processamento duplicado em ticks sobrepostos.
 - Dedupe/lock persistente por mensagem (`provider:id`) no ingest para evitar processamento duplicado entre multiplos processos/workers.
 - Sender SMTP opcional (`GmailSmtpSender`) para auto-reply por email usando a mesma conta dedicada.
+- Guard explicito contra self-loop:
+  - emails vindos do proprio endereco configurado nao entram no loop do agente;
+  - nao geram `chat.handleMessage`;
+  - nao geram auto-reply.
 
 ## Decisao arquitetural
 
@@ -28,4 +32,4 @@ integração push (Gmail Pub/Sub) depois.
 ## Pendencias da fase
 
 1. Adicionar provider de Gmail API/PubSub (modo push) mantendo o mesmo contrato.
-2. Expor essas metricas de dedupe tambem em painéis/alertas operacionais (hoje visiveis no `/health`).
+2. Expor `selfSkipped` tambem em painéis/alertas operacionais (hoje visivel no `/health`).

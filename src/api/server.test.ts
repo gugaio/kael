@@ -573,6 +573,7 @@ function makeFakeApp(): KaelApp {
         processed: 3,
         duplicateSkipped: 2,
         inFlightSkipped: 1,
+        selfSkipped: 0,
         lastPollAt: new Date().toISOString(),
       }),
     },
@@ -670,6 +671,7 @@ describe("API integration", () => {
     expect(body.metrics.emailIngest.processed).toBe(3);
     expect(body.metrics.emailIngest.duplicateSkipped).toBe(2);
     expect(body.metrics.emailIngest.inFlightSkipped).toBe(1);
+    expect(body.metrics.emailIngest.selfSkipped).toBe(0);
     expect(body.metrics.schedules.total).toBeGreaterThan(0);
     await server.close();
   });

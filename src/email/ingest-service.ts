@@ -9,6 +9,7 @@ export type EmailIngestRuntimeTelemetry = {
   processed: number;
   duplicateSkipped: number;
   inFlightSkipped: number;
+  selfSkipped: number;
   lastPollAt?: string;
 };
 
@@ -20,6 +21,7 @@ export class EmailIngestService {
     processed: 0,
     duplicateSkipped: 0,
     inFlightSkipped: 0,
+    selfSkipped: 0,
     lastPollAt: undefined as string | undefined,
   };
 
@@ -28,6 +30,7 @@ export class EmailIngestService {
     private readonly chat: ChatService,
     private readonly sender?: EmailSender,
     private readonly dedupe?: EmailIngestDedupeStore,
+    private readonly selfAddress?: string,
   ) {}
 
   async init(): Promise<void> {
@@ -57,6 +60,7 @@ export class EmailIngestService {
       processed: this.telemetry.processed,
       duplicateSkipped: this.telemetry.duplicateSkipped,
       inFlightSkipped: this.telemetry.inFlightSkipped,
+      selfSkipped: this.telemetry.selfSkipped,
       ...(this.telemetry.lastPollAt ? { lastPollAt: this.telemetry.lastPollAt } : {}),
     };
   }
@@ -85,12 +89,14 @@ export class EmailIngestService {
         continue;
       }
       try {
-        await this.processSingleEmail(message);
+        const handled = await this.processSingleEmail(message);
         if (this.dedupe) {
           await this.dedupe.markProcessed(dedupeKey);
         }
-        processed += 1;
-        this.telemetry.processed += 1;
+        if (handled) {
+          processed += 1;
+          this.telemetry.processed += 1;
+        }
       } finally {
         if (this.dedupe) {
           await this.dedupe.release(dedupeKey);
@@ -103,7 +109,17 @@ export class EmailIngestService {
     };
   }
 
-  private async processSingleEmail(message: InboundEmailMessage): Promise<void> {
+  private async processSingleEmail(message: InboundEmailMessage): Promise<boolean> {
+    if (isSelfEmail(message, this.selfAddress)) {
+      this.telemetry.selfSkipped += 1;
+      kaelLogger.info("email.ingest.self_skipped", {
+        emailId: message.id,
+        from: message.fromEmail ?? message.from,
+        selfAddress: this.selfAddress ?? null,
+        subject: message.subject,
+      });
+      return false;
+    }
     const sessionKey = buildEmailSessionKey(message.fromEmail ?? message.from);
     const safeBody = sanitizeEmailBodyForAgent(message.body);
     const chatMessage = [
@@ -146,6 +162,7 @@ export class EmailIngestService {
       from: message.fromEmail ?? message.from,
       subject: message.subject,
     });
+    return true;
   }
 }
 
@@ -207,4 +224,23 @@ function buildEmailDedupeKey(provider: string, messageId: string): string {
   const safeProvider = provider.trim().toLowerCase() || "unknown";
   const safeMessageId = messageId.trim();
   return `${safeProvider}:${safeMessageId}`;
+}
+
+function isSelfEmail(message: InboundEmailMessage, selfAddress: string | undefined): boolean {
+  const own = normalizeEmailAddress(selfAddress);
+  if (!own) {
+    return false;
+  }
+  const from = normalizeEmailAddress(message.fromEmail ?? message.from);
+  return from === own;
+}
+
+function normalizeEmailAddress(value: string | undefined): string | null {
+  const raw = value?.trim();
+  if (!raw) {
+    return null;
+  }
+  const bracketMatch = raw.match(/<([^>]+)>/);
+  const address = bracketMatch?.[1]?.trim() || raw;
+  return address.toLowerCase();
 }

@@ -223,6 +223,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
       new FileEmailIngestDedupeStore({
         rootDir: path.join(config.dataDir, "email", "ingest-dedupe"),
       }),
+      config.email.gmail.address,
     );
     await emailIngest.init();
   }
