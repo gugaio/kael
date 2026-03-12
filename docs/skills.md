@@ -124,6 +124,40 @@ Observacoes:
 - `KAEL_SKILLS_AUTO_MAX_PER_TURN=0` desativa auto-invocacao.
 - Invocacao manual por slash continua funcionando mesmo com auto desativada.
 
+## Skill MCP (`mcporter`)
+
+Foi adicionada:
+
+- `.kael/skills/mcporter/SKILL.md`
+
+Objetivo:
+
+- orientar o Kael a operar servidores MCP pelo bridge `mcporter`, usando as
+  tools nativas `mcp_list` e `mcp_call`.
+
+Fluxo recomendado:
+
+1. `mcp_list` sem argumentos para listar servidores disponiveis.
+2. `mcp_list` com `server` + `schema=true` para inspecionar tools.
+3. `mcp_call` com `target` e `argumentsJson` para executar a tool desejada.
+
+Variaveis de ambiente da fase:
+
+- `KAEL_MCP_ENABLED`
+- `KAEL_MCP_BINARY`
+- `KAEL_MCP_CONFIG_PATH`
+- `KAEL_MCP_TIMEOUT_MS`
+- `KAEL_MCP_MAX_OUTPUT_CHARS`
+- `KAEL_MCP_ALLOW_HTTP`
+- `KAEL_MCP_ALLOW_STDIO`
+
+Guardrails:
+
+- `http` e `stdio` ficam desabilitados por default.
+- O caminho preferido do MVP e usar servidores ja configurados no `mcporter`.
+- Quando houver bloqueio por policy, o agente deve explicar o bloqueio em vez de
+  insistir por `exec`.
+
 ## Skill de diagnostico (recomendada)
 
 Foi adicionada a skill:

@@ -39,6 +39,15 @@ describe("createPiCapabilityTools", () => {
         logToolStart,
         logToolEnd,
       },
+      mcp: {
+        sessionKey: "s1",
+        tooling: {} as never,
+        textResult,
+        makeBlockedResult,
+        reserveMcpCall: reserveNone,
+        logToolStart,
+        logToolEnd,
+      },
       memory: {
         tooling: {} as never,
         textResult,
@@ -85,6 +94,7 @@ describe("createPiCapabilityTools", () => {
     expect(registry.system.map((tool) => tool.name)).toEqual(["exec", "process"]);
     expect(registry.video.map((tool) => tool.name)).toEqual(["video_hls_inspect", "video_probe"]);
     expect(registry.jobs.map((tool) => tool.name)).toEqual(["jobs_list", "jobs_get", "jobs_log_tail"]);
+    expect(registry.mcp.map((tool) => tool.name)).toEqual(["mcp_list", "mcp_call"]);
     expect(registry.memory.map((tool) => tool.name)).toEqual(["memory_search", "memory_get", "memory_write"]);
     expect(registry.workspace.map((tool) => tool.name)).toEqual(["workspace_search", "workspace_read"]);
     expect(registry.web.map((tool) => tool.name)).toEqual(["web_search", "web_fetch", "web_research"]);
@@ -102,4 +112,3 @@ describe("createPiCapabilityTools", () => {
     expect(registry.image.name).toBe("image_generate");
   });
 });
-

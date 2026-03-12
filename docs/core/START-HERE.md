@@ -44,6 +44,7 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 16: em andamento (browser control em fases para teste de sites: foundations -> read-only -> interacao).
 - Fase 17: em andamento (orquestracao de planos: controle de execucao, validacoes e branching leve).
 - Fase 18: em andamento (skills no core com discovery em `.kael/skills`, invocacao manual e auto-invocacao conservadora).
+- Fase 19: em andamento (MCP bridge via `mcporter` com `mcp_list`/`mcp_call` e skill operacional).
 
 ## Estudos e referencias tecnicas
 

@@ -6,6 +6,7 @@ import type { PlannerService } from "../planner/service.js";
 import type { ResearchService } from "../research/service.js";
 import type { ImageGeneratorService } from "../media/image-generator.js";
 import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
+import type { McpRuntime } from "../tools/mcp/mcp-bridge-service.js";
 import type { VideoInspectToolService } from "../capabilities/video/index.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
 import type { BrowserCapability } from "../capabilities/browser/index.js";
@@ -14,6 +15,7 @@ import { buildJobLogTailResult, selectJobs } from "../jobs/tooling.js";
 type ChatToolingDeps = {
   jobs: JobManager;
   shell: ShellRuntime;
+  mcp: McpRuntime;
   videoInspect: VideoInspectToolService;
   memory: MemoryService;
   workspace: WorkspaceInspector;
@@ -43,6 +45,10 @@ export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
     },
     execCommand: (params) => deps.shell.exec(params),
     processCommand: (params) => deps.shell.process(params),
+    mcpList: ({ sessionKey, server, schema, timeoutMs }) =>
+      deps.mcp.list({ sessionKey, server, schema, timeoutMs }),
+    mcpCall: ({ sessionKey, target, argumentsJson, stdioCommand, timeoutMs }) =>
+      deps.mcp.call({ sessionKey, target, argumentsJson, stdioCommand, timeoutMs }),
     memorySearch: ({ query, maxResults }) => deps.memory.search(query, maxResults),
     memoryGet: ({ path, from, lines }) => deps.memory.get({ relPath: path, from, lines }),
     memoryWrite: ({ content, target }) => deps.memory.write({ content, target }),
@@ -229,6 +235,12 @@ export function createChatOnlyTooling(tooling: EngineTooling): EngineTooling {
     },
     processCommand: async () => {
       throw new Error("chat-only mode: process disabled");
+    },
+    mcpList: async () => {
+      throw new Error("chat-only mode: mcp_list disabled");
+    },
+    mcpCall: async () => {
+      throw new Error("chat-only mode: mcp_call disabled");
     },
     browserCommand: async () => {
       throw new Error("chat-only mode: browser disabled");

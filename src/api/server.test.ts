@@ -56,6 +56,14 @@ function makeFakeApp(): KaelApp {
         ask: "on-miss",
         allowlist: ["ls", "cat"],
       },
+      mcp: {
+        enabled: false,
+        binary: "mcporter",
+        defaultTimeoutMs: 30_000,
+        maxOutputChars: 120_000,
+        allowHttp: false,
+        allowStdio: false,
+      },
       research: {
         enabled: false,
         provider: "tavily",
@@ -467,6 +475,16 @@ function makeFakeApp(): KaelApp {
       listApprovals: async () => [],
       resolveApproval: async () => null,
     } as unknown as KaelApp["shell"],
+    mcp: {
+      list: async () => ({ ok: true, command: "mcporter list", schema: false, format: "json", items: [] }),
+      call: async () => ({
+        ok: true,
+        command: "mcporter call linear.list_issues",
+        target: "linear.list_issues",
+        format: "json",
+        output: {},
+      }),
+    } as unknown as KaelApp["mcp"],
     emailIngest: {
       getRuntimeTelemetrySnapshot: () => ({
         polls: 4,

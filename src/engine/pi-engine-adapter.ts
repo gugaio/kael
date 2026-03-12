@@ -665,6 +665,7 @@ export class PiEngineAdapter implements AgentEngine {
             maxWebFetchCalls: 5,
             maxWebSearchCalls: 3,
             maxWebResearchCalls: 2,
+            maxMcpCalls: 4,
             maxBrowserCalls: 8,
             maxBrowserInteractionCalls: 6,
           },

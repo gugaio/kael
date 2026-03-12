@@ -62,6 +62,14 @@ function createToolingStub(): EngineTooling {
       action: "list",
       sessions: [],
     }),
+    mcpList: async () => ({ ok: true, command: "mcporter list", schema: false, format: "json", items: [] }),
+    mcpCall: async () => ({
+      ok: true,
+      command: "mcporter call linear.list_issues",
+      target: "linear.list_issues",
+      format: "json",
+      output: {},
+    }),
     memorySearch: async () => [],
     memoryGet: async () => ({
       path: "MEMORY.md",

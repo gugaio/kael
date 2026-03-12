@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-03-10**
+Ultima atualizacao: **2026-03-12**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -387,7 +387,52 @@ Definition of Done (checklist):
 - [x] Telemetria inicial de skills em `/health`.
 - [x] Documentacao operacional de skills (estrutura de pastas + exemplos) no repo.
 
+### Fase 19 - MCP Bridge via `mcporter`
+
+Status: **Em andamento**
+
+Objetivos:
+- Adicionar suporte operacional a MCP sem embutir runtime MCP no core do Kael.
+- Expor tools dedicadas de MCP no PI (`mcp_list`, `mcp_call`) com guardrails.
+- Reusar o padrao do OpenClaw: bridge externa via `mcporter` + skill operacional.
+
+Definition of Done (checklist):
+- [x] `McpBridgeService` com `list/call`, timeout, parsing JSON e truncamento de output.
+- [x] Configuracao base por ENV (`KAEL_MCP_*`) integrada ao app.
+- [x] Wiring em `EngineTooling` + `createChatTooling`.
+- [x] Tools PI `mcp_list` e `mcp_call`.
+- [x] Skill operacional `.kael/skills/mcporter/SKILL.md`.
+- [ ] Telemetria dedicada de MCP no `/health`.
+- [ ] Fluxos de `auth/config` do `mcporter` com policy explicita.
+
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-12 - Fase 19.0: MCP bridge via mcporter no runtime PI
+
+Resumo:
+- Implementado `McpBridgeService` para executar `mcporter list/call` com timeout, parsing JSON e bloqueio por policy de `http`/`stdio`.
+- Integradas novas capabilities no engine/runtime: `mcpList`, `mcpCall`, `mcp_list` e `mcp_call`.
+- Adicionada skill operacional `mcporter` em `.kael/skills` e documentada a nova fase de arquitetura.
+
+Arquivos-chave:
+- `src/tools/mcp/mcp-bridge-service.ts`
+- `src/engine/tool-specs/mcp.ts`
+- `src/engine/pi-tools.ts`
+- `src/chat/tooling-factory.ts`
+- `.kael/skills/mcporter/SKILL.md`
+- `docs/architecture/phases/phase-19.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/tools/mcp/mcp-bridge-service.test.ts src/engine/pi-tools.test.ts src/engine/tool-specs/index.test.ts src/config.test.ts`
+- [x] `npm test -- src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- Falta expor telemetria dedicada de MCP no `/health`.
+- Ainda nao ha fluxo nativo para `mcporter auth/config`; o MVP cobre `list/call`.
+
+Proximo passo recomendado:
+- Fase 19.1: adicionar telemetria MCP no `/health` e surface segura para `auth/config`.
 
 ### 2026-03-10 - Fase 18.5: skill Youbora (NPAW) com script operacional e ENV dedicada
 

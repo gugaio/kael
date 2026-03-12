@@ -5,6 +5,7 @@ import type {
   BrowserCommandResult,
   BrowserRuntimeTelemetry,
 } from "../capabilities/browser/index.js";
+import type { McpCallResult, McpListResult } from "../tools/mcp/mcp-bridge-service.js";
 
 export type EngineTooling = {
   startTranscode: (params: {
@@ -203,6 +204,19 @@ export type EngineTooling = {
       failureCode?: string;
     };
   }>;
+  mcpList: (params: {
+    sessionKey: string;
+    server?: string;
+    schema?: boolean;
+    timeoutMs?: number;
+  }) => Promise<McpListResult>;
+  mcpCall: (params: {
+    sessionKey: string;
+    target: string;
+    argumentsJson?: string;
+    stdioCommand?: string;
+    timeoutMs?: number;
+  }) => Promise<McpCallResult>;
   memorySearch: (params: {
     query: string;
     maxResults?: number;

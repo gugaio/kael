@@ -81,6 +81,7 @@ export function createPiShellTools(params: {
     maxWebFetchCalls?: number;
     maxWebSearchCalls?: number;
     maxWebResearchCalls?: number;
+    maxMcpCalls?: number;
     maxBrowserCalls?: number;
     maxBrowserInteractionCalls?: number;
   };
@@ -99,6 +100,7 @@ export function createPiShellTools(params: {
   let webFetchCalls = 0;
   let webSearchCalls = 0;
   let webResearchCalls = 0;
+  let mcpCalls = 0;
   let browserCalls = 0;
   let browserInteractionCalls = 0;
   let imageGenerateCalls = 0;
@@ -107,6 +109,7 @@ export function createPiShellTools(params: {
   const maxWebFetchCalls = Math.max(1, Math.floor(params.budget?.maxWebFetchCalls ?? 5));
   const maxWebSearchCalls = Math.max(1, Math.floor(params.budget?.maxWebSearchCalls ?? 3));
   const maxWebResearchCalls = Math.max(1, Math.floor(params.budget?.maxWebResearchCalls ?? 2));
+  const maxMcpCalls = Math.max(1, Math.floor((params.budget as { maxMcpCalls?: number } | undefined)?.maxMcpCalls ?? 4));
   const maxBrowserCalls = Math.max(1, Math.floor(params.budget?.maxBrowserCalls ?? 8));
   const maxBrowserInteractionCalls = Math.max(1, Math.floor(params.budget?.maxBrowserInteractionCalls ?? 6));
   const maxImageGenerateCalls = 1;
@@ -143,6 +146,16 @@ export function createPiShellTools(params: {
           ? String((rawParams as { action?: unknown }).action ?? "")
           : "";
       return action ? `browser:${action}` : "browser:unknown";
+    }
+    if (tool === "mcp_list") {
+      return "mcp:list";
+    }
+    if (tool === "mcp_call") {
+      const target =
+        rawParams && typeof rawParams === "object"
+          ? String((rawParams as { target?: unknown }).target ?? "")
+          : "";
+      return target ? `mcp:call:${target}` : "mcp:call";
     }
     const command =
       rawParams && typeof rawParams === "object"
@@ -365,6 +378,20 @@ export function createPiShellTools(params: {
     return null;
   };
 
+  const reserveMcpCall = (): { blocked: BlockedToolResult } | null => {
+    if (toolCalls >= maxToolCalls) {
+      const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+      return { blocked: blockByBudget({ tool: "mcp_call", reason, emitEvent: true }) };
+    }
+    if (mcpCalls >= maxMcpCalls) {
+      const reason = `mcp_call_budget_exceeded:${mcpCalls}/${maxMcpCalls}`;
+      return { blocked: blockByBudget({ tool: "mcp_call", reason, emitEvent: true }) };
+    }
+    toolCalls += 1;
+    mcpCalls += 1;
+    return null;
+  };
+
   const capabilityTools = createPiCapabilityTools({
     system: {
       sessionKey: params.sessionKey,
@@ -392,6 +419,17 @@ export function createPiShellTools(params: {
       tooling: params.tooling,
       textResult,
       reserveToolCall,
+      logToolStart,
+      logToolEnd: (tool, intent, result, startedAtMs, summary) =>
+        logToolEnd(tool, intent, result, startedAtMs, summary),
+    },
+    mcp: {
+      sessionKey: params.sessionKey,
+      tooling: params.tooling,
+      loopGuard: params.loopGuard,
+      textResult,
+      makeBlockedResult,
+      reserveMcpCall,
       logToolStart,
       logToolEnd: (tool, intent, result, startedAtMs, summary) =>
         logToolEnd(tool, intent, result, startedAtMs, summary),
@@ -448,6 +486,7 @@ export function createPiShellTools(params: {
   const [execTool, processTool] = capabilityTools.system;
   const [videoHlsInspectTool, videoProbeTool] = capabilityTools.video;
   const [jobsListTool, jobsGetTool, jobsLogTailTool] = capabilityTools.jobs;
+  const [mcpListTool, mcpCallTool] = capabilityTools.mcp;
   const [memorySearchTool, memoryGetTool, memoryWriteTool] = capabilityTools.memory;
   const [workspaceSearchTool, workspaceReadTool] = capabilityTools.workspace;
   const [webSearchTool, webFetchTool, webResearchTool] = capabilityTools.web;
@@ -472,6 +511,8 @@ export function createPiShellTools(params: {
     jobsListTool,
     jobsGetTool,
     jobsLogTailTool,
+    mcpListTool,
+    mcpCallTool,
     memorySearchTool,
     memoryGetTool,
     memoryWriteTool,

@@ -31,6 +31,7 @@ import { NoopMediaUnderstandingService, OpenAiMediaUnderstandingService } from "
 import { NoopImageGeneratorService, OpenAiImageGeneratorService } from "./media/image-generator.js";
 import { BrowserCapability, BrowserToolService } from "./capabilities/browser/index.js";
 import { SkillService } from "./skills/service.js";
+import { McpBridgeService, type McpRuntime } from "./tools/mcp/mcp-bridge-service.js";
 
 export type KaelApp = {
   config: KaelConfig;
@@ -42,6 +43,7 @@ export type KaelApp = {
   chat: ChatService;
   automation: AutomationService;
   shell: ShellRuntime;
+  mcp: McpRuntime;
   emailIngest?: {
     getRuntimeTelemetrySnapshot(): EmailIngestRuntimeTelemetry;
   };
@@ -86,6 +88,16 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     approvalsPath: path.join(resolveKaelHome(), "exec-approvals.json"),
   });
   await shell.init();
+  const mcp = new McpBridgeService({
+    enabled: config.mcp.enabled,
+    binary: config.mcp.binary,
+    configPath: config.mcp.configPath,
+    workspaceRoot: config.shell.workspaceRoot,
+    defaultTimeoutMs: config.mcp.defaultTimeoutMs,
+    maxOutputChars: config.mcp.maxOutputChars,
+    allowHttp: config.mcp.allowHttp,
+    allowStdio: config.mcp.allowStdio,
+  });
   const memory = new MemoryService({
     workspaceRoot: config.shell.workspaceRoot,
     storageRoot: path.join(resolveKaelHome(), "data", "memory"),
@@ -137,6 +149,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   const tooling = createChatTooling({
     jobs,
     shell,
+    mcp,
     videoInspect,
     memory,
     workspace,
@@ -299,6 +312,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     chat,
     automation,
     shell,
+    mcp,
     ...(emailIngest ? { emailIngest } : {}),
   };
 }

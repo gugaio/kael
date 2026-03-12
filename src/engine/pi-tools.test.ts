@@ -149,3 +149,74 @@ describe("createPiShellTools jobs/plans state tools", () => {
     expect(text).toContain("found=false");
   });
 });
+
+describe("createPiShellTools mcp tools", () => {
+  it("exposes mcp_list and mcp_call using tooling state methods", async () => {
+    const tools = createPiShellTools({
+      sessionKey: "s-mcp",
+      tooling: createTooling({
+        mcpList: async () => ({
+          ok: true,
+          command: "mcporter list --output json",
+          schema: false,
+          format: "json",
+          items: [{ name: "linear" }],
+        }),
+        mcpCall: async () => ({
+          ok: true,
+          command: "mcporter call linear.list_issues --output json",
+          target: "linear.list_issues",
+          format: "json",
+          output: { issues: [{ id: "1" }] },
+        }),
+      }),
+    });
+    const listTool = tools.find((item) => item.name === "mcp_list");
+    const callTool = tools.find((item) => item.name === "mcp_call");
+    expect(listTool).toBeTruthy();
+    expect(callTool).toBeTruthy();
+
+    const listResult = await listTool!.execute("tc-list", {});
+    const callResult = await callTool!.execute("tc-call", {
+      target: "linear.list_issues",
+      argumentsJson: "{\"limit\":5}",
+    });
+    const listText = String((listResult.content?.[0] as { text?: unknown })?.text ?? "");
+    const callText = String((callResult.content?.[0] as { text?: unknown })?.text ?? "");
+
+    expect(listText).toContain("ok=true");
+    expect(listText).toContain("\"linear\"");
+    expect(callText).toContain("target=linear.list_issues");
+    expect(callText).toContain("\"issues\"");
+  });
+
+  it("blocks mcp calls when turn budget is exhausted", async () => {
+    const tools = createPiShellTools({
+      sessionKey: "s-mcp-budget",
+      tooling: createTooling({
+        mcpList: async () => ({
+          ok: true,
+          command: "mcporter list --output json",
+          schema: false,
+          format: "json",
+          items: [],
+        }),
+      }),
+      budget: {
+        maxToolCalls: 5,
+        maxMcpCalls: 1,
+      },
+    });
+    const tool = tools.find((item) => item.name === "mcp_list");
+    expect(tool).toBeTruthy();
+
+    const first = await tool!.execute("tc-1", {});
+    const second = await tool!.execute("tc-2", {});
+
+    const firstText = String((first.content?.[0] as { text?: unknown })?.text ?? "");
+    const secondText = String((second.content?.[0] as { text?: unknown })?.text ?? "");
+    expect(firstText).toContain("ok=true");
+    expect(secondText).toContain("blocked=true");
+    expect(secondText).toContain("mcp_call_budget_exceeded:1/1");
+  });
+});

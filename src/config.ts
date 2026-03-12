@@ -60,6 +60,15 @@ export type KaelConfig = {
     ask: ExecAsk;
     allowlist: string[];
   };
+  mcp: {
+    enabled: boolean;
+    binary: string;
+    configPath?: string;
+    defaultTimeoutMs: number;
+    maxOutputChars: number;
+    allowHttp: boolean;
+    allowStdio: boolean;
+  };
   research: {
     enabled: boolean;
     provider: "tavily";
@@ -307,6 +316,18 @@ function validateConfig(config: KaelConfig): void {
 
   if (!config.shell.workspaceRoot.trim()) {
     issues.push("KAEL_EXEC_WORKSPACE_ROOT nao pode ser vazio");
+  }
+
+  if (config.mcp.enabled) {
+    if (!config.mcp.binary.trim()) {
+      issues.push("KAEL_MCP_BINARY nao pode ser vazio quando KAEL_MCP_ENABLED=true");
+    }
+    if (!Number.isFinite(config.mcp.defaultTimeoutMs) || config.mcp.defaultTimeoutMs <= 0) {
+      issues.push("KAEL_MCP_TIMEOUT_MS deve ser um numero positivo");
+    }
+    if (!Number.isFinite(config.mcp.maxOutputChars) || config.mcp.maxOutputChars <= 0) {
+      issues.push("KAEL_MCP_MAX_OUTPUT_CHARS deve ser um numero positivo");
+    }
   }
 
   if (config.research.enabled && !config.research.apiKey) {
@@ -624,6 +645,22 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     .map((item) => item.trim().toLowerCase())
     .filter((item) => item.length > 0);
 
+  const mcpEnabledRaw = process.env.KAEL_MCP_ENABLED?.trim() ?? "false";
+  const mcpEnabled = mcpEnabledRaw.toLowerCase() === "true";
+  const mcpBinary = process.env.KAEL_MCP_BINARY?.trim() || "mcporter";
+  const mcpConfigPathRaw = process.env.KAEL_MCP_CONFIG_PATH?.trim();
+  const mcpConfigPath = mcpConfigPathRaw ? path.resolve(expandHome(mcpConfigPathRaw)) : undefined;
+  const mcpTimeoutRaw = Number(process.env.KAEL_MCP_TIMEOUT_MS ?? "30000");
+  const mcpDefaultTimeoutMs =
+    Number.isFinite(mcpTimeoutRaw) && mcpTimeoutRaw > 0 ? Math.floor(mcpTimeoutRaw) : 30_000;
+  const mcpMaxOutputRaw = Number(process.env.KAEL_MCP_MAX_OUTPUT_CHARS ?? "120000");
+  const mcpMaxOutputChars =
+    Number.isFinite(mcpMaxOutputRaw) && mcpMaxOutputRaw > 0 ? Math.floor(mcpMaxOutputRaw) : 120_000;
+  const mcpAllowHttpRaw = process.env.KAEL_MCP_ALLOW_HTTP?.trim() ?? "false";
+  const mcpAllowHttp = mcpAllowHttpRaw.toLowerCase() === "true";
+  const mcpAllowStdioRaw = process.env.KAEL_MCP_ALLOW_STDIO?.trim() ?? "false";
+  const mcpAllowStdio = mcpAllowStdioRaw.toLowerCase() === "true";
+
   const researchEnabledRaw =
     process.env.KAEL_RESEARCH_ENABLED?.trim() ??
     String(globalConfig?.defaults.research?.enabled ?? false);
@@ -869,6 +906,15 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       security,
       ask,
       allowlist,
+    },
+    mcp: {
+      enabled: mcpEnabled,
+      binary: mcpBinary,
+      configPath: mcpConfigPath,
+      defaultTimeoutMs: mcpDefaultTimeoutMs,
+      maxOutputChars: mcpMaxOutputChars,
+      allowHttp: mcpAllowHttp,
+      allowStdio: mcpAllowStdio,
     },
     research: {
       enabled: researchEnabled,

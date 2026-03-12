@@ -1,4 +1,11 @@
-type ToolName = "exec" | "process" | "web_search" | "web_fetch" | "web_research";
+type ToolName =
+  | "exec"
+  | "process"
+  | "web_search"
+  | "web_fetch"
+  | "web_research"
+  | "mcp_list"
+  | "mcp_call";
 
 type LoopGuardPolicy = {
   historySize: number;
