@@ -11,6 +11,7 @@
     "ui:build": "npm --prefix ui run build",
     "ui:check": "npm --prefix ui run check",
     "clark:dev": "npm --prefix apps/clark run dev",
+    "clark:doctor": "npm --prefix apps/clark run doctor",
     "clark:build": "npm --prefix apps/clark run build",
     "clark:check": "npm --prefix apps/clark run check",
     "clark:test": "npm --prefix apps/clark run test",

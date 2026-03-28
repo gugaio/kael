@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "tsx src/cli/index.ts daemon",
+    "doctor": "tsx src/cli/index.ts doctor",
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/cli/index.js daemon",

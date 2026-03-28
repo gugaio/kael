@@ -35,6 +35,7 @@ Comandos:
 - `clark daemon`
 - `clark status`
 - `clark capabilities`
+- `clark doctor`
 
 Capabilities:
 
@@ -128,7 +129,19 @@ ambiente onde esta rodando e devolve o resultado como `task_result`.
 npm --prefix apps/clark run check
 npm --prefix apps/clark run test
 npm --prefix apps/clark run dev
+npx tsx apps/clark/src/cli/index.ts doctor
 ```
+
+## Doctor
+
+Use `clark doctor` para validar:
+
+- leitura do `.env`
+- leitura do `clark.config.json`
+- conectividade WebSocket com o servidor remoto
+- reachability dos providers MCP HTTP
+- existencia das tools configuradas nos bindings
+- capabilities finais montadas pelo runtime
 
 ## Build
 

@@ -3,6 +3,7 @@ import { Command } from 'commander';
 
 import { runCapabilitiesCommand } from './commands/capabilities.js';
 import { runDaemonCommand } from './commands/daemon.js';
+import { runDoctorCommand } from './commands/doctor.js';
 import { runStatusCommand } from './commands/status.js';
 
 const program = new Command();
@@ -31,6 +32,13 @@ program
   .description('Lista as capabilities registradas no client')
   .action(async () => {
     await runCapabilitiesCommand();
+  });
+
+program
+  .command('doctor')
+  .description('Valida configuracao, conectividade e providers MCP do client')
+  .action(async () => {
+    await runDoctorCommand();
   });
 
 await program.parseAsync(process.argv);

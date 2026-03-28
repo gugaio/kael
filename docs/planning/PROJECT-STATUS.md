@@ -532,6 +532,34 @@ Pendencias:
 Proximo passo recomendado:
 - Definir o primeiro binding real `youbora.session.fetch` com o nome exato da tool MCP e contratos tipados de entrada/saida.
 
+### 2026-03-28 - Fase 21.3: comando doctor para validar ambiente do Clark
+
+Resumo:
+- Adicionado comando `clark doctor` para validar carga de config, conectividade WebSocket e reachability de providers MCP HTTP.
+- O doctor tambem verifica se as tools configuradas nos bindings realmente existem nos providers e mostra as capabilities finais montadas.
+- Expostos scripts de conveniencia para executar o doctor via `apps/clark` e pela raiz do repo.
+
+Arquivos-chave:
+- `apps/clark/src/core/doctor.ts`
+- `apps/clark/src/cli/commands/doctor.ts`
+- `apps/clark/src/cli/index.ts`
+- `apps/clark/src/tests/doctor.test.ts`
+- `apps/clark/README.md`
+- `apps/clark/package.json`
+- `package.json`
+
+Checklist de validacao:
+- [x] `npm --prefix apps/clark run check`
+- [x] `npm --prefix apps/clark run test`
+- [x] `npm --prefix apps/clark run build`
+
+Pendencias:
+- O doctor hoje retorna JSON; ainda nao ha modo humano mais amigavel para troubleshooting rapido no terminal.
+- Ainda nao existe teste de `doctor` cobrindo cenarios de falha do servidor remoto ou binding MCP ausente.
+
+Proximo passo recomendado:
+- Implementar o primeiro binding real `youbora.session.fetch` com o nome exato da tool MCP e expandir o `doctor` com saida mais legivel para humanos.
+
 ### 2026-03-28 - Fase 20.0: base de video intelligence com playback analysis e artifacts
 
 Resumo:
