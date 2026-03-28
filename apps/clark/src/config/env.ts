@@ -15,6 +15,9 @@ const envSchema = z.object({
   CLARK_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   CLARK_HTTP_MAX_BYTES: z.coerce.number().int().positive().default(65536),
   CLARK_CONFIG_PATH: z.string().default('./clark.config.json'),
+  CLARK_MCP_BRIDGE_BINARY: z.string().min(1).default('mcporter'),
+  CLARK_MCP_BRIDGE_CONFIG_PATH: z.string().optional(),
+  CLARK_MCP_BRIDGE_MAX_OUTPUT_CHARS: z.coerce.number().int().positive().default(120000),
   CLARK_LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
 

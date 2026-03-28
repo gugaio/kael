@@ -60,9 +60,13 @@ describe('mcp capability provider', () => {
       httpAllowlist: ['localhost'],
       httpTimeoutMs: 3000,
       httpMaxBytes: 4096,
+      mcpBridgeBinary: 'mcporter',
+      mcpBridgeConfigPath: undefined,
+      mcpBridgeMaxOutputChars: 120000,
       mcpHttpServers: [
         {
           name: 'corp-observability',
+          kind: 'mcp-http',
           baseUrl: `http://127.0.0.1:${address.port}`,
           timeoutMs: 3000,
         },

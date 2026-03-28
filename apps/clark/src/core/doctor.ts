@@ -3,7 +3,7 @@ import pino from 'pino';
 
 import { createCapabilityRegistry } from '../capabilities/index.js';
 import type { ClarkSettings } from '../config/settings.js';
-import { McpHttpClient } from '../mcp/http-client.js';
+import { createProviderClient } from '../mcp/capability-provider.js';
 
 export interface DoctorCheck {
   name: string;
@@ -106,7 +106,7 @@ async function inspectMcpProvider(settings: ClarkSettings, serverName: string): 
   }
 
   const bindings = settings.mcpCapabilityBindings.filter((item) => item.serverName === serverName);
-  const client = new McpHttpClient(server);
+  const client = createProviderClient(settings, server);
 
   try {
     const tools = await client.listTools();

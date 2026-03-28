@@ -77,6 +77,8 @@ CLARK_CLIENT_ID=clark-local
 CLARK_CLIENT_NAME=Clark Local Notebook
 CLARK_HTTP_ALLOWLIST=localhost,127.0.0.1
 CLARK_CONFIG_PATH=./clark.config.json
+CLARK_MCP_BRIDGE_BINARY=mcporter
+CLARK_MCP_BRIDGE_CONFIG_PATH=
 ```
 
 Exemplo de `clark.config.json`:
@@ -85,7 +87,7 @@ Exemplo de `clark.config.json`:
 {
   "providers": {
     "youbora": {
-      "kind": "mcp-http",
+      "kind": "mcp-http-bridge",
       "url": "https://youbora-mcp.apps.tsuru.gcp.i.globo/mcp",
       "enabled": true,
       "timeoutMs": 5000
@@ -108,6 +110,10 @@ Exemplo de `clark.config.json`:
 O Clark nao expoe um "MCP generico" para o Kael. Ele faz o binding de tools MCP
 disponiveis em seu ambiente para capabilities explicitas declaradas em
 `clark.config.json`.
+
+Quando o provider usa um transporte MCP HTTP/SSE que nao funciona como JSON-RPC
+direto, o Clark pode usar `mcporter` como bridge local atraves do kind
+`mcp-http-bridge`.
 
 Exemplo:
 

@@ -57,6 +57,7 @@ describe('config', () => {
 
     expect(settings.mcpHttpServers).toHaveLength(1);
     expect(settings.mcpHttpServers[0]?.name).toBe('corp-observability');
+    expect(settings.mcpHttpServers[0]?.kind).toBe('mcp-http');
     expect(settings.mcpCapabilityBindings[0]?.capabilityName).toBe('corp.session.fetch');
   });
 });

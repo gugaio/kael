@@ -59,6 +59,7 @@ describe('mcp http client', () => {
 
     const client = new McpHttpClient({
       name: 'corp-observability',
+      kind: 'mcp-http',
       baseUrl: `http://127.0.0.1:${address.port}`,
       timeoutMs: 3000,
     });

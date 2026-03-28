@@ -8,6 +8,7 @@ import type {
 } from '../config/settings.js';
 import type { Capability } from '../core/capability.js';
 import { CapabilityRegistry } from '../core/capability-registry.js';
+import { McpBridgeHttpClient } from './bridge-http-client.js';
 import { McpHttpClient } from './http-client.js';
 import type { McpProviderInfo, McpToolDescriptor } from './types.js';
 
@@ -30,7 +31,7 @@ export async function createRegistryWithMcpCapabilities(
       continue;
     }
 
-    const provider = await discoverProvider(baseRegistry, server, bindings, logger);
+    const provider = await discoverProvider(baseRegistry, settings, server, bindings, logger);
     providers.push(provider);
   }
 
@@ -42,11 +43,12 @@ export async function createRegistryWithMcpCapabilities(
 
 async function discoverProvider(
   registry: CapabilityRegistry,
+  settings: ClarkSettings,
   server: McpHttpServerSettings,
   bindings: McpCapabilityBindingSettings[],
   logger: Logger,
 ): Promise<McpProviderInfo> {
-  const client = new McpHttpClient(server);
+  const client = createProviderClient(settings, server);
 
   try {
     const tools = await client.listTools();
@@ -91,7 +93,7 @@ async function discoverProvider(
 }
 
 function createMcpBackedCapability(
-  client: McpHttpClient,
+  client: Pick<McpHttpClient, 'callTool'> | Pick<McpBridgeHttpClient, 'callTool'>,
   binding: McpCapabilityBindingSettings,
   tool: McpToolDescriptor,
 ): Capability<Record<string, unknown>, unknown> {
@@ -106,4 +108,15 @@ function createMcpBackedCapability(
       return client.callTool(binding.toolName, input);
     },
   };
+}
+
+export function createProviderClient(
+  settings: Pick<ClarkSettings, 'mcpBridgeBinary' | 'mcpBridgeConfigPath' | 'mcpBridgeMaxOutputChars'>,
+  server: McpHttpServerSettings,
+): Pick<McpHttpClient, 'listTools' | 'callTool'> | Pick<McpBridgeHttpClient, 'listTools' | 'callTool'> {
+  if (server.kind === 'mcp-http-bridge') {
+    return new McpBridgeHttpClient(server, settings);
+  }
+
+  return new McpHttpClient(server);
 }

@@ -586,6 +586,33 @@ Pendencias:
 Proximo passo recomendado:
 - Implementar o primeiro dispatch manual de task (`system.info`) do Kael para o Clark antes de integrar esse fluxo ao chat/orquestrador.
 
+### 2026-03-28 - Fase 21.5: suporte a providers MCP HTTP via bridge `mcporter` no Clark
+
+Resumo:
+- Adicionado um segundo adapter de provider MCP no Clark para casos em que o endpoint remoto exige transporte baseado em SSE/stream e nao funciona como JSON-RPC HTTP simples.
+- O provider `mcp-http-bridge` usa `mcporter` localmente para `list/call`, mantendo o modelo declarativo por `clark.config.json`.
+- O Youbora passou a ser documentado como primeiro caso desse tipo, evitando hardcode de URL e de tool no codigo.
+
+Arquivos-chave:
+- `apps/clark/src/mcp/bridge-http-client.ts`
+- `apps/clark/src/mcp/capability-provider.ts`
+- `apps/clark/src/config/file-config.ts`
+- `apps/clark/src/config/settings.ts`
+- `apps/clark/clark.config.example.json`
+- `apps/clark/README.md`
+
+Checklist de validacao:
+- [x] `npm --prefix apps/clark run check`
+- [x] `npm --prefix apps/clark run test`
+- [x] `npm --prefix apps/clark run build`
+
+Pendencias:
+- Ainda falta confirmar o nome exato da tool MCP do Youbora para ativar o binding real `youbora.session.fetch`.
+- O `doctor` ainda devolve JSON tecnico; a UX humana para troubleshooting continua simples.
+
+Proximo passo recomendado:
+- Confirmar a tool do MCP do Youbora e ativar o binding real `youbora.session.fetch` no `clark.config.json`.
+
 ### 2026-03-28 - Fase 20.0: base de video intelligence com playback analysis e artifacts
 
 Resumo:

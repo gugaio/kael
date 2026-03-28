@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 const providerSchema = z.object({
-  kind: z.literal('mcp-http'),
+  kind: z.enum(['mcp-http', 'mcp-http-bridge']),
   url: z.string().url(),
   enabled: z.boolean().default(true),
   timeoutMs: z.number().int().positive().default(5000),

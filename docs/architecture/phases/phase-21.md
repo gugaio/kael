@@ -84,6 +84,9 @@ Nota:
   metadados resumidos de providers MCP HTTP disponiveis.
 - Apenas bindings configurados e realmente presentes no provider sao expostos ao
   Kael.
+- Quando o endpoint MCP remoto nao fala JSON-RPC HTTP simples e exige fluxo
+  baseado em SSE/stream, o Clark pode usar `mcporter` como bridge local via um
+  provider `mcp-http-bridge`.
 
 Exemplo:
 

@@ -3,6 +3,7 @@ import { loadClarkFileConfig } from './file-config.js';
 
 export interface McpHttpServerSettings {
   name: string;
+  kind: 'mcp-http' | 'mcp-http-bridge';
   baseUrl: string;
   timeoutMs: number;
   headers?: Record<string, string>;
@@ -28,6 +29,9 @@ export interface ClarkSettings {
   httpAllowlist: string[];
   httpTimeoutMs: number;
   httpMaxBytes: number;
+  mcpBridgeBinary: string;
+  mcpBridgeConfigPath?: string;
+  mcpBridgeMaxOutputChars: number;
   mcpHttpServers: McpHttpServerSettings[];
   mcpCapabilityBindings: McpCapabilityBindingSettings[];
   logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
@@ -51,10 +55,14 @@ export function loadSettings(source: NodeJS.ProcessEnv = process.env): ClarkSett
       .filter(Boolean),
     httpTimeoutMs: env.CLARK_HTTP_TIMEOUT_MS,
     httpMaxBytes: env.CLARK_HTTP_MAX_BYTES,
+    mcpBridgeBinary: env.CLARK_MCP_BRIDGE_BINARY,
+    mcpBridgeConfigPath: env.CLARK_MCP_BRIDGE_CONFIG_PATH?.trim() || undefined,
+    mcpBridgeMaxOutputChars: env.CLARK_MCP_BRIDGE_MAX_OUTPUT_CHARS,
     mcpHttpServers: Object.entries(fileConfig.config.providers)
       .filter(([, provider]) => provider.enabled)
       .map(([name, provider]) => ({
         name,
+        kind: provider.kind,
         baseUrl: provider.url,
         timeoutMs: provider.timeoutMs,
         headers: provider.headers,
