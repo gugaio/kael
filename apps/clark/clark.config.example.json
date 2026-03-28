@@ -1,0 +1,19 @@
+{
+  "providers": {
+    "youbora": {
+      "kind": "mcp-http",
+      "url": "https://youbora-mcp.apps.tsuru.gcp.i.globo/mcp",
+      "enabled": true,
+      "timeoutMs": 5000
+    }
+  },
+  "capabilities": [
+    {
+      "name": "youbora.session.fetch",
+      "description": "Busca metricas de uma session no Youbora via MCP",
+      "provider": "youbora",
+      "tool": "replace_with_real_tool_name",
+      "requiresApproval": false
+    }
+  ]
+}

@@ -429,7 +429,108 @@ Definition of Done (checklist):
 - [ ] Provider(s) reais de video generation plugados no novo contrato.
 - [ ] Integracao de validacoes de playback/video QA ao planner.
 
+### Fase 21 - Clark Runtime Satelite (capacidades de ambiente)
+
+Status: **Concluida**
+
+Objetivos:
+- Incubar um projeto separado em `apps/clark` para atuar como runtime satelite do Kael.
+- Permitir execucao de capacidades disponiveis em ambientes especificos, sem acoplar o runtime do Kael a um host, rede, MCP ou contexto operacional particular.
+- Validar o fluxo minimo ponta a ponta: registro, heartbeat, task dispatch e retorno estruturado de resultados.
+
+Definition of Done (checklist):
+- [x] `apps/clark` criado com `package.json`, `tsconfig.json`, `README.md` e estrutura propria de `src/`.
+- [x] CLI inicial com `daemon`, `status` e `capabilities`.
+- [x] Protocolo WebSocket minimo tipado e validado em runtime (`register`, `heartbeat`, `task_request`, `task_result`).
+- [x] Conexao outbound com reconexao/backoff e logs estruturados.
+- [x] Registry de capabilities e `task executor` desacoplados.
+- [x] Capabilities MVP implementadas (`system.info`, `network.check`, `internal.http.fetch` restrita).
+- [x] Suite inicial de testes unitarios e ao menos um teste de integracao com servidor WS fake.
+
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-28 - Fase 21.0: bootstrap funcional do Clark runtime satelite em apps/clark
+
+Resumo:
+- Criado `apps/clark` como projeto incubado separado, com CLI propria, build, check, testes e README.
+- Implementado daemon MVP com WebSocket outbound, `register`, `heartbeat`, task dispatch, reconexao/backoff e logs estruturados.
+- Entregues registry de capabilities, executor de capacidades de ambiente e capabilities iniciais `system.info`, `network.check` e `internal.http.fetch`.
+
+Arquivos-chave:
+- `apps/clark/package.json`
+- `apps/clark/src/core/edge-client.ts`
+- `apps/clark/src/core/connection-manager.ts`
+- `apps/clark/src/core/task-executor.ts`
+- `apps/clark/src/protocol/types.ts`
+- `apps/clark/src/capabilities/internal-http-fetch.ts`
+- `apps/clark/src/tests/integration.test.ts`
+- `docs/architecture/phases/phase-21.md`
+
+Checklist de validacao:
+- [x] `npm --prefix apps/clark run check`
+- [x] `npm --prefix apps/clark run test`
+
+Pendencias:
+- Ainda nao ha autenticacao, approval local nem capability real de negocio como Youbora.
+- O projeto ainda nao possui `package-lock.json` proprio porque o bootstrap foi validado reaproveitando as dependencias ja presentes no workspace.
+
+Proximo passo recomendado:
+- Implementar a primeira capability real de negocio orientada a ambiente remoto especifico, comecando por um adapter como `youbora.session.fetch`.
+
+### 2026-03-28 - Fase 21.1: bindings explicitos para MCP HTTP corporativo no Clark
+
+Resumo:
+- Adicionado suporte a discovery de providers MCP HTTP configurados localmente no Clark.
+- Introduzido modelo de bindings explicitos `capability -> mcp tool`, preservando o Kael orientado a capabilities e nao a um MCP generico.
+- O `register` do client agora inclui metadados resumidos de providers MCP HTTP disponiveis, e o executor de capacidades de ambiente ja consegue chamar tools MCP por HTTP JSON-RPC.
+
+Arquivos-chave:
+- `apps/clark/src/mcp/http-client.ts`
+- `apps/clark/src/mcp/capability-provider.ts`
+- `apps/clark/src/config/settings.ts`
+- `apps/clark/src/protocol/types.ts`
+- `apps/clark/src/tests/mcp-http-client.test.ts`
+- `apps/clark/src/tests/mcp-capability-provider.test.ts`
+- `docs/architecture/phases/phase-21.md`
+
+Checklist de validacao:
+- [x] `npm --prefix apps/clark run check`
+- [x] `npm --prefix apps/clark run test`
+- [x] `npm --prefix apps/clark run build`
+
+Pendencias:
+- Os bindings MCP ainda usam schema generico de input (`object passthrough`), sem contratos estritos por capability.
+- Ainda nao ha um binding real de negocio ja configurado no repo, apenas a infraestrutura e o fluxo.
+
+Proximo passo recomendado:
+- Criar o primeiro binding corporativo real, por exemplo `corp.session.fetch`, com input/output tipados e contrato alinhado ao MCP da empresa.
+
+### 2026-03-28 - Fase 21.2: configuracao declarativa externa para providers e bindings do Clark
+
+Resumo:
+- Removida a configuracao estrutural de MCPs e bindings do `.env`, migrando isso para `clark.config.json`.
+- Introduzido loader validado com `zod` para providers e capabilities declaradas fora do codigo.
+- Adicionados `clark.config.json` e `clark.config.example.json` com o provider `youbora` como primeiro caso configurado externamente.
+
+Arquivos-chave:
+- `apps/clark/src/config/file-config.ts`
+- `apps/clark/src/config/settings.ts`
+- `apps/clark/clark.config.json`
+- `apps/clark/clark.config.example.json`
+- `apps/clark/README.md`
+- `docs/architecture/phases/phase-21.md`
+
+Checklist de validacao:
+- [x] `npm --prefix apps/clark run check`
+- [x] `npm --prefix apps/clark run test`
+- [x] `npm --prefix apps/clark run build`
+
+Pendencias:
+- O binding real do Youbora ainda depende de confirmar o nome exato da tool MCP a ser mapeada.
+- Ainda nao ha schemas estritos de input/output por capability declarada no arquivo.
+
+Proximo passo recomendado:
+- Definir o primeiro binding real `youbora.session.fetch` com o nome exato da tool MCP e contratos tipados de entrada/saida.
 
 ### 2026-03-28 - Fase 20.0: base de video intelligence com playback analysis e artifacts
 
