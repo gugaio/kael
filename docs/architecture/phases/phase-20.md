@@ -18,7 +18,7 @@ inteligencia de video, capaz de:
 - Evoluir o dominio por subservicos, nao por um monolito:
   - `VideoJobService`
   - `VideoInspectToolService`
-  - `PlaybackAnalysisService`
+  - `PlaybackTriageService`
   - `VideoGenerationService`
   - `VideoArtifactsService`
 - Tratar players como adapters de ingest/normalizacao, nao como capabilities do core.
@@ -36,11 +36,13 @@ Nota:
 - `PlaybackSessionInput` aceita `logText` como entrada principal para manter
   ingest flexivel desde o inicio; `events` estruturados seguem como formato
   opcional/derivado quando houver adapters dedicados por player.
+- `PlaybackTriageService` faz triagem deterministica de sinais; a interpretacao
+  final por LLM continua sendo uma camada separada.
 
 ## Entregas implementadas (incremento 20.0)
 
 - Tipos canônicos iniciais para playback/generation em `src/capabilities/video/types.ts`.
-- `PlaybackAnalysisService` com heuristicas iniciais de:
+- `PlaybackTriageService` com heuristicas iniciais de:
   - erro fatal;
   - rebuffer/stall;
   - startup lento.
@@ -48,6 +50,10 @@ Nota:
 - `ProviderBackedVideoGenerationService` com geracao de imagem baseada no provider atual e persistencia de artifacts.
 - Wiring inicial no app/chat tooling para expor a camada de playback analysis e video generation ao runtime.
 - Tool PI `playback_analyze` adicionada com contrato text-first (`logText`) e suporte opcional a `events`.
+- Adapter inicial de `hls.js` adicionando parsing dedicado de log text e heuristicas de:
+  - `MANIFEST_LOAD_ERROR`
+  - `FRAG_LOAD_ERROR`
+  - oscilacao de `LEVEL_SWITCHED`
 
 ## Proximos incrementos
 

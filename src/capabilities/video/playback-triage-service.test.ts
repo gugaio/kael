@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { PlaybackAnalysisService } from "./playback-analysis-service.js";
+import { PlaybackTriageService } from "./playback-triage-service.js";
 
-describe("PlaybackAnalysisService", () => {
+describe("PlaybackTriageService", () => {
   it("classifica sessao com stall e erro fatal", () => {
-    const service = new PlaybackAnalysisService();
+    const service = new PlaybackTriageService();
     const report = service.analyzeSession({
       sessionKey: "s1",
       player: "hlsjs",
@@ -26,7 +26,7 @@ describe("PlaybackAnalysisService", () => {
   });
 
   it("marca sessao limpa quando nao encontra sinais fortes de problema", () => {
-    const service = new PlaybackAnalysisService();
+    const service = new PlaybackTriageService();
     const report = service.analyzeSession({
       sessionKey: "s2",
       player: "exoplayer",
@@ -43,7 +43,7 @@ describe("PlaybackAnalysisService", () => {
   });
 
   it("aceita log bruto como entrada principal", () => {
-    const service = new PlaybackAnalysisService();
+    const service = new PlaybackTriageService();
     const report = service.analyzeSession({
       sessionKey: "s3",
       player: "hlsjs",
@@ -61,5 +61,26 @@ describe("PlaybackAnalysisService", () => {
     expect(report.metrics.fatalErrorCount).toBe(1);
     expect(report.issues.map((issue) => issue.code)).toContain("fatal_error");
     expect(report.issues.map((issue) => issue.code)).toContain("rebuffering");
+  });
+
+  it("enriquece analise de hls.js com issues especificas do player", () => {
+    const service = new PlaybackTriageService();
+    const report = service.analyzeSession({
+      sessionKey: "s4",
+      player: "hlsjs",
+      logText: `
+        [100ms] MANIFEST_LOAD_ERROR fatal: true
+        [1000ms] LEVEL_SWITCHED level=0 bitrate=800000
+        [2000ms] LEVEL_SWITCHED level=1 bitrate=1500000
+        [3000ms] LEVEL_SWITCHED level=0 bitrate=800000
+        [4000ms] LEVEL_SWITCHED level=1 bitrate=1500000
+        [5000ms] FRAG_LOAD_ERROR fatal: false frag sn=44
+      `,
+    });
+
+    expect(report.ok).toBe(false);
+    expect(report.issues.map((issue) => issue.code)).toContain("manifest_load_error");
+    expect(report.issues.map((issue) => issue.code)).toContain("frag_load_error");
+    expect(report.issues.map((issue) => issue.code)).toContain("level_switch_oscillation");
   });
 });

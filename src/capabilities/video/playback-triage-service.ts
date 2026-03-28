@@ -1,6 +1,7 @@
 import type { PlaybackAnalysisReport, PlaybackEvent, PlaybackIssue, PlaybackSessionInput } from "./types.js";
+import { deriveHlsJsIssues, parseHlsJsLogText } from "./playback-adapters/hlsjs.js";
 
-export class PlaybackAnalysisService {
+export class PlaybackTriageService {
   analyzeSession(input: PlaybackSessionInput): PlaybackAnalysisReport {
     const events = normalizePlaybackEvents(input).sort((left, right) => left.atMs - right.atMs);
     const issues: PlaybackIssue[] = [];
@@ -35,6 +36,8 @@ export class PlaybackAnalysisService {
         evidence: [`first_playing_at=${startupTimeMs}ms`],
       });
     }
+
+    issues.push(...derivePlayerSpecificIssues(input.player, events));
 
     if (issues.length === 0 && errorEvents.length === 0) {
       issues.push({
@@ -72,7 +75,20 @@ function normalizePlaybackEvents(input: PlaybackSessionInput): PlaybackEvent[] {
   if (!input.logText?.trim()) {
     return [];
   }
+  if (input.player === "hlsjs") {
+    return parseHlsJsLogText(input.logText);
+  }
   return parseLogTextToEvents(input.logText);
+}
+
+function derivePlayerSpecificIssues(
+  player: PlaybackSessionInput["player"],
+  events: PlaybackEvent[],
+): PlaybackIssue[] {
+  if (player === "hlsjs") {
+    return deriveHlsJsIssues(events);
+  }
+  return [];
 }
 
 function parseLogTextToEvents(logText: string): PlaybackEvent[] {

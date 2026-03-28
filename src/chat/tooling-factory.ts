@@ -10,7 +10,7 @@ import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
 import type { McpRuntime } from "../tools/mcp/mcp-bridge-service.js";
 import type { VideoInspectToolService } from "../capabilities/video/index.js";
 import type {
-  PlaybackAnalysisService,
+  PlaybackTriageService,
   ProviderBackedVideoGenerationService,
 } from "../capabilities/video/index.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
@@ -28,7 +28,7 @@ type ChatToolingDeps = {
   planner: PlannerService;
   imageGenerator: ImageGeneratorService;
   videoGeneration: ProviderBackedVideoGenerationService;
-  playbackAnalysis: PlaybackAnalysisService;
+  playbackTriage: PlaybackTriageService;
   browser: BrowserCapability;
 };
 
@@ -115,7 +115,7 @@ export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
     videoGenerateImage: ({ sessionKey, prompt, provider, size }) =>
       deps.videoGeneration.generateImage({ sessionKey, prompt, provider, size }),
     playbackAnalyze: async ({ sessionKey, player, source, streamUrl, logText, events }) =>
-      deps.playbackAnalysis.analyzeSession({ sessionKey, player, source, streamUrl, logText, events }),
+      deps.playbackTriage.analyzeSession({ sessionKey, player, source, streamUrl, logText, events }),
     planCreate: ({ sessionKey, title, steps }) => deps.planner.create({ sessionKey, title, steps }),
     planGenerate: ({ sessionKey, objective, maxSteps }) =>
       deps.planner.generate({ sessionKey, objective, maxSteps }),

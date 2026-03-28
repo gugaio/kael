@@ -418,12 +418,14 @@ Objetivos:
 
 Definition of Done (checklist):
 - [x] Tipos canônicos iniciais para playback/generation/artifacts.
-- [x] `PlaybackAnalysisService` com heuristicas baseline para sessoes de player.
+- [x] `PlaybackTriageService` com heuristicas baseline para sessoes de player.
 - [x] `VideoArtifactsService` para persistir outputs gerados e metadata.
 - [x] `VideoGenerationService` inicial reaproveitando provider atual de image generation.
 - [ ] Tools PI dedicadas (`video_generate_image`, `video_dash_inspect`, `video_manifest_diff`).
 - [x] Tool PI `playback_analyze` com contrato text-first (`logText`) e suporte opcional a eventos estruturados.
 - [ ] Adapters por player (`hlsjs`, `shaka`, `exoplayer`, `avplayer`) com normalizacao de eventos.
+- [ ] Adapters por player (`shaka`, `exoplayer`, `avplayer`) com normalizacao de eventos.
+- [x] Adapter inicial de `hlsjs` com parsing text-first e heuristicas de erro/ABR.
 - [ ] Provider(s) reais de video generation plugados no novo contrato.
 - [ ] Integracao de validacoes de playback/video QA ao planner.
 
@@ -433,12 +435,12 @@ Definition of Done (checklist):
 
 Resumo:
 - Introduzidos contratos canônicos de video intelligence para playback, generation e artifacts.
-- Adicionados `PlaybackAnalysisService`, `VideoArtifactsService` e `ProviderBackedVideoGenerationService` ao dominio `video`.
+- Adicionados `PlaybackTriageService`, `VideoArtifactsService` e `ProviderBackedVideoGenerationService` ao dominio `video`.
 - Wiring inicial no app/chat tooling para deixar a nova camada pronta para exposicao por tools e planner nos proximos incrementos.
 
 Arquivos-chave:
 - `src/capabilities/video/types.ts`
-- `src/capabilities/video/playback-analysis-service.ts`
+- `src/capabilities/video/playback-triage-service.ts`
 - `src/capabilities/video/artifacts-service.ts`
 - `src/capabilities/video/generation-service.ts`
 - `src/app.ts`
@@ -446,14 +448,14 @@ Arquivos-chave:
 
 Checklist de validacao:
 - [ ] `npm run check`
-- [ ] `npm test -- src/capabilities/video/playback-analysis-service.test.ts src/capabilities/video/artifacts-service.test.ts src/capabilities/video/generation-service.test.ts`
+- [ ] `npm test -- src/capabilities/video/playback-triage-service.test.ts src/capabilities/video/artifacts-service.test.ts src/capabilities/video/generation-service.test.ts`
 
 Pendencias:
 - Ainda nao ha tools PI dedicadas nem provider real de video generation.
 - A geracao atual cobre imagem com persistencia; video permanece como contrato/stub.
 
 Proximo passo recomendado:
-- Expor `playback_analyze` e `video_generate_image` no runtime PI e iniciar adapters canonicos por player (`hlsjs` primeiro).
+- Expor `video_generate_image` no runtime PI e seguir com o proximo adapter de player (`shaka` ou `exoplayer`).
 
 ### 2026-03-12 - Refactor Fase 17: runtime compartilhado do planner entre API e chat
 

@@ -27,7 +27,7 @@ import { WorkspaceInspector } from "./workspace/inspector.js";
 import { LocalProcessRunner } from "./tools/system/process-runner.js";
 import { ShellToolService, type ShellRuntime } from "./tools/system/shell-tool-service.js";
 import {
-  PlaybackAnalysisService,
+  PlaybackTriageService,
   ProviderBackedVideoGenerationService,
   VideoArtifactsService,
   VideoCapability,
@@ -167,7 +167,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     workspace,
     research,
     planner,
-    playbackAnalysis: new PlaybackAnalysisService(),
+    playbackTriage: new PlaybackTriageService(),
     browser,
     imageGenerator:
       config.media.enabled && !!config.media.apiKey
