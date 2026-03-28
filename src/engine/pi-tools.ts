@@ -131,6 +131,9 @@ export function createPiShellTools(params: {
     if (tool === "video_probe") {
       return "video:probe";
     }
+    if (tool === "playback_analyze") {
+      return "video:playback_analyze";
+    }
     if (tool === "web_search") {
       return "web:search";
     }
@@ -484,7 +487,7 @@ export function createPiShellTools(params: {
   });
 
   const [execTool, processTool] = capabilityTools.system;
-  const [videoHlsInspectTool, videoProbeTool] = capabilityTools.video;
+  const [videoHlsInspectTool, videoProbeTool, playbackAnalyzeTool] = capabilityTools.video;
   const [jobsListTool, jobsGetTool, jobsLogTailTool] = capabilityTools.jobs;
   const [mcpListTool, mcpCallTool] = capabilityTools.mcp;
   const [memorySearchTool, memoryGetTool, memoryWriteTool] = capabilityTools.memory;
@@ -508,6 +511,7 @@ export function createPiShellTools(params: {
     processTool,
     videoHlsInspectTool,
     videoProbeTool,
+    playbackAnalyzeTool,
     jobsListTool,
     jobsGetTool,
     jobsLogTailTool,

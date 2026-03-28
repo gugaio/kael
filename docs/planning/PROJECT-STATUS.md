@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-03-12**
+Ultima atualizacao: **2026-03-28**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -407,7 +407,53 @@ Definition of Done (checklist):
 - [x] Telemetria dedicada de MCP no `/health`.
 - [ ] Fluxos de `auth/config` do `mcporter` com policy explicita.
 
+### Fase 20 - Video Intelligence Platform
+
+Status: **Em andamento**
+
+Objetivos:
+- Evoluir o Kael para analise de playback, geracao multimidia e persistencia de evidencia no dominio de video.
+- Preservar `video` como capability principal, expandindo por subservicos e adapters plugaveis.
+- Preparar base para players (`AVPlayer`, `ExoPlayer`, `hls.js`, `Shaka`) e providers de geracao (`Veo`, `Seedance`, etc.) sem acoplamento estrutural.
+
+Definition of Done (checklist):
+- [x] Tipos canônicos iniciais para playback/generation/artifacts.
+- [x] `PlaybackAnalysisService` com heuristicas baseline para sessoes de player.
+- [x] `VideoArtifactsService` para persistir outputs gerados e metadata.
+- [x] `VideoGenerationService` inicial reaproveitando provider atual de image generation.
+- [ ] Tools PI dedicadas (`video_generate_image`, `video_dash_inspect`, `video_manifest_diff`).
+- [x] Tool PI `playback_analyze` com contrato text-first (`logText`) e suporte opcional a eventos estruturados.
+- [ ] Adapters por player (`hlsjs`, `shaka`, `exoplayer`, `avplayer`) com normalizacao de eventos.
+- [ ] Provider(s) reais de video generation plugados no novo contrato.
+- [ ] Integracao de validacoes de playback/video QA ao planner.
+
 ## Registro de Atualizacoes por Commit
+
+### 2026-03-28 - Fase 20.0: base de video intelligence com playback analysis e artifacts
+
+Resumo:
+- Introduzidos contratos canônicos de video intelligence para playback, generation e artifacts.
+- Adicionados `PlaybackAnalysisService`, `VideoArtifactsService` e `ProviderBackedVideoGenerationService` ao dominio `video`.
+- Wiring inicial no app/chat tooling para deixar a nova camada pronta para exposicao por tools e planner nos proximos incrementos.
+
+Arquivos-chave:
+- `src/capabilities/video/types.ts`
+- `src/capabilities/video/playback-analysis-service.ts`
+- `src/capabilities/video/artifacts-service.ts`
+- `src/capabilities/video/generation-service.ts`
+- `src/app.ts`
+- `docs/architecture/phases/phase-20.md`
+
+Checklist de validacao:
+- [ ] `npm run check`
+- [ ] `npm test -- src/capabilities/video/playback-analysis-service.test.ts src/capabilities/video/artifacts-service.test.ts src/capabilities/video/generation-service.test.ts`
+
+Pendencias:
+- Ainda nao ha tools PI dedicadas nem provider real de video generation.
+- A geracao atual cobre imagem com persistencia; video permanece como contrato/stub.
+
+Proximo passo recomendado:
+- Expor `playback_analyze` e `video_generate_image` no runtime PI e iniciar adapters canonicos por player (`hlsjs` primeiro).
 
 ### 2026-03-12 - Refactor Fase 17: runtime compartilhado do planner entre API e chat
 

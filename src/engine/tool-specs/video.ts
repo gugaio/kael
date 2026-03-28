@@ -130,6 +130,118 @@ export function createVideoPiTools(params: {
     },
   };
 
-  return [videoHlsInspectTool, videoProbeTool];
-}
+  const playbackAnalyzeTool: AgentTool = {
+    name: "playback_analyze",
+    label: "Playback Analyze",
+    description:
+      "Analisa logs textuais ou eventos estruturados de playback e retorna diagnostico inicial de sessao para players como hls.js, Shaka, ExoPlayer e AVPlayer.",
+    parameters: {
+      type: "object",
+      properties: {
+        player: {
+          type: "string",
+          enum: ["generic", "avplayer", "exoplayer", "hlsjs", "shaka"],
+          description: "Engine/player de origem dos logs",
+        },
+        logText: {
+          type: "string",
+          description: "Texto bruto de logs do player. Preferir este campo para hls.js e logs copiados de observabilidade.",
+        },
+        events: {
+          type: "array",
+          description: "Eventos estruturados opcionais, quando ja houver normalizacao externa.",
+          items: {
+            type: "object",
+            properties: {
+              atMs: { type: "number" },
+              name: { type: "string" },
+              category: {
+                type: "string",
+                enum: ["lifecycle", "buffer", "network", "abr", "drm", "quality", "error", "user"],
+              },
+              detail: { type: "string" },
+              fatal: { type: "boolean" },
+            },
+            required: ["atMs", "name", "category"],
+            additionalProperties: true,
+          },
+        },
+        source: { type: "string", description: "Origem do log, ex.: xray, splunk, browser console" },
+        streamUrl: { type: "string", description: "URL do stream relacionado, se houver" },
+      },
+      required: ["player"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const blocked = params.reserveToolCall("playback_analyze");
+      if (blocked) {
+        return blocked.blocked;
+      }
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as {
+        player: "generic" | "avplayer" | "exoplayer" | "hlsjs" | "shaka";
+        logText?: string;
+        events?: Array<{
+          atMs: number;
+          name: string;
+          category: "lifecycle" | "buffer" | "network" | "abr" | "drm" | "quality" | "error" | "user";
+          detail?: string;
+          fatal?: boolean;
+        }>;
+        source?: string;
+        streamUrl?: string;
+      };
+      const intent = params.logToolStart("playback_analyze", args);
+      if (!params.tooling.playbackAnalyze) {
+        const reason = "playback_analyze_unavailable";
+        const details = { status: "blocked", blocked: true, reason };
+        params.logToolEnd("playback_analyze", intent, details, startedAtMs);
+        return {
+          content: params.textResult(`blocked=true\nreason=${reason}`),
+          details,
+        };
+      }
+      try {
+        const result = await params.tooling.playbackAnalyze({
+          sessionKey: params.sessionKey,
+          player: args.player,
+          logText: args.logText,
+          events: args.events,
+          source: args.source,
+          streamUrl: args.streamUrl,
+        });
+        const text = [
+          `ok=${result.ok}`,
+          `player=${result.player}`,
+          `summary=${result.summary}`,
+          `events=${result.metrics.eventCount}`,
+          `errors=${result.metrics.errorCount}`,
+          `fatalErrors=${result.metrics.fatalErrorCount}`,
+          `rebuffer=${result.metrics.rebufferCount}`,
+          ...(typeof result.metrics.startupTimeMs === "number"
+            ? [`startupTimeMs=${result.metrics.startupTimeMs}`]
+            : []),
+          ...(result.issues.length > 0 ? ["issues:", ...result.issues.map((issue) => `- ${issue.code}: ${issue.summary}`)] : []),
+        ].join("\n");
+        params.logToolEnd(
+          "playback_analyze",
+          intent,
+          result,
+          startedAtMs,
+          `playback ok=${result.ok} player=${result.player} issues=${result.issues.length}`,
+        );
+        return { content: params.textResult(text), details: result };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const details = { status: "failed", blocked: false, reason: "playback_analyze_failed", error: message };
+        params.logToolEnd("playback_analyze", intent, details, startedAtMs);
+        return {
+          content: params.textResult(`ok=false\nreason=playback_analyze_failed\nerror=${message}`),
+          details,
+        };
+      }
+    },
+  };
 
+  return [videoHlsInspectTool, videoProbeTool, playbackAnalyzeTool];
+}

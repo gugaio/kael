@@ -57,6 +57,68 @@ describe("createPiShellTools image_generate", () => {
   });
 });
 
+describe("createPiShellTools playback_analyze", () => {
+  it("exposes playback_analyze and supports raw log text", async () => {
+    const tools = createPiShellTools({
+      sessionKey: "s-playback",
+      tooling: createTooling({
+        playbackAnalyze: async ({ player, logText }) => ({
+          ok: false,
+          player,
+          summary: "Analise detectou stall e erro fatal.",
+          metrics: {
+            eventCount: 4,
+            errorCount: 1,
+            fatalErrorCount: 1,
+            rebufferCount: 2,
+            startupTimeMs: 4200,
+          },
+          issues: [
+            {
+              code: "fatal_error",
+              severity: "error",
+              summary: "Sessao teve erro fatal.",
+              evidence: [String(logText ?? "").slice(0, 30)],
+            },
+          ],
+          recommendations: ["Cruzar logs com manifesto."],
+        }),
+      }),
+    });
+    const tool = tools.find((item) => item.name === "playback_analyze");
+    expect(tool).toBeTruthy();
+
+    const result = await tool!.execute("tc-playback", {
+      player: "hlsjs",
+      logText: "[4200ms] playing\n[9000ms] buffer stall\n[15000ms] fatal network error",
+    });
+    const text = String((result.content?.[0] as { text?: unknown })?.text ?? "");
+
+    expect(text).toContain("ok=false");
+    expect(text).toContain("player=hlsjs");
+    expect(text).toContain("fatalErrors=1");
+    expect(text).toContain("rebuffer=2");
+    expect(text).toContain("fatal_error");
+  });
+
+  it("returns blocked result when playback tool is unavailable", async () => {
+    const tools = createPiShellTools({
+      sessionKey: "s-playback-missing",
+      tooling: createTooling({}),
+    });
+    const tool = tools.find((item) => item.name === "playback_analyze");
+    expect(tool).toBeTruthy();
+
+    const result = await tool!.execute("tc-playback", {
+      player: "generic",
+      logText: "fatal error",
+    });
+    const text = String((result.content?.[0] as { text?: unknown })?.text ?? "");
+    expect(text).toContain("blocked=true");
+    expect(text).toContain("playback_analyze_unavailable");
+  });
+});
+
 describe("createPiShellTools browser budget", () => {
   it("bloqueia segunda chamada de browser quando maxBrowserCalls=1", async () => {
     const tools = createPiShellTools({

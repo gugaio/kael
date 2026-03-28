@@ -5,6 +5,7 @@ import type {
   BrowserCommandResult,
   BrowserRuntimeTelemetry,
 } from "../capabilities/browser/index.js";
+import type { PlaybackAnalysisReport, PlaybackEvent, PlaybackEngine } from "../capabilities/video/index.js";
 import type { McpCallResult, McpListResult } from "../tools/mcp/mcp-bridge-service.js";
 
 export type EngineTooling = {
@@ -305,6 +306,35 @@ export type EngineTooling = {
     prompt: string;
     size?: "1024x1024" | "1536x1024" | "1024x1536";
   }) => Promise<EngineOutputArtifact>;
+  videoGenerateImage?: (params: {
+    sessionKey: string;
+    prompt: string;
+    provider?: string;
+    size?: "1024x1024" | "1536x1024" | "1024x1536";
+  }) => Promise<{
+    artifact: EngineOutputArtifact;
+    record: {
+      id: string;
+      sessionKey: string;
+      kind: "image" | "video";
+      provider: string;
+      prompt: string;
+      fileName: string;
+      filePath: string;
+      metadataPath: string;
+      mimeType: string;
+      bytes: number;
+      createdAt: string;
+    };
+  }>;
+  playbackAnalyze?: (params: {
+    sessionKey: string;
+    player: PlaybackEngine;
+    source?: string;
+    streamUrl?: string;
+    logText?: string;
+    events?: PlaybackEvent[];
+  }) => Promise<PlaybackAnalysisReport>;
   planCreate: (params: {
     sessionKey: string;
     title: string;

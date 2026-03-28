@@ -26,7 +26,14 @@ import { TurnOrchestrator } from "./chat/turn-orchestrator.js";
 import { WorkspaceInspector } from "./workspace/inspector.js";
 import { LocalProcessRunner } from "./tools/system/process-runner.js";
 import { ShellToolService, type ShellRuntime } from "./tools/system/shell-tool-service.js";
-import { VideoCapability, VideoInspectToolService, VideoJobService } from "./capabilities/video/index.js";
+import {
+  PlaybackAnalysisService,
+  ProviderBackedVideoGenerationService,
+  VideoArtifactsService,
+  VideoCapability,
+  VideoInspectToolService,
+  VideoJobService,
+} from "./capabilities/video/index.js";
 import { NoopMediaUnderstandingService, OpenAiMediaUnderstandingService } from "./media/service.js";
 import { NoopImageGeneratorService, OpenAiImageGeneratorService } from "./media/image-generator.js";
 import { BrowserCapability, BrowserToolService } from "./capabilities/browser/index.js";
@@ -75,6 +82,8 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   });
   const jobs = new JobManager(jobStore, [new VideoCapability(video)]);
   const videoInspect = new VideoInspectToolService();
+  const videoArtifacts = new VideoArtifactsService(path.join(config.dataDir, "video", "artifacts"));
+  await videoArtifacts.init();
   const shell = new ShellToolService({
     workspaceRoot: config.shell.workspaceRoot,
     defaultTimeoutMs: config.shell.defaultTimeoutMs,
@@ -158,6 +167,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     workspace,
     research,
     planner,
+    playbackAnalysis: new PlaybackAnalysisService(),
     browser,
     imageGenerator:
       config.media.enabled && !!config.media.apiKey
@@ -168,6 +178,21 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
             model: process.env.KAEL_IMAGE_GENERATION_MODEL?.trim() || "gpt-image-1",
           })
         : new NoopImageGeneratorService(),
+    videoGeneration: new ProviderBackedVideoGenerationService(
+      config.media.enabled && !!config.media.apiKey
+        ? new OpenAiImageGeneratorService({
+            apiKey: config.media.apiKey,
+            baseUrl: config.media.baseUrl,
+            timeoutMs: config.media.imageGenerationTimeoutMs,
+            model: process.env.KAEL_IMAGE_GENERATION_MODEL?.trim() || "gpt-image-1",
+          })
+        : new NoopImageGeneratorService(),
+      videoArtifacts,
+      {
+        imageProvider: process.env.KAEL_IMAGE_GENERATION_MODEL?.trim() || "gpt-image-1",
+        videoProvider: process.env.KAEL_VIDEO_GENERATION_PROVIDER?.trim() || undefined,
+      },
+    ),
   });
   const chat = new ChatService(
     sessions,

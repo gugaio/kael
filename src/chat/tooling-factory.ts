@@ -9,6 +9,10 @@ import type { ImageGeneratorService } from "../media/image-generator.js";
 import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
 import type { McpRuntime } from "../tools/mcp/mcp-bridge-service.js";
 import type { VideoInspectToolService } from "../capabilities/video/index.js";
+import type {
+  PlaybackAnalysisService,
+  ProviderBackedVideoGenerationService,
+} from "../capabilities/video/index.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
 import type { BrowserCapability } from "../capabilities/browser/index.js";
 import { buildJobLogTailResult, selectJobs } from "../jobs/tooling.js";
@@ -23,6 +27,8 @@ type ChatToolingDeps = {
   research: ResearchService;
   planner: PlannerService;
   imageGenerator: ImageGeneratorService;
+  videoGeneration: ProviderBackedVideoGenerationService;
+  playbackAnalysis: PlaybackAnalysisService;
   browser: BrowserCapability;
 };
 
@@ -106,6 +112,10 @@ export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
       }),
     browserRuntimeTelemetry: () => deps.browser.getRuntimeTelemetrySnapshot(),
     imageGenerate: ({ prompt, size }) => deps.imageGenerator.generate({ prompt, size }),
+    videoGenerateImage: ({ sessionKey, prompt, provider, size }) =>
+      deps.videoGeneration.generateImage({ sessionKey, prompt, provider, size }),
+    playbackAnalyze: async ({ sessionKey, player, source, streamUrl, logText, events }) =>
+      deps.playbackAnalysis.analyzeSession({ sessionKey, player, source, streamUrl, logText, events }),
     planCreate: ({ sessionKey, title, steps }) => deps.planner.create({ sessionKey, title, steps }),
     planGenerate: ({ sessionKey, objective, maxSteps }) =>
       deps.planner.generate({ sessionKey, objective, maxSteps }),
@@ -225,6 +235,12 @@ export function createChatOnlyTooling(tooling: EngineTooling): EngineTooling {
     }),
     imageGenerate: async () => {
       throw new Error("chat-only mode: image_generate disabled");
+    },
+    videoGenerateImage: async () => {
+      throw new Error("chat-only mode: video_generate_image disabled");
+    },
+    playbackAnalyze: async () => {
+      throw new Error("chat-only mode: playback_analyze disabled");
     },
     planCreate: async () => {
       throw new Error("chat-only mode: plan_create disabled");
