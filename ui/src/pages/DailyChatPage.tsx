@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { getSessionMessages, postChat } from "../lib/api";
 import { formatDate } from "../lib/format";
+import { ChatMessage } from "../components/ChatMessage";
 
 export function DailyChatPage(): JSX.Element {
   const queryClient = useQueryClient();
@@ -89,24 +90,12 @@ export function DailyChatPage(): JSX.Element {
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
         <main ref={listRef} className="kael-scroll flex min-h-[72vh] flex-col gap-4 overflow-y-auto pb-44 pr-1">
           {(messages.data ?? []).map((item) => (
-            <article
+            <ChatMessage
               key={item.id}
-              className={`max-w-[94%] space-y-1 rounded-[18px] px-3 py-2 ${
-                item.role === "user"
-                  ? "ml-auto bg-[#d9fdd3] text-black shadow-[0_1px_1px_rgba(0,0,0,0.08)]"
-                  : "bg-white text-black shadow-[0_1px_1px_rgba(0,0,0,0.08)]"
-              }`}
-            >
-              <div
-                className={`flex items-center justify-between gap-3 text-[11px] ${
-                  item.role === "user" ? "text-[#4f5f5a]" : "text-[#667781]"
-                }`}
-              >
-                <span className="font-medium">{item.role === "user" ? "voce" : item.role}</span>
-                <span>{formatDate(item.createdAt)}</span>
-              </div>
-              <p className="whitespace-pre-wrap break-words text-[15px] leading-7 [overflow-wrap:anywhere]">{item.content}</p>
-            </article>
+              content={item.content}
+              role={item.role}
+              timestamp={formatDate(item.createdAt)}
+            />
           ))}
           {pendingUserMessage && (
             <>
