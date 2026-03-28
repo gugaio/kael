@@ -560,6 +560,32 @@ Pendencias:
 Proximo passo recomendado:
 - Implementar o primeiro binding real `youbora.session.fetch` com o nome exato da tool MCP e expandir o `doctor` com saida mais legivel para humanos.
 
+### 2026-03-28 - Fase 21.4: handshake WebSocket minimo do Clark no Kael
+
+Resumo:
+- Adicionado endpoint `WS /ws` no Kael para aceitar o handshake inicial do Clark.
+- Implementado runtime minimo em memoria para registrar clients conectados e marcar heartbeats.
+- O Kael agora recebe `client.register`, responde `server.registered` e observa `client.heartbeat`, preparando o caminho para o futuro `task_request`.
+
+Arquivos-chave:
+- `src/api/server.ts`
+- `src/api/server.test.ts`
+- `src/edge/runtime.ts`
+- `src/edge/protocol.ts`
+- `docs/api.md`
+- `docs/architecture/phases/phase-21.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/api/server.test.ts`
+
+Pendencias:
+- O Kael ainda nao envia `task_request` nem processa `client.task.result`.
+- O registry de edge clients ainda e apenas em memoria e orientado a observabilidade/handshake.
+
+Proximo passo recomendado:
+- Implementar o primeiro dispatch manual de task (`system.info`) do Kael para o Clark antes de integrar esse fluxo ao chat/orquestrador.
+
 ### 2026-03-28 - Fase 20.0: base de video intelligence com playback analysis e artifacts
 
 Resumo:

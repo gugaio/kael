@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
+import { WebSocketServer } from "ws";
 import { createKaelApp, type KaelApp } from "../app.js";
 import { VIDEO_JOB_ACTIONS } from "../capabilities/video/index.js";
 import { IdempotencyConflictError, IdempotencyStore, stableStringify } from "../infra/idempotency-store.js";
@@ -9,6 +10,8 @@ import {
   createPlannerExecuteRuntime,
   createPlannerReconcileRuntime,
 } from "../planner/runtime.js";
+import { createRegisteredMessage, parseEdgeInboundMessage } from "../edge/protocol.js";
+import { EdgeRuntime } from "../edge/runtime.js";
 
 type RequestWithStart = {
   _kaelStartNs?: bigint;
@@ -251,6 +254,8 @@ async function withIdempotency<T>(params: {
 
 export function createApiServer(app: KaelApp): FastifyInstance {
   const server = Fastify({ logger: false });
+  const edgeRuntime = new EdgeRuntime();
+  const edgeWsServer = new WebSocketServer({ noServer: true });
   const idempotency = new IdempotencyStore(app.config.idempotency.ttlMs);
   const plannerExecuteRuntime = createPlannerExecuteRuntime(app);
   const plannerReconcileRuntime = createPlannerReconcileRuntime(app);
@@ -268,6 +273,86 @@ export function createApiServer(app: KaelApp): FastifyInstance {
       });
     }
   };
+
+  server.server.on("upgrade", (request, socket, head) => {
+    if (request.url !== "/ws") {
+      socket.destroy();
+      return;
+    }
+
+    edgeWsServer.handleUpgrade(request, socket, head, (ws: {
+      on: (event: string, handler: (...args: unknown[]) => void) => void;
+      once: (event: string, handler: (...args: unknown[]) => void) => void;
+      send: (payload: string) => void;
+      close: () => void;
+    }) => {
+      edgeWsServer.emit("connection", ws, request);
+    });
+  });
+
+  edgeWsServer.on("connection", (ws: {
+    on: (event: string, handler: (...args: unknown[]) => void) => void;
+    once: (event: string, handler: (...args: unknown[]) => void) => void;
+    send: (payload: string) => void;
+    close: () => void;
+  }) => {
+    let connectionId: string | null = null;
+
+    ws.on("message", (raw: unknown) => {
+      const rawText = typeof raw === "string" ? raw : Buffer.isBuffer(raw) ? raw.toString("utf8") : String(raw);
+
+      try {
+        const message = parseEdgeInboundMessage(rawText);
+        if (message.type === "client.register") {
+          const record = edgeRuntime.registerClient(message.payload.client);
+          connectionId = record.connectionId;
+          kaelLogger.info("edge.client.registered", {
+            connectionId,
+            clientId: record.client.clientId,
+            clientName: record.client.clientName,
+            hostname: record.client.hostname,
+            capabilities: record.client.capabilities.map((item) => item.name),
+            providers: record.client.providers.map((item) => ({
+              name: item.name,
+              kind: item.kind,
+              status: item.status,
+            })),
+          });
+          ws.send(JSON.stringify(createRegisteredMessage(connectionId)));
+          return;
+        }
+
+        if (!connectionId) {
+          kaelLogger.warn("edge.client.heartbeat.before_register", {
+            clientId: message.payload.clientId,
+          });
+          return;
+        }
+
+        const record = edgeRuntime.markHeartbeat(connectionId);
+        kaelLogger.info("edge.client.heartbeat", {
+          connectionId,
+          clientId: message.payload.clientId,
+          known: !!record,
+        });
+      } catch (error) {
+        kaelLogger.warn("edge.client.protocol_error", {
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+
+    ws.once("close", () => {
+      if (!connectionId) {
+        return;
+      }
+      const removed = edgeRuntime.removeClient(connectionId);
+      kaelLogger.info("edge.client.disconnected", {
+        connectionId,
+        clientId: removed?.client.clientId ?? null,
+      });
+    });
+  });
 
   server.addHook("onRequest", async (request) => {
     (request as unknown as RequestWithStart)._kaelStartNs = process.hrtime.bigint();
@@ -347,6 +432,9 @@ export function createApiServer(app: KaelApp): FastifyInstance {
           total: schedules.length,
           enabled: enabledSchedules,
           disabled: schedules.length - enabledSchedules,
+        },
+        edgeRuntime: {
+          connectedClients: edgeRuntime.listClients().length,
         },
       },
     };

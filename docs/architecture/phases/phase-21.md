@@ -60,6 +60,7 @@ Nota:
 
 - CLI local com comando principal `clark daemon`.
 - Conexao WebSocket com reconexao/backoff.
+- Kael expondo endpoint WebSocket minimo em `/ws` para handshake inicial.
 - Registro do client e envio periodico de heartbeat.
 - Registry de capabilities de ambiente.
 - Dispatch de tasks enviadas pelo servidor remoto.
@@ -104,6 +105,18 @@ Exemplo:
   status.
 - MCP HTTP entra apenas por bindings allowlistados; o Kael nao recebe acesso
   irrestrito ao catalogo bruto de tools do provider.
+
+## Handshake minimo no Kael
+
+- Endpoint inicial: `WS /ws`
+- Mensagens suportadas no primeiro recorte:
+  - `client.register`
+  - `client.heartbeat`
+  - `server.registered`
+- O Kael mantem um registry em memoria dos clients conectados, suficiente para:
+  - observar conexoes ativas;
+  - validar o protocolo;
+  - preparar o proximo incremento de `task_request`/`task_result`.
 
 ## Proximos incrementos
 

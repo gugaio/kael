@@ -1,4 +1,6 @@
+import { once } from "node:events";
 import { describe, expect, it } from "vitest";
+import WebSocket from "ws";
 import type { KaelApp } from "../app.js";
 import type { SchedulerJob } from "../automation/persistent-scheduler.js";
 import { createApiServer } from "./server.js";
@@ -673,6 +675,76 @@ describe("API integration", () => {
     expect(body.metrics.emailIngest.inFlightSkipped).toBe(1);
     expect(body.metrics.emailIngest.selfSkipped).toBe(0);
     expect(body.metrics.schedules.total).toBeGreaterThan(0);
+    expect(body.metrics.edgeRuntime.connectedClients).toBe(0);
+    await server.close();
+  });
+
+  it("accepts Clark register and heartbeat over WebSocket", async () => {
+    const server = createApiServer(makeFakeApp());
+    await server.listen({ host: "127.0.0.1", port: 0 });
+    const address = server.server.address();
+    if (!address || typeof address === "string") {
+      throw new Error("expected server address");
+    }
+
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`);
+    await once(socket, "open");
+
+    socket.send(JSON.stringify({
+      version: 1,
+      type: "client.register",
+      timestamp: new Date().toISOString(),
+      payload: {
+        client: {
+          clientId: "clark-test",
+          clientName: "Clark Test",
+          hostname: "notebook",
+          machineName: "notebook",
+          platform: "linux",
+          arch: "x64",
+          version: "0.1.0",
+          capabilities: [
+            {
+              name: "system.info",
+              description: "Retorna info",
+              requiresApproval: false,
+            },
+          ],
+          providers: [],
+          startedAt: new Date().toISOString(),
+        },
+      },
+    }));
+
+    const [registeredRaw] = await once(socket, "message");
+    const registered = JSON.parse(String(registeredRaw)) as {
+      type: string;
+      payload: { connectionId: string; accepted: boolean };
+    };
+    expect(registered.type).toBe("server.registered");
+    expect(registered.payload.accepted).toBe(true);
+    expect(typeof registered.payload.connectionId).toBe("string");
+
+    socket.send(JSON.stringify({
+      version: 1,
+      type: "client.heartbeat",
+      timestamp: new Date().toISOString(),
+      payload: {
+        clientId: "clark-test",
+      },
+    }));
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    const health = await server.inject({
+      method: "GET",
+      url: "/health",
+    });
+    expect(health.statusCode).toBe(200);
+    expect(health.json().metrics.edgeRuntime.connectedClients).toBe(1);
+
+    socket.close();
+    await new Promise((resolve) => setTimeout(resolve, 25));
     await server.close();
   });
 

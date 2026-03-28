@@ -15,6 +15,7 @@ flowchart TD
         subgraph Events ["Events (real-time)"]
             direction LR
             API --> EventsStream[GET /events/stream<br/>SSE stream]
+            API --> EdgeWs[WS /ws<br/>Clark handshake]
         end
 
         subgraph Chat ["Chat & Sessions"]
@@ -91,6 +92,7 @@ flowchart TD
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | /events/stream | Server-Sent Events stream |
+| WS | /ws | Clark handshake endpoint (`client.register`, `client.heartbeat`, `server.registered`) |
 
 ### Chat & Sessions
 | Method | Path | Description |
