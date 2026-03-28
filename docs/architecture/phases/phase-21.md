@@ -104,6 +104,9 @@ Exemplo:
   - timeout;
   - limite de tamanho de resposta;
   - sanitizacao basica.
+- Integracoes HTTP com segredo local podem usar profiles declarados
+  (`httpProfiles`) para que o Kael passe apenas `profile + path + query`,
+  enquanto base URL e headers sensiveis ficam apenas no Clark.
 - Toda task deve gerar logs estruturados com `taskId`, `capability`, duracao e
   status.
 - MCP HTTP entra apenas por bindings allowlistados; o Kael nao recebe acesso

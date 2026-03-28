@@ -20,9 +20,18 @@ const capabilitySchema = z.object({
   requiresApproval: z.boolean().default(false),
 });
 
+const httpProfileSchema = z.object({
+  baseUrl: z.string().url(),
+  allowedMethods: z.array(z.enum(['GET'])).default(['GET']),
+  timeoutMs: z.number().int().positive().optional(),
+  maxBytes: z.number().int().positive().optional(),
+  defaultHeaders: z.record(z.string(), z.string()).default({}),
+});
+
 const clarkFileConfigSchema = z.object({
   providers: z.record(z.string(), providerSchema).default({}),
   capabilities: z.array(capabilitySchema).default([]),
+  httpProfiles: z.record(z.string(), httpProfileSchema).default({}),
 });
 
 export type ClarkFileConfig = z.infer<typeof clarkFileConfigSchema>;

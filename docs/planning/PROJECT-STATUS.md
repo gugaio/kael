@@ -613,6 +613,33 @@ Pendencias:
 Proximo passo recomendado:
 - Confirmar a tool do MCP do Youbora e ativar o binding real `youbora.session.fetch` no `clark.config.json`.
 
+### 2026-03-28 - Fase 21.6: capability HTTP generica por profile local no Clark
+
+Resumo:
+- Adicionada capability `internal.http.profile_request` para permitir requests HTTP genericos sem expor tokens ou headers sensiveis no payload da task.
+- `clark.config.json` agora aceita `httpProfiles` com `baseUrl`, metodos permitidos e `defaultHeaders`, incluindo placeholders `${env:...}` resolvidos no startup.
+- O caso do Traceview passou a ser modelado como profile local, deixando o Kael ciente apenas de `profile + path + query`.
+
+Arquivos-chave:
+- `apps/clark/src/capabilities/internal-http-profile-request.ts`
+- `apps/clark/src/config/file-config.ts`
+- `apps/clark/src/config/settings.ts`
+- `apps/clark/clark.config.example.json`
+- `apps/clark/README.md`
+- `apps/clark/src/tests/internal-http-profile-request.test.ts`
+
+Checklist de validacao:
+- [x] `npm --prefix apps/clark run check`
+- [x] `npm --prefix apps/clark run test`
+- [x] `npm --prefix apps/clark run build`
+
+Pendencias:
+- O Kael ainda nao envia `task_request`; a capability ja existe no Clark, mas o dispatch remoto ainda nao foi implementado.
+- Ainda nao ha response shaping semantico para Traceview; o retorno atual continua sendo HTTP bruto controlado.
+
+Proximo passo recomendado:
+- Implementar o primeiro dispatch manual de `task_request` do Kael para o Clark usando `internal.http.profile_request` com profile `traceview`.
+
 ### 2026-03-28 - Fase 20.0: base de video intelligence com playback analysis e artifacts
 
 Resumo:

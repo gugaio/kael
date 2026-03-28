@@ -7,6 +7,15 @@
       "timeoutMs": 5000
     }
   },
+  "httpProfiles": {
+    "traceview": {
+      "baseUrl": "https://traceview.example.com",
+      "allowedMethods": ["GET"],
+      "defaultHeaders": {
+        "x-api-token": "${env:TRACEVIEW_API_TOKEN}"
+      }
+    }
+  },
   "capabilities": [
     {
       "name": "youbora.session.fetch",

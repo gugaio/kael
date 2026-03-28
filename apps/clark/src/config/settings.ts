@@ -17,6 +17,15 @@ export interface McpCapabilityBindingSettings {
   requiresApproval: boolean;
 }
 
+export interface HttpProfileSettings {
+  name: string;
+  baseUrl: string;
+  allowedMethods: Array<'GET'>;
+  timeoutMs: number;
+  maxBytes: number;
+  defaultHeaders: Record<string, string>;
+}
+
 export interface ClarkSettings {
   configPath: string;
   serverUrl: string;
@@ -32,6 +41,7 @@ export interface ClarkSettings {
   mcpBridgeBinary: string;
   mcpBridgeConfigPath?: string;
   mcpBridgeMaxOutputChars: number;
+  httpProfiles: HttpProfileSettings[];
   mcpHttpServers: McpHttpServerSettings[];
   mcpCapabilityBindings: McpCapabilityBindingSettings[];
   logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
@@ -58,6 +68,16 @@ export function loadSettings(source: NodeJS.ProcessEnv = process.env): ClarkSett
     mcpBridgeBinary: env.CLARK_MCP_BRIDGE_BINARY,
     mcpBridgeConfigPath: env.CLARK_MCP_BRIDGE_CONFIG_PATH?.trim() || undefined,
     mcpBridgeMaxOutputChars: env.CLARK_MCP_BRIDGE_MAX_OUTPUT_CHARS,
+    httpProfiles: Object.entries(fileConfig.config.httpProfiles).map(([name, profile]) => ({
+      name,
+      baseUrl: profile.baseUrl,
+      allowedMethods: profile.allowedMethods,
+      timeoutMs: profile.timeoutMs ?? env.CLARK_HTTP_TIMEOUT_MS,
+      maxBytes: profile.maxBytes ?? env.CLARK_HTTP_MAX_BYTES,
+      defaultHeaders: Object.fromEntries(
+        Object.entries(profile.defaultHeaders).map(([headerName, value]) => [headerName, resolveEnvPlaceholders(value, source)]),
+      ),
+    })),
     mcpHttpServers: Object.entries(fileConfig.config.providers)
       .filter(([, provider]) => provider.enabled)
       .map(([name, provider]) => ({
@@ -81,4 +101,8 @@ export function loadSettings(source: NodeJS.ProcessEnv = process.env): ClarkSett
       })),
     logLevel: env.CLARK_LOG_LEVEL,
   };
+}
+
+function resolveEnvPlaceholders(value: string, env: NodeJS.ProcessEnv): string {
+  return value.replace(/\$\{env:([A-Z0-9_]+)\}/g, (_match, key: string) => env[key] ?? '');
 }

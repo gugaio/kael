@@ -63,6 +63,7 @@ describe('mcp capability provider', () => {
       mcpBridgeBinary: 'mcporter',
       mcpBridgeConfigPath: undefined,
       mcpBridgeMaxOutputChars: 120000,
+      httpProfiles: [],
       mcpHttpServers: [
         {
           name: 'corp-observability',

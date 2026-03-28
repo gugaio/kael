@@ -48,17 +48,34 @@ describe('config', () => {
           requiresApproval: false,
         },
       ],
+      httpProfiles: {
+        traceview: {
+          baseUrl: 'https://traceview.example.com',
+          allowedMethods: ['GET'],
+          defaultHeaders: {
+            'x-api-token': '${env:TRACEVIEW_API_TOKEN}',
+          },
+        },
+      },
     });
 
     const settings = loadSettings({
       CLARK_SERVER_URL: 'ws://localhost:8080/ws',
       CLARK_CONFIG_PATH: configPath,
+      TRACEVIEW_API_TOKEN: 'secret-token',
     });
 
     expect(settings.mcpHttpServers).toHaveLength(1);
     expect(settings.mcpHttpServers[0]?.name).toBe('corp-observability');
     expect(settings.mcpHttpServers[0]?.kind).toBe('mcp-http');
     expect(settings.mcpCapabilityBindings[0]?.capabilityName).toBe('corp.session.fetch');
+    expect(settings.httpProfiles[0]).toMatchObject({
+      name: 'traceview',
+      baseUrl: 'https://traceview.example.com',
+      defaultHeaders: {
+        'x-api-token': 'secret-token',
+      },
+    });
   });
 });
 

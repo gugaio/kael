@@ -67,6 +67,7 @@ describe('edge client integration', () => {
       mcpBridgeBinary: 'mcporter',
       mcpBridgeConfigPath: undefined,
       mcpBridgeMaxOutputChars: 120000,
+      httpProfiles: [],
       mcpHttpServers: [],
       mcpCapabilityBindings: [],
       logLevel: 'error',

@@ -42,6 +42,7 @@ Capabilities:
 - `system.info`
 - `network.check`
 - `internal.http.fetch`
+- `internal.http.profile_request`
 - capabilities derivadas de MCP HTTP configurado, como `corp.session.fetch`
 
 Exemplos de ambiente que um Clark pode representar:
@@ -79,6 +80,7 @@ CLARK_HTTP_ALLOWLIST=localhost,127.0.0.1
 CLARK_CONFIG_PATH=./clark.config.json
 CLARK_MCP_BRIDGE_BINARY=mcporter
 CLARK_MCP_BRIDGE_CONFIG_PATH=
+TRACEVIEW_API_TOKEN=seu-token-local
 ```
 
 Exemplo de `clark.config.json`:
@@ -93,6 +95,15 @@ Exemplo de `clark.config.json`:
       "timeoutMs": 5000
     }
   },
+  "httpProfiles": {
+    "traceview": {
+      "baseUrl": "https://traceview.example.com",
+      "allowedMethods": ["GET"],
+      "defaultHeaders": {
+        "x-api-token": "${env:TRACEVIEW_API_TOKEN}"
+      }
+    }
+  },
   "capabilities": [
     {
       "name": "youbora.session.fetch",
@@ -102,6 +113,22 @@ Exemplo de `clark.config.json`:
       "requiresApproval": false
     }
   ]
+}
+```
+
+Exemplo de task usando profile HTTP local sem expor token ao Kael:
+
+```json
+{
+  "id": "task-001",
+  "capability": "internal.http.profile_request",
+  "input": {
+    "profile": "traceview",
+    "path": "/sessions/abc123",
+    "query": {
+      "includeMetrics": true
+    }
+  }
 }
 ```
 
