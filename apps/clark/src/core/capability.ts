@@ -12,6 +12,6 @@ export interface CapabilityContext {
 
 export interface Capability<TInput = unknown, TOutput = unknown> {
   descriptor: CapabilityDescriptor;
-  inputSchema: z.ZodType<TInput>;
+  inputSchema: z.ZodType<TInput, z.ZodTypeDef, unknown>;
   execute(input: TInput, context: CapabilityContext): Promise<TOutput>;
 }

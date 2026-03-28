@@ -4,6 +4,7 @@ import type {
   ClientRegisterMessage,
   ClientHeartbeatMessage,
   ClientTaskResultMessage,
+  ServerMessage,
   TaskResult,
 } from './types.js';
 import { serverMessageSchema } from './schemas.js';
@@ -40,6 +41,6 @@ export function serializeClientMessage(message: ClientMessage): string {
   return JSON.stringify(message);
 }
 
-export function parseServerMessage(raw: string) {
-  return serverMessageSchema.parse(JSON.parse(raw));
+export function parseServerMessage(raw: string): ServerMessage {
+  return serverMessageSchema.parse(JSON.parse(raw)) as ServerMessage;
 }
