@@ -229,6 +229,32 @@ export type EngineTooling = {
     clientId?: string;
     timeoutMs?: number;
   }) => Promise<EdgeCallResult>;
+  youboraMetricsGet: (params: {
+    fromDate: string;
+    toDate?: string;
+    metrics?: string;
+    type?: string;
+    granularity?: string;
+    filters?: unknown;
+    clientId?: string;
+    timeoutMs?: number;
+  }) => Promise<EdgeCallResult>;
+  youboraRawdataGet: (params: {
+    fromDate: string;
+    toDate?: string;
+    type?: string;
+    filters?: unknown;
+    clientId?: string;
+    timeoutMs?: number;
+  }) => Promise<EdgeCallResult>;
+  youboraEventsGet: (params: {
+    fromDate: string;
+    toDate?: string;
+    type?: string;
+    filters?: unknown;
+    clientId?: string;
+    timeoutMs?: number;
+  }) => Promise<EdgeCallResult>;
   memorySearch: (params: {
     query: string;
     maxResults?: number;

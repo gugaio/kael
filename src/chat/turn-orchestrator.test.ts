@@ -72,6 +72,9 @@ function createToolingStub(): EngineTooling {
     }),
     edgeList: () => [],
     edgeCall: async ({ capability }) => ({ ok: false, taskId: "t1", capability, error: "unused" }),
+    youboraMetricsGet: async () => ({ ok: true, taskId: "yb1", capability: "youbora.metrics.get", output: {} }),
+    youboraRawdataGet: async () => ({ ok: true, taskId: "yb2", capability: "youbora.rawdata.get", output: {} }),
+    youboraEventsGet: async () => ({ ok: true, taskId: "yb3", capability: "youbora.events.get", output: {} }),
     memorySearch: async () => [],
     memoryGet: async () => ({
       path: "MEMORY.md",

@@ -24,6 +24,14 @@ function extractUrl(text: string): string | null {
   return match[0].trim().replace(/[),.;]+$/, "");
 }
 
+function looksLikeYouboraBoundary(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const text = value.trim();
+  return /^last\d+(hours|days)$/i.test(text) || /^\d{4}-\d{2}-\d{2}/.test(text);
+}
+
 export class SimpleCommandEngine implements AgentEngine {
   async runTurn(input: EngineTurnInput): Promise<EngineTurnOutput> {
     const parsed = parseCommand(input.message);
@@ -38,7 +46,7 @@ export class SimpleCommandEngine implements AgentEngine {
     if (parsed.name === "/help") {
       return {
         reply:
-          "Comandos: /transcode <input> <output> | /hls <input> <playlist.m3u8> [segmentSeconds] | /capture <url> <output> [durationSeconds] | /probe <input> | /vlc <input|url> | /jobs | /browser-start | /browser-open <url> | /browser-snapshot | /browser-shot | /browser-click <selector> | /browser-type <selector> <texto> | /browser-press <tecla> [selector] | /browser-wait <selector> [timeoutMs] | /browser-close | /help",
+          "Comandos: /transcode <input> <output> | /hls <input> <playlist.m3u8> [segmentSeconds] | /capture <url> <output> [durationSeconds] | /probe <input> | /vlc <input|url> | /jobs | /youbora [metrics|rawdata|events] <fromDate> ... | /browser-start | /browser-open <url> | /browser-snapshot | /browser-shot | /browser-click <selector> | /browser-type <selector> <texto> | /browser-press <tecla> [selector] | /browser-wait <selector> [timeoutMs] | /browser-close | /help",
       };
     }
 
@@ -56,6 +64,88 @@ export class SimpleCommandEngine implements AgentEngine {
         .join("\n");
 
       return { reply: `Ultimos jobs:\n${summary}` };
+    }
+
+    if (parsed.name === "/youbora") {
+      const [firstArg, ...restArgs] = parsed.args;
+      const mode = ["metrics", "rawdata", "events"].includes(firstArg ?? "") ? firstArg : "metrics";
+      const args = mode === "metrics" && firstArg !== "metrics" && firstArg !== "rawdata" && firstArg !== "events"
+        ? parsed.args
+        : restArgs;
+
+      if (args.length < 1) {
+        return {
+          reply:
+            "Uso: /youbora [metrics|rawdata|events] <fromDate> [toDate] [metrics|type] [type|granularity|filtersJson] [granularity|filtersJson]",
+        };
+      }
+
+      if (mode === "metrics") {
+        const [fromDate, second, third, fourth, fifth] = args;
+        const hasToDate = looksLikeYouboraBoundary(second);
+        const toDate = hasToDate ? second : undefined;
+        const metrics = hasToDate ? third : second;
+        const type = hasToDate ? fourth : third;
+        const granularity = hasToDate ? fifth : fourth;
+        const result = await input.tooling.youboraMetricsGet({
+          fromDate,
+          toDate,
+          metrics,
+          type,
+          granularity,
+        });
+        return {
+          reply: [
+            `ok=${result.ok}`,
+            `capability=${result.capability}`,
+            `taskId=${result.taskId}`,
+            result.error ? `error=${result.error}` : "",
+            result.output !== undefined ? `output=${JSON.stringify(result.output)}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        };
+      }
+
+      const [fromDate, second, third, ...rest] = args;
+      const hasToDate = looksLikeYouboraBoundary(second);
+      const toDate = hasToDate ? second : undefined;
+      const type = hasToDate ? third : second;
+      const filtersJson = (hasToDate ? rest : [third, ...rest]).filter(Boolean).join(" ").trim() || undefined;
+      let filters: unknown = undefined;
+      if (filtersJson) {
+        try {
+          filters = JSON.parse(filtersJson);
+        } catch {
+          return {
+            reply: `filtersJson invalido: ${filtersJson}`,
+          };
+        }
+      }
+      const result = mode === "rawdata"
+        ? await input.tooling.youboraRawdataGet({
+            fromDate,
+            toDate,
+            type,
+            filters,
+          })
+        : await input.tooling.youboraEventsGet({
+            fromDate,
+            toDate,
+            type,
+            filters,
+          });
+      return {
+        reply: [
+          `ok=${result.ok}`,
+          `capability=${result.capability}`,
+          `taskId=${result.taskId}`,
+          result.error ? `error=${result.error}` : "",
+          result.output !== undefined ? `output=${JSON.stringify(result.output)}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      };
     }
 
     if (parsed.name === "/transcode") {

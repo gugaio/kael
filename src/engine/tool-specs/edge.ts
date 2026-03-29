@@ -194,9 +194,13 @@ export function createEdgePiTools(params: {
         ...(filters !== undefined ? { filters } : {}),
       };
 
-      const result = await params.tooling.edgeCall({
-        capability: "youbora.metrics.get",
-        input,
+      const result = await params.tooling.youboraMetricsGet({
+        fromDate: args.fromDate,
+        toDate: args.toDate,
+        metrics: args.metrics,
+        type: args.type,
+        granularity: args.granularity,
+        filters,
         clientId: args.clientId,
         timeoutMs: args.timeoutMs,
       });
@@ -231,5 +235,167 @@ export function createEdgePiTools(params: {
     },
   };
 
-  return [listTool, callTool, youboraMetricsGetTool];
+  const youboraRawdataGetTool: AgentTool = {
+    name: "youbora_rawdata_get",
+    label: "Youbora Rawdata Get",
+    description:
+      "Consulta sessoes brutas do Youbora via Clark/MCP usando a capability remota youbora.rawdata.get.",
+    parameters: {
+      type: "object",
+      properties: {
+        fromDate: { type: "string", description: "Data inicial ou relativo, ex.: last24hours" },
+        toDate: { type: "string", description: "Data final quando fromDate nao for relativo" },
+        type: { type: "string", description: "Tipo de conteudo, ex.: vod ou live" },
+        filtersJson: { type: "string", description: "Filtros adicionais em JSON serializado" },
+        clientId: { type: "string", description: "ClientId especifico do Clark quando houver mais de um conectado" },
+        timeoutMs: { type: "number", description: "Timeout total da task remota em milissegundos" },
+      },
+      required: ["fromDate"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const blocked = params.reserveEdgeCall();
+      if (blocked) {
+        return blocked.blocked;
+      }
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as {
+        fromDate: string;
+        toDate?: string;
+        type?: string;
+        filtersJson?: string;
+        clientId?: string;
+        timeoutMs?: number;
+      };
+      const intent = params.logToolStart("youbora_rawdata_get", args);
+      let filters: unknown;
+      if (args.filtersJson?.trim()) {
+        try {
+          filters = JSON.parse(args.filtersJson);
+        } catch (error) {
+          const blockedResult = params.makeBlockedResult({
+            reason: `invalid_youbora_filters_json:${error instanceof Error ? error.message : String(error)}`,
+          });
+          params.logToolEnd("youbora_rawdata_get", intent, blockedResult.details, startedAtMs);
+          return blockedResult;
+        }
+      }
+      const result = await params.tooling.youboraRawdataGet({
+        fromDate: args.fromDate,
+        toDate: args.toDate,
+        type: args.type,
+        filters,
+        clientId: args.clientId,
+        timeoutMs: args.timeoutMs,
+      });
+      const text = [
+        `ok=${result.ok}`,
+        `taskId=${result.taskId}`,
+        `capability=${result.capability}`,
+        `fromDate=${args.fromDate}`,
+        args.toDate ? `toDate=${args.toDate}` : "",
+        args.type ? `type=${args.type}` : "",
+        result.clientId ? `clientId=${result.clientId}` : "",
+        result.connectionId ? `connectionId=${result.connectionId}` : "",
+        typeof result.durationMs === "number" ? `durationMs=${result.durationMs}` : "",
+        result.errorCode ? `errorCode=${result.errorCode}` : "",
+        result.error ? `error=${result.error}` : "",
+        result.output !== undefined ? `output:\n${stringifyCompact(result.output)}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const response = { content: params.textResult(text), details: result };
+      params.logToolEnd(
+        "youbora_rawdata_get",
+        intent,
+        { status: result.ok ? "completed" : "failed", ...result },
+        startedAtMs,
+        result.ok ? `youbora_rawdata_get ${args.fromDate}` : `youbora_rawdata_get failed: ${result.error ?? "unknown"}`,
+      );
+      return response;
+    },
+  };
+
+  const youboraEventsGetTool: AgentTool = {
+    name: "youbora_events_get",
+    label: "Youbora Events Get",
+    description:
+      "Consulta eventos de player do Youbora via Clark/MCP usando a capability remota youbora.events.get.",
+    parameters: {
+      type: "object",
+      properties: {
+        fromDate: { type: "string", description: "Data inicial ou relativo, ex.: last24hours" },
+        toDate: { type: "string", description: "Data final quando fromDate nao for relativo" },
+        type: { type: "string", description: "Tipo de conteudo, ex.: vod ou live" },
+        filtersJson: { type: "string", description: "Filtros adicionais em JSON serializado" },
+        clientId: { type: "string", description: "ClientId especifico do Clark quando houver mais de um conectado" },
+        timeoutMs: { type: "number", description: "Timeout total da task remota em milissegundos" },
+      },
+      required: ["fromDate"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const blocked = params.reserveEdgeCall();
+      if (blocked) {
+        return blocked.blocked;
+      }
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as {
+        fromDate: string;
+        toDate?: string;
+        type?: string;
+        filtersJson?: string;
+        clientId?: string;
+        timeoutMs?: number;
+      };
+      const intent = params.logToolStart("youbora_events_get", args);
+      let filters: unknown;
+      if (args.filtersJson?.trim()) {
+        try {
+          filters = JSON.parse(args.filtersJson);
+        } catch (error) {
+          const blockedResult = params.makeBlockedResult({
+            reason: `invalid_youbora_filters_json:${error instanceof Error ? error.message : String(error)}`,
+          });
+          params.logToolEnd("youbora_events_get", intent, blockedResult.details, startedAtMs);
+          return blockedResult;
+        }
+      }
+      const result = await params.tooling.youboraEventsGet({
+        fromDate: args.fromDate,
+        toDate: args.toDate,
+        type: args.type,
+        filters,
+        clientId: args.clientId,
+        timeoutMs: args.timeoutMs,
+      });
+      const text = [
+        `ok=${result.ok}`,
+        `taskId=${result.taskId}`,
+        `capability=${result.capability}`,
+        `fromDate=${args.fromDate}`,
+        args.toDate ? `toDate=${args.toDate}` : "",
+        args.type ? `type=${args.type}` : "",
+        result.clientId ? `clientId=${result.clientId}` : "",
+        result.connectionId ? `connectionId=${result.connectionId}` : "",
+        typeof result.durationMs === "number" ? `durationMs=${result.durationMs}` : "",
+        result.errorCode ? `errorCode=${result.errorCode}` : "",
+        result.error ? `error=${result.error}` : "",
+        result.output !== undefined ? `output:\n${stringifyCompact(result.output)}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const response = { content: params.textResult(text), details: result };
+      params.logToolEnd(
+        "youbora_events_get",
+        intent,
+        { status: result.ok ? "completed" : "failed", ...result },
+        startedAtMs,
+        result.ok ? `youbora_events_get ${args.fromDate}` : `youbora_events_get failed: ${result.error ?? "unknown"}`,
+      );
+      return response;
+    },
+  };
+
+  return [listTool, callTool, youboraMetricsGetTool, youboraRawdataGetTool, youboraEventsGetTool];
 }

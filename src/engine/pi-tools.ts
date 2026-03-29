@@ -176,6 +176,12 @@ export function createPiShellTools(params: {
     if (tool === "youbora_metrics_get") {
       return "edge:call:youbora.metrics.get";
     }
+    if (tool === "youbora_rawdata_get") {
+      return "edge:call:youbora.rawdata.get";
+    }
+    if (tool === "youbora_events_get") {
+      return "edge:call:youbora.events.get";
+    }
     const command =
       rawParams && typeof rawParams === "object"
         ? String((rawParams as { command?: unknown }).command ?? "").toLowerCase()
@@ -528,7 +534,13 @@ export function createPiShellTools(params: {
   const [execTool, processTool] = capabilityTools.system;
   const [videoHlsInspectTool, videoProbeTool, playbackAnalyzeTool] = capabilityTools.video;
   const [jobsListTool, jobsGetTool, jobsLogTailTool] = capabilityTools.jobs;
-  const [edgeListTool, edgeCallTool, youboraMetricsGetTool] = capabilityTools.edge;
+  const [
+    edgeListTool,
+    edgeCallTool,
+    youboraMetricsGetTool,
+    youboraRawdataGetTool,
+    youboraEventsGetTool,
+  ] = capabilityTools.edge;
   const [mcpListTool, mcpCallTool] = capabilityTools.mcp;
   const [memorySearchTool, memoryGetTool, memoryWriteTool] = capabilityTools.memory;
   const [workspaceSearchTool, workspaceReadTool] = capabilityTools.workspace;
@@ -558,6 +570,8 @@ export function createPiShellTools(params: {
     edgeListTool,
     edgeCallTool,
     youboraMetricsGetTool,
+    youboraRawdataGetTool,
+    youboraEventsGetTool,
     mcpListTool,
     mcpCallTool,
     memorySearchTool,

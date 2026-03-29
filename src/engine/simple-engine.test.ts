@@ -52,6 +52,24 @@ function createTooling(
     }),
     edgeList: () => [],
     edgeCall: async ({ capability }) => ({ ok: false, taskId: "t1", capability, error: "unused" }),
+    youboraMetricsGet: async () => ({
+      ok: true,
+      taskId: "yb1",
+      capability: "youbora.metrics.get",
+      output: { rows: [] },
+    }),
+    youboraRawdataGet: async () => ({
+      ok: true,
+      taskId: "yb2",
+      capability: "youbora.rawdata.get",
+      output: { rows: [] },
+    }),
+    youboraEventsGet: async () => ({
+      ok: true,
+      taskId: "yb3",
+      capability: "youbora.events.get",
+      output: { rows: [] },
+    }),
     memorySearch: async () => [],
     memoryGet: async () => ({ path: "MEMORY.md", text: "", startLine: 1, endLine: 1 }),
     memoryWrite: async () => ({ path: "memory/2026-01-01.md" }),
@@ -237,5 +255,90 @@ describe("SimpleCommandEngine", () => {
       selector: "#search",
       text: "best local pizza",
     });
+  });
+
+  it("executa /youbora metrics com wrapper dedicado", async () => {
+    const youboraMetricsGet = vi.fn(async () => ({
+      ok: true,
+      taskId: "yb-metrics-1",
+      capability: "youbora.metrics.get",
+      output: { rows: [{ metric: "views", value: 10 }] },
+    }));
+    const engine = new SimpleCommandEngine();
+
+    const result = await engine.runTurn(
+      makeInput(
+        "/youbora metrics last24hours views,plays vod hour",
+        {
+          ...createTooling(),
+          youboraMetricsGet,
+        },
+      ),
+    );
+
+    expect(youboraMetricsGet).toHaveBeenCalledWith({
+      fromDate: "last24hours",
+      toDate: undefined,
+      metrics: "views,plays",
+      type: "vod",
+      granularity: "hour",
+    });
+    expect(result.reply).toContain("capability=youbora.metrics.get");
+  });
+
+  it("executa /youbora rawdata com wrapper dedicado", async () => {
+    const youboraRawdataGet = vi.fn(async () => ({
+      ok: true,
+      taskId: "yb-raw-1",
+      capability: "youbora.rawdata.get",
+      output: { rows: [] },
+    }));
+    const engine = new SimpleCommandEngine();
+
+    const result = await engine.runTurn(
+      makeInput(
+        '/youbora rawdata 2026-03-01 2026-03-02 vod {"account":"globo"}',
+        {
+          ...createTooling(),
+          youboraRawdataGet,
+        },
+      ),
+    );
+
+    expect(youboraRawdataGet).toHaveBeenCalledWith({
+      fromDate: "2026-03-01",
+      toDate: "2026-03-02",
+      type: "vod",
+      filters: { account: "globo" },
+    });
+    expect(result.reply).toContain("capability=youbora.rawdata.get");
+  });
+
+  it("executa /youbora events com wrapper dedicado", async () => {
+    const youboraEventsGet = vi.fn(async () => ({
+      ok: true,
+      taskId: "yb-events-1",
+      capability: "youbora.events.get",
+      output: { rows: [] },
+    }));
+    const engine = new SimpleCommandEngine();
+
+    const result = await engine.runTurn(
+      makeInput(
+        '/youbora events last24hours live {"event":"rebuffer"}',
+        {
+          ...createTooling(),
+          youboraEventsGet,
+        },
+      ),
+    );
+
+    expect(youboraEventsGet).toHaveBeenCalledWith({
+      fromDate: "last24hours",
+      toDate: undefined,
+      type: "live",
+      filters: { event: "rebuffer" },
+    });
+    expect(result.reply).toContain("capability=youbora.events.get");
   });
 });

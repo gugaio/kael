@@ -65,6 +65,44 @@ export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
         .filter((item) => (capability ? item.name === capability : true)),
     edgeCall: ({ capability, input, clientId, timeoutMs }) =>
       deps.edge.dispatchTask({ capability, input, clientId, timeoutMs }),
+    youboraMetricsGet: ({ fromDate, toDate, metrics, type, granularity, filters, clientId, timeoutMs }) =>
+      deps.edge.dispatchTask({
+        capability: "youbora.metrics.get",
+        input: {
+          fromDate,
+          ...(toDate ? { toDate } : {}),
+          ...(metrics ? { metrics } : {}),
+          ...(type ? { type } : {}),
+          ...(granularity ? { granularity } : {}),
+          ...(filters !== undefined ? { filters } : {}),
+        },
+        clientId,
+        timeoutMs,
+      }),
+    youboraRawdataGet: ({ fromDate, toDate, type, filters, clientId, timeoutMs }) =>
+      deps.edge.dispatchTask({
+        capability: "youbora.rawdata.get",
+        input: {
+          fromDate,
+          ...(toDate ? { toDate } : {}),
+          ...(type ? { type } : {}),
+          ...(filters !== undefined ? { filters } : {}),
+        },
+        clientId,
+        timeoutMs,
+      }),
+    youboraEventsGet: ({ fromDate, toDate, type, filters, clientId, timeoutMs }) =>
+      deps.edge.dispatchTask({
+        capability: "youbora.events.get",
+        input: {
+          fromDate,
+          ...(toDate ? { toDate } : {}),
+          ...(type ? { type } : {}),
+          ...(filters !== undefined ? { filters } : {}),
+        },
+        clientId,
+        timeoutMs,
+      }),
     memorySearch: ({ query, maxResults }) => deps.memory.search(query, maxResults),
     memoryGet: ({ path, from, lines }) => deps.memory.get({ relPath: path, from, lines }),
     memoryWrite: ({ content, target }) => deps.memory.write({ content, target }),
@@ -199,6 +237,27 @@ export function createChatOnlyTooling(tooling: EngineTooling): EngineTooling {
       taskId: "chat-only",
       capability,
       error: "chat-only mode: edge_call disabled",
+      errorCode: "chat_only_disabled",
+    }),
+    youboraMetricsGet: async () => ({
+      ok: false,
+      taskId: "chat-only",
+      capability: "youbora.metrics.get",
+      error: "chat-only mode: youbora_metrics_get disabled",
+      errorCode: "chat_only_disabled",
+    }),
+    youboraRawdataGet: async () => ({
+      ok: false,
+      taskId: "chat-only",
+      capability: "youbora.rawdata.get",
+      error: "chat-only mode: youbora_rawdata_get disabled",
+      errorCode: "chat_only_disabled",
+    }),
+    youboraEventsGet: async () => ({
+      ok: false,
+      taskId: "chat-only",
+      capability: "youbora.events.get",
+      error: "chat-only mode: youbora_events_get disabled",
       errorCode: "chat_only_disabled",
     }),
     browserCommand: async () => {

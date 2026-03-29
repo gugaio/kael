@@ -110,6 +110,8 @@ describe("createPiCapabilityTools", () => {
       "edge_list",
       "edge_call",
       "youbora_metrics_get",
+      "youbora_rawdata_get",
+      "youbora_events_get",
     ]);
     expect(registry.mcp.map((tool) => tool.name)).toEqual(["mcp_list", "mcp_call"]);
     expect(registry.memory.map((tool) => tool.name)).toEqual(["memory_search", "memory_get", "memory_write"]);

@@ -37,6 +37,32 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-29 - Youbora: rawdata/events e rota explicita /youbora
+
+Resumo:
+- Adicionados wrappers dedicados `youbora_rawdata_get` e `youbora_events_get` sobre capabilities remotas do Clark/MCP.
+- O fast-path operacional ganhou rota explicita `/youbora` com subcomandos `metrics`, `rawdata` e `events`.
+- O consumo do Youbora ficou menos dependente da escolha autonoma do modelo e mais previsivel para operacao/manual test.
+
+Arquivos-chave:
+- `src/engine/tool-specs/edge.ts`
+- `src/engine/pi-tools.ts`
+- `src/engine/simple-engine.ts`
+- `src/engine/types.ts`
+- `src/chat/tooling-factory.ts`
+- `docs/architecture/phases/phase-21.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/engine/simple-engine.test.ts src/engine/pi-tools.test.ts src/engine/tool-specs/index.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts`
+
+Pendencias:
+- Ainda falta definir um contrato mais ergonomico para filtros complexos do Youbora, evitando `filtersJson` cru nos subcomandos.
+- Ainda nao ha persistencia/observabilidade dedicada para consultas edge do Youbora.
+
+Proximo passo recomendado:
+- Adicionar um parser/contrato mais amigavel para filtros comuns do Youbora e registrar execucoes edge em trilha operacional persistente.
+
 ### 2026-03-29 - Youbora: remover heuristica lexical no adapter
 
 Resumo:

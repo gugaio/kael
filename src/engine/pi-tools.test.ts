@@ -290,7 +290,7 @@ describe("createPiShellTools edge tools", () => {
   });
 
   it("exposes youbora_metrics_get as typed wrapper over edge_call", async () => {
-    const edgeCall = vi.fn(async () => ({
+    const youboraMetricsGet = vi.fn(async () => ({
       ok: true,
       taskId: "task-yb-1",
       clientId: "clark-1",
@@ -302,7 +302,7 @@ describe("createPiShellTools edge tools", () => {
     const tools = createPiShellTools({
       sessionKey: "s-youbora",
       tooling: createTooling({
-        edgeCall,
+        youboraMetricsGet,
       }),
     });
     const tool = tools.find((item) => item.name === "youbora_metrics_get");
@@ -316,13 +316,13 @@ describe("createPiShellTools edge tools", () => {
     });
     const text = String((result.content?.[0] as { text?: unknown })?.text ?? "");
 
-    expect(edgeCall).toHaveBeenCalledWith({
-      capability: "youbora.metrics.get",
-      input: {
-        fromDate: "last24hours",
-        metrics: "views,plays",
-        type: "vod",
-      },
+    expect(youboraMetricsGet).toHaveBeenCalledWith({
+      fromDate: "last24hours",
+      toDate: undefined,
+      metrics: "views,plays",
+      type: "vod",
+      granularity: undefined,
+      filters: undefined,
       clientId: "clark-1",
       timeoutMs: undefined,
     });
@@ -330,6 +330,80 @@ describe("createPiShellTools edge tools", () => {
     expect(text).toContain("capability=youbora.metrics.get");
     expect(text).toContain("fromDate=last24hours");
     expect(text).toContain("metrics=views,plays");
+  });
+
+  it("exposes youbora_rawdata_get as typed wrapper over tooling method", async () => {
+    const youboraRawdataGet = vi.fn(async () => ({
+      ok: true,
+      taskId: "task-yb-raw-1",
+      clientId: "clark-1",
+      connectionId: "conn-1",
+      capability: "youbora.rawdata.get",
+      durationMs: 9,
+      output: { rows: [] },
+    }));
+    const tools = createPiShellTools({
+      sessionKey: "s-youbora-raw",
+      tooling: createTooling({
+        youboraRawdataGet,
+      }),
+    });
+    const tool = tools.find((item) => item.name === "youbora_rawdata_get");
+    expect(tool).toBeTruthy();
+
+    const result = await tool!.execute("tc-yb-raw", {
+      fromDate: "last24hours",
+      type: "vod",
+      filtersJson: "{\"country\":\"br\"}",
+    });
+    const text = String((result.content?.[0] as { text?: unknown })?.text ?? "");
+
+    expect(youboraRawdataGet).toHaveBeenCalledWith({
+      fromDate: "last24hours",
+      toDate: undefined,
+      type: "vod",
+      filters: { country: "br" },
+      clientId: undefined,
+      timeoutMs: undefined,
+    });
+    expect(text).toContain("capability=youbora.rawdata.get");
+  });
+
+  it("exposes youbora_events_get as typed wrapper over tooling method", async () => {
+    const youboraEventsGet = vi.fn(async () => ({
+      ok: true,
+      taskId: "task-yb-events-1",
+      clientId: "clark-1",
+      connectionId: "conn-1",
+      capability: "youbora.events.get",
+      durationMs: 9,
+      output: { rows: [] },
+    }));
+    const tools = createPiShellTools({
+      sessionKey: "s-youbora-events",
+      tooling: createTooling({
+        youboraEventsGet,
+      }),
+    });
+    const tool = tools.find((item) => item.name === "youbora_events_get");
+    expect(tool).toBeTruthy();
+
+    const result = await tool!.execute("tc-yb-events", {
+      fromDate: "last24hours",
+      type: "live",
+      filtersJson: "{\"event\":\"rebuffer\"}",
+    });
+    const text = String((result.content?.[0] as { text?: unknown })?.text ?? "");
+
+    expect(youboraEventsGet).toHaveBeenCalledWith({
+      fromDate: "last24hours",
+      toDate: undefined,
+      type: "live",
+      filters: { event: "rebuffer" },
+      clientId: undefined,
+      timeoutMs: undefined,
+    });
+    expect(text).toContain("capability=youbora.events.get");
   });
 });
 

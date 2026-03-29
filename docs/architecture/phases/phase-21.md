@@ -135,6 +135,12 @@ Exemplo:
   - `edge_list`
   - `edge_call`
   - `youbora_metrics_get`
+  - `youbora_rawdata_get`
+  - `youbora_events_get`
+- O fast-path operacional do Kael agora tambem pode consultar Youbora sem depender da escolha do modelo:
+  - `/youbora metrics ...`
+  - `/youbora rawdata ...`
+  - `/youbora events ...`
 
 ## Proximos incrementos
 
