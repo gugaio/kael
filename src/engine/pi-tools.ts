@@ -82,6 +82,7 @@ export function createPiShellTools(params: {
     maxWebSearchCalls?: number;
     maxWebResearchCalls?: number;
     maxMcpCalls?: number;
+    maxEdgeCalls?: number;
     maxBrowserCalls?: number;
     maxBrowserInteractionCalls?: number;
   };
@@ -101,6 +102,7 @@ export function createPiShellTools(params: {
   let webSearchCalls = 0;
   let webResearchCalls = 0;
   let mcpCalls = 0;
+  let edgeCalls = 0;
   let browserCalls = 0;
   let browserInteractionCalls = 0;
   let imageGenerateCalls = 0;
@@ -110,6 +112,7 @@ export function createPiShellTools(params: {
   const maxWebSearchCalls = Math.max(1, Math.floor(params.budget?.maxWebSearchCalls ?? 3));
   const maxWebResearchCalls = Math.max(1, Math.floor(params.budget?.maxWebResearchCalls ?? 2));
   const maxMcpCalls = Math.max(1, Math.floor((params.budget as { maxMcpCalls?: number } | undefined)?.maxMcpCalls ?? 4));
+  const maxEdgeCalls = Math.max(1, Math.floor((params.budget as { maxEdgeCalls?: number } | undefined)?.maxEdgeCalls ?? 4));
   const maxBrowserCalls = Math.max(1, Math.floor(params.budget?.maxBrowserCalls ?? 8));
   const maxBrowserInteractionCalls = Math.max(1, Math.floor(params.budget?.maxBrowserInteractionCalls ?? 6));
   const maxImageGenerateCalls = 1;
@@ -159,6 +162,16 @@ export function createPiShellTools(params: {
           ? String((rawParams as { target?: unknown }).target ?? "")
           : "";
       return target ? `mcp:call:${target}` : "mcp:call";
+    }
+    if (tool === "edge_list") {
+      return "edge:list";
+    }
+    if (tool === "edge_call") {
+      const capability =
+        rawParams && typeof rawParams === "object"
+          ? String((rawParams as { capability?: unknown }).capability ?? "")
+          : "";
+      return capability ? `edge:call:${capability}` : "edge:call";
     }
     const command =
       rawParams && typeof rawParams === "object"
@@ -395,6 +408,20 @@ export function createPiShellTools(params: {
     return null;
   };
 
+  const reserveEdgeCall = (): { blocked: BlockedToolResult } | null => {
+    if (toolCalls >= maxToolCalls) {
+      const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+      return { blocked: blockByBudget({ tool: "edge_call", reason, emitEvent: true }) };
+    }
+    if (edgeCalls >= maxEdgeCalls) {
+      const reason = `edge_call_budget_exceeded:${edgeCalls}/${maxEdgeCalls}`;
+      return { blocked: blockByBudget({ tool: "edge_call", reason, emitEvent: true }) };
+    }
+    toolCalls += 1;
+    edgeCalls += 1;
+    return null;
+  };
+
   const capabilityTools = createPiCapabilityTools({
     system: {
       sessionKey: params.sessionKey,
@@ -422,6 +449,15 @@ export function createPiShellTools(params: {
       tooling: params.tooling,
       textResult,
       reserveToolCall,
+      logToolStart,
+      logToolEnd: (tool, intent, result, startedAtMs, summary) =>
+        logToolEnd(tool, intent, result, startedAtMs, summary),
+    },
+    edge: {
+      tooling: params.tooling,
+      textResult,
+      makeBlockedResult,
+      reserveEdgeCall,
       logToolStart,
       logToolEnd: (tool, intent, result, startedAtMs, summary) =>
         logToolEnd(tool, intent, result, startedAtMs, summary),
@@ -489,6 +525,7 @@ export function createPiShellTools(params: {
   const [execTool, processTool] = capabilityTools.system;
   const [videoHlsInspectTool, videoProbeTool, playbackAnalyzeTool] = capabilityTools.video;
   const [jobsListTool, jobsGetTool, jobsLogTailTool] = capabilityTools.jobs;
+  const [edgeListTool, edgeCallTool] = capabilityTools.edge;
   const [mcpListTool, mcpCallTool] = capabilityTools.mcp;
   const [memorySearchTool, memoryGetTool, memoryWriteTool] = capabilityTools.memory;
   const [workspaceSearchTool, workspaceReadTool] = capabilityTools.workspace;
@@ -515,6 +552,8 @@ export function createPiShellTools(params: {
     jobsListTool,
     jobsGetTool,
     jobsLogTailTool,
+    edgeListTool,
+    edgeCallTool,
     mcpListTool,
     mcpCallTool,
     memorySearchTool,

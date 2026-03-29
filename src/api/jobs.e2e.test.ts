@@ -8,6 +8,7 @@ import type { Readable, Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import type { KaelApp } from "../app.js";
 import { createApiServer } from "./server.js";
+import { EdgeRuntime } from "../edge/runtime.js";
 import { JobManager } from "../jobs/manager.js";
 import { JobStore } from "../jobs/store.js";
 import { VideoCapability, VideoJobService } from "../capabilities/video/index.js";
@@ -398,6 +399,7 @@ async function createJobsServer(params: {
         lastCallAt: null,
       }),
     } as unknown as KaelApp["mcp"],
+    edge: new EdgeRuntime(),
   };
 
   return { server: createApiServer(app), jobs };

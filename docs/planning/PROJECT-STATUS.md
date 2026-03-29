@@ -35,6 +35,38 @@ Proximo passo recomendado:
 - <proximo passo>
 ```
 
+## Registro de Atualizacoes por Commit
+
+### 2026-03-29 - Edge/Clark: dispatch remoto baseline no Kael
+
+Resumo:
+- `EdgeRuntime` do Kael deixou de ser apenas registry/heartbeat e passou a despachar `server.task.request` com correlacao por `taskId`, timeout e reconciliacao de `client.task.result`.
+- `KaelApp` agora expoe runtime edge compartilhado entre app, API e tooling de chat/PI.
+- O agente ganhou tools genericas `edge_list` e `edge_call` para listar capabilities remotas e executar uma capability via Clark.
+- Cobertura de testes atualizada com roundtrip WebSocket real entre Kael e Clark no fluxo `task_request/task_result`.
+
+Arquivos-chave:
+- `src/edge/runtime.ts`
+- `src/edge/protocol.ts`
+- `src/api/server.ts`
+- `src/chat/tooling-factory.ts`
+- `src/engine/tool-specs/edge.ts`
+- `src/engine/pi-tools.ts`
+- `src/api/server.test.ts`
+- `docs/architecture/phases/phase-21.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/api/server.test.ts src/engine/pi-tools.test.ts src/engine/tool-specs/index.test.ts`
+
+Pendencias:
+- Ainda nao existe capability de negocio dedicada para Youbora/NPAW; o baseline atual e generico.
+- Execucoes remotas ainda nao entram na trilha persistente de jobs/observabilidade do Kael.
+- Ainda falta auth/approval entre Kael e Clark.
+
+Proximo passo recomendado:
+- Implementar a primeira capability remota de negocio (Youbora/NPAW) por cima de `edge_call`, com contrato dedicado e rastreabilidade operacional.
+
 ## Roadmap de Fases
 
 ### Fase 0 - Foundation

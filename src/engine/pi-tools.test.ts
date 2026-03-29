@@ -212,6 +212,84 @@ describe("createPiShellTools jobs/plans state tools", () => {
   });
 });
 
+describe("createPiShellTools edge tools", () => {
+  it("exposes edge_list and edge_call using tooling state methods", async () => {
+    const tools = createPiShellTools({
+      sessionKey: "s-edge",
+      tooling: createTooling({
+        edgeList: () => [
+          {
+            clientId: "clark-1",
+            clientName: "Clark 1",
+            connectionId: "conn-1",
+            name: "system.info",
+            description: "Info",
+            requiresApproval: false,
+            providerNames: [],
+            lastHeartbeatAt: null,
+          },
+        ],
+        edgeCall: async () => ({
+          ok: true,
+          taskId: "task-1",
+          clientId: "clark-1",
+          connectionId: "conn-1",
+          capability: "system.info",
+          durationMs: 12,
+          output: { hostname: "notebook" },
+        }),
+      }),
+    });
+    const listTool = tools.find((item) => item.name === "edge_list");
+    const callTool = tools.find((item) => item.name === "edge_call");
+    expect(listTool).toBeTruthy();
+    expect(callTool).toBeTruthy();
+
+    const listResult = await listTool!.execute("tc-list", {});
+    const callResult = await callTool!.execute("tc-call", {
+      capability: "system.info",
+      inputJson: "{}",
+    });
+    const listText = String((listResult.content?.[0] as { text?: unknown })?.text ?? "");
+    const callText = String((callResult.content?.[0] as { text?: unknown })?.text ?? "");
+
+    expect(listText).toContain("count=1");
+    expect(listText).toContain("system.info");
+    expect(callText).toContain("ok=true");
+    expect(callText).toContain("taskId=task-1");
+    expect(callText).toContain("hostname");
+  });
+
+  it("blocks edge_call when edge turn budget is exhausted", async () => {
+    const tools = createPiShellTools({
+      sessionKey: "s-edge-budget",
+      tooling: createTooling({
+        edgeCall: async () => ({
+          ok: true,
+          taskId: "task-1",
+          capability: "system.info",
+          output: {},
+        }),
+      }),
+      budget: {
+        maxToolCalls: 5,
+        maxEdgeCalls: 1,
+      },
+    });
+    const tool = tools.find((item) => item.name === "edge_call");
+    expect(tool).toBeTruthy();
+
+    const first = await tool!.execute("tc-1", { capability: "system.info" });
+    const second = await tool!.execute("tc-2", { capability: "system.info" });
+
+    const firstText = String((first.content?.[0] as { text?: unknown })?.text ?? "");
+    const secondText = String((second.content?.[0] as { text?: unknown })?.text ?? "");
+    expect(firstText).toContain("ok=true");
+    expect(secondText).toContain("blocked=true");
+    expect(secondText).toContain("edge_call_budget_exceeded:1/1");
+  });
+});
+
 describe("createPiShellTools mcp tools", () => {
   it("exposes mcp_list and mcp_call using tooling state methods", async () => {
     const tools = createPiShellTools({

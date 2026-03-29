@@ -39,6 +39,7 @@ import { NoopImageGeneratorService, OpenAiImageGeneratorService } from "./media/
 import { BrowserCapability, BrowserToolService } from "./capabilities/browser/index.js";
 import { SkillService } from "./skills/service.js";
 import { McpBridgeService, type McpRuntime } from "./tools/mcp/mcp-bridge-service.js";
+import { EdgeRuntime } from "./edge/runtime.js";
 
 export type KaelApp = {
   config: KaelConfig;
@@ -51,6 +52,7 @@ export type KaelApp = {
   automation: AutomationService;
   shell: ShellRuntime;
   mcp: McpRuntime;
+  edge: EdgeRuntime;
   emailIngest?: {
     getRuntimeTelemetrySnapshot(): EmailIngestRuntimeTelemetry;
   };
@@ -110,6 +112,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     allowStdio: config.mcp.allowStdio,
   });
   await mcp.init();
+  const edge = new EdgeRuntime();
   const memory = new MemoryService({
     workspaceRoot: config.shell.workspaceRoot,
     storageRoot: path.join(resolveKaelHome(), "data", "memory"),
@@ -162,6 +165,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     jobs,
     shell,
     mcp,
+    edge,
     videoInspect,
     memory,
     workspace,
@@ -342,6 +346,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     automation,
     shell,
     mcp,
+    edge,
     ...(emailIngest ? { emailIngest } : {}),
   };
 }

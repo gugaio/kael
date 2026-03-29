@@ -11,7 +11,6 @@ import {
   createPlannerReconcileRuntime,
 } from "../planner/runtime.js";
 import { createRegisteredMessage, parseEdgeInboundMessage } from "../edge/protocol.js";
-import { EdgeRuntime } from "../edge/runtime.js";
 
 type RequestWithStart = {
   _kaelStartNs?: bigint;
@@ -254,7 +253,6 @@ async function withIdempotency<T>(params: {
 
 export function createApiServer(app: KaelApp): FastifyInstance {
   const server = Fastify({ logger: false });
-  const edgeRuntime = new EdgeRuntime();
   const edgeWsServer = new WebSocketServer({ noServer: true });
   const idempotency = new IdempotencyStore(app.config.idempotency.ttlMs);
   const plannerExecuteRuntime = createPlannerExecuteRuntime(app);
@@ -304,7 +302,9 @@ export function createApiServer(app: KaelApp): FastifyInstance {
       try {
         const message = parseEdgeInboundMessage(rawText);
         if (message.type === "client.register") {
-          const record = edgeRuntime.registerClient(message.payload.client);
+          const record = app.edge.registerClient(message.payload.client, {
+            send: (payload: string) => ws.send(payload),
+          });
           connectionId = record.connectionId;
           kaelLogger.info("edge.client.registered", {
             connectionId,
@@ -322,18 +322,36 @@ export function createApiServer(app: KaelApp): FastifyInstance {
           return;
         }
 
-        if (!connectionId) {
-          kaelLogger.warn("edge.client.heartbeat.before_register", {
+        if (message.type === "client.heartbeat") {
+          if (!connectionId) {
+            kaelLogger.warn("edge.client.heartbeat.before_register", {
+              clientId: message.payload.clientId,
+            });
+            return;
+          }
+          const record = app.edge.markHeartbeat(connectionId);
+          kaelLogger.info("edge.client.heartbeat", {
+            connectionId,
             clientId: message.payload.clientId,
+            known: !!record,
           });
           return;
         }
 
-        const record = edgeRuntime.markHeartbeat(connectionId);
-        kaelLogger.info("edge.client.heartbeat", {
+        if (!connectionId) {
+          kaelLogger.warn("edge.client.task_result.before_register", {
+            taskId: message.payload.result.taskId,
+          });
+          return;
+        }
+
+        const resolved = app.edge.resolveTaskResult(connectionId, message.payload.result);
+        kaelLogger.info("edge.client.task_result", {
           connectionId,
-          clientId: message.payload.clientId,
-          known: !!record,
+          taskId: message.payload.result.taskId,
+          capability: message.payload.result.capability,
+          success: message.payload.result.success,
+          resolved,
         });
       } catch (error) {
         kaelLogger.warn("edge.client.protocol_error", {
@@ -346,7 +364,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
       if (!connectionId) {
         return;
       }
-      const removed = edgeRuntime.removeClient(connectionId);
+      const removed = app.edge.removeClient(connectionId);
       kaelLogger.info("edge.client.disconnected", {
         connectionId,
         clientId: removed?.client.clientId ?? null,
@@ -434,7 +452,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
           disabled: schedules.length - enabledSchedules,
         },
         edgeRuntime: {
-          connectedClients: edgeRuntime.listClients().length,
+          connectedClients: app.edge.listClients().length,
         },
       },
     };

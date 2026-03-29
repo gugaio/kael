@@ -70,6 +70,8 @@ function createToolingStub(): EngineTooling {
       format: "json",
       output: {},
     }),
+    edgeList: () => [],
+    edgeCall: async ({ capability }) => ({ ok: false, taskId: "t1", capability, error: "unused" }),
     memorySearch: async () => [],
     memoryGet: async () => ({
       path: "MEMORY.md",

@@ -39,6 +39,14 @@ describe("createPiCapabilityTools", () => {
         logToolStart,
         logToolEnd,
       },
+      edge: {
+        tooling: {} as never,
+        textResult,
+        makeBlockedResult,
+        reserveEdgeCall: reserveNone,
+        logToolStart,
+        logToolEnd,
+      },
       mcp: {
         sessionKey: "s1",
         tooling: {} as never,
@@ -92,8 +100,13 @@ describe("createPiCapabilityTools", () => {
     });
 
     expect(registry.system.map((tool) => tool.name)).toEqual(["exec", "process"]);
-    expect(registry.video.map((tool) => tool.name)).toEqual(["video_hls_inspect", "video_probe"]);
+    expect(registry.video.map((tool) => tool.name)).toEqual([
+      "video_hls_inspect",
+      "video_probe",
+      "playback_analyze",
+    ]);
     expect(registry.jobs.map((tool) => tool.name)).toEqual(["jobs_list", "jobs_get", "jobs_log_tail"]);
+    expect(registry.edge.map((tool) => tool.name)).toEqual(["edge_list", "edge_call"]);
     expect(registry.mcp.map((tool) => tool.name)).toEqual(["mcp_list", "mcp_call"]);
     expect(registry.memory.map((tool) => tool.name)).toEqual(["memory_search", "memory_get", "memory_write"]);
     expect(registry.workspace.map((tool) => tool.name)).toEqual(["workspace_search", "workspace_read"]);
