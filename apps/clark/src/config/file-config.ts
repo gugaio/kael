@@ -26,6 +26,16 @@ const httpProfileSchema = z.object({
   timeoutMs: z.number().int().positive().optional(),
   maxBytes: z.number().int().positive().optional(),
   defaultHeaders: z.record(z.string(), z.string()).default({}),
+  pathTemplates: z.record(z.string(), z.object({
+    description: z.string().min(1),
+    path: z.string().min(1),
+    method: z.literal('GET').default('GET'),
+    params: z.array(z.object({
+      name: z.string().min(1),
+      description: z.string().min(1),
+      required: z.boolean().default(true),
+    })).default([]),
+  })).default({}),
 });
 
 const clarkFileConfigSchema = z.object({

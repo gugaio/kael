@@ -24,6 +24,17 @@ export interface HttpProfileSettings {
   timeoutMs: number;
   maxBytes: number;
   defaultHeaders: Record<string, string>;
+  pathTemplates: Array<{
+    name: string;
+    description: string;
+    method: 'GET';
+    pathTemplate: string;
+    params: Array<{
+      name: string;
+      description: string;
+      required: boolean;
+    }>;
+  }>;
 }
 
 export interface ClarkSettings {
@@ -77,6 +88,13 @@ export function loadSettings(source: NodeJS.ProcessEnv = process.env): ClarkSett
       defaultHeaders: Object.fromEntries(
         Object.entries(profile.defaultHeaders).map(([headerName, value]) => [headerName, resolveEnvPlaceholders(value, source)]),
       ),
+      pathTemplates: Object.entries(profile.pathTemplates).map(([templateName, template]) => ({
+        name: templateName,
+        description: template.description,
+        method: template.method,
+        pathTemplate: template.path,
+        params: template.params,
+      })),
     })),
     mcpHttpServers: Object.entries(fileConfig.config.providers)
       .filter(([, provider]) => provider.enabled)

@@ -1,9 +1,27 @@
 import type { z } from 'zod';
 
+export interface CapabilityParameterDescriptor {
+  name: string;
+  description: string;
+  required: boolean;
+}
+
+export interface CapabilityTemplateDescriptor {
+  name: string;
+  description: string;
+  method: 'GET';
+  pathTemplate: string;
+  params: CapabilityParameterDescriptor[];
+}
+
 export interface CapabilityDescriptor {
   name: string;
   description: string;
   requiresApproval: boolean;
+  metadata?: {
+    httpProfile?: string;
+    templates?: CapabilityTemplateDescriptor[];
+  };
 }
 
 export interface CapabilityContext {
