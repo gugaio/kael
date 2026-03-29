@@ -104,4 +104,58 @@ describe('mcp capability provider', () => {
       server.close((error) => (error ? reject(error) : resolve()));
     });
   });
+
+  it('registers configured bindings even when provider discovery fails', async () => {
+    const settings: ClarkSettings = {
+      configPath: '/tmp/clark.config.json',
+      serverUrl: 'ws://localhost:8080/ws',
+      clientId: 'test',
+      clientName: 'Test',
+      heartbeatIntervalMs: 1000,
+      reconnectBaseDelayMs: 1000,
+      reconnectMaxDelayMs: 5000,
+      taskTimeoutMs: 5000,
+      httpAllowlist: ['localhost'],
+      httpTimeoutMs: 3000,
+      httpMaxBytes: 4096,
+      mcpBridgeBinary: 'mcporter',
+      mcpBridgeConfigPath: undefined,
+      mcpBridgeMaxOutputChars: 120000,
+      httpProfiles: [],
+      mcpHttpServers: [
+        {
+          name: 'youbora',
+          kind: 'mcp-http-bridge',
+          baseUrl: 'https://youbora.example.com/mcp',
+          timeoutMs: 3000,
+        },
+      ],
+      mcpCapabilityBindings: [
+        {
+          capabilityName: 'youbora.metrics.get',
+          description: 'Consulta metricas no Youbora',
+          serverName: 'youbora',
+          toolName: 'get_metrics',
+          requiresApproval: false,
+        },
+      ],
+      logLevel: 'error',
+    };
+
+    const result = await createRegistryWithMcpCapabilities(
+      new CapabilityRegistry(),
+      settings,
+      pino({ enabled: false }),
+    );
+
+    expect(result.providers).toEqual([
+      {
+        name: 'youbora',
+        kind: 'mcp-http-bridge',
+        status: 'unreachable',
+        capabilities: [],
+      },
+    ]);
+    expect(result.registry.get('youbora.metrics.get')).toBeDefined();
+  });
 });

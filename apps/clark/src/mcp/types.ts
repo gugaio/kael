@@ -6,7 +6,7 @@ export interface McpToolDescriptor {
 
 export interface McpProviderInfo {
   name: string;
-  kind: 'mcp-http';
+  kind: 'mcp-http' | 'mcp-http-bridge';
   status: 'available' | 'unreachable';
   capabilities: string[];
 }

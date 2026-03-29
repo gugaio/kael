@@ -80,6 +80,7 @@ CLARK_HTTP_ALLOWLIST=localhost,127.0.0.1
 CLARK_CONFIG_PATH=./clark.config.json
 CLARK_MCP_BRIDGE_BINARY=mcporter
 CLARK_MCP_BRIDGE_CONFIG_PATH=
+CLARK_MCP_BRIDGE_MAX_OUTPUT_CHARS=500000
 TRACEVIEW_API_TOKEN=seu-token-local
 ```
 
@@ -106,10 +107,24 @@ Exemplo de `clark.config.json`:
   },
   "capabilities": [
     {
-      "name": "youbora.session.fetch",
-      "description": "Busca metricas de uma session no Youbora via MCP",
+      "name": "youbora.metrics.get",
+      "description": "Consulta metricas agregadas de QoE no Youbora",
       "provider": "youbora",
-      "tool": "replace_with_real_tool_name",
+      "tool": "get_metrics",
+      "requiresApproval": false
+    },
+    {
+      "name": "youbora.rawdata.get",
+      "description": "Consulta sessoes brutas no Youbora",
+      "provider": "youbora",
+      "tool": "get_rawdata",
+      "requiresApproval": false
+    },
+    {
+      "name": "youbora.events.get",
+      "description": "Consulta eventos de player no Youbora",
+      "provider": "youbora",
+      "tool": "get_events",
       "requiresApproval": false
     }
   ]

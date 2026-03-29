@@ -640,6 +640,37 @@ Pendencias:
 Proximo passo recomendado:
 - Implementar o primeiro dispatch manual de `task_request` do Kael para o Clark usando `internal.http.profile_request` com profile `traceview`.
 
+### 2026-03-28 - Fase 21.7: hardening do bridge MCP HTTP/SSE no Clark
+
+Resumo:
+- Corrigido o adapter `mcp-http-bridge` para interpretar o envelope JSON real do `mcporter list`, em vez de assumir array cru, preservando mensagens uteis quando o provider SSE estiver offline.
+- Ajustado o parsing de retorno do `mcporter call` para aceitar JSON ou texto simples sem quebrar a capability.
+- Alinhado o `clark.config.json` e o exemplo do Clark com os nomes reais das tools expostas pelo MCP do Youbora (`get_metrics`, `get_rawdata`, `get_events`, `get_filter_help`, `get_metrics_help`).
+- Adicionado fallback no bootstrap do Clark para registrar bindings MCP explicitamente configurados mesmo quando o discovery via `tools/list` falha.
+- Endurecido o parser do bridge para extrair o JSON mesmo quando o `mcporter` imprime warnings ao redor do payload, e ampliado o buffer default para respostas grandes de `tools/list`.
+- Adicionado fallback heuristico para recuperar nomes de tools a partir de output JSON malformado do `mcporter list`, evitando falha total do `doctor`/bootstrap quando o payload vem truncado ou corrompido.
+- Alterada a captura do subprocesso `mcporter` no bridge do Clark para usar arquivos temporarios em vez de pipes, mitigando truncamento de stdout observado em `list --json` quando o CLI escreve muito volume para processos Node.
+
+Arquivos-chave:
+- `apps/clark/src/mcp/bridge-http-client.ts`
+- `apps/clark/src/mcp/capability-provider.ts`
+- `apps/clark/src/mcp/types.ts`
+- `apps/clark/clark.config.json`
+- `apps/clark/clark.config.example.json`
+- `apps/clark/README.md`
+
+Checklist de validacao:
+- [x] `npm --prefix apps/clark run check`
+- [ ] `npm --prefix apps/clark run test` (falhou por dependencia opcional ausente do `rolldown` no ambiente local)
+- [ ] `npm --prefix apps/clark run doctor` (bloqueado no sandbox pelo `tsx` abrindo pipe IPC)
+
+Pendencias:
+- Confirmar em ambiente com rede o `doctor` contra o endpoint real do Youbora para validar discovery e bindings fim a fim.
+- Resolver a dependencia opcional ausente do `rolldown` no ambiente local para voltar a executar a suite Vitest do Clark.
+
+Proximo passo recomendado:
+- Implementar o primeiro dispatch manual de `task_request` do Kael para o Clark usando `internal.http.profile_request` com profile `traceview`.
+
 ### 2026-03-28 - Fase 20.0: base de video intelligence com playback analysis e artifacts
 
 Resumo:

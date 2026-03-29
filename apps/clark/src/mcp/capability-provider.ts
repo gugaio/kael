@@ -72,20 +72,27 @@ async function discoverProvider(
 
     return {
       name: server.name,
-      kind: 'mcp-http',
+      kind: server.kind,
       status: 'available',
       capabilities: registeredCapabilities,
     };
   } catch (error) {
+    const fallbackCapabilities: string[] = [];
+    for (const binding of bindings) {
+      registry.register(createMcpBackedCapability(client, binding));
+      fallbackCapabilities.push(binding.capabilityName);
+    }
+
     logger.warn({
       event: 'mcp.provider.unreachable',
       serverName: server.name,
+      fallbackCapabilities,
       error,
-    }, 'MCP HTTP provider was unreachable during startup');
+    }, 'MCP HTTP provider was unreachable during startup; configured bindings were registered without discovery');
 
     return {
       name: server.name,
-      kind: 'mcp-http',
+      kind: server.kind,
       status: 'unreachable',
       capabilities: [],
     };
@@ -95,12 +102,12 @@ async function discoverProvider(
 function createMcpBackedCapability(
   client: Pick<McpHttpClient, 'callTool'> | Pick<McpBridgeHttpClient, 'callTool'>,
   binding: McpCapabilityBindingSettings,
-  tool: McpToolDescriptor,
+  tool?: McpToolDescriptor,
 ): Capability<Record<string, unknown>, unknown> {
   return {
     descriptor: {
       name: binding.capabilityName,
-      description: binding.description || tool.description || `Calls MCP tool ${binding.toolName}`,
+      description: binding.description || tool?.description || `Calls MCP tool ${binding.toolName}`,
       requiresApproval: binding.requiresApproval,
     },
     inputSchema: z.object({}).passthrough(),
