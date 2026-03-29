@@ -135,5 +135,101 @@ export function createEdgePiTools(params: {
     },
   };
 
-  return [listTool, callTool];
+  const youboraMetricsGetTool: AgentTool = {
+    name: "youbora_metrics_get",
+    label: "Youbora Metrics Get",
+    description:
+      "Consulta metricas agregadas do Youbora via Clark/MCP usando a capability remota youbora.metrics.get.",
+    parameters: {
+      type: "object",
+      properties: {
+        fromDate: { type: "string", description: "Data inicial ou relativo, ex.: last24hours" },
+        toDate: { type: "string", description: "Data final quando fromDate nao for relativo" },
+        metrics: { type: "string", description: "Lista de metricas, ex.: views,plays,errors" },
+        type: { type: "string", description: "Tipo de conteudo, ex.: vod ou live" },
+        granularity: { type: "string", description: "Granularidade, ex.: hour/day/week/month" },
+        filtersJson: { type: "string", description: "Filtros adicionais em JSON serializado" },
+        clientId: { type: "string", description: "ClientId especifico do Clark quando houver mais de um conectado" },
+        timeoutMs: { type: "number", description: "Timeout total da task remota em milissegundos" },
+      },
+      required: ["fromDate"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const blocked = params.reserveEdgeCall();
+      if (blocked) {
+        return blocked.blocked;
+      }
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as {
+        fromDate: string;
+        toDate?: string;
+        metrics?: string;
+        type?: string;
+        granularity?: string;
+        filtersJson?: string;
+        clientId?: string;
+        timeoutMs?: number;
+      };
+      const intent = params.logToolStart("youbora_metrics_get", args);
+      let filters: unknown;
+      if (args.filtersJson?.trim()) {
+        try {
+          filters = JSON.parse(args.filtersJson);
+        } catch (error) {
+          const blockedResult = params.makeBlockedResult({
+            reason: `invalid_youbora_filters_json:${error instanceof Error ? error.message : String(error)}`,
+          });
+          params.logToolEnd("youbora_metrics_get", intent, blockedResult.details, startedAtMs);
+          return blockedResult;
+        }
+      }
+
+      const input = {
+        fromDate: args.fromDate,
+        ...(args.toDate ? { toDate: args.toDate } : {}),
+        ...(args.metrics ? { metrics: args.metrics } : {}),
+        ...(args.type ? { type: args.type } : {}),
+        ...(args.granularity ? { granularity: args.granularity } : {}),
+        ...(filters !== undefined ? { filters } : {}),
+      };
+
+      const result = await params.tooling.edgeCall({
+        capability: "youbora.metrics.get",
+        input,
+        clientId: args.clientId,
+        timeoutMs: args.timeoutMs,
+      });
+
+      const text = [
+        `ok=${result.ok}`,
+        `taskId=${result.taskId}`,
+        `capability=${result.capability}`,
+        `fromDate=${args.fromDate}`,
+        args.toDate ? `toDate=${args.toDate}` : "",
+        args.metrics ? `metrics=${args.metrics}` : "",
+        args.type ? `type=${args.type}` : "",
+        args.granularity ? `granularity=${args.granularity}` : "",
+        result.clientId ? `clientId=${result.clientId}` : "",
+        result.connectionId ? `connectionId=${result.connectionId}` : "",
+        typeof result.durationMs === "number" ? `durationMs=${result.durationMs}` : "",
+        result.errorCode ? `errorCode=${result.errorCode}` : "",
+        result.error ? `error=${result.error}` : "",
+        result.output !== undefined ? `output:\n${stringifyCompact(result.output)}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const response = { content: params.textResult(text), details: result };
+      params.logToolEnd(
+        "youbora_metrics_get",
+        intent,
+        { status: result.ok ? "completed" : "failed", ...result, input },
+        startedAtMs,
+        result.ok ? `youbora_metrics_get ${args.fromDate}` : `youbora_metrics_get failed: ${result.error ?? "unknown"}`,
+      );
+      return response;
+    },
+  };
+
+  return [listTool, callTool, youboraMetricsGetTool];
 }

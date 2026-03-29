@@ -37,6 +37,51 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-03-29 - Youbora: remover heuristica lexical no adapter
+
+Resumo:
+- Removido o roteamento por substring (`isYouboraQuestion`) do `pi-engine-adapter`.
+- A integracao do Youbora continua disponivel pela tool dedicada e pelo catalogo de capabilities/skills, sem lista hardcoded de palavras no adapter.
+- Mantido o principio de descoberta por tools/contratos em vez de inferencia lexical fragil.
+
+Arquivos-chave:
+- `src/engine/pi-engine-adapter.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+
+Pendencias:
+- Ainda falta evoluir a experiencia do agente para escolher a tool do Youbora com base em contexto/tool descriptions, sem heuristicas ad hoc.
+
+Proximo passo recomendado:
+- Se necessario, melhorar descricoes/system prompt das tools do edge/Youbora em vez de reintroduzir detectores lexicais.
+
+### 2026-03-29 - Youbora via Clark/MCP: wrapper dedicado no Kael
+
+Resumo:
+- Confirmado o caminho de integracao via Clark/MCP usando capabilities declaradas no `clark.config.json` real da maquina, em vez de criar capability HTTP nova no Clark.
+- O PI/Kael ganhou a tool dedicada `youbora_metrics_get`, wrapper tipado sobre `edge_call` para a capability remota `youbora.metrics.get`.
+- O `pi-engine-adapter` agora prioriza `youbora_metrics_get` quando detecta perguntas sobre Youbora/NPAW.
+- A skill local `youbora` foi atualizada para preferir Clark/MCP e usar o script HTTP/MD5 apenas como fallback.
+
+Arquivos-chave:
+- `src/engine/tool-specs/edge.ts`
+- `src/engine/pi-tools.ts`
+- `src/engine/pi-engine-adapter.ts`
+- `.kael/skills/youbora/SKILL.md`
+- `docs/architecture/phases/phase-21.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/engine/pi-tools.test.ts src/engine/tool-specs/index.test.ts src/api/server.test.ts`
+
+Pendencias:
+- Ainda falta wrapper dedicado para outras capabilities do MCP do Youbora (`rawdata`, `events`, `metrics_help`, `filters_help`).
+- O sucesso end-to-end depende do `clark.config.json` real ter a capability `youbora.metrics.get` ativa e o Clark conectado.
+
+Proximo passo recomendado:
+- Adicionar wrappers dedicados para `youbora.rawdata.get` e `youbora.events.get`, ou um contrato de consulta mais completo cobrindo filtros comuns do time.
+
 ### 2026-03-29 - Edge/Clark: dispatch remoto baseline no Kael
 
 Resumo:

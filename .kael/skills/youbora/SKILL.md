@@ -1,6 +1,6 @@
 ---
 name: youbora
-description: Use quando o usuario quiser consultar dados do Youbora/NPAW (views, plays, erros, QoE, tipo vod/live, janelas de tempo e granularidade). Esta skill deve montar URL assinada (MD5) e buscar dados em api.npaw.com.
+description: Use quando o usuario quiser consultar dados do Youbora/NPAW (views, plays, erros, QoE, tipo vod/live, janelas de tempo e granularidade). Priorize Clark/MCP; use a chamada HTTP/MD5 local apenas como fallback.
 argument-hint: "[fromDate] [toDate-opcional] [metrics] [type-opcional] [granularity-opcional]"
 disable-model-invocation: false
 user-invocable: true
@@ -8,7 +8,7 @@ user-invocable: true
 
 # Youbora (NPAW) no Kael
 
-Objetivo: consultar a API do Youbora com autenticacao por token MD5 usando credenciais do `.env`.
+Objetivo: consultar o Youbora preferencialmente via Clark/MCP ja conectado ao Kael.
 
 ## Credenciais (via ENV)
 
@@ -23,9 +23,9 @@ Nunca imprima API key completa; no maximo mascarada.
 
 ## Fluxo obrigatorio
 
-1. Validar se as variaveis de ambiente existem.
-2. Se faltar algo, responder claramente o que falta.
-3. Executar o script local da skill:
+1. Priorizar a tool dedicada `youbora_metrics_get` para consultas agregadas.
+2. Se necessario, verificar disponibilidade do Clark/capability com `edge_list`.
+3. So se Clark/MCP nao estiver disponivel, cair para o script local:
    - `${CLAUDE_SKILL_DIR}/scripts/query-youbora.mjs`
 4. Retornar:
    - URL final sem token completo (mascarar token)
@@ -49,7 +49,7 @@ Use os argumentos recebidos na invocacao (`$ARGUMENTS`) para popular:
 
 ## Execucao
 
-Rode:
+Fallback local apenas quando Clark/MCP nao estiver disponivel:
 
 ```bash
 node ${CLAUDE_SKILL_DIR}/scripts/query-youbora.mjs $ARGUMENTS

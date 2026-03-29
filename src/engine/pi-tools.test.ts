@@ -288,6 +288,49 @@ describe("createPiShellTools edge tools", () => {
     expect(secondText).toContain("blocked=true");
     expect(secondText).toContain("edge_call_budget_exceeded:1/1");
   });
+
+  it("exposes youbora_metrics_get as typed wrapper over edge_call", async () => {
+    const edgeCall = vi.fn(async () => ({
+      ok: true,
+      taskId: "task-yb-1",
+      clientId: "clark-1",
+      connectionId: "conn-1",
+      capability: "youbora.metrics.get",
+      durationMs: 18,
+      output: { rows: [{ metric: "views", value: 123 }] },
+    }));
+    const tools = createPiShellTools({
+      sessionKey: "s-youbora",
+      tooling: createTooling({
+        edgeCall,
+      }),
+    });
+    const tool = tools.find((item) => item.name === "youbora_metrics_get");
+    expect(tool).toBeTruthy();
+
+    const result = await tool!.execute("tc-yb", {
+      fromDate: "last24hours",
+      metrics: "views,plays",
+      type: "vod",
+      clientId: "clark-1",
+    });
+    const text = String((result.content?.[0] as { text?: unknown })?.text ?? "");
+
+    expect(edgeCall).toHaveBeenCalledWith({
+      capability: "youbora.metrics.get",
+      input: {
+        fromDate: "last24hours",
+        metrics: "views,plays",
+        type: "vod",
+      },
+      clientId: "clark-1",
+      timeoutMs: undefined,
+    });
+    expect(text).toContain("ok=true");
+    expect(text).toContain("capability=youbora.metrics.get");
+    expect(text).toContain("fromDate=last24hours");
+    expect(text).toContain("metrics=views,plays");
+  });
 });
 
 describe("createPiShellTools mcp tools", () => {

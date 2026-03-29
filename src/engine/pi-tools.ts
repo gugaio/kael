@@ -173,6 +173,9 @@ export function createPiShellTools(params: {
           : "";
       return capability ? `edge:call:${capability}` : "edge:call";
     }
+    if (tool === "youbora_metrics_get") {
+      return "edge:call:youbora.metrics.get";
+    }
     const command =
       rawParams && typeof rawParams === "object"
         ? String((rawParams as { command?: unknown }).command ?? "").toLowerCase()
@@ -525,7 +528,7 @@ export function createPiShellTools(params: {
   const [execTool, processTool] = capabilityTools.system;
   const [videoHlsInspectTool, videoProbeTool, playbackAnalyzeTool] = capabilityTools.video;
   const [jobsListTool, jobsGetTool, jobsLogTailTool] = capabilityTools.jobs;
-  const [edgeListTool, edgeCallTool] = capabilityTools.edge;
+  const [edgeListTool, edgeCallTool, youboraMetricsGetTool] = capabilityTools.edge;
   const [mcpListTool, mcpCallTool] = capabilityTools.mcp;
   const [memorySearchTool, memoryGetTool, memoryWriteTool] = capabilityTools.memory;
   const [workspaceSearchTool, workspaceReadTool] = capabilityTools.workspace;
@@ -554,6 +557,7 @@ export function createPiShellTools(params: {
     jobsLogTailTool,
     edgeListTool,
     edgeCallTool,
+    youboraMetricsGetTool,
     mcpListTool,
     mcpCallTool,
     memorySearchTool,

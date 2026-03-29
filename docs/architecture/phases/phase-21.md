@@ -134,6 +134,7 @@ Exemplo:
 - O agente/PI ganhou baseline generico para consumo do Clark:
   - `edge_list`
   - `edge_call`
+  - `youbora_metrics_get`
 
 ## Proximos incrementos
 

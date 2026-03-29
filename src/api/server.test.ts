@@ -790,7 +790,7 @@ describe("API integration", () => {
 
     await once(socket, "message");
 
-    socket.on("message", (raw) => {
+    socket.on("message", (raw: unknown) => {
       const parsed = JSON.parse(String(raw)) as {
         type: string;
         payload?: { task?: { id: string; capability: string; input: unknown } };

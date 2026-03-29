@@ -106,7 +106,11 @@ describe("createPiCapabilityTools", () => {
       "playback_analyze",
     ]);
     expect(registry.jobs.map((tool) => tool.name)).toEqual(["jobs_list", "jobs_get", "jobs_log_tail"]);
-    expect(registry.edge.map((tool) => tool.name)).toEqual(["edge_list", "edge_call"]);
+    expect(registry.edge.map((tool) => tool.name)).toEqual([
+      "edge_list",
+      "edge_call",
+      "youbora_metrics_get",
+    ]);
     expect(registry.mcp.map((tool) => tool.name)).toEqual(["mcp_list", "mcp_call"]);
     expect(registry.memory.map((tool) => tool.name)).toEqual(["memory_search", "memory_get", "memory_write"]);
     expect(registry.workspace.map((tool) => tool.name)).toEqual(["workspace_search", "workspace_read"]);
