@@ -46,7 +46,7 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 18: em andamento (skills no core com discovery em `.kael/skills`, invocacao manual e auto-invocacao conservadora).
 - Fase 19: em andamento (MCP bridge via `mcporter` com `mcp_list`/`mcp_call` e skill operacional).
 - Fase 20: em andamento (video intelligence platform: playback analysis + generation/artifacts base).
-- Fase 21: concluida (Clark runtime satelite incubado em `apps/clark` com daemon, protocolo WS minimo, execucao remota de capacidades de ambiente, capabilities MVP e bindings explicitos para MCP HTTP).
+- Fase 21: concluida (Clark runtime satelite incubado em `apps/clark` com daemon, protocolo WS com handshake + dispatch remoto baseline, capabilities MVP e bindings explicitos para MCP HTTP).
 
 ## Estudos e referencias tecnicas
 

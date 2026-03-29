@@ -1,14 +1,32 @@
 import { z } from 'zod';
 
+const capabilityParameterDescriptorSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  required: z.boolean(),
+});
+
+const capabilityTemplateDescriptorSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  method: z.literal('GET'),
+  pathTemplate: z.string().min(1),
+  params: z.array(capabilityParameterDescriptorSchema),
+});
+
 const capabilityDescriptorSchema = z.object({
   name: z.string().min(1),
   description: z.string().min(1),
   requiresApproval: z.boolean(),
+  metadata: z.object({
+    httpProfile: z.string().min(1).optional(),
+    templates: z.array(capabilityTemplateDescriptorSchema).optional(),
+  }).optional(),
 });
 
 const providerInfoSchema = z.object({
   name: z.string().min(1),
-  kind: z.literal('mcp-http'),
+  kind: z.enum(['mcp-http', 'mcp-http-bridge']),
   status: z.enum(['available', 'unreachable']),
   capabilities: z.array(z.string().min(1)),
 });

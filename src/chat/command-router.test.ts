@@ -45,6 +45,8 @@ function createTooling(): EngineTooling {
       format: "json",
       output: {},
     }),
+    edgeList: () => [],
+    edgeCall: async ({ capability }) => ({ ok: false, taskId: "t1", capability, error: "unused" }),
     memorySearch: async () => [],
     memoryGet: async () => ({ path: "MEMORY.md", text: "", startLine: 1, endLine: 1 }),
     memoryWrite: async () => ({ path: "memory/2026-01-01.md" }),

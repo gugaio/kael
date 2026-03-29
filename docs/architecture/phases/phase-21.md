@@ -112,23 +112,36 @@ Exemplo:
 - MCP HTTP entra apenas por bindings allowlistados; o Kael nao recebe acesso
   irrestrito ao catalogo bruto de tools do provider.
 
-## Handshake minimo no Kael
+## Runtime atual no Kael
 
-- Endpoint inicial: `WS /ws`
-- Mensagens suportadas no primeiro recorte:
+- Endpoint atual: `WS /ws`
+- Mensagens suportadas no runtime atual:
   - `client.register`
   - `client.heartbeat`
+  - `client.task.result`
   - `server.registered`
-- O Kael mantem um registry em memoria dos clients conectados, suficiente para:
-  - observar conexoes ativas;
-  - validar o protocolo;
-  - preparar o proximo incremento de `task_request`/`task_result`.
+  - `server.task.request`
+- O Kael mantem um registry em memoria dos clients conectados com:
+  - metadata do client;
+  - capabilities expostas;
+  - ultimo heartbeat;
+  - mapa de tasks pendentes por `taskId`.
+- O runtime edge do Kael agora consegue:
+  - listar capabilities remotas conectadas;
+  - escolher client por `clientId` explicito ou por matching da capability;
+  - despachar uma task remota com timeout;
+  - reconciliar `client.task.result` e resolver a chamada no runtime.
+- O agente/PI ganhou baseline generico para consumo do Clark:
+  - `edge_list`
+  - `edge_call`
 
 ## Proximos incrementos
 
 1. Integrar primeira capability real de negocio acessivel em ambiente remoto
    especifico (ex.: Youbora/internal API ou binding MCP corporativo de session lookup).
 2. Introduzir autenticacao simples e camada de approval local sem quebrar os
-   contratos iniciais.
-3. Evoluir bindings MCP com schemas de input/output mais restritos por
+   contratos atuais.
+3. Persistir execucoes remotas em trilha operacional do Kael (job ou store dedicado)
+   para auditoria, retry e observabilidade.
+4. Evoluir bindings MCP com schemas de input/output mais restritos por
    capability.

@@ -16,11 +16,13 @@ import type {
 import type { WorkspaceInspector } from "../workspace/inspector.js";
 import type { BrowserCapability } from "../capabilities/browser/index.js";
 import { buildJobLogTailResult, selectJobs } from "../jobs/tooling.js";
+import type { EdgeRuntime } from "../edge/runtime.js";
 
 type ChatToolingDeps = {
   jobs: JobManager;
   shell: ShellRuntime;
   mcp: McpRuntime;
+  edge: EdgeRuntime;
   videoInspect: VideoInspectToolService;
   memory: MemoryService;
   workspace: WorkspaceInspector;
@@ -56,6 +58,13 @@ export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
       deps.mcp.list({ sessionKey, server, schema, timeoutMs }),
     mcpCall: ({ sessionKey, target, argumentsJson, stdioCommand, timeoutMs }) =>
       deps.mcp.call({ sessionKey, target, argumentsJson, stdioCommand, timeoutMs }),
+    edgeList: ({ clientId, capability } = {}) =>
+      deps.edge
+        .listCapabilities()
+        .filter((item) => (clientId ? item.clientId === clientId : true))
+        .filter((item) => (capability ? item.name === capability : true)),
+    edgeCall: ({ capability, input, clientId, timeoutMs }) =>
+      deps.edge.dispatchTask({ capability, input, clientId, timeoutMs }),
     memorySearch: ({ query, maxResults }) => deps.memory.search(query, maxResults),
     memoryGet: ({ path, from, lines }) => deps.memory.get({ relPath: path, from, lines }),
     memoryWrite: ({ content, target }) => deps.memory.write({ content, target }),
@@ -184,6 +193,14 @@ export function createChatOnlyTooling(tooling: EngineTooling): EngineTooling {
     mcpCall: async () => {
       throw new Error("chat-only mode: mcp_call disabled");
     },
+    edgeList: () => [],
+    edgeCall: async ({ capability }) => ({
+      ok: false,
+      taskId: "chat-only",
+      capability,
+      error: "chat-only mode: edge_call disabled",
+      errorCode: "chat_only_disabled",
+    }),
     browserCommand: async () => {
       throw new Error("chat-only mode: browser disabled");
     },

@@ -18,6 +18,28 @@ export type EdgeClientHeartbeatMessage = {
   };
 };
 
+export type EdgeClientTaskResult = {
+  taskId: string;
+  capability: string;
+  success: boolean;
+  output?: unknown;
+  error?: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+  durationMs: number;
+};
+
+export type EdgeClientTaskResultMessage = {
+  version: 1;
+  type: "client.task.result";
+  timestamp: string;
+  payload: {
+    result: EdgeClientTaskResult;
+  };
+};
+
 export type EdgeServerRegisteredMessage = {
   version: 1;
   type: "server.registered";
@@ -28,7 +50,24 @@ export type EdgeServerRegisteredMessage = {
   };
 };
 
-export type EdgeInboundMessage = EdgeClientRegisterMessage | EdgeClientHeartbeatMessage;
+export type EdgeServerTaskRequestMessage = {
+  version: 1;
+  type: "server.task.request";
+  timestamp: string;
+  payload: {
+    task: {
+      id: string;
+      capability: string;
+      input: unknown;
+      timeoutMs?: number;
+    };
+  };
+};
+
+export type EdgeInboundMessage =
+  | EdgeClientRegisterMessage
+  | EdgeClientHeartbeatMessage
+  | EdgeClientTaskResultMessage;
 
 export function parseEdgeInboundMessage(raw: string): EdgeInboundMessage {
   const parsed = JSON.parse(raw) as unknown;
@@ -71,6 +110,19 @@ export function parseEdgeInboundMessage(raw: string): EdgeInboundMessage {
     };
   }
 
+  if (type === "client.task.result") {
+    const result = (payload as { result?: unknown }).result;
+    if (!isEdgeClientTaskResult(result)) {
+      throw new Error("invalid client.task.result payload");
+    }
+    return {
+      version: 1,
+      type,
+      timestamp,
+      payload: { result },
+    };
+  }
+
   throw new Error(`unsupported edge message type: ${type}`);
 }
 
@@ -83,6 +135,20 @@ export function createRegisteredMessage(connectionId: string): EdgeServerRegiste
       connectionId,
       accepted: true,
     },
+  };
+}
+
+export function createTaskRequestMessage(task: {
+  id: string;
+  capability: string;
+  input: unknown;
+  timeoutMs?: number;
+}): EdgeServerTaskRequestMessage {
+  return {
+    version: 1,
+    type: "server.task.request",
+    timestamp: new Date().toISOString(),
+    payload: { task },
   };
 }
 
@@ -102,5 +168,18 @@ function isEdgeClientInfo(input: unknown): input is EdgeClientInfo {
     typeof value.startedAt === "string" &&
     Array.isArray(value.capabilities) &&
     Array.isArray(value.providers)
+  );
+}
+
+function isEdgeClientTaskResult(input: unknown): input is EdgeClientTaskResult {
+  if (!input || typeof input !== "object") {
+    return false;
+  }
+  const value = input as Record<string, unknown>;
+  return (
+    typeof value.taskId === "string" &&
+    typeof value.capability === "string" &&
+    typeof value.success === "boolean" &&
+    typeof value.durationMs === "number"
   );
 }

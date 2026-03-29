@@ -7,6 +7,7 @@ import type {
 } from "../capabilities/browser/index.js";
 import type { PlaybackAnalysisReport, PlaybackEvent, PlaybackEngine } from "../capabilities/video/index.js";
 import type { McpCallResult, McpListResult } from "../tools/mcp/mcp-bridge-service.js";
+import type { EdgeCallResult, EdgeCapabilitySummary } from "../edge/runtime.js";
 
 export type EngineTooling = {
   startTranscode: (params: {
@@ -218,6 +219,16 @@ export type EngineTooling = {
     stdioCommand?: string;
     timeoutMs?: number;
   }) => Promise<McpCallResult>;
+  edgeList: (params?: {
+    clientId?: string;
+    capability?: string;
+  }) => EdgeCapabilitySummary[];
+  edgeCall: (params: {
+    capability: string;
+    input: unknown;
+    clientId?: string;
+    timeoutMs?: number;
+  }) => Promise<EdgeCallResult>;
   memorySearch: (params: {
     query: string;
     maxResults?: number;
