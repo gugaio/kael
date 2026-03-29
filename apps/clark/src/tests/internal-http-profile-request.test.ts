@@ -29,6 +29,7 @@ describe('internal.http.profile_request', () => {
           defaultHeaders: {
             'x-api-token': 'secret-token',
           },
+          pathTemplates: [],
         },
       ],
     });
