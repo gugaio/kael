@@ -44,6 +44,9 @@ export class VideoJobService {
   ) {}
 
   getRuntimeStats(): { activeJobs: number; queuedJobs: number; maxConcurrentJobs: number } {
+    // Expõe um snapshot simples do runtime para observabilidade: jobs já em
+    // execução, slots reservados para jobs prestes a spawnar, fila pendente e
+    // o teto de concorrência configurado.
     return {
       activeJobs: this.activeJobs.size + this.reservedSlots,
       queuedJobs: this.queue.length,
@@ -57,6 +60,10 @@ export class VideoJobService {
     outputPath: string;
     args?: string[];
   }): Promise<VideoJob> {
+    // Agenda um transcode assíncrono com ffmpeg: valida origem/destino e monta
+    // `ffmpeg -y -i <input> ... <output>`. Sem args customizados, o método
+    // reencoda vídeo para H.264 (`libx264`) e áudio para AAC; com args do
+    // usuário, apenas repassa os parâmetros validados para o ffmpeg.
     await validateExistingInputPath({
       value: params.inputPath,
       label: "inputPath",
@@ -87,6 +94,11 @@ export class VideoJobService {
     outputPlaylistPath: string;
     segmentTime?: number;
   }): Promise<VideoJob> {
+    // Esta capability agenda um job assíncrono de conversão para HLS: valida o
+    // arquivo de entrada e o destino da playlist, normaliza `segmentTime` e
+    // dispara um ffmpeg em modo remux (`-c copy`) para gerar uma playlist
+    // `.m3u8` com segmentos sequenciais a partir de um arquivo local, sem
+    // reencodar audio/video.
     await validateExistingInputPath({
       value: params.inputPath,
       label: "inputPath",
@@ -135,6 +147,10 @@ export class VideoJobService {
     outputPath: string;
     durationSeconds?: number;
   }): Promise<VideoJob> {
+    // Agenda a captura de um stream remoto com `ffmpeg -i <url> [-t N] -c copy
+    // <output>`. O ffmpeg lê a origem HTTP/HTTPS, opcionalmente limita a
+    // gravação pela duração pedida e remuxa o conteúdo para arquivo sem
+    // reencodar, preservando os codecs de entrada quando possível.
     validateStreamUrl(params.streamUrl);
     validateOutputPath({
       value: params.outputPath,
@@ -162,6 +178,10 @@ export class VideoJobService {
     sessionKey: string;
     inputPath: string;
   }): Promise<VideoJob> {
+    // Agenda um probe local com ffprobe em modo somente-inspeção: o comando
+    // silencia logs não críticos (`-v error`) e retorna JSON com metadados de
+    // container e streams, como duração, bitrate, codec, resolução e frame
+    // rate médio, sem alterar o arquivo de origem.
     await validateExistingInputPath({
       value: params.inputPath,
       label: "inputPath",
@@ -189,6 +209,9 @@ export class VideoJobService {
     sessionKey: string;
     streamUrl: string;
   }): Promise<VideoJob> {
+    // Igual ao probe local, mas apontando o ffprobe para uma URL de stream.
+    // Serve para inspecionar um recurso remoto e obter o mesmo JSON resumido de
+    // formato/streams sem baixar ou transcodar o conteúdo inteiro.
     validateStreamUrl(params.streamUrl);
     return this.startJob({
       action: "probe_media",
@@ -211,6 +234,9 @@ export class VideoJobService {
     sessionKey: string;
     input: string;
   }): Promise<VideoJob> {
+    // Agenda a abertura do VLC com um único argumento de entrada. O método
+    // aceita arquivo local ou URL HTTP/HTTPS, valida a origem e delega ao job
+    // runner a execução do player como processo externo do sistema.
     const value = params.input.trim();
     if (!value) {
       throw new Error("input is required");
@@ -236,6 +262,9 @@ export class VideoJobService {
   }
 
   async cancelJob(jobId: string): Promise<{ job: VideoJob | null; canceled: boolean }> {
+    // Cancela um job em qualquer estágio: remove imediatamente da fila se ainda
+    // não executou, ou sinaliza o processo ativo com SIGTERM e agenda SIGKILL
+    // após a janela de graça para evitar processos órfãos.
     const job = this.jobs.get(jobId);
     if (!job) {
       return { job: null, canceled: false };
@@ -270,6 +299,9 @@ export class VideoJobService {
   }
 
   private async startJob(params: Omit<StartJobParams, "id">): Promise<VideoJob> {
+    // Materializa o job persistido com status inicial `queued`, registra o
+    // caminho de log e o coloca na fila interna; a execução real acontece
+    // depois via `drainQueue`, respeitando o limite de concorrência.
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
 
@@ -295,6 +327,9 @@ export class VideoJobService {
   }
 
   private drainQueue(): void {
+    // Consome a fila enquanto houver capacidade. `reservedSlots` evita corrida
+    // entre remover da fila e o processo efetivamente entrar em `activeJobs`,
+    // mantendo a concorrência real dentro do limite configurado.
     while (this.activeJobs.size + this.reservedSlots < this.safety.maxConcurrentJobs) {
       const next = this.queue.shift();
       if (!next) {
@@ -306,6 +341,10 @@ export class VideoJobService {
   }
 
   private async executeJob(params: StartJobParams): Promise<void> {
+    // Executa o comando do job, anexa stdout/stderr ao log persistente e faz o
+    // lifecycle completo de status: `running`, sucesso, falha, cancelamento ou
+    // timeout. O timeout primeiro tenta SIGTERM e só força SIGKILL se o
+    // processo não encerrar dentro de `killGraceMs`.
     try {
       await this.jobs.update(params.id, {
         status: "running",
