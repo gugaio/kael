@@ -214,7 +214,7 @@ export class VideoJobService {
     // formato/streams sem baixar ou transcodar o conteúdo inteiro.
     validateStreamUrl(params.streamUrl);
     return this.startJob({
-      action: "probe_media",
+      action: "probe_url",
       sessionKey: params.sessionKey,
       command: "ffprobe",
       input: params.streamUrl,

@@ -1,4 +1,5 @@
 import type { EngineTooling } from "../engine/types.js";
+import { flattenToolingNamespaces, type EngineToolingNamespaces } from "../engine/tooling-namespaces.js";
 import type { JobManager } from "../jobs/manager.js";
 import { VIDEO_JOB_ACTIONS } from "../capabilities/video/index.js";
 import type { MemoryService } from "../memory/service.js";
@@ -35,108 +36,116 @@ type ChatToolingDeps = {
 };
 
 export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
-  return {
-    startTranscode: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.transcode, params),
-    startConvertHls: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.convertHls, params),
-    startCaptureStream: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.captureStream, params),
-    startProbeMedia: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.probeMedia, params),
-    startPlayVlc: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.playVlc, params),
-    videoHlsInspect: async ({ url, maxSegments, timeoutMs }) =>
-      deps.videoInspect.inspectHls({ url, maxSegments, timeoutMs }),
-    videoProbe: async ({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }) =>
-      deps.videoInspect.probe({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }),
-    listJobs: ({ sessionKey, capability, action, status, limit } = {}) =>
-      selectJobs(deps.jobs.listJobs(), { sessionKey, capability, action, status, limit }),
-    getJob: ({ jobId }) => deps.jobs.getJob(jobId),
-    getJobLog: async ({ jobId, tailChars }) => {
-      const text = await deps.jobs.getJobLog(jobId);
-      return buildJobLogTailResult({ jobId, text, tailChars });
+  const namespaces: EngineToolingNamespaces = {
+    video: {
+      startTranscode: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.transcode, params),
+      startConvertHls: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.convertHls, params),
+      startCaptureStream: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.captureStream, params),
+      startProbeMedia: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.probeMedia, params),
+      startPlayVlc: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.playVlc, params),
+      videoHlsInspect: async ({ url, maxSegments, timeoutMs }) =>
+        deps.videoInspect.inspectHls({ url, maxSegments, timeoutMs }),
+      videoProbe: async ({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }) =>
+        deps.videoInspect.probe({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }),
+      videoGenerateImage: ({ sessionKey, prompt, provider, size }) =>
+        deps.videoGeneration.generateImage({ sessionKey, prompt, provider, size }),
+      playbackAnalyze: async ({ sessionKey, player, source, streamUrl, logText, events }) =>
+        deps.playbackTriage.analyzeSession({ sessionKey, player, source, streamUrl, logText, events }),
     },
-    execCommand: (params) => deps.shell.exec(params),
-    processCommand: (params) => deps.shell.process(params),
-    mcpList: ({ sessionKey, server, schema, timeoutMs }) =>
-      deps.mcp.list({ sessionKey, server, schema, timeoutMs }),
-    mcpCall: ({ sessionKey, target, argumentsJson, stdioCommand, timeoutMs }) =>
-      deps.mcp.call({ sessionKey, target, argumentsJson, stdioCommand, timeoutMs }),
-    edgeList: ({ clientId, capability } = {}) =>
-      deps.edge
-        .listCapabilities()
-        .filter((item) => (clientId ? item.clientId === clientId : true))
-        .filter((item) => (capability ? item.name === capability : true)),
-    edgeCall: ({ capability, input, clientId, timeoutMs }) =>
-      deps.edge.dispatchTask({ capability, input, clientId, timeoutMs }),
-    youboraMetricsGet: ({ fromDate, toDate, metrics, type, granularity, filters, clientId, timeoutMs }) =>
-      deps.edge.dispatchTask({
-        capability: "youbora.metrics.get",
-        input: {
-          fromDate,
-          ...(toDate ? { toDate } : {}),
-          ...(metrics ? { metrics } : {}),
-          ...(type ? { type } : {}),
-          ...(granularity ? { granularity } : {}),
-          ...(filters !== undefined ? { filters } : {}),
-        },
-        clientId,
-        timeoutMs,
-      }),
-    youboraRawdataGet: ({ fromDate, toDate, type, filters, clientId, timeoutMs }) =>
-      deps.edge.dispatchTask({
-        capability: "youbora.rawdata.get",
-        input: {
-          fromDate,
-          ...(toDate ? { toDate } : {}),
-          ...(type ? { type } : {}),
-          ...(filters !== undefined ? { filters } : {}),
-        },
-        clientId,
-        timeoutMs,
-      }),
-    youboraEventsGet: ({ fromDate, toDate, type, filters, clientId, timeoutMs }) =>
-      deps.edge.dispatchTask({
-        capability: "youbora.events.get",
-        input: {
-          fromDate,
-          ...(toDate ? { toDate } : {}),
-          ...(type ? { type } : {}),
-          ...(filters !== undefined ? { filters } : {}),
-        },
-        clientId,
-        timeoutMs,
-      }),
-    memorySearch: ({ query, maxResults }) => deps.memory.search(query, maxResults),
-    memoryGet: ({ path, from, lines }) => deps.memory.get({ relPath: path, from, lines }),
-    memoryWrite: ({ content, target }) => deps.memory.write({ content, target }),
-    workspaceSearch: ({ query, maxResults }) => deps.workspace.search({ query, maxResults }),
-    workspaceRead: ({ path, from, lines }) => deps.workspace.read({ relPath: path, from, lines }),
-    webSearch: ({ sessionKey, query, maxResults, recencyDays, domainsAllow, domainsBlock, signal }) =>
-      deps.research.search({
-        sessionKey,
-        query,
-        maxResults,
-        recencyDays,
-        domainsAllow,
-        domainsBlock,
-        signal,
-      }),
-    webFetch: ({ sessionKey, url, maxChars, signal }) =>
-      deps.research.fetchUrl({
-        sessionKey,
-        url,
-        maxChars,
-        signal,
-      }),
-    webResearch: ({
-      sessionKey,
-      query,
-      maxResults,
-      fetchTop,
-      fetchMaxChars,
-      recencyDays,
-      domainsAllow,
-      domainsBlock,
-      signal,
-    }) =>
-      deps.research.research({
+    jobs: {
+      listJobs: ({ sessionKey, capability, action, status, limit } = {}) =>
+        selectJobs(deps.jobs.listJobs(), { sessionKey, capability, action, status, limit }),
+      getJob: ({ jobId }) => deps.jobs.getJob(jobId),
+      getJobLog: async ({ jobId, tailChars }) => {
+        const text = await deps.jobs.getJobLog(jobId);
+        return buildJobLogTailResult({ jobId, text, tailChars });
+      },
+    },
+    system: {
+      execCommand: (params) => deps.shell.exec(params),
+      processCommand: (params) => deps.shell.process(params),
+    },
+    mcp: {
+      mcpList: ({ sessionKey, server, schema, timeoutMs }) =>
+        deps.mcp.list({ sessionKey, server, schema, timeoutMs }),
+      mcpCall: ({ sessionKey, target, argumentsJson, stdioCommand, timeoutMs }) =>
+        deps.mcp.call({ sessionKey, target, argumentsJson, stdioCommand, timeoutMs }),
+    },
+    edge: {
+      edgeList: ({ clientId, capability } = {}) =>
+        deps.edge
+          .listCapabilities()
+          .filter((item) => (clientId ? item.clientId === clientId : true))
+          .filter((item) => (capability ? item.name === capability : true)),
+      edgeCall: ({ capability, input, clientId, timeoutMs }) =>
+        deps.edge.dispatchTask({ capability, input, clientId, timeoutMs }),
+      youboraMetricsGet: ({ fromDate, toDate, metrics, type, granularity, filters, clientId, timeoutMs }) =>
+        deps.edge.dispatchTask({
+          capability: "youbora.metrics.get",
+          input: {
+            fromDate,
+            ...(toDate ? { toDate } : {}),
+            ...(metrics ? { metrics } : {}),
+            ...(type ? { type } : {}),
+            ...(granularity ? { granularity } : {}),
+            ...(filters !== undefined ? { filters } : {}),
+          },
+          clientId,
+          timeoutMs,
+        }),
+      youboraRawdataGet: ({ fromDate, toDate, type, filters, clientId, timeoutMs }) =>
+        deps.edge.dispatchTask({
+          capability: "youbora.rawdata.get",
+          input: {
+            fromDate,
+            ...(toDate ? { toDate } : {}),
+            ...(type ? { type } : {}),
+            ...(filters !== undefined ? { filters } : {}),
+          },
+          clientId,
+          timeoutMs,
+        }),
+      youboraEventsGet: ({ fromDate, toDate, type, filters, clientId, timeoutMs }) =>
+        deps.edge.dispatchTask({
+          capability: "youbora.events.get",
+          input: {
+            fromDate,
+            ...(toDate ? { toDate } : {}),
+            ...(type ? { type } : {}),
+            ...(filters !== undefined ? { filters } : {}),
+          },
+          clientId,
+          timeoutMs,
+        }),
+    },
+    memory: {
+      memorySearch: ({ query, maxResults }) => deps.memory.search(query, maxResults),
+      memoryGet: ({ path, from, lines }) => deps.memory.get({ relPath: path, from, lines }),
+      memoryWrite: ({ content, target }) => deps.memory.write({ content, target }),
+    },
+    workspace: {
+      workspaceSearch: ({ query, maxResults }) => deps.workspace.search({ query, maxResults }),
+      workspaceRead: ({ path, from, lines }) => deps.workspace.read({ relPath: path, from, lines }),
+    },
+    web: {
+      webSearch: ({ sessionKey, query, maxResults, recencyDays, domainsAllow, domainsBlock, signal }) =>
+        deps.research.search({
+          sessionKey,
+          query,
+          maxResults,
+          recencyDays,
+          domainsAllow,
+          domainsBlock,
+          signal,
+        }),
+      webFetch: ({ sessionKey, url, maxChars, signal }) =>
+        deps.research.fetchUrl({
+          sessionKey,
+          url,
+          maxChars,
+          signal,
+        }),
+      webResearch: ({
         sessionKey,
         query,
         maxResults,
@@ -146,50 +155,66 @@ export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
         domainsAllow,
         domainsBlock,
         signal,
-      }),
-    browserCommand: ({ sessionKey, action, targetId, url, selector, text, key, timeoutMs }) =>
-      deps.browser.executeAction(action, {
-        sessionKey,
-        targetId,
-        url,
-        selector,
-        text,
-        key,
-        timeoutMs,
-      }),
-    browserRuntimeTelemetry: () => deps.browser.getRuntimeTelemetrySnapshot(),
-    imageGenerate: ({ prompt, size }) => deps.imageGenerator.generate({ prompt, size }),
-    videoGenerateImage: ({ sessionKey, prompt, provider, size }) =>
-      deps.videoGeneration.generateImage({ sessionKey, prompt, provider, size }),
-    playbackAnalyze: async ({ sessionKey, player, source, streamUrl, logText, events }) =>
-      deps.playbackTriage.analyzeSession({ sessionKey, player, source, streamUrl, logText, events }),
-    planCreate: ({ sessionKey, title, steps }) => deps.planner.create({ sessionKey, title, steps }),
-    planGenerate: ({ sessionKey, objective, maxSteps }) =>
-      deps.planner.generate({ sessionKey, objective, maxSteps }),
-    planList: ({ sessionKey, status, limit }) => deps.planner.list({ sessionKey, status, limit }),
-    planGet: ({ planId }) => deps.planner.get(planId),
-    planUpdateStep: ({ planId, stepIndex, status, notes }) =>
-      deps.planner.updateStep({ planId, stepIndex, status, notes }),
-    planNextAction: ({ planId }) => deps.planner.nextAction(planId),
-    planExecuteNext: ({ planId, inputs }) =>
-      deps.planner.executeNext({
-        planId,
-        inputs,
-        runtime: createPlannerExecuteRuntime({
-          jobs: deps.jobs,
-          shell: deps.shell,
+      }) =>
+        deps.research.research({
+          sessionKey,
+          query,
+          maxResults,
+          fetchTop,
+          fetchMaxChars,
+          recencyDays,
+          domainsAllow,
+          domainsBlock,
+          signal,
         }),
-      }),
-    planReconcile: ({ planId, limit }) =>
-      deps.planner.reconcile({
-        planId,
-        limit,
-        runtime: createPlannerReconcileRuntime({
-          jobs: deps.jobs,
-          shell: deps.shell,
+    },
+    browser: {
+      browserCommand: ({ sessionKey, action, targetId, url, selector, text, key, timeoutMs }) =>
+        deps.browser.executeAction(action, {
+          sessionKey,
+          targetId,
+          url,
+          selector,
+          text,
+          key,
+          timeoutMs,
         }),
-      }),
+      browserRuntimeTelemetry: () => deps.browser.getRuntimeTelemetrySnapshot(),
+    },
+    image: {
+      imageGenerate: ({ prompt, size }) => deps.imageGenerator.generate({ prompt, size }),
+    },
+    plans: {
+      planCreate: ({ sessionKey, title, steps }) => deps.planner.create({ sessionKey, title, steps }),
+      planGenerate: ({ sessionKey, objective, maxSteps }) =>
+        deps.planner.generate({ sessionKey, objective, maxSteps }),
+      planList: ({ sessionKey, status, limit }) => deps.planner.list({ sessionKey, status, limit }),
+      planGet: ({ planId }) => deps.planner.get(planId),
+      planUpdateStep: ({ planId, stepIndex, status, notes }) =>
+        deps.planner.updateStep({ planId, stepIndex, status, notes }),
+      planNextAction: ({ planId }) => deps.planner.nextAction(planId),
+      planExecuteNext: ({ planId, inputs }) =>
+        deps.planner.executeNext({
+          planId,
+          inputs,
+          runtime: createPlannerExecuteRuntime({
+            jobs: deps.jobs,
+            shell: deps.shell,
+          }),
+        }),
+      planReconcile: ({ planId, limit }) =>
+        deps.planner.reconcile({
+          planId,
+          limit,
+          runtime: createPlannerReconcileRuntime({
+            jobs: deps.jobs,
+            shell: deps.shell,
+          }),
+        }),
+    },
   };
+
+  return flattenToolingNamespaces(namespaces);
 }
 
 export function createChatOnlyTooling(tooling: EngineTooling): EngineTooling {

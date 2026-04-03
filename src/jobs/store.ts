@@ -6,7 +6,7 @@ type JobIndex = {
   jobs: Record<string, JobRecord>;
 };
 
-const VIDEO_ACTIONS = new Set(["transcode", "convert_hls", "capture_stream", "probe_media", "play_vlc"]);
+const VIDEO_ACTIONS = new Set(["transcode", "convert_hls", "capture_stream", "probe_media", "probe_url", "play_vlc"]);
 
 function inferCapabilityFromAction(action: string): string {
   if (VIDEO_ACTIONS.has(action)) {

@@ -21,7 +21,13 @@ export type SessionEntry = {
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "canceled";
 
-export type VideoJobType = "transcode" | "convert_hls" | "capture_stream" | "probe_media" | "play_vlc";
+export type VideoJobType =
+  | "transcode"
+  | "convert_hls"
+  | "capture_stream"
+  | "probe_media"
+  | "probe_url"
+  | "play_vlc";
 
 export type JobRecord = {
   id: string;
