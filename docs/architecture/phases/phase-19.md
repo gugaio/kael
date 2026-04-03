@@ -11,7 +11,7 @@ dedicadas no runtime PI e skill operacional no workspace.
 ## Escopo da fase
 
 - `McpBridgeService` para executar `mcporter` como subprocesso controlado.
-- Surface minima no `EngineTooling`:
+- Surface minima no namespace `mcp` do `EngineToolingNamespaces`:
   - `mcpList`
   - `mcpCall`
 - Tools dedicadas no PI:
@@ -44,8 +44,8 @@ dedicadas no runtime PI e skill operacional no workspace.
    - Calls nomeadas por servidor configurado sao o caminho padrao do MVP.
 
 4. **Compatibilidade com `AgentEngine` atual**
-   - A integracao entra por extensao de `EngineTooling` + `createChatTooling`.
-   - Nenhuma quebra estrutural no contrato do engine.
+   - A integracao entra pelo namespace `mcp` em `EngineToolingNamespaces` + `createChatTooling`.
+   - O contrato do engine continua estavel, mas o tooling interno deixou de ser flat.
 
 ## Desenho de componentes
 
@@ -76,7 +76,7 @@ dedicadas no runtime PI e skill operacional no workspace.
 - Wiring no app/runtime:
   - `KaelConfig.mcp`
   - `KaelApp.mcp`
-  - `EngineTooling.mcpList/mcpCall`
+  - `EngineToolingNamespaces.mcp.mcpList/mcpCall`
   - `createChatTooling(...)`
 - Tools PI:
   - `mcp_list`

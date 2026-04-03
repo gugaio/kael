@@ -16,7 +16,7 @@ sequenceDiagram
     participant Session as SessionStore<br/>src/session/store.ts
     participant Engine as PiEngineAdapter<br/>src/engine/pi-engine-adapter.ts
     participant PiSDK as PI Agent SDK
-    participant Tooling as EngineTooling
+    participant Tooling as EngineToolingNamespaces
     participant VideoJob as VideoJobService
     participant Memory as MemoryService
 
@@ -96,7 +96,7 @@ sequenceDiagram
 
         loop Tool calling loop
             PiSDK-->>Engine: toolCall<br/>{name, args}
-            Engine->>Tooling: Executar tool
+            Engine->>Tooling: Executar tool no namespace correto
 
             alt Tool é exec/process?
                 Engine->>ShellToolService: exec/process
@@ -188,7 +188,7 @@ sequenceDiagram
 1. PI SDK executa agente com system prompt (SOUL.md)
 2. Agente decide se precisa chamar tools
 3. Para cada tool call:
-   - Engine executa via EngineTooling
+   - Engine executa via `EngineToolingNamespaces`
    - Tooling despacha para service apropriado
    - Resultado retornado ao PI SDK
 4. Loop continua até agente decidir finalizar

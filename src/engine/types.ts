@@ -9,7 +9,7 @@ import type { PlaybackAnalysisReport, PlaybackEvent, PlaybackEngine } from "../c
 import type { McpCallResult, McpListResult } from "../tools/mcp/mcp-bridge-service.js";
 import type { EdgeCallResult, EdgeCapabilitySummary } from "../edge/runtime.js";
 
-export type EngineTooling = {
+export type EngineVideoTooling = {
   startTranscode: (params: {
     sessionKey: string;
     inputPath: string;
@@ -98,6 +98,38 @@ export type EngineTooling = {
     };
     errors: string[];
   }>;
+  videoGenerateImage?: (params: {
+    sessionKey: string;
+    prompt: string;
+    provider?: string;
+    size?: "1024x1024" | "1536x1024" | "1024x1536";
+  }) => Promise<{
+    artifact: EngineOutputArtifact;
+    record: {
+      id: string;
+      sessionKey: string;
+      kind: "image" | "video";
+      provider: string;
+      prompt: string;
+      fileName: string;
+      filePath: string;
+      metadataPath: string;
+      mimeType: string;
+      bytes: number;
+      createdAt: string;
+    };
+  }>;
+  playbackAnalyze?: (params: {
+    sessionKey: string;
+    player: PlaybackEngine;
+    source?: string;
+    streamUrl?: string;
+    logText?: string;
+    events?: PlaybackEvent[];
+  }) => Promise<PlaybackAnalysisReport>;
+};
+
+export type EngineJobsTooling = {
   listJobs: (params?: {
     sessionKey?: string;
     capability?: string;
@@ -137,6 +169,9 @@ export type EngineTooling = {
     found: boolean;
     log?: string;
   }>;
+};
+
+export type EngineSystemTooling = {
   execCommand: (params: {
     sessionKey: string;
     command: string;
@@ -206,6 +241,9 @@ export type EngineTooling = {
       failureCode?: string;
     };
   }>;
+};
+
+export type EngineMcpTooling = {
   mcpList: (params: {
     sessionKey: string;
     server?: string;
@@ -219,6 +257,9 @@ export type EngineTooling = {
     stdioCommand?: string;
     timeoutMs?: number;
   }) => Promise<McpCallResult>;
+};
+
+export type EngineEdgeTooling = {
   edgeList: (params?: {
     clientId?: string;
     capability?: string;
@@ -255,6 +296,9 @@ export type EngineTooling = {
     clientId?: string;
     timeoutMs?: number;
   }) => Promise<EdgeCallResult>;
+};
+
+export type EngineMemoryTooling = {
   memorySearch: (params: {
     query: string;
     maxResults?: number;
@@ -281,6 +325,9 @@ export type EngineTooling = {
     content: string;
     target?: "daily" | "long_term";
   }) => Promise<{ path: string }>;
+};
+
+export type EngineWorkspaceTooling = {
   workspaceSearch: (params: {
     query: string;
     maxResults?: number;
@@ -301,6 +348,9 @@ export type EngineTooling = {
     startLine: number;
     endLine: number;
   }>;
+};
+
+export type EngineWebTooling = {
   webSearch: (params: {
     sessionKey: string;
     query: string;
@@ -327,6 +377,9 @@ export type EngineTooling = {
     domainsBlock?: string[];
     signal?: AbortSignal;
   }) => Promise<WebResearchResult>;
+};
+
+export type EngineBrowserTooling = {
   browserCommand: (params: {
     sessionKey: string;
     action: BrowserCommandAction;
@@ -338,40 +391,17 @@ export type EngineTooling = {
     timeoutMs?: number;
   }) => Promise<BrowserCommandResult>;
   browserRuntimeTelemetry: () => BrowserRuntimeTelemetry;
+};
+
+export type EngineImageTooling = {
   imageGenerate?: (params: {
     sessionKey: string;
     prompt: string;
     size?: "1024x1024" | "1536x1024" | "1024x1536";
   }) => Promise<EngineOutputArtifact>;
-  videoGenerateImage?: (params: {
-    sessionKey: string;
-    prompt: string;
-    provider?: string;
-    size?: "1024x1024" | "1536x1024" | "1024x1536";
-  }) => Promise<{
-    artifact: EngineOutputArtifact;
-    record: {
-      id: string;
-      sessionKey: string;
-      kind: "image" | "video";
-      provider: string;
-      prompt: string;
-      fileName: string;
-      filePath: string;
-      metadataPath: string;
-      mimeType: string;
-      bytes: number;
-      createdAt: string;
-    };
-  }>;
-  playbackAnalyze?: (params: {
-    sessionKey: string;
-    player: PlaybackEngine;
-    source?: string;
-    streamUrl?: string;
-    logText?: string;
-    events?: PlaybackEvent[];
-  }) => Promise<PlaybackAnalysisReport>;
+};
+
+export type EnginePlansTooling = {
   planCreate: (params: {
     sessionKey: string;
     title: string;
@@ -527,41 +557,17 @@ export type EngineTooling = {
 };
 
 export type EngineToolingNamespaces = {
-  video: Pick<
-    EngineTooling,
-    | "startTranscode"
-    | "startConvertHls"
-    | "startCaptureStream"
-    | "startProbeMedia"
-    | "startPlayVlc"
-    | "videoHlsInspect"
-    | "videoProbe"
-    | "videoGenerateImage"
-    | "playbackAnalyze"
-  >;
-  jobs: Pick<EngineTooling, "listJobs" | "getJob" | "getJobLog">;
-  system: Pick<EngineTooling, "execCommand" | "processCommand">;
-  mcp: Pick<EngineTooling, "mcpList" | "mcpCall">;
-  edge: Pick<
-    EngineTooling,
-    "edgeList" | "edgeCall" | "youboraMetricsGet" | "youboraRawdataGet" | "youboraEventsGet"
-  >;
-  memory: Pick<EngineTooling, "memorySearch" | "memoryGet" | "memoryWrite">;
-  workspace: Pick<EngineTooling, "workspaceSearch" | "workspaceRead">;
-  web: Pick<EngineTooling, "webSearch" | "webFetch" | "webResearch">;
-  browser: Pick<EngineTooling, "browserCommand" | "browserRuntimeTelemetry">;
-  image: Pick<EngineTooling, "imageGenerate">;
-  plans: Pick<
-    EngineTooling,
-    | "planCreate"
-    | "planGenerate"
-    | "planList"
-    | "planGet"
-    | "planUpdateStep"
-    | "planNextAction"
-    | "planExecuteNext"
-    | "planReconcile"
-  >;
+  video: EngineVideoTooling;
+  jobs: EngineJobsTooling;
+  system: EngineSystemTooling;
+  mcp: EngineMcpTooling;
+  edge: EngineEdgeTooling;
+  memory: EngineMemoryTooling;
+  workspace: EngineWorkspaceTooling;
+  web: EngineWebTooling;
+  browser: EngineBrowserTooling;
+  image: EngineImageTooling;
+  plans: EnginePlansTooling;
 };
 
 export type EngineTurnInput = {

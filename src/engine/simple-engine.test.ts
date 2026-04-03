@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { SimpleCommandEngine } from "./simple-engine.js";
-import type { EngineTurnInput, EngineTooling, EngineToolingNamespaces } from "./types.js";
+import type { EngineBrowserTooling, EngineSystemTooling, EngineTurnInput, EngineToolingNamespaces } from "./types.js";
 
 function createTooling(
-  execImpl?: EngineTooling["execCommand"],
-  browserImpl?: EngineTooling["browserCommand"],
+  execImpl?: EngineSystemTooling["execCommand"],
+  browserImpl?: EngineBrowserTooling["browserCommand"],
 ): EngineToolingNamespaces {
   return {
     video: {

@@ -10,7 +10,7 @@ em etapas curtas, com observabilidade e risco operacional controlado.
 ## Decisao arquitetural
 
 - Reutilizar o padrao atual do core:
-  - contrato no `EngineTooling`;
+  - contrato namespaced em `EngineToolingNamespaces`;
   - capability explicita (`BrowserCapability`) no dominio `src/capabilities/browser`;
   - runtime de browser (`BrowserToolService`) encapsulado pela capability;
   - wiring no `createKaelApp` e `createChatTooling`;
@@ -23,7 +23,7 @@ em etapas curtas, com observabilidade e risco operacional controlado.
 ### Fase 16.0 - Foundations
 
 Entregas:
-- Contrato `browserCommand` no `EngineTooling`.
+- Contrato `browserCommand` no namespace `browser` do `EngineToolingNamespaces`.
 - Runtime `BrowserToolService` com telemetria base e gate por config.
 - Configuracoes `KAEL_BROWSER_*`.
 - Telemetria `browserRuntime` no `/health`.

@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-03-28**
+Ultima atualizacao: **2026-04-03**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,32 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-04-03 - Refactor: tooling do engine modular por namespaces
+
+Resumo:
+- O contrato flat legado de tooling do engine foi removido do runtime e dos testes.
+- `src/engine/types.ts` passou a expor contratos reais por namespace (`video`, `jobs`, `system`, `mcp`, `edge`, `memory`, `workspace`, `web`, `browser`, `image`, `plans`).
+- `ChatService`, `SimpleCommandEngine`, `pi-tools` e `tool-specs` agora consomem `EngineToolingNamespaces` de ponta a ponta, sem adapter de flatten/resolve.
+
+Arquivos-chave:
+- `src/engine/types.ts`
+- `src/chat/tooling-factory.ts`
+- `src/chat/service.ts`
+- `src/engine/pi-tools.ts`
+- `src/engine/simple-engine.ts`
+- `docs/architecture/phases/phase-19.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/engine/simple-engine.test.ts src/engine/pi-tools.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/api/server.test.ts`
+
+Pendencias:
+- Ainda existem referencias historicas a `EngineTooling` flat em diagramas e registros antigos do status.
+- Falta avaliar se vale quebrar `src/engine/types.ts` em arquivos menores por dominio para reduzir densidade do contrato central.
+
+Proximo passo recomendado:
+- Continuar a simplificacao estrutural extraindo tipos/tool contracts por modulo de dominio e revisar os hotspots restantes (`PiEngineAdapter` e planner runtime) com a mesma abordagem.
 
 ### 2026-03-29 - Youbora: rawdata/events e rota explicita /youbora
 
@@ -445,7 +471,7 @@ Status: **Em andamento**
 Objetivos:
 - Introduzir controle de browser por tool dedicada no runtime PI.
 - Entregar automacao web incremental (read-only -> interacao) com observabilidade no `/health`.
-- Manter arquitetura simples e desacoplada no contrato `EngineTooling`.
+- Manter arquitetura simples e desacoplada no contrato namespaced `EngineToolingNamespaces`.
 
 Definition of Done (checklist):
 - [x] Foundations: contrato/wiring/config/telemetria base de browser runtime.
@@ -502,7 +528,7 @@ Objetivos:
 Definition of Done (checklist):
 - [x] `McpBridgeService` com `list/call`, timeout, parsing JSON e truncamento de output.
 - [x] Configuracao base por ENV (`KAEL_MCP_*`) integrada ao app.
-- [x] Wiring em `EngineTooling` + `createChatTooling`.
+- [x] Wiring em `EngineToolingNamespaces` + `createChatTooling`.
 - [x] Tools PI `mcp_list` e `mcp_call`.
 - [x] Skill operacional `.kael/skills/mcporter/SKILL.md`.
 - [x] Registry persistente de servidores MCP permitidos.

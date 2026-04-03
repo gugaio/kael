@@ -24,8 +24,8 @@ graph TB
     end
 
     subgraph "Tooling Layer"
-        subgraph "EngineTooling Contract"
-            Tooling[<<interface>><br/>EngineTooling<br/>startTranscode()<br/>startConvertHls()<br/>startCaptureStream()<br/>startProbeMedia()<br/>startPlayVLC()<br/>videoHlsInspect()<br/>videoProbe()<br/>listJobs()<br/>execCommand()<br/>processCommand()<br/>memorySearch()<br/>memoryGet()<br/>memoryWrite()<br/>workspaceSearch()<br/>workspaceRead()<br/>webSearch()<br/>webFetch()<br/>webResearch()<br/>browserCommand()<br/>browserRuntimeTelemetry()<br/>imageGenerate()<br/>planCreate()<br/>planGenerate()<br/>planList()<br/>planUpdateStep()<br/>planNextAction()<br/>planExecuteNext()<br/>planReconcile()]
+        subgraph "Engine Tooling Namespaces"
+            Tooling[<<interface>><br/>EngineToolingNamespaces<br/>video.*<br/>jobs.*<br/>system.*<br/>mcp.*<br/>edge.*<br/>memory.*<br/>workspace.*<br/>web.*<br/>browser.*<br/>image.*<br/>plans.*]
         end
 
         subgraph "Video Tools"
@@ -222,40 +222,43 @@ interface AgentEngine {
 - **PiEngineAdapter**: Runtime PI Agent SDK embedded com system prompt montado via `SOUL.md`.
 - **HybridEngine**: Slash commands locais + conversa via PI com fallback para Simple.
 
-### EngineTooling (Interface)
-Contrato único para todas as tools disponíveis ao engine:
+### EngineToolingNamespaces (Interface)
+Contrato modular por namespace para todas as tools disponíveis ao engine.
 
-**Video:**
+**video:**
 - `startTranscode`, `startConvertHls`, `startCaptureStream`, `startProbeMedia`, `startPlayVLC`
 - `videoHlsInspect`, `videoProbe`
-- `listJobs`
+- `videoGenerateImage`, `playbackAnalyze`
 
-**Shell:**
+**jobs:**
+- `listJobs`, `getJob`, `getJobLog`
+
+**system:**
 - `execCommand`: Executar comandos shell com timeout, background, approvals
 - `processCommand`: Gerenciar sessões (list/poll/kill/log/remove)
 
-**Memory:**
+**memory:**
 - `memorySearch`: Buscar na memória
 - `memoryGet`: Ler arquivo de memória
 - `memoryWrite`: Escrever na memória (daily ou long_term)
 
-**Workspace:**
+**workspace:**
 - `workspaceSearch`: Buscar no workspace
 - `workspaceRead`: Ler arquivo do workspace
 
-**Research:**
+**web:**
 - `webSearch`: Buscar web via Tavily
 - `webFetch`: Fetch URL com extração de texto e cache
 - `webResearch`: Pipeline completo (search + fetch + síntese)
 
-**Browser:**
+**browser:**
 - `browserCommand`: Navegar/clicar/scroll/tirar screenshot
 - `browserRuntimeTelemetry`: Métricas de runtime
 
-**Image Generation:**
+**image:**
 - `imageGenerate`: Gerar imagem via OpenAI
 
-**Planner:**
+**plans:**
 - `planCreate`: Criar plano manual
 - `planGenerate`: Gerar plano via LLM
 - `planList`: Listar planos
@@ -263,6 +266,10 @@ Contrato único para todas as tools disponíveis ao engine:
 - `planNextAction`: Próxima ação do plano
 - `planExecuteNext`: Executar próximo step
 - `planReconcile`: Reconciliar status com runtime
+
+**mcp / edge:**
+- `mcpList`, `mcpCall`
+- `edgeList`, `edgeCall`, `youboraMetricsGet`, `youboraRawdataGet`, `youboraEventsGet`
 
 ### EmailProvider (Interface)
 Provider plugável para ingest de email:

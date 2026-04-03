@@ -1,8 +1,35 @@
 import { describe, expect, it, vi } from "vitest";
 import { createPiShellTools } from "./pi-tools.js";
-import type { EngineTooling, EngineToolingNamespaces } from "./types.js";
+import type {
+  EngineBrowserTooling,
+  EngineEdgeTooling,
+  EngineImageTooling,
+  EngineJobsTooling,
+  EngineMcpTooling,
+  EngineMemoryTooling,
+  EnginePlansTooling,
+  EngineSystemTooling,
+  EngineToolingNamespaces,
+  EngineVideoTooling,
+  EngineWebTooling,
+  EngineWorkspaceTooling,
+} from "./types.js";
 
-function createTooling(overrides: Partial<EngineTooling> = {}): EngineToolingNamespaces {
+type ToolingOverrides = {
+  video?: Partial<EngineVideoTooling>;
+  jobs?: Partial<EngineJobsTooling>;
+  system?: Partial<EngineSystemTooling>;
+  mcp?: Partial<EngineMcpTooling>;
+  edge?: Partial<EngineEdgeTooling>;
+  memory?: Partial<EngineMemoryTooling>;
+  workspace?: Partial<EngineWorkspaceTooling>;
+  web?: Partial<EngineWebTooling>;
+  browser?: Partial<EngineBrowserTooling>;
+  image?: Partial<EngineImageTooling>;
+  plans?: Partial<EnginePlansTooling>;
+};
+
+function createTooling(overrides: ToolingOverrides = {}): EngineToolingNamespaces {
   return {
     video: {
       startTranscode: async () => ({ id: "job-1" } as never),
@@ -29,106 +56,84 @@ function createTooling(overrides: Partial<EngineTooling> = {}): EngineToolingNam
       }),
       videoGenerateImage: undefined,
       playbackAnalyze: undefined,
-      ...(overrides.startTranscode ? { startTranscode: overrides.startTranscode } : {}),
-      ...(overrides.startConvertHls ? { startConvertHls: overrides.startConvertHls } : {}),
-      ...(overrides.startCaptureStream ? { startCaptureStream: overrides.startCaptureStream } : {}),
-      ...(overrides.startProbeMedia ? { startProbeMedia: overrides.startProbeMedia } : {}),
-      ...(overrides.startPlayVlc ? { startPlayVlc: overrides.startPlayVlc } : {}),
-      ...(overrides.videoHlsInspect ? { videoHlsInspect: overrides.videoHlsInspect } : {}),
-      ...(overrides.videoProbe ? { videoProbe: overrides.videoProbe } : {}),
-      ...(overrides.videoGenerateImage ? { videoGenerateImage: overrides.videoGenerateImage } : {}),
-      ...(overrides.playbackAnalyze ? { playbackAnalyze: overrides.playbackAnalyze } : {}),
+      ...overrides.video,
     },
     jobs: {
-      listJobs: overrides.listJobs ?? (() => []),
-      getJob: overrides.getJob ?? (() => null),
-      getJobLog: overrides.getJobLog ?? (async ({ jobId }) => ({ jobId, found: false })),
+      listJobs: () => [],
+      getJob: () => null,
+      getJobLog: async ({ jobId }) => ({ jobId, found: false }),
+      ...overrides.jobs,
     },
     system: {
-      execCommand:
-        overrides.execCommand ??
-        (async () => ({
+      execCommand: async () => ({
           id: "exec-1",
           command: "true",
           cwd: ".",
           status: "completed",
           startedAt: new Date().toISOString(),
           outputTail: "",
-        })),
-      processCommand: overrides.processCommand ?? (async () => ({ ok: true, action: "list", sessions: [] })),
+        }),
+      processCommand: async () => ({ ok: true, action: "list", sessions: [] }),
+      ...overrides.system,
     },
     mcp: {
-      mcpList:
-        overrides.mcpList ?? (async () => ({ ok: true, command: "mcporter list", schema: false, format: "json", items: [] })),
-      mcpCall:
-        overrides.mcpCall ??
-        (async () => ({
+      mcpList: async () => ({ ok: true, command: "mcporter list", schema: false, format: "json", items: [] }),
+      mcpCall: async () => ({
           ok: true,
           command: "mcporter call stub",
           target: "stub.call",
           format: "json",
           output: {},
-        })),
+        }),
+      ...overrides.mcp,
     },
     edge: {
-      edgeList: overrides.edgeList ?? (() => []),
-      edgeCall:
-        overrides.edgeCall ??
-        (async ({ capability }) => ({ ok: true, taskId: "edge-1", capability, output: {} })),
-      youboraMetricsGet:
-        overrides.youboraMetricsGet ??
-        (async () => ({ ok: true, taskId: "yb-1", capability: "youbora.metrics.get", output: {} })),
-      youboraRawdataGet:
-        overrides.youboraRawdataGet ??
-        (async () => ({ ok: true, taskId: "yb-2", capability: "youbora.rawdata.get", output: {} })),
-      youboraEventsGet:
-        overrides.youboraEventsGet ??
-        (async () => ({ ok: true, taskId: "yb-3", capability: "youbora.events.get", output: {} })),
+      edgeList: () => [],
+      edgeCall: async ({ capability }) => ({ ok: true, taskId: "edge-1", capability, output: {} }),
+      youboraMetricsGet: async () => ({ ok: true, taskId: "yb-1", capability: "youbora.metrics.get", output: {} }),
+      youboraRawdataGet: async () => ({ ok: true, taskId: "yb-2", capability: "youbora.rawdata.get", output: {} }),
+      youboraEventsGet: async () => ({ ok: true, taskId: "yb-3", capability: "youbora.events.get", output: {} }),
+      ...overrides.edge,
     },
     memory: {
-      memorySearch: overrides.memorySearch ?? (async () => []),
-      memoryGet: overrides.memoryGet ?? (async () => ({ path: "MEMORY.md", text: "", startLine: 1, endLine: 1 })),
-      memoryWrite: overrides.memoryWrite ?? (async () => ({ path: "memory/2026-01-01.md" })),
+      memorySearch: async () => [],
+      memoryGet: async () => ({ path: "MEMORY.md", text: "", startLine: 1, endLine: 1 }),
+      memoryWrite: async () => ({ path: "memory/2026-01-01.md" }),
+      ...overrides.memory,
     },
     workspace: {
-      workspaceSearch: overrides.workspaceSearch ?? (async () => []),
-      workspaceRead: overrides.workspaceRead ?? (async () => ({ path: "README.md", text: "", startLine: 1, endLine: 1 })),
+      workspaceSearch: async () => [],
+      workspaceRead: async () => ({ path: "README.md", text: "", startLine: 1, endLine: 1 }),
+      ...overrides.workspace,
     },
     web: {
-      webSearch: overrides.webSearch ?? (async () => ({ answer: "ok", sources: [], notes: [] })),
-      webFetch:
-        overrides.webFetch ??
-        (async () => ({
+      webSearch: async () => ({ answer: "ok", sources: [], notes: [] }),
+      webFetch: async () => ({
           url: "https://example.com",
           finalUrl: "https://example.com",
           content: "ok",
           excerpt: "ok",
           fetchedAt: new Date().toISOString(),
           cached: false,
-        })),
-      webResearch:
-        overrides.webResearch ??
-        (async () => ({
+        }),
+      webResearch: async () => ({
           query: "q",
           summary: "s",
           confidence: 0.7,
           confidenceReason: "r",
           evidence: [],
           notes: [],
-        })),
+        }),
+      ...overrides.web,
     },
     browser: {
-      browserCommand:
-        overrides.browserCommand ??
-        (async ({ action }) => ({
+      browserCommand: async ({ action }) => ({
           ok: true,
           action,
           status: "started",
           message: "ok",
-        })),
-      browserRuntimeTelemetry:
-        overrides.browserRuntimeTelemetry ??
-        (() => ({
+        }),
+      browserRuntimeTelemetry: () => ({
           enabled: false,
           commands: 0,
           failures: 0,
@@ -173,20 +178,23 @@ function createTooling(overrides: Partial<EngineTooling> = {}): EngineToolingNam
             wait_for: 0,
             close: 0,
           },
-        })),
+        }),
+      ...overrides.browser,
     },
     image: {
-      imageGenerate: overrides.imageGenerate,
+      imageGenerate: undefined,
+      ...overrides.image,
     },
     plans: {
-      planCreate: overrides.planCreate ?? (async () => ({ id: "p1" } as never)),
-      planGenerate: overrides.planGenerate ?? (async () => ({ id: "p1" } as never)),
-      planList: overrides.planList ?? (() => []),
-      planGet: overrides.planGet ?? (() => null),
-      planUpdateStep: overrides.planUpdateStep ?? (async () => null),
-      planNextAction: overrides.planNextAction ?? (() => null),
-      planExecuteNext: overrides.planExecuteNext ?? (async () => ({ ok: false, reason: "no_next_step", message: "none" })),
-      planReconcile: overrides.planReconcile ?? (async () => ({ scannedPlans: 0, updatedPlans: 0, updatedSteps: 0 })),
+      planCreate: async () => ({ id: "p1" } as never),
+      planGenerate: async () => ({ id: "p1" } as never),
+      planList: () => [],
+      planGet: () => null,
+      planUpdateStep: async () => null,
+      planNextAction: () => null,
+      planExecuteNext: async () => ({ ok: false, reason: "no_next_step", message: "none" }),
+      planReconcile: async () => ({ scannedPlans: 0, updatedPlans: 0, updatedSteps: 0 }),
+      ...overrides.plans,
     },
   };
 }
@@ -196,8 +204,10 @@ describe("createPiShellTools image_generate", () => {
     const tools = createPiShellTools({
       sessionKey: "s1",
       tooling: createTooling({
-        imageGenerate: async () => {
-          throw new Error("image backend timeout");
+        image: {
+          imageGenerate: async () => {
+            throw new Error("image backend timeout");
+          },
         },
       }),
     });
@@ -221,7 +231,9 @@ describe("createPiShellTools image_generate", () => {
     const tools = createPiShellTools({
       sessionKey: "s1",
       tooling: createTooling({
-        imageGenerate,
+        image: {
+          imageGenerate,
+        },
       }),
     });
     const tool = tools.find((item) => item.name === "image_generate");
@@ -245,27 +257,29 @@ describe("createPiShellTools playback_analyze", () => {
     const tools = createPiShellTools({
       sessionKey: "s-playback",
       tooling: createTooling({
-        playbackAnalyze: async ({ player, logText }) => ({
-          ok: false,
-          player,
-          summary: "Analise detectou stall e erro fatal.",
-          metrics: {
-            eventCount: 4,
-            errorCount: 1,
-            fatalErrorCount: 1,
-            rebufferCount: 2,
-            startupTimeMs: 4200,
-          },
-          issues: [
-            {
-              code: "fatal_error",
-              severity: "error",
-              summary: "Sessao teve erro fatal.",
-              evidence: [String(logText ?? "").slice(0, 30)],
+        video: {
+          playbackAnalyze: async ({ player, logText }) => ({
+            ok: false,
+            player,
+            summary: "Analise detectou stall e erro fatal.",
+            metrics: {
+              eventCount: 4,
+              errorCount: 1,
+              fatalErrorCount: 1,
+              rebufferCount: 2,
+              startupTimeMs: 4200,
             },
-          ],
-          recommendations: ["Cruzar logs com manifesto."],
-        }),
+            issues: [
+              {
+                code: "fatal_error",
+                severity: "error",
+                summary: "Sessao teve erro fatal.",
+                evidence: [String(logText ?? "").slice(0, 30)],
+              },
+            ],
+            recommendations: ["Cruzar logs com manifesto."],
+          }),
+        },
       }),
     });
     const tool = tools.find((item) => item.name === "playback_analyze");
@@ -307,12 +321,14 @@ describe("createPiShellTools browser budget", () => {
     const tools = createPiShellTools({
       sessionKey: "s-browser",
       tooling: createTooling({
-        browserCommand: async ({ action }) => ({
-          ok: true,
-          action,
-          status: "started",
-          message: "ok",
-        }),
+        browser: {
+          browserCommand: async ({ action }) => ({
+            ok: true,
+            action,
+            status: "started",
+            message: "ok",
+          }),
+        },
       }),
       budget: {
         maxToolCalls: 5,
@@ -339,28 +355,30 @@ describe("createPiShellTools jobs/plans state tools", () => {
     const tools = createPiShellTools({
       sessionKey: "s-jobs",
       tooling: createTooling({
-        listJobs: () => [
-          {
-            id: "job-1",
-            capability: "video",
-            action: "transcode",
-            status: "succeeded",
-            createdAt: "2026-01-01T00:00:00.000Z",
-          },
-        ],
-        getJob: () =>
-          ({
-            id: "job-1",
-            capability: "video",
-            action: "transcode",
-            status: "succeeded",
-            sessionKey: "s1",
-            command: "ffmpeg",
-            input: "/tmp/in.mp4",
-            args: [],
-            createdAt: "2026-01-01T00:00:00.000Z",
-            logPath: "/tmp/job-1.log",
-          }) as never,
+        jobs: {
+          listJobs: () => [
+            {
+              id: "job-1",
+              capability: "video",
+              action: "transcode",
+              status: "succeeded",
+              createdAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+          getJob: () =>
+            ({
+              id: "job-1",
+              capability: "video",
+              action: "transcode",
+              status: "succeeded",
+              sessionKey: "s1",
+              command: "ffmpeg",
+              input: "/tmp/in.mp4",
+              args: [],
+              createdAt: "2026-01-01T00:00:00.000Z",
+              logPath: "/tmp/job-1.log",
+            }) as never,
+        },
       }),
     });
     const listTool = tools.find((item) => item.name === "jobs_list");
@@ -383,7 +401,9 @@ describe("createPiShellTools jobs/plans state tools", () => {
     const tools = createPiShellTools({
       sessionKey: "s-plan",
       tooling: createTooling({
-        planGet: () => null,
+        plans: {
+          planGet: () => null,
+        },
       }),
     });
     const planGetTool = tools.find((item) => item.name === "plan_get");
@@ -400,27 +420,29 @@ describe("createPiShellTools edge tools", () => {
     const tools = createPiShellTools({
       sessionKey: "s-edge",
       tooling: createTooling({
-        edgeList: () => [
-          {
+        edge: {
+          edgeList: () => [
+            {
+              clientId: "clark-1",
+              clientName: "Clark 1",
+              connectionId: "conn-1",
+              name: "system.info",
+              description: "Info",
+              requiresApproval: false,
+              providerNames: [],
+              lastHeartbeatAt: null,
+            },
+          ],
+          edgeCall: async () => ({
+            ok: true,
+            taskId: "task-1",
             clientId: "clark-1",
-            clientName: "Clark 1",
             connectionId: "conn-1",
-            name: "system.info",
-            description: "Info",
-            requiresApproval: false,
-            providerNames: [],
-            lastHeartbeatAt: null,
-          },
-        ],
-        edgeCall: async () => ({
-          ok: true,
-          taskId: "task-1",
-          clientId: "clark-1",
-          connectionId: "conn-1",
-          capability: "system.info",
-          durationMs: 12,
-          output: { hostname: "notebook" },
-        }),
+            capability: "system.info",
+            durationMs: 12,
+            output: { hostname: "notebook" },
+          }),
+        },
       }),
     });
     const listTool = tools.find((item) => item.name === "edge_list");
@@ -447,12 +469,14 @@ describe("createPiShellTools edge tools", () => {
     const tools = createPiShellTools({
       sessionKey: "s-edge-budget",
       tooling: createTooling({
-        edgeCall: async () => ({
-          ok: true,
-          taskId: "task-1",
-          capability: "system.info",
-          output: {},
-        }),
+        edge: {
+          edgeCall: async () => ({
+            ok: true,
+            taskId: "task-1",
+            capability: "system.info",
+            output: {},
+          }),
+        },
       }),
       budget: {
         maxToolCalls: 5,
@@ -485,7 +509,9 @@ describe("createPiShellTools edge tools", () => {
     const tools = createPiShellTools({
       sessionKey: "s-youbora",
       tooling: createTooling({
-        youboraMetricsGet,
+        edge: {
+          youboraMetricsGet,
+        },
       }),
     });
     const tool = tools.find((item) => item.name === "youbora_metrics_get");
@@ -528,7 +554,9 @@ describe("createPiShellTools edge tools", () => {
     const tools = createPiShellTools({
       sessionKey: "s-youbora-raw",
       tooling: createTooling({
-        youboraRawdataGet,
+        edge: {
+          youboraRawdataGet,
+        },
       }),
     });
     const tool = tools.find((item) => item.name === "youbora_rawdata_get");
@@ -565,7 +593,9 @@ describe("createPiShellTools edge tools", () => {
     const tools = createPiShellTools({
       sessionKey: "s-youbora-events",
       tooling: createTooling({
-        youboraEventsGet,
+        edge: {
+          youboraEventsGet,
+        },
       }),
     });
     const tool = tools.find((item) => item.name === "youbora_events_get");
@@ -595,20 +625,22 @@ describe("createPiShellTools mcp tools", () => {
     const tools = createPiShellTools({
       sessionKey: "s-mcp",
       tooling: createTooling({
-        mcpList: async () => ({
-          ok: true,
-          command: "mcporter list --output json",
-          schema: false,
-          format: "json",
-          items: [{ name: "linear" }],
-        }),
-        mcpCall: async () => ({
-          ok: true,
-          command: "mcporter call linear.list_issues --output json",
-          target: "linear.list_issues",
-          format: "json",
-          output: { issues: [{ id: "1" }] },
-        }),
+        mcp: {
+          mcpList: async () => ({
+            ok: true,
+            command: "mcporter list --output json",
+            schema: false,
+            format: "json",
+            items: [{ name: "linear" }],
+          }),
+          mcpCall: async () => ({
+            ok: true,
+            command: "mcporter call linear.list_issues --output json",
+            target: "linear.list_issues",
+            format: "json",
+            output: { issues: [{ id: "1" }] },
+          }),
+        },
       }),
     });
     const listTool = tools.find((item) => item.name === "mcp_list");
@@ -634,13 +666,15 @@ describe("createPiShellTools mcp tools", () => {
     const tools = createPiShellTools({
       sessionKey: "s-mcp-budget",
       tooling: createTooling({
-        mcpList: async () => ({
-          ok: true,
-          command: "mcporter list --output json",
-          schema: false,
-          format: "json",
-          items: [],
-        }),
+        mcp: {
+          mcpList: async () => ({
+            ok: true,
+            command: "mcporter list --output json",
+            schema: false,
+            format: "json",
+            items: [],
+          }),
+        },
       }),
       budget: {
         maxToolCalls: 5,
