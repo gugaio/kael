@@ -1,5 +1,5 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineTooling } from "../types.js";
+import type { EngineToolingNamespaces } from "../types.js";
 import type { ToolLoopGuard } from "../tool-loop-guard.js";
 
 type TextBlock = {
@@ -51,7 +51,7 @@ function summarizeWebResearch(result: {
 
 export function createWebPiTools(params: {
   sessionKey: string;
-  tooling: EngineTooling;
+  tooling: EngineToolingNamespaces["web"];
   turnSignal?: AbortSignal;
   loopGuard?: ToolLoopGuard;
   textResult: (text: string) => TextBlock[];

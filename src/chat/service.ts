@@ -1,4 +1,5 @@
-import type { EngineInboundAttachment, EngineOutputArtifact, EngineTooling } from "../engine/types.js";
+import type { EngineInboundAttachment, EngineOutputArtifact, EngineToolingInput } from "../engine/types.js";
+import { resolveToolingNamespaces } from "../engine/tooling-namespaces.js";
 import { normalizePiError } from "../engine/pi-errors.js";
 import type { MemoryService } from "../memory/service.js";
 import type { SessionStore } from "../session/store.js";
@@ -77,8 +78,8 @@ type PipelineState = {
 };
 
 export class ChatService {
-  private readonly tooling: EngineTooling;
-  private readonly chatOnlyTooling: EngineTooling;
+  private readonly tooling: EngineToolingInput;
+  private readonly chatOnlyTooling: EngineToolingInput;
   private readonly memoryOrchestrator: MemoryOrchestrator;
   private readonly commandRouter = new CommandRouter();
   private readonly routingTelemetry = new ChatRoutingTelemetry();
@@ -90,7 +91,7 @@ export class ChatService {
     private readonly orchestrator: TurnOrchestrator,
     private readonly media: MediaUnderstandingService,
     memory: MemoryService,
-    tooling: EngineTooling,
+    tooling: EngineToolingInput,
     skills: SkillService,
   ) {
     this.memoryOrchestrator = new MemoryOrchestrator(this.sessions, memory, this.orchestrator);
@@ -136,7 +137,7 @@ export class ChatService {
   }
 
   getBrowserRuntimeTelemetrySnapshot(): BrowserRuntimeTelemetry {
-    return this.tooling.browserRuntimeTelemetry();
+    return resolveToolingNamespaces(this.tooling).browser.browserRuntimeTelemetry();
   }
 
   getSkillsRuntimeTelemetrySnapshot(): SkillsRuntimeTelemetry {
@@ -145,7 +146,7 @@ export class ChatService {
 
   private async handleMessageInternal(
     input: HandleMessageInput,
-    tooling: EngineTooling,
+    tooling: EngineToolingInput,
     opts: { allowOperationalShortcuts: boolean },
   ): Promise<ChatReplyEnvelope> {
     const storedUserMessage = buildStoredUserMessage(input.message, input.attachments);
@@ -181,7 +182,7 @@ export class ChatService {
   private async handleCompactCommand(input: {
     sessionKey: string;
     currentMessage: string;
-    tooling: EngineTooling;
+    tooling: EngineToolingInput;
     requestId?: string;
   }): Promise<{ reply: string }> {
     const { flush, promote, compaction } = await this.memoryOrchestrator.runManualCompact(input);
@@ -247,7 +248,7 @@ export class ChatService {
 
   private async tryCompactStage(
     input: HandleMessageInput,
-    tooling: EngineTooling,
+    tooling: EngineToolingInput,
     user: SessionMessage,
   ): Promise<ChatReplyEnvelope | null> {
     if (!this.memoryOrchestrator.isCompactCommand(input.message)) {
@@ -276,7 +277,7 @@ export class ChatService {
 
   private async tryOperationalFastPathStage(
     input: HandleMessageInput,
-    tooling: EngineTooling,
+    tooling: EngineToolingInput,
     opts: { allowOperationalShortcuts: boolean },
     user: SessionMessage,
     pipeline: PipelineState,
@@ -344,7 +345,7 @@ export class ChatService {
 
   private async runLlmTurnStage(
     input: HandleMessageInput,
-    tooling: EngineTooling,
+    tooling: EngineToolingInput,
     user: SessionMessage,
     llmMessage: string,
   ): Promise<ChatReplyEnvelope> {
@@ -380,7 +381,7 @@ export class ChatService {
 
   private async handlePipelineError(
     input: HandleMessageInput,
-    tooling: EngineTooling,
+    tooling: EngineToolingInput,
     storedUserMessage: string,
     user: SessionMessage,
     error: unknown,

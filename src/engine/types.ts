@@ -526,6 +526,46 @@ export type EngineTooling = {
   }>;
 };
 
+export type EngineToolingNamespaces = {
+  video: Pick<
+    EngineTooling,
+    | "startTranscode"
+    | "startConvertHls"
+    | "startCaptureStream"
+    | "startProbeMedia"
+    | "startPlayVlc"
+    | "videoHlsInspect"
+    | "videoProbe"
+    | "videoGenerateImage"
+    | "playbackAnalyze"
+  >;
+  jobs: Pick<EngineTooling, "listJobs" | "getJob" | "getJobLog">;
+  system: Pick<EngineTooling, "execCommand" | "processCommand">;
+  mcp: Pick<EngineTooling, "mcpList" | "mcpCall">;
+  edge: Pick<
+    EngineTooling,
+    "edgeList" | "edgeCall" | "youboraMetricsGet" | "youboraRawdataGet" | "youboraEventsGet"
+  >;
+  memory: Pick<EngineTooling, "memorySearch" | "memoryGet" | "memoryWrite">;
+  workspace: Pick<EngineTooling, "workspaceSearch" | "workspaceRead">;
+  web: Pick<EngineTooling, "webSearch" | "webFetch" | "webResearch">;
+  browser: Pick<EngineTooling, "browserCommand" | "browserRuntimeTelemetry">;
+  image: Pick<EngineTooling, "imageGenerate">;
+  plans: Pick<
+    EngineTooling,
+    | "planCreate"
+    | "planGenerate"
+    | "planList"
+    | "planGet"
+    | "planUpdateStep"
+    | "planNextAction"
+    | "planExecuteNext"
+    | "planReconcile"
+  >;
+};
+
+export type EngineToolingInput = EngineTooling | EngineToolingNamespaces;
+
 export type EngineTurnInput = {
   sessionKey: string;
   message: string;
@@ -536,7 +576,7 @@ export type EngineTurnInput = {
     content: string;
     createdAt: string;
   }>;
-  tooling: EngineTooling;
+  tooling: EngineToolingInput;
 };
 
 export type EngineInboundAttachment = {

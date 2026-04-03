@@ -1,5 +1,5 @@
-import type { EngineTooling } from "../engine/types.js";
-import { flattenToolingNamespaces, type EngineToolingNamespaces } from "../engine/tooling-namespaces.js";
+import type { EngineTooling, EngineToolingInput, EngineToolingNamespaces } from "../engine/types.js";
+import { flattenToolingNamespaces, resolveToolingNamespaces } from "../engine/tooling-namespaces.js";
 import type { JobManager } from "../jobs/manager.js";
 import { VIDEO_JOB_ACTIONS } from "../capabilities/video/index.js";
 import type { MemoryService } from "../memory/service.js";
@@ -35,8 +35,8 @@ type ChatToolingDeps = {
   browser: BrowserCapability;
 };
 
-export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
-  const namespaces: EngineToolingNamespaces = {
+export function createChatToolingNamespaces(deps: ChatToolingDeps): EngineToolingNamespaces {
+  return {
     video: {
       startTranscode: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.transcode, params),
       startConvertHls: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.convertHls, params),
@@ -213,58 +213,77 @@ export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
         }),
     },
   };
-
-  return flattenToolingNamespaces(namespaces);
 }
 
-export function createChatOnlyTooling(tooling: EngineTooling): EngineTooling {
+export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
+  return flattenToolingNamespaces(createChatToolingNamespaces(deps));
+}
+
+export function createChatOnlyToolingNamespaces(tooling: EngineToolingInput): EngineToolingNamespaces {
+  const namespaces = resolveToolingNamespaces(tooling);
   return {
-    ...tooling,
-    startTranscode: async () => {
-      throw new Error("chat-only mode: transcode disabled");
+    ...namespaces,
+    video: {
+      ...namespaces.video,
+      startTranscode: async () => {
+        throw new Error("chat-only mode: transcode disabled");
+      },
+      startConvertHls: async () => {
+        throw new Error("chat-only mode: convert_hls disabled");
+      },
+      startCaptureStream: async () => {
+        throw new Error("chat-only mode: capture_stream disabled");
+      },
+      startProbeMedia: async () => {
+        throw new Error("chat-only mode: probe_media job disabled");
+      },
+      startPlayVlc: async () => {
+        throw new Error("chat-only mode: play_vlc job disabled");
+      },
+      videoHlsInspect: async () => {
+        throw new Error("chat-only mode: video_hls_inspect disabled");
+      },
+      videoProbe: async () => {
+        throw new Error("chat-only mode: video_probe disabled");
+      },
+      videoGenerateImage: async () => {
+        throw new Error("chat-only mode: video_generate_image disabled");
+      },
+      playbackAnalyze: async () => {
+        throw new Error("chat-only mode: playback_analyze disabled");
+      },
     },
-    startConvertHls: async () => {
-      throw new Error("chat-only mode: convert_hls disabled");
+    jobs: {
+      listJobs: () => [],
+      getJob: () => null,
+      getJobLog: async ({ jobId }) => ({ jobId, found: false }),
     },
-    startCaptureStream: async () => {
-      throw new Error("chat-only mode: capture_stream disabled");
+    system: {
+      execCommand: async () => {
+        throw new Error("chat-only mode: exec disabled");
+      },
+      processCommand: async () => {
+        throw new Error("chat-only mode: process disabled");
+      },
     },
-    startProbeMedia: async () => {
-      throw new Error("chat-only mode: probe_media job disabled");
+    mcp: {
+      mcpList: async () => {
+        throw new Error("chat-only mode: mcp_list disabled");
+      },
+      mcpCall: async () => {
+        throw new Error("chat-only mode: mcp_call disabled");
+      },
     },
-    startPlayVlc: async () => {
-      throw new Error("chat-only mode: play_vlc job disabled");
-    },
-    videoHlsInspect: async () => {
-      throw new Error("chat-only mode: video_hls_inspect disabled");
-    },
-    videoProbe: async () => {
-      throw new Error("chat-only mode: video_probe disabled");
-    },
-    listJobs: () => [],
-    getJob: () => null,
-    getJobLog: async ({ jobId }) => ({ jobId, found: false }),
-    execCommand: async () => {
-      throw new Error("chat-only mode: exec disabled");
-    },
-    processCommand: async () => {
-      throw new Error("chat-only mode: process disabled");
-    },
-    mcpList: async () => {
-      throw new Error("chat-only mode: mcp_list disabled");
-    },
-    mcpCall: async () => {
-      throw new Error("chat-only mode: mcp_call disabled");
-    },
-    edgeList: () => [],
-    edgeCall: async ({ capability }) => ({
+    edge: {
+      edgeList: () => [],
+      edgeCall: async ({ capability }) => ({
       ok: false,
       taskId: "chat-only",
       capability,
       error: "chat-only mode: edge_call disabled",
       errorCode: "chat_only_disabled",
     }),
-    youboraMetricsGet: async () => ({
+      youboraMetricsGet: async () => ({
       ok: false,
       taskId: "chat-only",
       capability: "youbora.metrics.get",
@@ -285,10 +304,12 @@ export function createChatOnlyTooling(tooling: EngineTooling): EngineTooling {
       error: "chat-only mode: youbora_events_get disabled",
       errorCode: "chat_only_disabled",
     }),
-    browserCommand: async () => {
-      throw new Error("chat-only mode: browser disabled");
     },
-    browserRuntimeTelemetry: () => ({
+    browser: {
+      browserCommand: async () => {
+        throw new Error("chat-only mode: browser disabled");
+      },
+      browserRuntimeTelemetry: () => ({
       enabled: false,
       commands: 0,
       failures: 0,
@@ -334,32 +355,35 @@ export function createChatOnlyTooling(tooling: EngineTooling): EngineTooling {
         close: 0,
       },
     }),
-    imageGenerate: async () => {
-      throw new Error("chat-only mode: image_generate disabled");
     },
-    videoGenerateImage: async () => {
-      throw new Error("chat-only mode: video_generate_image disabled");
+    image: {
+      imageGenerate: async () => {
+        throw new Error("chat-only mode: image_generate disabled");
+      },
     },
-    playbackAnalyze: async () => {
-      throw new Error("chat-only mode: playback_analyze disabled");
-    },
-    planCreate: async () => {
-      throw new Error("chat-only mode: plan_create disabled");
-    },
-    planGenerate: async () => {
-      throw new Error("chat-only mode: plan_generate disabled");
-    },
-    planList: () => [],
-    planGet: () => null,
-    planUpdateStep: async () => {
-      throw new Error("chat-only mode: plan_update_step disabled");
-    },
-    planNextAction: () => null,
-    planExecuteNext: async () => {
-      throw new Error("chat-only mode: plan_execute_next disabled");
-    },
-    planReconcile: async () => {
-      throw new Error("chat-only mode: plan_reconcile disabled");
+    plans: {
+      planCreate: async () => {
+        throw new Error("chat-only mode: plan_create disabled");
+      },
+      planGenerate: async () => {
+        throw new Error("chat-only mode: plan_generate disabled");
+      },
+      planList: () => [],
+      planGet: () => null,
+      planUpdateStep: async () => {
+        throw new Error("chat-only mode: plan_update_step disabled");
+      },
+      planNextAction: () => null,
+      planExecuteNext: async () => {
+        throw new Error("chat-only mode: plan_execute_next disabled");
+      },
+      planReconcile: async () => {
+        throw new Error("chat-only mode: plan_reconcile disabled");
+      },
     },
   };
+}
+
+export function createChatOnlyTooling(tooling: EngineToolingInput): EngineTooling {
+  return flattenToolingNamespaces(createChatOnlyToolingNamespaces(tooling));
 }

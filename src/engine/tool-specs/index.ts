@@ -9,6 +9,7 @@ import { createSystemPiTools } from "./system.js";
 import { createVideoPiTools } from "./video.js";
 import { createWebPiTools } from "./web.js";
 import { createWorkspacePiTools } from "./workspace.js";
+import type { EngineToolingNamespaces } from "../types.js";
 
 export {
   createBrowserPiTool,
@@ -51,3 +52,5 @@ export function createPiCapabilityTools(params: {
     image: createImagePiTool(params.image),
   };
 }
+
+export type PiCapabilityTooling = EngineToolingNamespaces;

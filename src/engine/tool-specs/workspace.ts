@@ -1,5 +1,5 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineTooling } from "../types.js";
+import type { EngineToolingNamespaces } from "../types.js";
 
 type TextBlock = {
   type: "text";
@@ -7,7 +7,7 @@ type TextBlock = {
 };
 
 export function createWorkspacePiTools(params: {
-  tooling: EngineTooling;
+  tooling: EngineToolingNamespaces["workspace"];
   textResult: (text: string) => TextBlock[];
 }): AgentTool[] {
   const workspaceSearchTool: AgentTool = {
@@ -74,4 +74,3 @@ export function createWorkspacePiTools(params: {
 
   return [workspaceSearchTool, workspaceReadTool];
 }
-

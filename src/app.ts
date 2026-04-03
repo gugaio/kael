@@ -28,7 +28,7 @@ import { GmailPop3Provider } from "./email/gmail-pop3-provider.js";
 import { GmailSmtpSender } from "./email/gmail-smtp-sender.js";
 import { FileEmailIngestDedupeStore } from "./email/ingest-dedupe-store.js";
 import { ChatService } from "./chat/service.js";
-import { createChatTooling } from "./chat/tooling-factory.js";
+import { createChatToolingNamespaces } from "./chat/tooling-factory.js";
 import { TurnOrchestrator } from "./chat/turn-orchestrator.js";
 import type { ShellRuntime } from "./tools/system/shell-tool-service.js";
 import { PlaybackTriageService } from "./capabilities/video/index.js";
@@ -83,7 +83,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     maxContextChars: config.context.maxChars,
   });
   const { mediaUnderstanding, imageGenerator, videoGeneration } = createMediaRuntime(config, videoArtifacts);
-  const tooling = createChatTooling({
+  const tooling = createChatToolingNamespaces({
     jobs,
     shell,
     mcp,

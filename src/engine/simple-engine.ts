@@ -1,4 +1,5 @@
-import type { AgentEngine, EngineTurnInput, EngineTurnOutput } from "./types.js";
+import type { AgentEngine, EngineToolingNamespaces, EngineTurnInput, EngineTurnOutput } from "./types.js";
+import { resolveToolingNamespaces } from "./tooling-namespaces.js";
 import { BROWSER_ACTIONS, formatBrowserReplyText } from "../capabilities/browser/index.js";
 
 type ParsedCommand = {
@@ -44,8 +45,8 @@ function helpReply(): EngineTurnOutput {
   };
 }
 
-function listJobsReply(input: EngineTurnInput): EngineTurnOutput {
-  const jobs = input.tooling.listJobs().slice(0, 8);
+function listJobsReply(tooling: EngineToolingNamespaces): EngineTurnOutput {
+  const jobs = tooling.jobs.listJobs().slice(0, 8);
   if (jobs.length === 0) {
     return { reply: "Nenhum job encontrado." };
   }
@@ -60,7 +61,10 @@ function listJobsReply(input: EngineTurnInput): EngineTurnOutput {
   return { reply: `Ultimos jobs:\n${summary}` };
 }
 
-async function handleYouboraCommand(input: EngineTurnInput, parsed: ParsedCommand): Promise<EngineTurnOutput> {
+async function handleYouboraCommand(
+  parsed: ParsedCommand,
+  tooling: EngineToolingNamespaces,
+): Promise<EngineTurnOutput> {
   const [firstArg, ...restArgs] = parsed.args;
   const mode = ["metrics", "rawdata", "events"].includes(firstArg ?? "") ? firstArg : "metrics";
   const args = mode === "metrics" && firstArg !== "metrics" && firstArg !== "rawdata" && firstArg !== "events"
@@ -81,7 +85,7 @@ async function handleYouboraCommand(input: EngineTurnInput, parsed: ParsedComman
     const metrics = hasToDate ? third : second;
     const type = hasToDate ? fourth : third;
     const granularity = hasToDate ? fifth : fourth;
-    const result = await input.tooling.youboraMetricsGet({
+    const result = await tooling.edge.youboraMetricsGet({
       fromDate,
       toDate,
       metrics,
@@ -117,13 +121,13 @@ async function handleYouboraCommand(input: EngineTurnInput, parsed: ParsedComman
     }
   }
   const result = mode === "rawdata"
-    ? await input.tooling.youboraRawdataGet({
+    ? await tooling.edge.youboraRawdataGet({
         fromDate,
         toDate,
         type,
         filters,
       })
-    : await input.tooling.youboraEventsGet({
+    : await tooling.edge.youboraEventsGet({
         fromDate,
         toDate,
         type,
@@ -142,14 +146,18 @@ async function handleYouboraCommand(input: EngineTurnInput, parsed: ParsedComman
   };
 }
 
-async function handleVideoJobCommand(input: EngineTurnInput, parsed: ParsedCommand): Promise<EngineTurnOutput | null> {
+async function handleVideoJobCommand(
+  input: EngineTurnInput,
+  parsed: ParsedCommand,
+  tooling: EngineToolingNamespaces,
+): Promise<EngineTurnOutput | null> {
   if (parsed.name === "/transcode") {
     if (parsed.args.length < 2) {
       return { reply: "Uso: /transcode <input> <output>" };
     }
 
     const [inputPath, outputPath] = parsed.args;
-    const job = await input.tooling.startTranscode({
+    const job = await tooling.video.startTranscode({
       sessionKey: input.sessionKey,
       inputPath,
       outputPath,
@@ -163,7 +171,7 @@ async function handleVideoJobCommand(input: EngineTurnInput, parsed: ParsedComma
     }
     const [inputPath, outputPlaylistPath, segmentRaw] = parsed.args;
     const segmentTime = segmentRaw ? Number(segmentRaw) : undefined;
-    const job = await input.tooling.startConvertHls({
+    const job = await tooling.video.startConvertHls({
       sessionKey: input.sessionKey,
       inputPath,
       outputPlaylistPath,
@@ -178,7 +186,7 @@ async function handleVideoJobCommand(input: EngineTurnInput, parsed: ParsedComma
     }
     const [streamUrl, outputPath, durationRaw] = parsed.args;
     const durationSeconds = durationRaw ? Number(durationRaw) : undefined;
-    const job = await input.tooling.startCaptureStream({
+    const job = await tooling.video.startCaptureStream({
       sessionKey: input.sessionKey,
       streamUrl,
       outputPath,
@@ -192,7 +200,7 @@ async function handleVideoJobCommand(input: EngineTurnInput, parsed: ParsedComma
       return { reply: "Uso: /probe <input>" };
     }
     const [inputPath] = parsed.args;
-    const job = await input.tooling.startProbeMedia({
+    const job = await tooling.video.startProbeMedia({
       sessionKey: input.sessionKey,
       inputPath,
     });
@@ -205,10 +213,10 @@ async function handleVideoJobCommand(input: EngineTurnInput, parsed: ParsedComma
     if (!inputTarget) {
       return { reply: "Uso: /vlc <input|url>" };
     }
-    if (!input.tooling.startPlayVlc) {
+    if (!tooling.video.startPlayVlc) {
       return { reply: "Tool de VLC indisponivel neste modo." };
     }
-    const job = await input.tooling.startPlayVlc({
+    const job = await tooling.video.startPlayVlc({
       sessionKey: input.sessionKey,
       input: inputTarget,
     });
@@ -218,9 +226,13 @@ async function handleVideoJobCommand(input: EngineTurnInput, parsed: ParsedComma
   return null;
 }
 
-async function handleBrowserCommand(input: EngineTurnInput, parsed: ParsedCommand): Promise<EngineTurnOutput | null> {
+async function handleBrowserCommand(
+  input: EngineTurnInput,
+  parsed: ParsedCommand,
+  tooling: EngineToolingNamespaces,
+): Promise<EngineTurnOutput | null> {
   if (parsed.name === "/browser-start") {
-    const result = await input.tooling.browserCommand({
+    const result = await tooling.browser.browserCommand({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.start,
     });
@@ -232,7 +244,7 @@ async function handleBrowserCommand(input: EngineTurnInput, parsed: ParsedComman
     if (!url) {
       return { reply: "Uso: /browser-open <url>" };
     }
-    const result = await input.tooling.browserCommand({
+    const result = await tooling.browser.browserCommand({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.open,
       url,
@@ -241,7 +253,7 @@ async function handleBrowserCommand(input: EngineTurnInput, parsed: ParsedComman
   }
 
   if (parsed.name === "/browser-snapshot") {
-    const result = await input.tooling.browserCommand({
+    const result = await tooling.browser.browserCommand({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.snapshotText,
     });
@@ -249,7 +261,7 @@ async function handleBrowserCommand(input: EngineTurnInput, parsed: ParsedComman
   }
 
   if (parsed.name === "/browser-shot" || parsed.name === "/browser-screenshot") {
-    const result = await input.tooling.browserCommand({
+    const result = await tooling.browser.browserCommand({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.screenshot,
     });
@@ -261,7 +273,7 @@ async function handleBrowserCommand(input: EngineTurnInput, parsed: ParsedComman
     if (!selector) {
       return { reply: "Uso: /browser-click <selector>" };
     }
-    const result = await input.tooling.browserCommand({
+    const result = await tooling.browser.browserCommand({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.click,
       selector,
@@ -278,7 +290,7 @@ async function handleBrowserCommand(input: EngineTurnInput, parsed: ParsedComman
     if (!text) {
       return { reply: "Uso: /browser-type <selector> <texto>" };
     }
-    const result = await input.tooling.browserCommand({
+    const result = await tooling.browser.browserCommand({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.type,
       selector,
@@ -293,7 +305,7 @@ async function handleBrowserCommand(input: EngineTurnInput, parsed: ParsedComman
       return { reply: "Uso: /browser-press <tecla> [selector]" };
     }
     const selector = parsed.args.slice(1).join(" ").trim() || undefined;
-    const result = await input.tooling.browserCommand({
+    const result = await tooling.browser.browserCommand({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.press,
       key,
@@ -313,7 +325,7 @@ async function handleBrowserCommand(input: EngineTurnInput, parsed: ParsedComman
       parsedTimeout != null && Number.isFinite(parsedTimeout) && parsedTimeout > 0
         ? Math.floor(parsedTimeout)
         : undefined;
-    const result = await input.tooling.browserCommand({
+    const result = await tooling.browser.browserCommand({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.waitFor,
       selector,
@@ -323,7 +335,7 @@ async function handleBrowserCommand(input: EngineTurnInput, parsed: ParsedComman
   }
 
   if (parsed.name === "/browser-close") {
-    const result = await input.tooling.browserCommand({
+    const result = await tooling.browser.browserCommand({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.close,
     });
@@ -335,6 +347,7 @@ async function handleBrowserCommand(input: EngineTurnInput, parsed: ParsedComman
 
 export class SimpleCommandEngine implements AgentEngine {
   async runTurn(input: EngineTurnInput): Promise<EngineTurnOutput> {
+    const tooling = resolveToolingNamespaces(input.tooling);
     const parsed = parseCommand(input.message);
 
     if (!parsed) {
@@ -349,19 +362,19 @@ export class SimpleCommandEngine implements AgentEngine {
     }
 
     if (parsed.name === "/jobs") {
-      return listJobsReply(input);
+      return listJobsReply(tooling);
     }
 
     if (parsed.name === "/youbora") {
-      return handleYouboraCommand(input, parsed);
+      return handleYouboraCommand(parsed, tooling);
     }
 
-    const videoReply = await handleVideoJobCommand(input, parsed);
+    const videoReply = await handleVideoJobCommand(input, parsed, tooling);
     if (videoReply) {
       return videoReply;
     }
 
-    const browserReply = await handleBrowserCommand(input, parsed);
+    const browserReply = await handleBrowserCommand(input, parsed, tooling);
     if (browserReply) {
       return browserReply;
     }
