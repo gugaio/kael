@@ -37,6 +37,33 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-03 - Video: capability inicial de manifest audit para HLS
+
+Resumo:
+- Adicionada a capability `VideoManifestAuditService` para transformar inspect bruto de HLS em diagnostico orientado a QA e operacao.
+- O runtime PI ganhou a tool `video_manifest_audit`, exposta no namespace `video` do engine.
+- O audit cobre checks iniciais de master/media playlist, ladder, grupos de audio, `TARGETDURATION` e consistencia dos primeiros segmentos.
+
+Arquivos-chave:
+- `src/capabilities/video/manifest-audit-service.ts`
+- `src/capabilities/video/types.ts`
+- `src/engine/tool-specs/video.ts`
+- `src/chat/tooling-factory.ts`
+- `src/bootstrap/runtime.ts`
+- `docs/architecture/phases/phase-20.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/manifest-audit-service.test.ts src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts`
+
+Pendencias:
+- Ainda nao ha auditoria equivalente para DASH.
+- Ainda falta um diff de manifesto entre duas versoes/ambientes.
+- O planner ainda nao consome esse relatorio como assert automatizado.
+
+Proximo passo recomendado:
+- Evoluir a trilha de video QA com `video_manifest_diff` e depois integrar `manifest_audit` como validacao reutilizavel no planner.
+
 ### 2026-04-03 - Refactor: tooling do engine modular por namespaces
 
 Resumo:

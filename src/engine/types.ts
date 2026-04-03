@@ -5,7 +5,12 @@ import type {
   BrowserCommandResult,
   BrowserRuntimeTelemetry,
 } from "../capabilities/browser/index.js";
-import type { PlaybackAnalysisReport, PlaybackEvent, PlaybackEngine } from "../capabilities/video/index.js";
+import type {
+  HlsManifestAuditReport,
+  PlaybackAnalysisReport,
+  PlaybackEvent,
+  PlaybackEngine,
+} from "../capabilities/video/index.js";
 import type { McpCallResult, McpListResult } from "../tools/mcp/mcp-bridge-service.js";
 import type { EdgeCallResult, EdgeCapabilitySummary } from "../edge/runtime.js";
 
@@ -98,6 +103,12 @@ export type EngineVideoTooling = {
     };
     errors: string[];
   }>;
+  videoManifestAudit?: (params: {
+    sessionKey: string;
+    url: string;
+    maxSegments?: number;
+    timeoutMs?: number;
+  }) => Promise<HlsManifestAuditReport>;
   videoGenerateImage?: (params: {
     sessionKey: string;
     prompt: string;

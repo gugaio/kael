@@ -18,6 +18,7 @@ inteligencia de video, capaz de:
 - Evoluir o dominio por subservicos, nao por um monolito:
   - `VideoJobService`
   - `VideoInspectToolService`
+  - `VideoManifestAuditService`
   - `PlaybackTriageService`
   - `VideoGenerationService`
   - `VideoArtifactsService`
@@ -29,6 +30,8 @@ inteligencia de video, capaz de:
 - `PlaybackEvent`
 - `PlaybackSessionInput`
 - `PlaybackAnalysisReport`
+- `HlsManifestAuditInput`
+- `HlsManifestAuditReport`
 - `VideoGenerationRequest`
 - `StoredArtifactRecord`
 
@@ -54,6 +57,12 @@ Nota:
   - `MANIFEST_LOAD_ERROR`
   - `FRAG_LOAD_ERROR`
   - oscilacao de `LEVEL_SWITCHED`
+- Nova capability `VideoManifestAuditService` para auditoria deterministica de manifestos HLS:
+  - classifica master/media playlist;
+  - detecta falhas estruturais em ladder e grupos de audio;
+  - valida `TARGETDURATION` e duracao dos primeiros segmentos;
+  - devolve `issues`, severidade e recomendacoes operacionais.
+- Tool PI `video_manifest_audit` adicionada para expor a auditoria ao agente.
 
 ## Proximos incrementos
 
@@ -66,5 +75,6 @@ Nota:
    - `shaka`
    - `exoplayer`
    - `avplayer`
-3. Evoluir geracao de video real por providers plugaveis (`veo`, `seedance`).
-4. Integrar validacoes de playback/video QA ao planner (`assert_*`).
+3. Evoluir auditoria de manifesto para DASH e diff entre versoes (`video_manifest_diff`).
+4. Evoluir geracao de video real por providers plugaveis (`veo`, `seedance`).
+5. Integrar validacoes de playback/video QA ao planner (`assert_*`).

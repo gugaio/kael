@@ -130,6 +130,77 @@ export function createVideoPiTools(params: {
     },
   };
 
+  const videoManifestAuditTool: AgentTool = {
+    name: "video_manifest_audit",
+    label: "Video Manifest Audit",
+    description:
+      "Audita um manifesto HLS e retorna diagnostico objetivo com issues, severidade e recomendacoes para QA de streaming, operacao e release.",
+    parameters: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "URL do manifesto HLS (.m3u8)" },
+        maxSegments: { type: "number", description: "Quantidade maxima de segmentos usados na auditoria" },
+        timeoutMs: { type: "number", description: "Timeout de fetch do manifesto" },
+      },
+      required: ["url"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const blocked = params.reserveToolCall("video_manifest_audit");
+      if (blocked) {
+        return blocked.blocked;
+      }
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as { url: string; maxSegments?: number; timeoutMs?: number };
+      const intent = params.logToolStart("video_manifest_audit", args);
+      if (!params.tooling.videoManifestAudit) {
+        const reason = "video_manifest_audit_unavailable";
+        const details = { status: "blocked", blocked: true, reason };
+        params.logToolEnd("video_manifest_audit", intent, details, startedAtMs);
+        return {
+          content: params.textResult(`blocked=true\nreason=${reason}`),
+          details,
+        };
+      }
+      try {
+        const result = await params.tooling.videoManifestAudit({
+          sessionKey: params.sessionKey,
+          url: args.url,
+          maxSegments: args.maxSegments,
+          timeoutMs: args.timeoutMs,
+        });
+        const text = [
+          `ok=${result.ok}`,
+          `playlistType=${result.playlistType}`,
+          `summary=${result.summary}`,
+          `variants=${result.stats.variants}`,
+          `renditions=${result.stats.renditions}`,
+          `segments=${result.stats.segments}`,
+          ...(typeof result.stats.targetDuration === "number"
+            ? [`targetDuration=${result.stats.targetDuration}`]
+            : []),
+          ...(result.issues.length > 0 ? ["issues:", ...result.issues.map((issue) => `- ${issue.code}: ${issue.summary}`)] : []),
+        ].join("\n");
+        params.logToolEnd(
+          "video_manifest_audit",
+          intent,
+          result,
+          startedAtMs,
+          `manifest ok=${result.ok} type=${result.playlistType} issues=${result.issues.length}`,
+        );
+        return { content: params.textResult(text), details: result };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const details = { status: "failed", blocked: false, reason: "video_manifest_audit_failed", error: message };
+        params.logToolEnd("video_manifest_audit", intent, details, startedAtMs);
+        return {
+          content: params.textResult(`ok=false\nreason=video_manifest_audit_failed\nerror=${message}`),
+          details,
+        };
+      }
+    },
+  };
+
   const playbackAnalyzeTool: AgentTool = {
     name: "playback_analyze",
     label: "Playback Analyze",
@@ -243,5 +314,5 @@ export function createVideoPiTools(params: {
     },
   };
 
-  return [videoHlsInspectTool, videoProbeTool, playbackAnalyzeTool];
+  return [videoHlsInspectTool, videoProbeTool, videoManifestAuditTool, playbackAnalyzeTool];
 }

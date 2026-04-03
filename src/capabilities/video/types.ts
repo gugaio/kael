@@ -12,6 +12,39 @@ export type PlaybackEventCategory =
 
 export type PlaybackIssueSeverity = "info" | "warning" | "error";
 
+export type ManifestAuditIssue = {
+  code: string;
+  severity: PlaybackIssueSeverity;
+  summary: string;
+  evidence: string[];
+};
+
+export type HlsManifestAuditInput = {
+  sessionKey: string;
+  url: string;
+  maxSegments?: number;
+  timeoutMs?: number;
+};
+
+export type HlsManifestAuditReport = {
+  ok: boolean;
+  url: string;
+  finalUrl: string;
+  playlistType: "master" | "media" | "unknown";
+  summary: string;
+  stats: {
+    variants: number;
+    renditions: number;
+    segments: number;
+    targetDuration?: number;
+    maxSegmentDuration?: number;
+    minSegmentDuration?: number;
+    averageSegmentDuration?: number;
+  };
+  issues: ManifestAuditIssue[];
+  recommendations: string[];
+};
+
 export type PlaybackEvent = {
   atMs: number;
   name: string;

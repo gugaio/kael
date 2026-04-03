@@ -103,6 +103,7 @@ describe("createPiCapabilityTools", () => {
     expect(registry.video.map((tool) => tool.name)).toEqual([
       "video_hls_inspect",
       "video_probe",
+      "video_manifest_audit",
       "playback_analyze",
     ]);
     expect(registry.jobs.map((tool) => tool.name)).toEqual(["jobs_list", "jobs_get", "jobs_log_tail"]);

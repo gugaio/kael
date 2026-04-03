@@ -156,7 +156,7 @@ export function createPiShellTools(params: {
   });
 
   const [execTool, processTool] = capabilityTools.system;
-  const [videoHlsInspectTool, videoProbeTool, playbackAnalyzeTool] = capabilityTools.video;
+  const [videoHlsInspectTool, videoProbeTool, videoManifestAuditTool, playbackAnalyzeTool] = capabilityTools.video;
   const [jobsListTool, jobsGetTool, jobsLogTailTool] = capabilityTools.jobs;
   const [
     edgeListTool,
@@ -187,6 +187,7 @@ export function createPiShellTools(params: {
     processTool,
     videoHlsInspectTool,
     videoProbeTool,
+    videoManifestAuditTool,
     playbackAnalyzeTool,
     jobsListTool,
     jobsGetTool,

@@ -12,6 +12,7 @@ import type { VideoInspectToolService } from "../capabilities/video/index.js";
 import type {
   PlaybackTriageService,
   ProviderBackedVideoGenerationService,
+  VideoManifestAuditService,
 } from "../capabilities/video/index.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
 import type { BrowserCapability } from "../capabilities/browser/index.js";
@@ -31,6 +32,7 @@ type ChatToolingDeps = {
   imageGenerator: ImageGeneratorService;
   videoGeneration: ProviderBackedVideoGenerationService;
   playbackTriage: PlaybackTriageService;
+  manifestAudit: VideoManifestAuditService;
   browser: BrowserCapability;
 };
 
@@ -46,6 +48,8 @@ export function createChatTooling(deps: ChatToolingDeps): EngineToolingNamespace
         deps.videoInspect.inspectHls({ url, maxSegments, timeoutMs }),
       videoProbe: async ({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }) =>
         deps.videoInspect.probe({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }),
+      videoManifestAudit: async ({ url, maxSegments, timeoutMs, sessionKey }) =>
+        deps.manifestAudit.auditHlsManifest({ sessionKey, url, maxSegments, timeoutMs }),
       videoGenerateImage: ({ sessionKey, prompt, provider, size }) =>
         deps.videoGeneration.generateImage({ sessionKey, prompt, provider, size }),
       playbackAnalyze: async ({ sessionKey, player, source, streamUrl, logText, events }) =>
@@ -240,6 +244,9 @@ export function createChatOnlyTooling(tooling: EngineToolingNamespaces): EngineT
       },
       videoProbe: async () => {
         throw new Error("chat-only mode: video_probe disabled");
+      },
+      videoManifestAudit: async () => {
+        throw new Error("chat-only mode: video_manifest_audit disabled");
       },
       videoGenerateImage: async () => {
         throw new Error("chat-only mode: video_generate_image disabled");

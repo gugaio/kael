@@ -12,6 +12,7 @@ import {
   VideoInspectToolService,
   VideoJobService,
   ProviderBackedVideoGenerationService,
+  VideoManifestAuditService,
 } from "../capabilities/video/index.js";
 import { MemoryService } from "../memory/service.js";
 import { HybridMemoryRetriever } from "../memory/retriever-hybrid.js";
@@ -35,6 +36,7 @@ import {
 export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore): Promise<{
   jobs: JobManager;
   videoInspect: VideoInspectToolService;
+  manifestAudit: VideoManifestAuditService;
   videoArtifacts: VideoArtifactsService;
 }> {
   const runner = new LocalProcessRunner();
@@ -48,11 +50,13 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
   });
   const jobs = new JobManager(jobStore, [new VideoCapability(video)]);
   const videoInspect = new VideoInspectToolService();
+  const manifestAudit = new VideoManifestAuditService(videoInspect);
   const videoArtifacts = new VideoArtifactsService(path.join(config.dataDir, "video", "artifacts"));
   await videoArtifacts.init();
   return {
     jobs,
     videoInspect,
+    manifestAudit,
     videoArtifacts,
   };
 }
