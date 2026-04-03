@@ -55,6 +55,27 @@ function buildStoredUserMessage(message: string, attachments?: EngineInboundAtta
   return lines.join("\n");
 }
 
+type HandleMessageInput = {
+  sessionKey: string;
+  message: string;
+  attachments?: EngineInboundAttachment[];
+  source?: "api" | "discord" | "email" | "unknown";
+  requestId?: string;
+};
+
+type ChatReplyEnvelope = {
+  user: SessionMessage;
+  assistant: SessionMessage;
+  reply: string;
+  artifacts: EngineOutputArtifact[];
+};
+
+type PipelineState = {
+  llmInputMessage: string;
+  skipOperationalFastPath: boolean;
+  skillManualApplied: boolean;
+};
+
 export class ChatService {
   private readonly tooling: EngineTooling;
   private readonly chatOnlyTooling: EngineTooling;
@@ -123,220 +144,33 @@ export class ChatService {
   }
 
   private async handleMessageInternal(
-    input: {
-      sessionKey: string;
-      message: string;
-      attachments?: EngineInboundAttachment[];
-      source?: "api" | "discord" | "email" | "unknown";
-      requestId?: string;
-    },
+    input: HandleMessageInput,
     tooling: EngineTooling,
     opts: { allowOperationalShortcuts: boolean },
-  ): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string; artifacts: EngineOutputArtifact[] }> {
+  ): Promise<ChatReplyEnvelope> {
     const storedUserMessage = buildStoredUserMessage(input.message, input.attachments);
     let user = await this.sessions.appendMessage(input.sessionKey, "user", storedUserMessage);
-    let llmInputMessage = input.message;
-    let skipOperationalFastPath = false;
-    let skillManualApplied = false;
-
-    const skillInvocation = await this.skills.resolveManualInvocation(input.message);
-    if (skillInvocation.matched) {
-      if (skillInvocation.blocked) {
-        this.routingTelemetry.record("fast_path");
-        kaelLogger.info("chat.route.selected", {
-          route: "fast_path",
-          sessionKey: input.sessionKey,
-          requestId: input.requestId ?? null,
-          reason: "skill_manual_blocked",
-          skillName: skillInvocation.skillName,
-        });
-        const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", skillInvocation.reply);
-        return {
-          user,
-          assistant,
-          reply: skillInvocation.reply,
-          artifacts: [],
-        };
-      }
-      llmInputMessage = skillInvocation.promptMessage;
-      skipOperationalFastPath = true;
-      skillManualApplied = true;
-      kaelLogger.info("chat.skill.manual_invocation", {
-        sessionKey: input.sessionKey,
-        requestId: input.requestId ?? null,
-        skillName: skillInvocation.skillName,
-      });
+    const manualSkillResult = await this.applyManualSkillStage(input, user);
+    if ("reply" in manualSkillResult) {
+      return manualSkillResult;
     }
+    const pipeline = manualSkillResult;
 
-    if (this.memoryOrchestrator.isCompactCommand(input.message)) {
-      this.routingTelemetry.record("compact");
-      kaelLogger.info("chat.route.selected", {
-        route: "compact",
-        sessionKey: input.sessionKey,
-        requestId: input.requestId ?? null,
-      });
-      const result = await this.handleCompactCommand({
-        sessionKey: input.sessionKey,
-        currentMessage: input.message,
-        tooling,
-        requestId: input.requestId,
-      });
-      const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", result.reply);
-      return {
-        user,
-        assistant,
-        reply: result.reply,
-        artifacts: [],
-      };
+    const compactReply = await this.tryCompactStage(input, tooling, user);
+    if (compactReply) {
+      return compactReply;
     }
 
     try {
-      if (!skipOperationalFastPath) {
-        // Fast-path operacional para slash commands, inclusive quando engineMode=pi.
-        // Isso preserva comportamento deterministico para comandos de job/sistema sem depender do LLM.
-        const commandRoute = await this.commandRouter.tryRoute({
-          sessionKey: input.sessionKey,
-          message: input.message,
-          requestId: input.requestId,
-          tooling,
-          allowOperationalShortcuts: opts.allowOperationalShortcuts,
-        });
-        if (commandRoute.handled) {
-          this.routingTelemetry.record("fast_path");
-          kaelLogger.info("chat.route.selected", {
-            route: "fast_path",
-            sessionKey: input.sessionKey,
-            requestId: input.requestId ?? null,
-          });
-          const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", commandRoute.reply);
-          return {
-            user,
-            assistant,
-            reply: commandRoute.reply,
-            artifacts: [],
-          };
-        }
+      const fastPathReply = await this.tryOperationalFastPathStage(input, tooling, opts, user, pipeline);
+      if (fastPathReply) {
+        return fastPathReply;
       }
 
-      if (!skillManualApplied) {
-        const preparedSkillTurn = await this.skills.prepareTurnMessage(llmInputMessage, {
-          sessionKey: input.sessionKey,
-        });
-        llmInputMessage = preparedSkillTurn.promptMessage;
-        if (preparedSkillTurn.autoAppliedSkillName) {
-          kaelLogger.info("chat.skill.auto_invocation", {
-            sessionKey: input.sessionKey,
-            requestId: input.requestId ?? null,
-            skillName: preparedSkillTurn.autoAppliedSkillName,
-          });
-        }
-      }
-
-      const mediaPreprocess = await this.media.preprocess({
-        sessionKey: input.sessionKey,
-        message: llmInputMessage,
-        attachments: input.attachments,
-        source: input.source ?? "unknown",
-        requestId: input.requestId,
-      });
-      const llmMessage = mediaPreprocess.message;
-      if (mediaPreprocess.applied) {
-        kaelLogger.info("media.preprocess.applied", {
-          sessionKey: input.sessionKey,
-          requestId: input.requestId ?? null,
-          details: mediaPreprocess.details,
-        });
-      }
-
-      await this.memoryOrchestrator.runAutoCompactionWithMemoryFlushIfNeeded({
-        sessionKey: input.sessionKey,
-        currentMessage: llmMessage,
-        tooling,
-        requestId: input.requestId,
-      });
-      this.routingTelemetry.record("llm_turn");
-      kaelLogger.info("chat.route.selected", {
-        route: "llm_turn",
-        sessionKey: input.sessionKey,
-        requestId: input.requestId ?? null,
-      });
-      const turn = await this.orchestrator.runConversationTurn({
-        sessionKey: input.sessionKey,
-        message: llmMessage,
-        attachments: input.attachments,
-        requestId: input.requestId,
-        tooling,
-      });
-      const reply = turn.reply;
-      const artifacts = turn.artifacts ?? [];
-
-      const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", reply);
-
-      return {
-        user,
-        assistant,
-        reply,
-        artifacts,
-      };
+      const llmMessage = await this.prepareLlmMessageStage(input, pipeline);
+      return this.runLlmTurnStage(input, tooling, user, llmMessage);
     } catch (error) {
-      const normalized = normalizePiError(error);
-      if (normalized.code === "timeout") {
-        const partialEvidence = extractPartialWebEvidence(normalized.message);
-        const cleanReason = normalized.message
-          .split("\n")
-          .find((line) => !line.includes("partial_web_evidence:"))
-          ?.trim();
-        const sessions = await this.shell.process({
-          sessionKey: input.sessionKey,
-          action: "list",
-        });
-        const recent = (sessions.sessions ?? []).slice(-3);
-        const lines = recent.map((item) => {
-          const exit = item.exitCode == null ? "n/a" : String(item.exitCode);
-          return `- ${item.status} (exit=${exit}) :: ${item.command}`;
-        });
-        const reply = [
-          "A execucao demorou demais e foi interrompida para evitar loop de ferramentas.",
-          cleanReason ? `Motivo: ${cleanReason}` : "",
-          partialEvidence.length > 0 ? "Evidencias parciais coletadas antes do timeout:" : "",
-          ...partialEvidence.map((item) => `- ${item}`),
-          lines.length > 0 ? "Ultimas execucoes shell observadas:" : "",
-          ...lines,
-          "Se quiser, posso continuar de forma mais objetiva com um comando por vez.",
-        ]
-          .filter(Boolean)
-          .join("\n");
-        const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", reply);
-        return {
-          user,
-          assistant,
-          reply,
-          artifacts: [],
-        };
-      }
-
-      if (!shouldResetSessionOnEngineError(error)) {
-        throw error;
-      }
-
-      // Falha irrecuperavel: recria sessao e tenta novamente uma vez sem historico antigo.
-      await this.sessions.resetSession(input.sessionKey);
-      user = await this.sessions.appendMessage(input.sessionKey, "user", storedUserMessage);
-      const turn = await this.orchestrator.runConversationTurn({
-        sessionKey: input.sessionKey,
-        message: input.message,
-        attachments: input.attachments,
-        requestId: input.requestId,
-        tooling,
-      });
-      const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", turn.reply);
-
-      return {
-        user,
-        assistant,
-        reply: turn.reply,
-        artifacts: turn.artifacts ?? [],
-      };
+      return this.handlePipelineError(input, tooling, storedUserMessage, user, error);
     }
   }
 
@@ -368,5 +202,245 @@ export class ChatService {
     ].filter(Boolean);
 
     return { reply: lines.join("\n") };
+  }
+
+  private async applyManualSkillStage(
+    input: HandleMessageInput,
+    user: SessionMessage,
+  ): Promise<PipelineState | ChatReplyEnvelope> {
+    const skillInvocation = await this.skills.resolveManualInvocation(input.message);
+    if (!skillInvocation.matched) {
+      return {
+        llmInputMessage: input.message,
+        skipOperationalFastPath: false,
+        skillManualApplied: false,
+      };
+    }
+    if (skillInvocation.blocked) {
+      this.routingTelemetry.record("fast_path");
+      kaelLogger.info("chat.route.selected", {
+        route: "fast_path",
+        sessionKey: input.sessionKey,
+        requestId: input.requestId ?? null,
+        reason: "skill_manual_blocked",
+        skillName: skillInvocation.skillName,
+      });
+      const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", skillInvocation.reply);
+      return {
+        user,
+        assistant,
+        reply: skillInvocation.reply,
+        artifacts: [],
+      };
+    }
+    kaelLogger.info("chat.skill.manual_invocation", {
+      sessionKey: input.sessionKey,
+      requestId: input.requestId ?? null,
+      skillName: skillInvocation.skillName,
+    });
+    return {
+      llmInputMessage: skillInvocation.promptMessage,
+      skipOperationalFastPath: true,
+      skillManualApplied: true,
+    };
+  }
+
+  private async tryCompactStage(
+    input: HandleMessageInput,
+    tooling: EngineTooling,
+    user: SessionMessage,
+  ): Promise<ChatReplyEnvelope | null> {
+    if (!this.memoryOrchestrator.isCompactCommand(input.message)) {
+      return null;
+    }
+    this.routingTelemetry.record("compact");
+    kaelLogger.info("chat.route.selected", {
+      route: "compact",
+      sessionKey: input.sessionKey,
+      requestId: input.requestId ?? null,
+    });
+    const result = await this.handleCompactCommand({
+      sessionKey: input.sessionKey,
+      currentMessage: input.message,
+      tooling,
+      requestId: input.requestId,
+    });
+    const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", result.reply);
+    return {
+      user,
+      assistant,
+      reply: result.reply,
+      artifacts: [],
+    };
+  }
+
+  private async tryOperationalFastPathStage(
+    input: HandleMessageInput,
+    tooling: EngineTooling,
+    opts: { allowOperationalShortcuts: boolean },
+    user: SessionMessage,
+    pipeline: PipelineState,
+  ): Promise<ChatReplyEnvelope | null> {
+    if (pipeline.skipOperationalFastPath) {
+      return null;
+    }
+    const commandRoute = await this.commandRouter.tryRoute({
+      sessionKey: input.sessionKey,
+      message: input.message,
+      requestId: input.requestId,
+      tooling,
+      allowOperationalShortcuts: opts.allowOperationalShortcuts,
+    });
+    if (!commandRoute.handled) {
+      return null;
+    }
+    this.routingTelemetry.record("fast_path");
+    kaelLogger.info("chat.route.selected", {
+      route: "fast_path",
+      sessionKey: input.sessionKey,
+      requestId: input.requestId ?? null,
+    });
+    const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", commandRoute.reply);
+    return {
+      user,
+      assistant,
+      reply: commandRoute.reply,
+      artifacts: [],
+    };
+  }
+
+  private async prepareLlmMessageStage(input: HandleMessageInput, pipeline: PipelineState): Promise<string> {
+    let llmInputMessage = pipeline.llmInputMessage;
+    if (!pipeline.skillManualApplied) {
+      const preparedSkillTurn = await this.skills.prepareTurnMessage(llmInputMessage, {
+        sessionKey: input.sessionKey,
+      });
+      llmInputMessage = preparedSkillTurn.promptMessage;
+      if (preparedSkillTurn.autoAppliedSkillName) {
+        kaelLogger.info("chat.skill.auto_invocation", {
+          sessionKey: input.sessionKey,
+          requestId: input.requestId ?? null,
+          skillName: preparedSkillTurn.autoAppliedSkillName,
+        });
+      }
+    }
+
+    const mediaPreprocess = await this.media.preprocess({
+      sessionKey: input.sessionKey,
+      message: llmInputMessage,
+      attachments: input.attachments,
+      source: input.source ?? "unknown",
+      requestId: input.requestId,
+    });
+    if (mediaPreprocess.applied) {
+      kaelLogger.info("media.preprocess.applied", {
+        sessionKey: input.sessionKey,
+        requestId: input.requestId ?? null,
+        details: mediaPreprocess.details,
+      });
+    }
+    return mediaPreprocess.message;
+  }
+
+  private async runLlmTurnStage(
+    input: HandleMessageInput,
+    tooling: EngineTooling,
+    user: SessionMessage,
+    llmMessage: string,
+  ): Promise<ChatReplyEnvelope> {
+    await this.memoryOrchestrator.runAutoCompactionWithMemoryFlushIfNeeded({
+      sessionKey: input.sessionKey,
+      currentMessage: llmMessage,
+      tooling,
+      requestId: input.requestId,
+    });
+    this.routingTelemetry.record("llm_turn");
+    kaelLogger.info("chat.route.selected", {
+      route: "llm_turn",
+      sessionKey: input.sessionKey,
+      requestId: input.requestId ?? null,
+    });
+    const turn = await this.orchestrator.runConversationTurn({
+      sessionKey: input.sessionKey,
+      message: llmMessage,
+      attachments: input.attachments,
+      requestId: input.requestId,
+      tooling,
+    });
+    const reply = turn.reply;
+    const artifacts = turn.artifacts ?? [];
+    const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", reply);
+    return {
+      user,
+      assistant,
+      reply,
+      artifacts,
+    };
+  }
+
+  private async handlePipelineError(
+    input: HandleMessageInput,
+    tooling: EngineTooling,
+    storedUserMessage: string,
+    user: SessionMessage,
+    error: unknown,
+  ): Promise<ChatReplyEnvelope> {
+    const normalized = normalizePiError(error);
+    if (normalized.code === "timeout") {
+      const partialEvidence = extractPartialWebEvidence(normalized.message);
+      const cleanReason = normalized.message
+        .split("\n")
+        .find((line) => !line.includes("partial_web_evidence:"))
+        ?.trim();
+      const sessions = await this.shell.process({
+        sessionKey: input.sessionKey,
+        action: "list",
+      });
+      const recent = (sessions.sessions ?? []).slice(-3);
+      const lines = recent.map((item) => {
+        const exit = item.exitCode == null ? "n/a" : String(item.exitCode);
+        return `- ${item.status} (exit=${exit}) :: ${item.command}`;
+      });
+      const reply = [
+        "A execucao demorou demais e foi interrompida para evitar loop de ferramentas.",
+        cleanReason ? `Motivo: ${cleanReason}` : "",
+        partialEvidence.length > 0 ? "Evidencias parciais coletadas antes do timeout:" : "",
+        ...partialEvidence.map((item) => `- ${item}`),
+        lines.length > 0 ? "Ultimas execucoes shell observadas:" : "",
+        ...lines,
+        "Se quiser, posso continuar de forma mais objetiva com um comando por vez.",
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", reply);
+      return {
+        user,
+        assistant,
+        reply,
+        artifacts: [],
+      };
+    }
+
+    if (!shouldResetSessionOnEngineError(error)) {
+      throw error;
+    }
+
+    await this.sessions.resetSession(input.sessionKey);
+    const resetUser = await this.sessions.appendMessage(input.sessionKey, "user", storedUserMessage);
+    const turn = await this.orchestrator.runConversationTurn({
+      sessionKey: input.sessionKey,
+      message: input.message,
+      attachments: input.attachments,
+      requestId: input.requestId,
+      tooling,
+    });
+    const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", turn.reply);
+
+    return {
+      user: resetUser,
+      assistant,
+      reply: turn.reply,
+      artifacts: turn.artifacts ?? [],
+    };
   }
 }
