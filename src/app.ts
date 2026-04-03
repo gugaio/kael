@@ -21,7 +21,7 @@ import { GmailPop3Provider } from "./email/gmail-pop3-provider.js";
 import { GmailSmtpSender } from "./email/gmail-smtp-sender.js";
 import { FileEmailIngestDedupeStore } from "./email/ingest-dedupe-store.js";
 import { ChatService } from "./chat/service.js";
-import { createChatOnlyTooling, createChatTooling } from "./chat/tooling-factory.js";
+import { createChatTooling } from "./chat/tooling-factory.js";
 import { TurnOrchestrator } from "./chat/turn-orchestrator.js";
 import { WorkspaceInspector } from "./workspace/inspector.js";
 import { LocalProcessRunner } from "./tools/system/process-runner.js";
@@ -220,7 +220,6 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
       : new NoopMediaUnderstandingService(),
     memory,
     tooling,
-    createChatOnlyTooling(tooling),
     new SkillService(config.shell.workspaceRoot),
   );
   const heartbeat = new HeartbeatRunner(jobs, sessions);

@@ -9,6 +9,7 @@ import { TurnOrchestrator } from "./turn-orchestrator.js";
 import { MemoryOrchestrator } from "../memory/orchestrator.js";
 import { CommandRouter } from "./command-router.js";
 import { ChatRoutingTelemetry, type ChatRoutingTelemetrySnapshot } from "./routing-telemetry.js";
+import { createChatOnlyTooling } from "./tooling-factory.js";
 import type { MediaRuntimeTelemetry, MediaUnderstandingService } from "../media/service.js";
 import type { BrowserRuntimeTelemetry } from "../capabilities/browser/index.js";
 import { SkillService, type SkillsRuntimeTelemetry } from "../skills/service.js";
@@ -69,12 +70,11 @@ export class ChatService {
     private readonly media: MediaUnderstandingService,
     memory: MemoryService,
     tooling: EngineTooling,
-    chatOnlyTooling: EngineTooling,
     skills: SkillService,
   ) {
     this.memoryOrchestrator = new MemoryOrchestrator(this.sessions, memory, this.orchestrator);
     this.tooling = tooling;
-    this.chatOnlyTooling = chatOnlyTooling;
+    this.chatOnlyTooling = createChatOnlyTooling(tooling);
     this.skills = skills;
   }
 
