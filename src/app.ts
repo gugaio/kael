@@ -4,15 +4,22 @@ import { HeartbeatRunner } from "./automation/heartbeat-runner.js";
 import { PersistentScheduler } from "./automation/persistent-scheduler.js";
 import { AutomationService } from "./automation/service.js";
 import { loadConfig, type KaelConfig } from "./config.js";
+import {
+  createBrowserRuntime,
+  createMediaRuntime,
+  createMcpRuntime,
+  createMemoryRuntime,
+  createPlannerRuntime,
+  createResearchRuntime,
+  createShellRuntime,
+  createVideoRuntime,
+  createWorkspaceRuntime,
+} from "./bootstrap/runtime.js";
 import { createEngine } from "./engine/factory.js";
-import { resolveKaelHome } from "./global-config.js";
 import { JobManager } from "./jobs/manager.js";
 import { JobStore } from "./jobs/store.js";
 import { MemoryService } from "./memory/service.js";
-import { HybridMemoryRetriever } from "./memory/retriever-hybrid.js";
-import { LlmPlanGenerator } from "./planner/llm-generator.js";
 import { PlannerService } from "./planner/service.js";
-import { DisabledSearchProvider, TavilySearchProvider } from "./research/provider.js";
 import { ResearchService } from "./research/service.js";
 import { SessionStore } from "./session/store.js";
 import { EmailIngestService } from "./email/ingest-service.js";
@@ -23,22 +30,10 @@ import { FileEmailIngestDedupeStore } from "./email/ingest-dedupe-store.js";
 import { ChatService } from "./chat/service.js";
 import { createChatTooling } from "./chat/tooling-factory.js";
 import { TurnOrchestrator } from "./chat/turn-orchestrator.js";
-import { WorkspaceInspector } from "./workspace/inspector.js";
-import { LocalProcessRunner } from "./tools/system/process-runner.js";
-import { ShellToolService, type ShellRuntime } from "./tools/system/shell-tool-service.js";
-import {
-  PlaybackTriageService,
-  ProviderBackedVideoGenerationService,
-  VideoArtifactsService,
-  VideoCapability,
-  VideoInspectToolService,
-  VideoJobService,
-} from "./capabilities/video/index.js";
-import { NoopMediaUnderstandingService, OpenAiMediaUnderstandingService } from "./media/service.js";
-import { NoopImageGeneratorService, OpenAiImageGeneratorService } from "./media/image-generator.js";
-import { BrowserCapability, BrowserToolService } from "./capabilities/browser/index.js";
+import type { ShellRuntime } from "./tools/system/shell-tool-service.js";
+import { PlaybackTriageService } from "./capabilities/video/index.js";
 import { SkillService } from "./skills/service.js";
-import { McpBridgeService, type McpRuntime } from "./tools/mcp/mcp-bridge-service.js";
+import type { McpRuntime } from "./tools/mcp/mcp-bridge-service.js";
 import { EdgeRuntime } from "./edge/runtime.js";
 
 export type KaelApp = {
@@ -73,94 +68,21 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   await sessions.init();
   await jobStore.init();
 
-  const runner = new LocalProcessRunner();
-  const video = new VideoJobService(jobStore, runner, {
-    safePathsEnabled: config.execution.safePathsEnabled,
-    allowedPaths: config.execution.allowedPaths,
-    maxJobArgs: config.execution.maxJobArgs,
-    maxConcurrentJobs: config.execution.maxConcurrentJobs,
-    jobTimeoutMs: config.execution.jobTimeoutMs,
-    killGraceMs: config.execution.killGraceMs,
-  });
-  const jobs = new JobManager(jobStore, [new VideoCapability(video)]);
-  const videoInspect = new VideoInspectToolService();
-  const videoArtifacts = new VideoArtifactsService(path.join(config.dataDir, "video", "artifacts"));
-  await videoArtifacts.init();
-  const shell = new ShellToolService({
-    workspaceRoot: config.shell.workspaceRoot,
-    defaultTimeoutMs: config.shell.defaultTimeoutMs,
-    noOutputTimeoutMs: config.shell.noOutputTimeoutMs,
-    maxTimeoutMs: config.shell.maxTimeoutMs,
-    maxOutputChars: config.shell.maxOutputChars,
-    approvalWaitMs: config.shell.approvalWaitMs,
-    security: config.shell.security,
-    ask: config.shell.ask,
-    allowlist: config.shell.allowlist,
-    approvalsPath: path.join(resolveKaelHome(), "exec-approvals.json"),
-  });
-  await shell.init();
-  const mcp = new McpBridgeService({
-    enabled: config.mcp.enabled,
-    binary: config.mcp.binary,
-    configPath: config.mcp.configPath,
-    registryPath: path.join(config.dataDir, "mcp", "registry.json"),
-    approvalsPath: path.join(config.dataDir, "mcp", "approvals.json"),
-    workspaceRoot: config.shell.workspaceRoot,
-    defaultTimeoutMs: config.mcp.defaultTimeoutMs,
-    maxOutputChars: config.mcp.maxOutputChars,
-    allowHttp: config.mcp.allowHttp,
-    allowStdio: config.mcp.allowStdio,
-  });
-  await mcp.init();
+  const { jobs, videoInspect, videoArtifacts } = await createVideoRuntime(config, jobStore);
+  const shell = await createShellRuntime(config);
+  const mcp = await createMcpRuntime(config);
   const edge = new EdgeRuntime();
-  const memory = new MemoryService({
-    workspaceRoot: config.shell.workspaceRoot,
-    storageRoot: path.join(resolveKaelHome(), "data", "memory"),
-    defaultMaxResults: 6,
-    maxSnippetChars: 1200,
-    retriever: new HybridMemoryRetriever(),
-  });
-  await memory.init();
-  const workspace = new WorkspaceInspector({
-    workspaceRoot: config.shell.workspaceRoot,
-    maxFileChars: 100_000,
-    maxSearchResults: 12,
-  });
-  const browserRuntime = new BrowserToolService({
-    enabled: config.browser.enabled,
-    headless: config.browser.headless,
-    defaultTimeoutMs: config.browser.defaultTimeoutMs,
-    actionTimeoutMs: config.browser.actionTimeoutMs,
-    maxScreenshotsPerTurn: config.browser.maxScreenshotsPerTurn,
-    sessionTtlMs: config.browser.sessionTtlMs,
-    maxSessions: config.browser.maxSessions,
-    artifactDir: config.browser.artifactDir,
-  });
-  const browser = new BrowserCapability(browserRuntime);
-  const searchProvider = config.research.enabled && config.research.apiKey
-    ? new TavilySearchProvider(config.research.apiKey)
-    : new DisabledSearchProvider();
-  const research = new ResearchService(searchProvider, {
-    enabled: config.research.enabled,
-    dataDir: config.dataDir,
-    defaultMaxResults: config.research.defaultMaxResults,
-    maxResultsLimit: config.research.maxResultsLimit,
-    timeoutMs: config.research.timeoutMs,
-    fetchMaxChars: config.research.fetchMaxChars,
-    fetchCacheTtlMs: config.research.fetchCacheTtlMs,
-    fetchMaxRedirects: config.research.fetchMaxRedirects,
-    fetchMaxResponseBytes: config.research.fetchMaxResponseBytes,
-  });
-  const llmPlanner = new LlmPlanGenerator(config.pi);
-  const planner = new PlannerService(config.dataDir, {
-    generateDrafts: async ({ objective, maxSteps }) => llmPlanner.generate({ objective, maxSteps }),
-  });
-  await planner.init();
+  const memory = await createMemoryRuntime(config);
+  const workspace = createWorkspaceRuntime(config);
+  const browser = createBrowserRuntime(config);
+  const research = createResearchRuntime(config);
+  const planner = await createPlannerRuntime(config);
   const engine = createEngine(config);
   const orchestrator = new TurnOrchestrator(sessions, engine, {
     maxContextMessages: config.context.maxMessages,
     maxContextChars: config.context.maxChars,
   });
+  const { mediaUnderstanding, imageGenerator, videoGeneration } = createMediaRuntime(config, videoArtifacts);
   const tooling = createChatTooling({
     jobs,
     shell,
@@ -173,51 +95,14 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     planner,
     playbackTriage: new PlaybackTriageService(),
     browser,
-    imageGenerator:
-      config.media.enabled && !!config.media.apiKey
-        ? new OpenAiImageGeneratorService({
-            apiKey: config.media.apiKey,
-            baseUrl: config.media.baseUrl,
-            timeoutMs: config.media.imageGenerationTimeoutMs,
-            model: process.env.KAEL_IMAGE_GENERATION_MODEL?.trim() || "gpt-image-1",
-          })
-        : new NoopImageGeneratorService(),
-    videoGeneration: new ProviderBackedVideoGenerationService(
-      config.media.enabled && !!config.media.apiKey
-        ? new OpenAiImageGeneratorService({
-            apiKey: config.media.apiKey,
-            baseUrl: config.media.baseUrl,
-            timeoutMs: config.media.imageGenerationTimeoutMs,
-            model: process.env.KAEL_IMAGE_GENERATION_MODEL?.trim() || "gpt-image-1",
-          })
-        : new NoopImageGeneratorService(),
-      videoArtifacts,
-      {
-        imageProvider: process.env.KAEL_IMAGE_GENERATION_MODEL?.trim() || "gpt-image-1",
-        videoProvider: process.env.KAEL_VIDEO_GENERATION_PROVIDER?.trim() || undefined,
-      },
-    ),
+    imageGenerator,
+    videoGeneration,
   });
   const chat = new ChatService(
     sessions,
     shell,
     orchestrator,
-    config.media.enabled
-      ? new OpenAiMediaUnderstandingService({
-          enabled: config.media.enabled,
-          apiKey: config.media.apiKey,
-          baseUrl: config.media.baseUrl,
-          timeoutMs: config.media.timeoutMs,
-          maxAttachmentBytes: config.media.maxAttachmentBytes,
-          maxTotalBytesPerMessage: config.media.maxTotalBytesPerMessage,
-          maxProcessingMsPerMessage: config.media.maxProcessingMsPerMessage,
-          maxAttachmentsPerMessage: config.media.maxAttachmentsPerMessage,
-          maxAttachmentsBySource: config.media.maxAttachmentsBySource,
-          imageModel: config.media.imageModel,
-          imagePrompt: config.media.imagePrompt,
-          audioModel: config.media.audioModel,
-        })
-      : new NoopMediaUnderstandingService(),
+    mediaUnderstanding,
     memory,
     tooling,
     new SkillService(config.shell.workspaceRoot),

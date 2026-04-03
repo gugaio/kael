@@ -1,259 +1,23 @@
 import Fastify, { type FastifyInstance } from "fastify";
-import { WebSocketServer } from "ws";
 import { createKaelApp, type KaelApp } from "../app.js";
 import { VIDEO_JOB_ACTIONS } from "../capabilities/video/index.js";
 import { IdempotencyConflictError, IdempotencyStore, stableStringify } from "../infra/idempotency-store.js";
 import { kaelLogger } from "../infra/logger.js";
 import { ApiError, asApiError, sendApiError } from "./errors.js";
-import type { EngineInboundAttachment } from "../engine/types.js";
 import {
   createPlannerExecuteRuntime,
   createPlannerReconcileRuntime,
 } from "../planner/runtime.js";
-import { createRegisteredMessage, parseEdgeInboundMessage } from "../edge/protocol.js";
+import { registerEdgeWsGateway } from "./edge-ws.js";
+import { buildLiveState, type LivePingEvent, type LiveResource, type LiveSyncEvent } from "./live-state.js";
+import { bodySessionKey, normalizeInboundAttachments, readIdempotencyKey, withIdempotency } from "./request-utils.js";
 
 type RequestWithStart = {
   _kaelStartNs?: bigint;
 };
 
-type LiveResource =
-  | "health"
-  | "jobs"
-  | "schedules"
-  | "plans"
-  | "approvals"
-  | "exec_sessions"
-  | "mcp_servers"
-  | "mcp_approvals";
-
-type LiveSyncEvent = {
-  type: "sync";
-  at: string;
-  seq: number;
-  changed: LiveResource[];
-  summary: {
-    jobs: number;
-    plans: number;
-    schedules: number;
-    approvals: number;
-    execSessions: number;
-    mcpServers: number;
-    mcpApprovals: number;
-  };
-};
-
-type LivePingEvent = {
-  type: "ping";
-  at: string;
-  seq: number;
-};
-
-async function buildLiveState(app: KaelApp): Promise<{
-  signatures: Record<LiveResource, string>;
-  summary: LiveSyncEvent["summary"];
-}> {
-  const jobs = app.jobs.listJobs();
-  const plans = app.planner.list({ limit: 100 });
-  const schedules = app.automation.listSchedules();
-  const approvals = await app.shell.listApprovals({ status: "open", limit: 100 });
-  const mcpServers = await app.mcp.listServers();
-  const mcpApprovals = await app.mcp.listApprovals({ status: "open", limit: 100 });
-  const execSessionsResult = await app.shell.process({
-    sessionKey: "api.events",
-    action: "list",
-  });
-  const execSessions = execSessionsResult.ok ? execSessionsResult.sessions ?? [] : [];
-  const sessions = await app.sessions.countSessions();
-  const jobsByStatus = app.jobs.getStatusCounts();
-  const runtimeJobs = app.jobs.getRuntimeStats();
-  const chatRouting = app.chat.getRoutingTelemetrySnapshot();
-  const engineRuntime = app.chat.getEngineRuntimeTelemetrySnapshot();
-  const mediaRuntime = app.chat.getMediaRuntimeTelemetrySnapshot();
-  const browserRuntime = app.chat.getBrowserRuntimeTelemetrySnapshot();
-  const skillsRuntime = app.chat.getSkillsRuntimeTelemetrySnapshot();
-  const mcpRuntime = app.mcp.getRuntimeTelemetrySnapshot();
-  const emailIngest = app.emailIngest?.getRuntimeTelemetrySnapshot() ?? null;
-
-  const healthSignature = stableStringify({
-    sessions,
-    jobsByStatus,
-    runtimeJobs,
-    chatRouting,
-    engineRuntime,
-    mediaRuntime,
-    browserRuntime,
-    skillsRuntime,
-    mcpRuntime,
-    emailIngest,
-    engineMode: app.config.engineMode,
-    piEnabled: app.config.pi.enabled,
-  });
-
-  const jobsSignature = stableStringify(
-    jobs.map((job) => ({
-      id: job.id,
-      status: job.status,
-      startedAt: job.startedAt ?? null,
-      endedAt: job.endedAt ?? null,
-      error: job.error ?? null,
-    })),
-  );
-
-  const schedulesSignature = stableStringify(
-    schedules.map((schedule) => ({
-      id: schedule.id,
-      enabled: schedule.enabled,
-      nextRunAt: schedule.nextRunAt,
-      schedule: schedule.schedule,
-    })),
-  );
-
-  const plansSignature = stableStringify(
-    plans.map((plan) => ({
-      id: plan.id,
-      status: plan.status,
-      updatedAt: plan.updatedAt,
-      steps: plan.steps.map((step) => ({
-        id: step.id,
-        status: step.status,
-        updatedAt: step.updatedAt,
-      })),
-    })),
-  );
-
-  const approvalsSignature = stableStringify(
-    approvals.map((approval) => ({
-      id: approval.id,
-      status: approval.status,
-      command: approval.command,
-      decidedAt: approval.decidedAt ?? null,
-    })),
-  );
-  const execSessionsSignature = stableStringify(
-    execSessions.map((session) => ({
-      id: session.id,
-      status: session.status,
-      startedAt: session.startedAt,
-      endedAt: session.endedAt ?? null,
-      failureCode: session.failureCode ?? "none",
-      approvalId: session.approvalId ?? null,
-    })),
-  );
-  const mcpServersSignature = stableStringify(
-    mcpServers.map((server) => ({
-      name: server.name,
-      transport: server.transport,
-      enabled: server.enabled,
-      requireApproval: server.requireApproval,
-      updatedAt: server.updatedAt,
-    })),
-  );
-  const mcpApprovalsSignature = stableStringify(
-    mcpApprovals.map((approval) => ({
-      id: approval.id,
-      serverName: approval.serverName,
-      transport: approval.transport,
-      status: approval.status,
-      decidedAt: approval.decidedAt ?? null,
-    })),
-  );
-
-  return {
-    signatures: {
-      health: healthSignature,
-      jobs: jobsSignature,
-      schedules: schedulesSignature,
-      plans: plansSignature,
-      approvals: approvalsSignature,
-      exec_sessions: execSessionsSignature,
-      mcp_servers: mcpServersSignature,
-      mcp_approvals: mcpApprovalsSignature,
-    },
-    summary: {
-      jobs: jobs.length,
-      plans: plans.length,
-      schedules: schedules.length,
-      approvals: approvals.length,
-      execSessions: execSessions.length,
-      mcpServers: mcpServers.length,
-      mcpApprovals: mcpApprovals.length,
-    },
-  };
-}
-
-function readIdempotencyKey(headerValue: string | string[] | undefined): string | null {
-  if (Array.isArray(headerValue)) {
-    return readIdempotencyKey(headerValue[0]);
-  }
-  const value = headerValue?.trim();
-  return value ? value : null;
-}
-
-function bodySessionKey(body: unknown): string | null {
-  if (!body || typeof body !== "object") {
-    return null;
-  }
-  const value = (body as { sessionKey?: unknown }).sessionKey;
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed || null;
-}
-
-function normalizeInboundAttachments(raw: unknown): EngineInboundAttachment[] {
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-  const out: EngineInboundAttachment[] = [];
-  for (const item of raw) {
-    if (!item || typeof item !== "object") {
-      throw new ApiError(400, "BAD_REQUEST", "attachments invalidos");
-    }
-    const kindRaw = (item as { kind?: unknown }).kind;
-    const kind = kindRaw === "image" || kindRaw === "audio" ? kindRaw : null;
-    const dataBase64 = (item as { dataBase64?: unknown }).dataBase64;
-    if (!kind || typeof dataBase64 !== "string" || !dataBase64.trim()) {
-      throw new ApiError(
-        400,
-        "BAD_REQUEST",
-        "attachment invalido: use {kind: image|audio, dataBase64: string}",
-      );
-    }
-    const mimeTypeRaw = (item as { mimeType?: unknown }).mimeType;
-    const fileNameRaw = (item as { fileName?: unknown }).fileName;
-    out.push({
-      kind,
-      dataBase64: dataBase64.trim(),
-      mimeType: typeof mimeTypeRaw === "string" ? mimeTypeRaw.trim() || undefined : undefined,
-      fileName: typeof fileNameRaw === "string" ? fileNameRaw.trim() || undefined : undefined,
-    });
-  }
-  return out;
-}
-
-async function withIdempotency<T>(params: {
-  store: IdempotencyStore;
-  enabled: boolean;
-  scope: string;
-  idempotencyKey: string | null;
-  signature: string;
-  execute: () => Promise<T>;
-}): Promise<{ replayed: boolean; value: T }> {
-  if (!params.enabled || !params.idempotencyKey) {
-    return { replayed: false, value: await params.execute() };
-  }
-
-  return params.store.execute({
-    key: `${params.scope}:${params.idempotencyKey}`,
-    signature: params.signature,
-    handler: params.execute,
-  });
-}
-
 export function createApiServer(app: KaelApp): FastifyInstance {
   const server = Fastify({ logger: false });
-  const edgeWsServer = new WebSocketServer({ noServer: true });
   const idempotency = new IdempotencyStore(app.config.idempotency.ttlMs);
   const plannerExecuteRuntime = createPlannerExecuteRuntime(app);
   const plannerReconcileRuntime = createPlannerReconcileRuntime(app);
@@ -272,105 +36,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
     }
   };
 
-  server.server.on("upgrade", (request, socket, head) => {
-    if (request.url !== "/ws") {
-      socket.destroy();
-      return;
-    }
-
-    edgeWsServer.handleUpgrade(request, socket, head, (ws: {
-      on: (event: string, handler: (...args: unknown[]) => void) => void;
-      once: (event: string, handler: (...args: unknown[]) => void) => void;
-      send: (payload: string) => void;
-      close: () => void;
-    }) => {
-      edgeWsServer.emit("connection", ws, request);
-    });
-  });
-
-  edgeWsServer.on("connection", (ws: {
-    on: (event: string, handler: (...args: unknown[]) => void) => void;
-    once: (event: string, handler: (...args: unknown[]) => void) => void;
-    send: (payload: string) => void;
-    close: () => void;
-  }) => {
-    let connectionId: string | null = null;
-
-    ws.on("message", (raw: unknown) => {
-      const rawText = typeof raw === "string" ? raw : Buffer.isBuffer(raw) ? raw.toString("utf8") : String(raw);
-
-      try {
-        const message = parseEdgeInboundMessage(rawText);
-        if (message.type === "client.register") {
-          const record = app.edge.registerClient(message.payload.client, {
-            send: (payload: string) => ws.send(payload),
-          });
-          connectionId = record.connectionId;
-          kaelLogger.info("edge.client.registered", {
-            connectionId,
-            clientId: record.client.clientId,
-            clientName: record.client.clientName,
-            hostname: record.client.hostname,
-            capabilities: record.client.capabilities.map((item) => item.name),
-            providers: record.client.providers.map((item) => ({
-              name: item.name,
-              kind: item.kind,
-              status: item.status,
-            })),
-          });
-          ws.send(JSON.stringify(createRegisteredMessage(connectionId)));
-          return;
-        }
-
-        if (message.type === "client.heartbeat") {
-          if (!connectionId) {
-            kaelLogger.warn("edge.client.heartbeat.before_register", {
-              clientId: message.payload.clientId,
-            });
-            return;
-          }
-          const record = app.edge.markHeartbeat(connectionId);
-          kaelLogger.info("edge.client.heartbeat", {
-            connectionId,
-            clientId: message.payload.clientId,
-            known: !!record,
-          });
-          return;
-        }
-
-        if (!connectionId) {
-          kaelLogger.warn("edge.client.task_result.before_register", {
-            taskId: message.payload.result.taskId,
-          });
-          return;
-        }
-
-        const resolved = app.edge.resolveTaskResult(connectionId, message.payload.result);
-        kaelLogger.info("edge.client.task_result", {
-          connectionId,
-          taskId: message.payload.result.taskId,
-          capability: message.payload.result.capability,
-          success: message.payload.result.success,
-          resolved,
-        });
-      } catch (error) {
-        kaelLogger.warn("edge.client.protocol_error", {
-          message: error instanceof Error ? error.message : String(error),
-        });
-      }
-    });
-
-    ws.once("close", () => {
-      if (!connectionId) {
-        return;
-      }
-      const removed = app.edge.removeClient(connectionId);
-      kaelLogger.info("edge.client.disconnected", {
-        connectionId,
-        clientId: removed?.client.clientId ?? null,
-      });
-    });
-  });
+  registerEdgeWsGateway(server, app);
 
   server.addHook("onRequest", async (request) => {
     (request as unknown as RequestWithStart)._kaelStartNs = process.hrtime.bigint();
@@ -436,7 +102,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
       piEnabled: app.config.pi.enabled,
       metrics: {
         sessions,
-        totalJobs: Object.values(jobsByStatus).reduce((sum, value) => sum + value, 0),
+        totalJobs: Object.values(jobsByStatus).reduce<number>((sum, value) => sum + Number(value), 0),
         jobsByStatus,
         runtimeJobs,
         chatRouting,
