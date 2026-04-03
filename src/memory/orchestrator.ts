@@ -1,6 +1,6 @@
 import { kaelLogger } from "../infra/logger.js";
 import type { SessionStore } from "../session/store.js";
-import type { EngineToolingInput } from "../engine/types.js";
+import type { EngineToolingNamespaces } from "../engine/types.js";
 import type { MemoryService } from "./service.js";
 import type { MemoryPolicy } from "./types.js";
 import { DefaultMemoryPolicy } from "./policy.js";
@@ -37,7 +37,7 @@ export class MemoryOrchestrator {
   async runManualCompact(params: {
     sessionKey: string;
     currentMessage: string;
-    tooling: EngineToolingInput;
+    tooling: EngineToolingNamespaces;
     requestId?: string;
   }): Promise<{
     flush: MemoryFlushResult;
@@ -56,7 +56,7 @@ export class MemoryOrchestrator {
   async runAutoCompactionWithMemoryFlushIfNeeded(params: {
     sessionKey: string;
     currentMessage: string;
-    tooling: EngineToolingInput;
+    tooling: EngineToolingNamespaces;
     requestId?: string;
   }): Promise<void> {
     const need = await this.turns.checkCompactionNeed({
@@ -99,7 +99,7 @@ export class MemoryOrchestrator {
   private async flushSessionToDailyMemory(params: {
     sessionKey: string;
     currentMessage: string;
-    tooling: EngineToolingInput;
+    tooling: EngineToolingNamespaces;
     requestId?: string;
   }): Promise<MemoryFlushResult> {
     const llmFlush = await this.tryLlmMemoryFlush(params);
@@ -135,7 +135,7 @@ export class MemoryOrchestrator {
   private async tryLlmMemoryFlush(params: {
     sessionKey: string;
     currentMessage: string;
-    tooling: EngineToolingInput;
+    tooling: EngineToolingNamespaces;
     requestId?: string;
   }): Promise<MemoryFlushResult> {
     const relPath = this.policy.todayDailyRelPath();
@@ -184,7 +184,7 @@ export class MemoryOrchestrator {
   private async promoteLongTermMemoryIfNeeded(params: {
     sessionKey: string;
     currentMessage: string;
-    tooling: EngineToolingInput;
+    tooling: EngineToolingNamespaces;
     requestId?: string;
   }): Promise<LongTermPromoteResult> {
     const before = await this.readMemorySnapshot("MEMORY.md");

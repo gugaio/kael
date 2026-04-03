@@ -1,11 +1,194 @@
 import { describe, expect, it, vi } from "vitest";
 import { createPiShellTools } from "./pi-tools.js";
-import type { EngineTooling } from "./types.js";
+import type { EngineTooling, EngineToolingNamespaces } from "./types.js";
 
-function createTooling(overrides: Partial<EngineTooling> = {}): EngineTooling {
+function createTooling(overrides: Partial<EngineTooling> = {}): EngineToolingNamespaces {
   return {
-    ...overrides,
-  } as EngineTooling;
+    video: {
+      startTranscode: async () => ({ id: "job-1" } as never),
+      startConvertHls: async () => ({ id: "job-2" } as never),
+      startCaptureStream: async () => ({ id: "job-3" } as never),
+      startProbeMedia: async () => ({ id: "job-4" } as never),
+      startPlayVlc: async () => ({ id: "job-5" } as never),
+      videoHlsInspect: async () => ({
+        ok: true,
+        url: "https://example.com/master.m3u8",
+        finalUrl: "https://example.com/master.m3u8",
+        playlistType: "master" as const,
+        variants: [],
+        renditions: [],
+        segments: [],
+        errors: [],
+      }),
+      videoProbe: async () => ({
+        ok: true,
+        input: "input.mp4",
+        timeoutMs: 1000,
+        streams: [],
+        errors: [],
+      }),
+      videoGenerateImage: undefined,
+      playbackAnalyze: undefined,
+      ...(overrides.startTranscode ? { startTranscode: overrides.startTranscode } : {}),
+      ...(overrides.startConvertHls ? { startConvertHls: overrides.startConvertHls } : {}),
+      ...(overrides.startCaptureStream ? { startCaptureStream: overrides.startCaptureStream } : {}),
+      ...(overrides.startProbeMedia ? { startProbeMedia: overrides.startProbeMedia } : {}),
+      ...(overrides.startPlayVlc ? { startPlayVlc: overrides.startPlayVlc } : {}),
+      ...(overrides.videoHlsInspect ? { videoHlsInspect: overrides.videoHlsInspect } : {}),
+      ...(overrides.videoProbe ? { videoProbe: overrides.videoProbe } : {}),
+      ...(overrides.videoGenerateImage ? { videoGenerateImage: overrides.videoGenerateImage } : {}),
+      ...(overrides.playbackAnalyze ? { playbackAnalyze: overrides.playbackAnalyze } : {}),
+    },
+    jobs: {
+      listJobs: overrides.listJobs ?? (() => []),
+      getJob: overrides.getJob ?? (() => null),
+      getJobLog: overrides.getJobLog ?? (async ({ jobId }) => ({ jobId, found: false })),
+    },
+    system: {
+      execCommand:
+        overrides.execCommand ??
+        (async () => ({
+          id: "exec-1",
+          command: "true",
+          cwd: ".",
+          status: "completed",
+          startedAt: new Date().toISOString(),
+          outputTail: "",
+        })),
+      processCommand: overrides.processCommand ?? (async () => ({ ok: true, action: "list", sessions: [] })),
+    },
+    mcp: {
+      mcpList:
+        overrides.mcpList ?? (async () => ({ ok: true, command: "mcporter list", schema: false, format: "json", items: [] })),
+      mcpCall:
+        overrides.mcpCall ??
+        (async () => ({
+          ok: true,
+          command: "mcporter call stub",
+          target: "stub.call",
+          format: "json",
+          output: {},
+        })),
+    },
+    edge: {
+      edgeList: overrides.edgeList ?? (() => []),
+      edgeCall:
+        overrides.edgeCall ??
+        (async ({ capability }) => ({ ok: true, taskId: "edge-1", capability, output: {} })),
+      youboraMetricsGet:
+        overrides.youboraMetricsGet ??
+        (async () => ({ ok: true, taskId: "yb-1", capability: "youbora.metrics.get", output: {} })),
+      youboraRawdataGet:
+        overrides.youboraRawdataGet ??
+        (async () => ({ ok: true, taskId: "yb-2", capability: "youbora.rawdata.get", output: {} })),
+      youboraEventsGet:
+        overrides.youboraEventsGet ??
+        (async () => ({ ok: true, taskId: "yb-3", capability: "youbora.events.get", output: {} })),
+    },
+    memory: {
+      memorySearch: overrides.memorySearch ?? (async () => []),
+      memoryGet: overrides.memoryGet ?? (async () => ({ path: "MEMORY.md", text: "", startLine: 1, endLine: 1 })),
+      memoryWrite: overrides.memoryWrite ?? (async () => ({ path: "memory/2026-01-01.md" })),
+    },
+    workspace: {
+      workspaceSearch: overrides.workspaceSearch ?? (async () => []),
+      workspaceRead: overrides.workspaceRead ?? (async () => ({ path: "README.md", text: "", startLine: 1, endLine: 1 })),
+    },
+    web: {
+      webSearch: overrides.webSearch ?? (async () => ({ answer: "ok", sources: [], notes: [] })),
+      webFetch:
+        overrides.webFetch ??
+        (async () => ({
+          url: "https://example.com",
+          finalUrl: "https://example.com",
+          content: "ok",
+          excerpt: "ok",
+          fetchedAt: new Date().toISOString(),
+          cached: false,
+        })),
+      webResearch:
+        overrides.webResearch ??
+        (async () => ({
+          query: "q",
+          summary: "s",
+          confidence: 0.7,
+          confidenceReason: "r",
+          evidence: [],
+          notes: [],
+        })),
+    },
+    browser: {
+      browserCommand:
+        overrides.browserCommand ??
+        (async ({ action }) => ({
+          ok: true,
+          action,
+          status: "started",
+          message: "ok",
+        })),
+      browserRuntimeTelemetry:
+        overrides.browserRuntimeTelemetry ??
+        (() => ({
+          enabled: false,
+          commands: 0,
+          failures: 0,
+          sessionsStarted: 0,
+          sessionsClosed: 0,
+          expiredSessionsClosed: 0,
+          evictedSessions: 0,
+          activeSessions: 0,
+          actionCalls: {
+            start: 0,
+            open: 0,
+            navigate: 0,
+            snapshot_text: 0,
+            screenshot: 0,
+            click: 0,
+            type: 0,
+            press: 0,
+            wait_for: 0,
+            close: 0,
+          },
+          actionFailures: {
+            start: 0,
+            open: 0,
+            navigate: 0,
+            snapshot_text: 0,
+            screenshot: 0,
+            click: 0,
+            type: 0,
+            press: 0,
+            wait_for: 0,
+            close: 0,
+          },
+          avgLatencyMsByAction: {
+            start: 0,
+            open: 0,
+            navigate: 0,
+            snapshot_text: 0,
+            screenshot: 0,
+            click: 0,
+            type: 0,
+            press: 0,
+            wait_for: 0,
+            close: 0,
+          },
+        })),
+    },
+    image: {
+      imageGenerate: overrides.imageGenerate,
+    },
+    plans: {
+      planCreate: overrides.planCreate ?? (async () => ({ id: "p1" } as never)),
+      planGenerate: overrides.planGenerate ?? (async () => ({ id: "p1" } as never)),
+      planList: overrides.planList ?? (() => []),
+      planGet: overrides.planGet ?? (() => null),
+      planUpdateStep: overrides.planUpdateStep ?? (async () => null),
+      planNextAction: overrides.planNextAction ?? (() => null),
+      planExecuteNext: overrides.planExecuteNext ?? (async () => ({ ok: false, reason: "no_next_step", message: "none" })),
+      planReconcile: overrides.planReconcile ?? (async () => ({ scannedPlans: 0, updatedPlans: 0, updatedSteps: 0 })),
+    },
+  };
 }
 
 describe("createPiShellTools image_generate", () => {

@@ -1,163 +1,189 @@
 import { describe, expect, it, vi } from "vitest";
 import { SimpleCommandEngine } from "./simple-engine.js";
-import type { EngineTurnInput, EngineTooling } from "./types.js";
+import type { EngineTurnInput, EngineTooling, EngineToolingNamespaces } from "./types.js";
 
 function createTooling(
   execImpl?: EngineTooling["execCommand"],
   browserImpl?: EngineTooling["browserCommand"],
-): EngineTooling {
+): EngineToolingNamespaces {
   return {
-    startTranscode: async () => ({ id: "j1" } as never),
-    startConvertHls: async () => ({ id: "j2" } as never),
-    startCaptureStream: async () => ({ id: "j3" } as never),
-    startProbeMedia: async () => ({ id: "j4" } as never),
-    videoHlsInspect: async () => ({
-      ok: true,
-      url: "https://example.com/master.m3u8",
-      finalUrl: "https://example.com/master.m3u8",
-      playlistType: "master" as const,
-      variants: [],
-      renditions: [],
-      segments: [],
-      errors: [],
-    }),
-    videoProbe: async () => ({
-      ok: true,
-      input: "https://example.com/video.m3u8",
-      timeoutMs: 1000,
-      streams: [],
-      errors: [],
-    }),
-    listJobs: () => [],
-    getJob: () => null,
-    getJobLog: async ({ jobId }) => ({ jobId, found: false }),
-    execCommand:
-      execImpl ??
-      (async () => ({
-        id: "s1",
-        command: "true",
-        cwd: ".",
-        status: "completed",
-        startedAt: new Date().toISOString(),
-        outputTail: "",
-      })),
-    processCommand: async () => ({ ok: true, action: "list", sessions: [] }),
-    mcpList: async () => ({ ok: true, command: "mcporter list", schema: false, format: "json", items: [] }),
-    mcpCall: async () => ({
-      ok: true,
-      command: "mcporter call linear.list_issues",
-      target: "linear.list_issues",
-      format: "json",
-      output: {},
-    }),
-    edgeList: () => [],
-    edgeCall: async ({ capability }) => ({ ok: false, taskId: "t1", capability, error: "unused" }),
-    youboraMetricsGet: async () => ({
-      ok: true,
-      taskId: "yb1",
-      capability: "youbora.metrics.get",
-      output: { rows: [] },
-    }),
-    youboraRawdataGet: async () => ({
-      ok: true,
-      taskId: "yb2",
-      capability: "youbora.rawdata.get",
-      output: { rows: [] },
-    }),
-    youboraEventsGet: async () => ({
-      ok: true,
-      taskId: "yb3",
-      capability: "youbora.events.get",
-      output: { rows: [] },
-    }),
-    memorySearch: async () => [],
-    memoryGet: async () => ({ path: "MEMORY.md", text: "", startLine: 1, endLine: 1 }),
-    memoryWrite: async () => ({ path: "memory/2026-01-01.md" }),
-    workspaceSearch: async () => [],
-    workspaceRead: async () => ({ path: "README.md", text: "", startLine: 1, endLine: 1 }),
-    webSearch: async () => ({ answer: "ok", sources: [], notes: [] }),
-    webFetch: async () => ({
-      url: "https://example.com",
-      finalUrl: "https://example.com",
-      content: "ok",
-      excerpt: "ok",
-      fetchedAt: new Date().toISOString(),
-      cached: false,
-    }),
-    webResearch: async () => ({
-      query: "q",
-      summary: "s",
-      confidence: 0.7,
-      confidenceReason: "r",
-      evidence: [],
-      notes: [],
-    }),
-    browserCommand:
-      browserImpl ??
-      (async ({ action }) => ({
-        ok: false,
-        action,
-        status: "failed",
-        message: "stub",
-      })),
-    browserRuntimeTelemetry: () => ({
-      enabled: false,
-      commands: 0,
-      failures: 0,
-      sessionsStarted: 0,
-      sessionsClosed: 0,
-      expiredSessionsClosed: 0,
-      evictedSessions: 0,
-      activeSessions: 0,
-      actionCalls: {
-        start: 0,
-        open: 0,
-        navigate: 0,
-        snapshot_text: 0,
-        screenshot: 0,
-        click: 0,
-        type: 0,
-        press: 0,
-        wait_for: 0,
-        close: 0,
-      },
-      actionFailures: {
-        start: 0,
-        open: 0,
-        navigate: 0,
-        snapshot_text: 0,
-        screenshot: 0,
-        click: 0,
-        type: 0,
-        press: 0,
-        wait_for: 0,
-        close: 0,
-      },
-      avgLatencyMsByAction: {
-        start: 0,
-        open: 0,
-        navigate: 0,
-        snapshot_text: 0,
-        screenshot: 0,
-        click: 0,
-        type: 0,
-        press: 0,
-        wait_for: 0,
-        close: 0,
-      },
-    }),
-    planCreate: async () => ({ id: "p1" } as never),
-    planGenerate: async () => ({ id: "p1" } as never),
-    planList: () => [],
-    planGet: () => null,
-    planUpdateStep: async () => null,
-    planNextAction: () => null,
-    planExecuteNext: async () => ({ ok: false, reason: "no_next_step", message: "none" }),
-    planReconcile: async () => ({ scannedPlans: 0, updatedPlans: 0, updatedSteps: 0 }),
+    video: {
+      startTranscode: async () => ({ id: "j1" } as never),
+      startConvertHls: async () => ({ id: "j2" } as never),
+      startCaptureStream: async () => ({ id: "j3" } as never),
+      startProbeMedia: async () => ({ id: "j4" } as never),
+      startPlayVlc: async () => ({ id: "j5" } as never),
+      videoHlsInspect: async () => ({
+        ok: true,
+        url: "https://example.com/master.m3u8",
+        finalUrl: "https://example.com/master.m3u8",
+        playlistType: "master" as const,
+        variants: [],
+        renditions: [],
+        segments: [],
+        errors: [],
+      }),
+      videoProbe: async () => ({
+        ok: true,
+        input: "https://example.com/video.m3u8",
+        timeoutMs: 1000,
+        streams: [],
+        errors: [],
+      }),
+      videoGenerateImage: undefined,
+      playbackAnalyze: undefined,
+    },
+    jobs: {
+      listJobs: () => [],
+      getJob: () => null,
+      getJobLog: async ({ jobId }) => ({ jobId, found: false }),
+    },
+    system: {
+      execCommand:
+        execImpl ??
+        (async () => ({
+          id: "s1",
+          command: "true",
+          cwd: ".",
+          status: "completed",
+          startedAt: new Date().toISOString(),
+          outputTail: "",
+        })),
+      processCommand: async () => ({ ok: true, action: "list", sessions: [] }),
+    },
+    mcp: {
+      mcpList: async () => ({ ok: true, command: "mcporter list", schema: false, format: "json", items: [] }),
+      mcpCall: async () => ({
+        ok: true,
+        command: "mcporter call linear.list_issues",
+        target: "linear.list_issues",
+        format: "json",
+        output: {},
+      }),
+    },
+    edge: {
+      edgeList: () => [],
+      edgeCall: async ({ capability }) => ({ ok: false, taskId: "t1", capability, error: "unused" }),
+      youboraMetricsGet: async () => ({
+        ok: true,
+        taskId: "yb1",
+        capability: "youbora.metrics.get",
+        output: { rows: [] },
+      }),
+      youboraRawdataGet: async () => ({
+        ok: true,
+        taskId: "yb2",
+        capability: "youbora.rawdata.get",
+        output: { rows: [] },
+      }),
+      youboraEventsGet: async () => ({
+        ok: true,
+        taskId: "yb3",
+        capability: "youbora.events.get",
+        output: { rows: [] },
+      }),
+    },
+    memory: {
+      memorySearch: async () => [],
+      memoryGet: async () => ({ path: "MEMORY.md", text: "", startLine: 1, endLine: 1 }),
+      memoryWrite: async () => ({ path: "memory/2026-01-01.md" }),
+    },
+    workspace: {
+      workspaceSearch: async () => [],
+      workspaceRead: async () => ({ path: "README.md", text: "", startLine: 1, endLine: 1 }),
+    },
+    web: {
+      webSearch: async () => ({ answer: "ok", sources: [], notes: [] }),
+      webFetch: async () => ({
+        url: "https://example.com",
+        finalUrl: "https://example.com",
+        content: "ok",
+        excerpt: "ok",
+        fetchedAt: new Date().toISOString(),
+        cached: false,
+      }),
+      webResearch: async () => ({
+        query: "q",
+        summary: "s",
+        confidence: 0.7,
+        confidenceReason: "r",
+        evidence: [],
+        notes: [],
+      }),
+    },
+    browser: {
+      browserCommand:
+        browserImpl ??
+        (async ({ action }) => ({
+          ok: false,
+          action,
+          status: "failed",
+          message: "stub",
+        })),
+      browserRuntimeTelemetry: () => ({
+        enabled: false,
+        commands: 0,
+        failures: 0,
+        sessionsStarted: 0,
+        sessionsClosed: 0,
+        expiredSessionsClosed: 0,
+        evictedSessions: 0,
+        activeSessions: 0,
+        actionCalls: {
+          start: 0,
+          open: 0,
+          navigate: 0,
+          snapshot_text: 0,
+          screenshot: 0,
+          click: 0,
+          type: 0,
+          press: 0,
+          wait_for: 0,
+          close: 0,
+        },
+        actionFailures: {
+          start: 0,
+          open: 0,
+          navigate: 0,
+          snapshot_text: 0,
+          screenshot: 0,
+          click: 0,
+          type: 0,
+          press: 0,
+          wait_for: 0,
+          close: 0,
+        },
+        avgLatencyMsByAction: {
+          start: 0,
+          open: 0,
+          navigate: 0,
+          snapshot_text: 0,
+          screenshot: 0,
+          click: 0,
+          type: 0,
+          press: 0,
+          wait_for: 0,
+          close: 0,
+        },
+      }),
+    },
+    image: {
+      imageGenerate: undefined,
+    },
+    plans: {
+      planCreate: async () => ({ id: "p1" } as never),
+      planGenerate: async () => ({ id: "p1" } as never),
+      planList: () => [],
+      planGet: () => null,
+      planUpdateStep: async () => null,
+      planNextAction: () => null,
+      planExecuteNext: async () => ({ ok: false, reason: "no_next_step", message: "none" }),
+      planReconcile: async () => ({ scannedPlans: 0, updatedPlans: 0, updatedSteps: 0 }),
+    },
   };
 }
 
-function makeInput(message: string, tooling: EngineTooling): EngineTurnInput {
+function makeInput(message: string, tooling: EngineToolingNamespaces): EngineTurnInput {
   return {
     sessionKey: "main",
     message,
@@ -176,7 +202,10 @@ describe("SimpleCommandEngine", () => {
         "/vlc https://example.com/video.m3u8",
         {
           ...createTooling(),
-          startPlayVlc,
+          video: {
+            ...createTooling().video,
+            startPlayVlc,
+          },
         },
       ),
     );
@@ -271,7 +300,10 @@ describe("SimpleCommandEngine", () => {
         "/youbora metrics last24hours views,plays vod hour",
         {
           ...createTooling(),
-          youboraMetricsGet,
+          edge: {
+            ...createTooling().edge,
+            youboraMetricsGet,
+          },
         },
       ),
     );
@@ -300,7 +332,10 @@ describe("SimpleCommandEngine", () => {
         '/youbora rawdata 2026-03-01 2026-03-02 vod {"account":"globo"}',
         {
           ...createTooling(),
-          youboraRawdataGet,
+          edge: {
+            ...createTooling().edge,
+            youboraRawdataGet,
+          },
         },
       ),
     );
@@ -328,7 +363,10 @@ describe("SimpleCommandEngine", () => {
         '/youbora events last24hours live {"event":"rebuffer"}',
         {
           ...createTooling(),
-          youboraEventsGet,
+          edge: {
+            ...createTooling().edge,
+            youboraEventsGet,
+          },
         },
       ),
     );

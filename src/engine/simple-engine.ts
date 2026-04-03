@@ -1,5 +1,4 @@
 import type { AgentEngine, EngineToolingNamespaces, EngineTurnInput, EngineTurnOutput } from "./types.js";
-import { resolveToolingNamespaces } from "./tooling-namespaces.js";
 import { BROWSER_ACTIONS, formatBrowserReplyText } from "../capabilities/browser/index.js";
 
 type ParsedCommand = {
@@ -347,7 +346,7 @@ async function handleBrowserCommand(
 
 export class SimpleCommandEngine implements AgentEngine {
   async runTurn(input: EngineTurnInput): Promise<EngineTurnOutput> {
-    const tooling = resolveToolingNamespaces(input.tooling);
+    const tooling = input.tooling;
     const parsed = parseCommand(input.message);
 
     if (!parsed) {

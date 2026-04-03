@@ -1,14 +1,13 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { createPiCapabilityTools } from "./tool-specs/index.js";
-import type { EngineOutputArtifact, EngineToolingInput } from "./types.js";
-import { resolveToolingNamespaces } from "./tooling-namespaces.js";
+import type { EngineOutputArtifact, EngineToolingNamespaces } from "./types.js";
 import type { ToolLoopGuard } from "./tool-loop-guard.js";
 import { createToolBudget } from "./pi-tools-budget.js";
 import { createToolTelemetry, formatSession, textResult } from "./pi-tools-telemetry.js";
 
 export function createPiShellTools(params: {
   sessionKey: string;
-  tooling: EngineToolingInput;
+  tooling: EngineToolingNamespaces;
   turnSignal?: AbortSignal;
   loopGuard?: ToolLoopGuard;
   trace?: {
@@ -38,7 +37,6 @@ export function createPiShellTools(params: {
     artifact?: EngineOutputArtifact;
   }) => void;
 }): AgentTool[] {
-  const tooling = resolveToolingNamespaces(params.tooling);
   const telemetry = createToolTelemetry({
     sessionKey: params.sessionKey,
     trace: params.trace,
@@ -60,7 +58,7 @@ export function createPiShellTools(params: {
   const capabilityTools = createPiCapabilityTools({
     system: {
       sessionKey: params.sessionKey,
-      tooling: tooling.system,
+      tooling: params.tooling.system,
       loopGuard: params.loopGuard,
       textResult,
       formatSession,
@@ -73,7 +71,7 @@ export function createPiShellTools(params: {
     },
     video: {
       sessionKey: params.sessionKey,
-      tooling: tooling.video,
+      tooling: params.tooling.video,
       textResult,
       reserveToolCall: budget.reserveToolCall,
       logToolStart: telemetry.logToolStart,
@@ -81,7 +79,7 @@ export function createPiShellTools(params: {
         telemetry.logToolEnd(tool, intent, result, startedAtMs, summary),
     },
     jobs: {
-      tooling: tooling.jobs,
+      tooling: params.tooling.jobs,
       textResult,
       reserveToolCall: budget.reserveToolCall,
       logToolStart: telemetry.logToolStart,
@@ -89,7 +87,7 @@ export function createPiShellTools(params: {
         telemetry.logToolEnd(tool, intent, result, startedAtMs, summary),
     },
     edge: {
-      tooling: tooling.edge,
+      tooling: params.tooling.edge,
       textResult,
       makeBlockedResult: budget.makeBlockedResult,
       reserveEdgeCall: budget.reserveEdgeCall,
@@ -99,7 +97,7 @@ export function createPiShellTools(params: {
     },
     mcp: {
       sessionKey: params.sessionKey,
-      tooling: tooling.mcp,
+      tooling: params.tooling.mcp,
       loopGuard: params.loopGuard,
       textResult,
       makeBlockedResult: budget.makeBlockedResult,
@@ -109,19 +107,19 @@ export function createPiShellTools(params: {
         telemetry.logToolEnd(tool, intent, result, startedAtMs, summary),
     },
     memory: {
-      tooling: tooling.memory,
+      tooling: params.tooling.memory,
       textResult,
       logToolStart: telemetry.logToolStart,
       logToolEnd: (tool, intent, result, startedAtMs, summary) =>
         telemetry.logToolEnd(tool, intent, result, startedAtMs, summary),
     },
     workspace: {
-      tooling: tooling.workspace,
+      tooling: params.tooling.workspace,
       textResult,
     },
     web: {
       sessionKey: params.sessionKey,
-      tooling: tooling.web,
+      tooling: params.tooling.web,
       turnSignal: params.turnSignal,
       loopGuard: params.loopGuard,
       textResult,
@@ -133,7 +131,7 @@ export function createPiShellTools(params: {
     },
     browser: {
       sessionKey: params.sessionKey,
-      tooling: tooling.browser,
+      tooling: params.tooling.browser,
       textResult,
       reserveBrowserCall: budget.reserveBrowserCall,
       logToolStart: telemetry.logToolStart,
@@ -142,12 +140,12 @@ export function createPiShellTools(params: {
     },
     plans: {
       sessionKey: params.sessionKey,
-      tooling: tooling.plans,
+      tooling: params.tooling.plans,
       textResult,
     },
     image: {
       sessionKey: params.sessionKey,
-      tooling: tooling.image,
+      tooling: params.tooling.image,
       textResult,
       makeBlockedResult: budget.makeBlockedResult,
       reserveImageCall: budget.reserveImageCall,

@@ -1,5 +1,4 @@
-import type { EngineTooling, EngineToolingInput, EngineToolingNamespaces } from "../engine/types.js";
-import { flattenToolingNamespaces, resolveToolingNamespaces } from "../engine/tooling-namespaces.js";
+import type { EngineToolingNamespaces } from "../engine/types.js";
 import type { JobManager } from "../jobs/manager.js";
 import { VIDEO_JOB_ACTIONS } from "../capabilities/video/index.js";
 import type { MemoryService } from "../memory/service.js";
@@ -35,7 +34,7 @@ type ChatToolingDeps = {
   browser: BrowserCapability;
 };
 
-export function createChatToolingNamespaces(deps: ChatToolingDeps): EngineToolingNamespaces {
+export function createChatTooling(deps: ChatToolingDeps): EngineToolingNamespaces {
   return {
     video: {
       startTranscode: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.transcode, params),
@@ -215,12 +214,8 @@ export function createChatToolingNamespaces(deps: ChatToolingDeps): EngineToolin
   };
 }
 
-export function createChatTooling(deps: ChatToolingDeps): EngineTooling {
-  return flattenToolingNamespaces(createChatToolingNamespaces(deps));
-}
-
-export function createChatOnlyToolingNamespaces(tooling: EngineToolingInput): EngineToolingNamespaces {
-  const namespaces = resolveToolingNamespaces(tooling);
+export function createChatOnlyTooling(tooling: EngineToolingNamespaces): EngineToolingNamespaces {
+  const namespaces = tooling;
   return {
     ...namespaces,
     video: {
@@ -382,8 +377,4 @@ export function createChatOnlyToolingNamespaces(tooling: EngineToolingInput): En
       },
     },
   };
-}
-
-export function createChatOnlyTooling(tooling: EngineToolingInput): EngineTooling {
-  return flattenToolingNamespaces(createChatOnlyToolingNamespaces(tooling));
 }

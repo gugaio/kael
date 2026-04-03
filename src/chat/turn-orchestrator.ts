@@ -1,4 +1,4 @@
-import type { AgentEngine, EngineToolingInput, EngineTurnInput, EngineTurnOutput } from "../engine/types.js";
+import type { AgentEngine, EngineToolingNamespaces, EngineTurnInput, EngineTurnOutput } from "../engine/types.js";
 import { kaelLogger } from "../infra/logger.js";
 import type { SessionStore } from "../session/store.js";
 import type { SessionMessage } from "../types.js";
@@ -13,7 +13,7 @@ type OrchestratedTurnInput = {
   message: string;
   attachments?: EngineTurnInput["attachments"];
   requestId?: string;
-  tooling: EngineToolingInput;
+  tooling: EngineToolingNamespaces;
 };
 
 type UtilityTurnInput = {
@@ -21,7 +21,7 @@ type UtilityTurnInput = {
   message: string;
   attachments?: EngineTurnInput["attachments"];
   requestId?: string;
-  tooling: EngineToolingInput;
+  tooling: EngineToolingNamespaces;
   excludeCurrentMessage?: string | null;
 };
 

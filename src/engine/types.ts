@@ -564,8 +564,6 @@ export type EngineToolingNamespaces = {
   >;
 };
 
-export type EngineToolingInput = EngineTooling | EngineToolingNamespaces;
-
 export type EngineTurnInput = {
   sessionKey: string;
   message: string;
@@ -576,7 +574,7 @@ export type EngineTurnInput = {
     content: string;
     createdAt: string;
   }>;
-  tooling: EngineToolingInput;
+  tooling: EngineToolingNamespaces;
 };
 
 export type EngineInboundAttachment = {

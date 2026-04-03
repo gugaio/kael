@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AgentEngine, EngineTooling, EngineTurnInput, EngineTurnOutput } from "../engine/types.js";
+import type { AgentEngine, EngineToolingNamespaces, EngineTurnInput, EngineTurnOutput } from "../engine/types.js";
 import type { SessionMessage } from "../types.js";
 import { TurnOrchestrator } from "./turn-orchestrator.js";
 
@@ -13,176 +13,204 @@ function createMessage(role: SessionMessage["role"], content: string, idx: numbe
   };
 }
 
-function createToolingStub(): EngineTooling {
+function createToolingStub(): EngineToolingNamespaces {
   return {
-    startTranscode: async () => {
-      throw new Error("not used");
-    },
-    startConvertHls: async () => {
-      throw new Error("not used");
-    },
-    startCaptureStream: async () => {
-      throw new Error("not used");
-    },
-    startProbeMedia: async () => {
-      throw new Error("not used");
-    },
-    videoHlsInspect: async () => ({
-      ok: true,
-      url: "https://example.com/master.m3u8",
-      finalUrl: "https://example.com/master.m3u8",
-      playlistType: "master" as const,
-      variants: [],
-      renditions: [],
-      segments: [],
-      errors: [],
-    }),
-    videoProbe: async () => ({
-      ok: true,
-      input: "x",
-      timeoutMs: 1000,
-      streams: [],
-      errors: [],
-    }),
-    listJobs: () => [],
-    getJob: () => null,
-    getJobLog: async ({ jobId }) => ({ jobId, found: false }),
-    execCommand: async () => ({
-      id: "1",
-      command: "true",
-      cwd: ".",
-      status: "completed",
-      startedAt: new Date().toISOString(),
-      outputTail: "",
-      endedAt: new Date().toISOString(),
-      exitCode: 0,
-    }),
-    processCommand: async () => ({
-      ok: true,
-      action: "list",
-      sessions: [],
-    }),
-    mcpList: async () => ({ ok: true, command: "mcporter list", schema: false, format: "json", items: [] }),
-    mcpCall: async () => ({
-      ok: true,
-      command: "mcporter call linear.list_issues",
-      target: "linear.list_issues",
-      format: "json",
-      output: {},
-    }),
-    edgeList: () => [],
-    edgeCall: async ({ capability }) => ({ ok: false, taskId: "t1", capability, error: "unused" }),
-    youboraMetricsGet: async () => ({ ok: true, taskId: "yb1", capability: "youbora.metrics.get", output: {} }),
-    youboraRawdataGet: async () => ({ ok: true, taskId: "yb2", capability: "youbora.rawdata.get", output: {} }),
-    youboraEventsGet: async () => ({ ok: true, taskId: "yb3", capability: "youbora.events.get", output: {} }),
-    memorySearch: async () => [],
-    memoryGet: async () => ({
-      path: "MEMORY.md",
-      text: "",
-      startLine: 1,
-      endLine: 1,
-    }),
-    memoryWrite: async () => ({ path: "memory/2000-01-01.md" }),
-    workspaceSearch: async () => [],
-    workspaceRead: async () => ({
-      path: "README.md",
-      text: "",
-      startLine: 1,
-      endLine: 1,
-    }),
-    webSearch: async () => ({ answer: "ok", sources: [], notes: [] }),
-    webFetch: async () => ({
-      url: "https://example.com",
-      finalUrl: "https://example.com",
-      content: "ok",
-      excerpt: "ok",
-      fetchedAt: new Date().toISOString(),
-      cached: false,
-    }),
-    webResearch: async () => ({
-      query: "q",
-      summary: "s",
-      confidence: 0.7,
-      confidenceReason: "r",
-      evidence: [],
-      notes: [],
-    }),
-    browserCommand: async ({ action }) => ({
-      ok: false,
-      action,
-      status: "failed",
-      message: "stub",
-    }),
-    browserRuntimeTelemetry: () => ({
-      enabled: false,
-      commands: 0,
-      failures: 0,
-      sessionsStarted: 0,
-      sessionsClosed: 0,
-      expiredSessionsClosed: 0,
-      evictedSessions: 0,
-      activeSessions: 0,
-      actionCalls: {
-        start: 0,
-        open: 0,
-        navigate: 0,
-        snapshot_text: 0,
-        screenshot: 0,
-        click: 0,
-        type: 0,
-        press: 0,
-        wait_for: 0,
-        close: 0,
+    video: {
+      startTranscode: async () => {
+        throw new Error("not used");
       },
-      actionFailures: {
-        start: 0,
-        open: 0,
-        navigate: 0,
-        snapshot_text: 0,
-        screenshot: 0,
-        click: 0,
-        type: 0,
-        press: 0,
-        wait_for: 0,
-        close: 0,
+      startConvertHls: async () => {
+        throw new Error("not used");
       },
-      avgLatencyMsByAction: {
-        start: 0,
-        open: 0,
-        navigate: 0,
-        snapshot_text: 0,
-        screenshot: 0,
-        click: 0,
-        type: 0,
-        press: 0,
-        wait_for: 0,
-        close: 0,
+      startCaptureStream: async () => {
+        throw new Error("not used");
       },
-    }),
-    planCreate: async () => ({
-      id: "p1",
-      sessionKey: "s1",
-      title: "plan",
-      status: "active",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      steps: [],
-    }),
-    planGenerate: async () => ({
-      id: "p1",
-      sessionKey: "s1",
-      title: "plan",
-      status: "active",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      steps: [],
-    }),
-    planList: () => [],
-    planGet: () => null,
-    planUpdateStep: async () => null,
-    planNextAction: () => null,
-    planExecuteNext: async () => ({ ok: false, reason: "no_next_step", message: "none" }),
-    planReconcile: async () => ({ scannedPlans: 0, updatedPlans: 0, updatedSteps: 0 }),
+      startProbeMedia: async () => {
+        throw new Error("not used");
+      },
+      startPlayVlc: async () => {
+        throw new Error("not used");
+      },
+      videoHlsInspect: async () => ({
+        ok: true,
+        url: "https://example.com/master.m3u8",
+        finalUrl: "https://example.com/master.m3u8",
+        playlistType: "master" as const,
+        variants: [],
+        renditions: [],
+        segments: [],
+        errors: [],
+      }),
+      videoProbe: async () => ({
+        ok: true,
+        input: "x",
+        timeoutMs: 1000,
+        streams: [],
+        errors: [],
+      }),
+      videoGenerateImage: undefined,
+      playbackAnalyze: undefined,
+    },
+    jobs: {
+      listJobs: () => [],
+      getJob: () => null,
+      getJobLog: async ({ jobId }) => ({ jobId, found: false }),
+    },
+    system: {
+      execCommand: async () => ({
+        id: "1",
+        command: "true",
+        cwd: ".",
+        status: "completed",
+        startedAt: new Date().toISOString(),
+        outputTail: "",
+        endedAt: new Date().toISOString(),
+        exitCode: 0,
+      }),
+      processCommand: async () => ({
+        ok: true,
+        action: "list",
+        sessions: [],
+      }),
+    },
+    mcp: {
+      mcpList: async () => ({ ok: true, command: "mcporter list", schema: false, format: "json", items: [] }),
+      mcpCall: async () => ({
+        ok: true,
+        command: "mcporter call linear.list_issues",
+        target: "linear.list_issues",
+        format: "json",
+        output: {},
+      }),
+    },
+    edge: {
+      edgeList: () => [],
+      edgeCall: async ({ capability }) => ({ ok: false, taskId: "t1", capability, error: "unused" }),
+      youboraMetricsGet: async () => ({ ok: true, taskId: "yb1", capability: "youbora.metrics.get", output: {} }),
+      youboraRawdataGet: async () => ({ ok: true, taskId: "yb2", capability: "youbora.rawdata.get", output: {} }),
+      youboraEventsGet: async () => ({ ok: true, taskId: "yb3", capability: "youbora.events.get", output: {} }),
+    },
+    memory: {
+      memorySearch: async () => [],
+      memoryGet: async () => ({
+        path: "MEMORY.md",
+        text: "",
+        startLine: 1,
+        endLine: 1,
+      }),
+      memoryWrite: async () => ({ path: "memory/2000-01-01.md" }),
+    },
+    workspace: {
+      workspaceSearch: async () => [],
+      workspaceRead: async () => ({
+        path: "README.md",
+        text: "",
+        startLine: 1,
+        endLine: 1,
+      }),
+    },
+    web: {
+      webSearch: async () => ({ answer: "ok", sources: [], notes: [] }),
+      webFetch: async () => ({
+        url: "https://example.com",
+        finalUrl: "https://example.com",
+        content: "ok",
+        excerpt: "ok",
+        fetchedAt: new Date().toISOString(),
+        cached: false,
+      }),
+      webResearch: async () => ({
+        query: "q",
+        summary: "s",
+        confidence: 0.7,
+        confidenceReason: "r",
+        evidence: [],
+        notes: [],
+      }),
+    },
+    browser: {
+      browserCommand: async ({ action }) => ({
+        ok: false,
+        action,
+        status: "failed",
+        message: "stub",
+      }),
+      browserRuntimeTelemetry: () => ({
+        enabled: false,
+        commands: 0,
+        failures: 0,
+        sessionsStarted: 0,
+        sessionsClosed: 0,
+        expiredSessionsClosed: 0,
+        evictedSessions: 0,
+        activeSessions: 0,
+        actionCalls: {
+          start: 0,
+          open: 0,
+          navigate: 0,
+          snapshot_text: 0,
+          screenshot: 0,
+          click: 0,
+          type: 0,
+          press: 0,
+          wait_for: 0,
+          close: 0,
+        },
+        actionFailures: {
+          start: 0,
+          open: 0,
+          navigate: 0,
+          snapshot_text: 0,
+          screenshot: 0,
+          click: 0,
+          type: 0,
+          press: 0,
+          wait_for: 0,
+          close: 0,
+        },
+        avgLatencyMsByAction: {
+          start: 0,
+          open: 0,
+          navigate: 0,
+          snapshot_text: 0,
+          screenshot: 0,
+          click: 0,
+          type: 0,
+          press: 0,
+          wait_for: 0,
+          close: 0,
+        },
+      }),
+    },
+    image: {
+      imageGenerate: undefined,
+    },
+    plans: {
+      planCreate: async () => ({
+        id: "p1",
+        sessionKey: "s1",
+        title: "plan",
+        status: "active",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        steps: [],
+      }),
+      planGenerate: async () => ({
+        id: "p1",
+        sessionKey: "s1",
+        title: "plan",
+        status: "active",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        steps: [],
+      }),
+      planList: () => [],
+      planGet: () => null,
+      planUpdateStep: async () => null,
+      planNextAction: () => null,
+      planExecuteNext: async () => ({ ok: false, reason: "no_next_step", message: "none" }),
+      planReconcile: async () => ({ scannedPlans: 0, updatedPlans: 0, updatedSteps: 0 }),
+    },
   };
 }
 

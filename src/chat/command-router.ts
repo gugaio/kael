@@ -1,11 +1,11 @@
-import type { AgentEngine, EngineToolingInput } from "../engine/types.js";
+import type { AgentEngine, EngineToolingNamespaces } from "../engine/types.js";
 import { isSlashCommand, SimpleCommandEngine } from "../engine/simple-engine.js";
 
 export type CommandRouterInput = {
   sessionKey: string;
   message: string;
   requestId?: string;
-  tooling: EngineToolingInput;
+  tooling: EngineToolingNamespaces;
   allowOperationalShortcuts: boolean;
 };
 
