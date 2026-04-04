@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ChatService } from "./service.js";
+import { ProjectContextService } from "../projects/service.js";
 import { SessionStore } from "../session/store.js";
 import { SkillService } from "../skills/service.js";
 import type { EngineToolingNamespaces } from "../engine/types.js";
@@ -185,6 +186,7 @@ describe("ChatService knowledge retrieval", () => {
       },
       {} as never,
       tooling,
+      new ProjectContextService(root),
       new SkillService(root),
     );
 
@@ -248,6 +250,7 @@ describe("ChatService knowledge retrieval", () => {
       },
       {} as never,
       tooling,
+      new ProjectContextService(root),
       new SkillService(root),
     );
 
@@ -258,5 +261,70 @@ describe("ChatService knowledge retrieval", () => {
 
     expect(knowledgeSearchCalls).toBe(0);
     expect(capturedMessage).not.toContain("[project_knowledge_context]");
+  });
+
+  it("uses @project hint to scaffold and inject project context", async () => {
+    const root = await createWorkspace();
+    const sessions = new SessionStore(path.join(root, ".kael-data"));
+    await sessions.init();
+    let capturedMessage = "";
+    let capturedProject: string | undefined;
+    const orchestrator = {
+      checkCompactionNeed: async () => ({
+        compacted: false,
+        reason: "below_threshold" as const,
+        summarizedMessages: 0,
+        totalMessages: 0,
+        totalChars: 0,
+      }),
+      runConversationTurn: async ({ message }: { message: string }) => {
+        capturedMessage = message;
+        return { reply: "ok", artifacts: [] };
+      },
+      getEngineRuntimeTelemetrySnapshot: () => ({ timeouts: 0, toolCallsByName: {}, blockedCallsByTool: {} }),
+    } as unknown as ConstructorParameters<typeof ChatService>[2];
+
+    const tooling = createTooling({
+      knowledgeSearch: async ({ project }) => {
+        capturedProject = project;
+        return [];
+      },
+    });
+
+    const chat = new ChatService(
+      sessions,
+      { process: async () => ({ ok: true, action: "list", sessions: [] }) } as never,
+      orchestrator as never,
+      {
+        preprocess: async ({ message }: { message: string }) => ({ message, applied: false, details: [] }),
+        getRuntimeTelemetrySnapshot: () => ({
+          processedRequests: 0,
+          appliedRequests: 0,
+          imageDescribed: 0,
+          audioTranscribed: 0,
+          failures: 0,
+          processedAttachments: 0,
+          skippedTooLarge: 0,
+          skippedBySourceLimit: 0,
+          skippedByTotalBytesBudget: 0,
+          skippedByProcessingBudget: 0,
+        }),
+      },
+      {} as never,
+      tooling,
+      new ProjectContextService(root),
+      new SkillService(root),
+    );
+
+    await chat.handleMessage({
+      sessionKey: "s1",
+      message: "@ios-app como o parametro x e enviado?",
+    });
+
+    expect(capturedProject).toBe("ios-app");
+    expect(capturedMessage).toContain("[project_context]");
+    expect(capturedMessage).toContain("project=ios-app");
+    const scaffoldPath = path.join(root, ".kael", "projects", "ios-app", "PROJECT.md");
+    await expect(fs.readFile(scaffoldPath, "utf-8")).resolves.toContain("# ios-app");
   });
 });

@@ -293,6 +293,7 @@ function makeFakeApp(): KaelApp {
     research: {} as KaelApp["research"],
     memory: {} as KaelApp["memory"],
     knowledge: {} as KaelApp["knowledge"],
+    projects: {} as KaelApp["projects"],
     chat: {
       handleMessage: async ({
         sessionKey,

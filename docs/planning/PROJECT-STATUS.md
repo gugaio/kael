@@ -37,6 +37,31 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-04 - Chat: escopo explicito por projeto com `@project` e `.kael/projects`
+
+Resumo:
+- O chat agora aceita `@project-name` como hint forte de escopo para perguntas sobre um projeto especifico.
+- Foi adicionado um `ProjectContextService` que cria e carrega automaticamente `.kael/projects/<project>/PROJECT.md` na primeira vez em que o projeto e mencionado.
+- Quando `@project` aparece, o runtime prioriza esse projeto no retrieval da knowledge base e injeta o `PROJECT.md` como contexto adicional do turno.
+
+Arquivos-chave:
+- `src/projects/service.ts`
+- `src/projects/service.test.ts`
+- `src/chat/service.ts`
+- `src/chat/service.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/projects/service.test.ts src/chat/service.test.ts src/knowledge/service.test.ts src/skills/service.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/engine/simple-engine.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- O `PROJECT.md` inicial ainda e so um scaffold, sem schema/frontmatter mais forte.
+- Ainda nao ha comando dedicado para listar projetos conhecidos ou preencher/curar o contexto de projeto.
+- Skills ainda nao usam `@project` de forma explicita como argumento default.
+
+Proximo passo recomendado:
+- Fazer skills e writer de knowledge herdarem automaticamente o `@project` atual como default de escopo e depois adicionar um comando simples para inspecionar/provisionar projetos.
+
 ### 2026-04-04 - Chat: retrieval leve da knowledge base para perguntas de projeto
 
 Resumo:

@@ -179,3 +179,13 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
   - schema recomendado de payload;
   - exemplos de nota confirmada, analise e conflito.
 - Cobertura de testes expandida para auto-selecao da skill quando a mensagem pede para salvar achados de projeto.
+
+## Entregas implementadas (incremento 18.6)
+
+- Escopo explicito por projeto adicionado ao chat via marcador `@project-name`.
+- Novo `ProjectContextService` cria e carrega `.kael/projects/<project>/PROJECT.md` como contexto local do workspace.
+- Quando `@project` aparece:
+  - o scaffold do projeto e provisionado automaticamente se ainda nao existir;
+  - o `PROJECT.md` e injetado no turno;
+  - a busca na knowledge base passa a priorizar aquele projeto.
+- Cobertura de testes adicionada para parser de `@project`, scaffold inicial e injecao de contexto no `ChatService`.

@@ -18,6 +18,7 @@ import {
 import { MemoryService } from "../memory/service.js";
 import { HybridMemoryRetriever } from "../memory/retriever-hybrid.js";
 import { KnowledgeService } from "../knowledge/service.js";
+import { ProjectContextService } from "../projects/service.js";
 import { WorkspaceInspector } from "../workspace/inspector.js";
 import { BrowserRuntimeService, type BrowserRuntime } from "../runtime/browser/index.js";
 import { DisabledSearchProvider, TavilySearchProvider } from "../research/provider.js";
@@ -119,6 +120,10 @@ export async function createKnowledgeRuntime(config: KaelConfig): Promise<Knowle
   });
   await knowledge.init();
   return knowledge;
+}
+
+export function createProjectContextRuntime(config: KaelConfig): ProjectContextService {
+  return new ProjectContextService(config.shell.workspaceRoot);
 }
 
 export function createWorkspaceRuntime(config: KaelConfig): WorkspaceInspector {

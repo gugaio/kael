@@ -12,11 +12,13 @@ import { ChatRoutingTelemetry, type ChatRoutingTelemetrySnapshot } from "./routi
 import { createChatOnlyTooling } from "./tooling-factory.js";
 import type { MediaRuntimeTelemetry, MediaUnderstandingService } from "../media/service.js";
 import type { BrowserRuntimeTelemetry } from "../runtime/browser/index.js";
+import { extractProjectMention, type ProjectContextService } from "../projects/service.js";
 import { SkillService, type SkillsRuntimeTelemetry } from "../skills/service.js";
 
 const PROJECT_KNOWLEDGE_MAX_NOTES = 2;
 const PROJECT_KNOWLEDGE_MIN_SCORE = 10;
 const PROJECT_KNOWLEDGE_MIN_CONFIDENCE = 0.55;
+const PROJECT_CONTEXT_MAX_CHARS = 1400;
 
 function shouldResetSessionOnEngineError(error: unknown): boolean {
   const normalized = normalizePiError(error);
@@ -80,6 +82,17 @@ function buildProjectKnowledgeContextBlock(
   }
 
   return lines.join("\n");
+}
+
+function buildProjectOverviewContextBlock(project: { name: string; content: string; filePath: string }): string {
+  const trimmedContent = project.content.trim().slice(0, PROJECT_CONTEXT_MAX_CHARS);
+  return [
+    "[project_context]",
+    `project=${project.name}`,
+    `file=${project.filePath}`,
+    "Use este contexto do projeto quando ele ajudar a interpretar a pergunta atual.",
+    trimmedContent,
+  ].join("\n");
 }
 
 function extractPartialWebEvidence(message: string): string[] {
@@ -146,6 +159,7 @@ export class ChatService {
   private readonly commandRouter = new CommandRouter();
   private readonly routingTelemetry = new ChatRoutingTelemetry();
   private readonly skills: SkillService;
+  private readonly projects: ProjectContextService;
 
   constructor(
     private readonly sessions: SessionStore,
@@ -154,11 +168,13 @@ export class ChatService {
     private readonly media: MediaUnderstandingService,
     memory: MemoryService,
     tooling: EngineToolingNamespaces,
+    projects: ProjectContextService,
     skills: SkillService,
   ) {
     this.memoryOrchestrator = new MemoryOrchestrator(this.sessions, memory, this.orchestrator);
     this.tooling = tooling;
     this.chatOnlyTooling = createChatOnlyTooling(tooling);
+    this.projects = projects;
     this.skills = skills;
   }
 
@@ -374,6 +390,7 @@ export class ChatService {
 
   private async prepareLlmMessageStage(input: HandleMessageInput, pipeline: PipelineState): Promise<string> {
     let llmInputMessage = pipeline.llmInputMessage;
+    const projectHint = extractProjectMention(input.message);
     if (!pipeline.skillManualApplied) {
       const preparedSkillTurn = await this.skills.prepareTurnMessage(llmInputMessage, {
         sessionKey: input.sessionKey,
@@ -388,9 +405,9 @@ export class ChatService {
       }
     }
 
-    const projectKnowledgeContext = await this.buildProjectKnowledgeContext(input, llmInputMessage);
-    if (projectKnowledgeContext) {
-      llmInputMessage = `${llmInputMessage}\n\n${projectKnowledgeContext}`;
+    const projectContextBlocks = await this.buildProjectContextBlocks(input, llmInputMessage, projectHint?.projectName);
+    if (projectContextBlocks.length > 0) {
+      llmInputMessage = `${llmInputMessage}\n\n${projectContextBlocks.join("\n\n")}`;
     }
 
     const mediaPreprocess = await this.media.preprocess({
@@ -410,14 +427,24 @@ export class ChatService {
     return mediaPreprocess.message;
   }
 
-  private async buildProjectKnowledgeContext(input: HandleMessageInput, llmInputMessage: string): Promise<string | null> {
-    if (!looksLikeProjectKnowledgeQuestion(input.message)) {
-      return null;
+  private async buildProjectContextBlocks(
+    input: HandleMessageInput,
+    llmInputMessage: string,
+    projectName?: string,
+  ): Promise<string[]> {
+    const blocks: string[] = [];
+    if (!projectName && !looksLikeProjectKnowledgeQuestion(input.message)) {
+      return blocks;
     }
 
     try {
+      if (projectName) {
+        const project = await this.projects.ensureProject(projectName);
+        blocks.push(buildProjectOverviewContextBlock(project));
+      }
       const results = await this.tooling.knowledge.knowledgeSearch({
         query: input.message,
+        ...(projectName ? { project: projectName } : {}),
         maxResults: PROJECT_KNOWLEDGE_MAX_NOTES,
       });
       const strongMatches = results
@@ -425,31 +452,34 @@ export class ChatService {
         .filter((item) => item.confidence >= PROJECT_KNOWLEDGE_MIN_CONFIDENCE)
         .slice(0, PROJECT_KNOWLEDGE_MAX_NOTES);
       if (strongMatches.length === 0) {
-        return null;
+        return blocks;
       }
 
       const notes = (
         await Promise.all(strongMatches.map((item) => this.tooling.knowledge.knowledgeGet({ noteId: item.id })))
       ).filter((item): item is NonNullable<typeof item> => Boolean(item));
       if (notes.length === 0) {
-        return null;
+        return blocks;
       }
 
       kaelLogger.info("chat.knowledge.context_applied", {
         sessionKey: input.sessionKey,
         requestId: input.requestId ?? null,
+        projectName: projectName ?? null,
         noteIds: notes.map((item) => item.id),
         query: input.message,
         llmChars: llmInputMessage.length,
       });
-      return buildProjectKnowledgeContextBlock(notes);
+      blocks.push(buildProjectKnowledgeContextBlock(notes));
+      return blocks;
     } catch (error) {
       kaelLogger.warn("chat.knowledge.context_failed", {
         sessionKey: input.sessionKey,
         requestId: input.requestId ?? null,
+        projectName: projectName ?? null,
         error: error instanceof Error ? error.message : String(error),
       });
-      return null;
+      return blocks;
     }
   }
 

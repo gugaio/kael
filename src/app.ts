@@ -11,6 +11,7 @@ import {
   createMcpRuntime,
   createMemoryRuntime,
   createPlannerRuntime,
+  createProjectContextRuntime,
   createResearchRuntime,
   createShellRuntime,
   createVideoRuntime,
@@ -27,6 +28,7 @@ import {
   type KnowledgeNoteStatus,
   type KnowledgeSearchResult,
 } from "./knowledge/service.js";
+import { ProjectContextService } from "./projects/service.js";
 import { PlannerService } from "./planner/service.js";
 import { ResearchService } from "./research/service.js";
 import { SessionStore } from "./session/store.js";
@@ -56,6 +58,7 @@ export type KaelApp = {
   jobs: JobManager;
   memory: MemoryService;
   knowledge: KnowledgeService;
+  projects: ProjectContextService;
   planner: PlannerService;
   research: ResearchService;
   chat: ChatService;
@@ -124,6 +127,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   const edge = new EdgeRuntime();
   const memory = await createMemoryRuntime(config);
   const knowledge = await createKnowledgeRuntime(config);
+  const projects = createProjectContextRuntime(config);
   const workspace = createWorkspaceRuntime(config);
   const browserRuntime = createBrowserRuntime(config);
   const research = createResearchRuntime(config);
@@ -159,6 +163,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     mediaUnderstanding,
     memory,
     tooling,
+    projects,
     new SkillService(config.shell.workspaceRoot),
   );
   const heartbeat = new HeartbeatRunner(jobs, sessions);
@@ -279,6 +284,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     jobs,
     memory,
     knowledge,
+    projects,
     planner,
     research,
     chat,
