@@ -40,20 +40,20 @@ Proximo passo recomendado:
 ### 2026-04-04 - Core: modos de execucao explicitos no tooling
 
 Resumo:
-- O wiring de `createChatTooling` passou a usar nomes de executor explicitos (`jobManager`, `shellRuntime`, `edgeRuntime`, `browserInteractive`) em vez de dependencias ambigamente chamadas de capability.
-- O wrapper de browser foi renomeado para `BrowserInteractiveCapability`, deixando claro que browser opera como runtime interativo stateful por sessao, nao como job persistente.
+- O wiring de `createChatTooling` passou a usar nomes de executor explicitos (`jobManager`, `shellRuntime`, `edgeRuntime`, `browserRuntime`) em vez de dependencias ambigamente chamadas de capability.
+- Browser saiu de `src/capabilities/browser` para `src/runtime/browser`, e o core agora depende direto de `BrowserRuntime`.
 - Foi adicionado um catalogo central de namespaces com `executionMode` para documentar a diferenca entre `job`, `interactive`, `remote` e `service`.
 
 Arquivos-chave:
 - `src/chat/tooling-factory.ts`
 - `src/bootstrap/runtime.ts`
-- `src/capabilities/browser/capability.ts`
+- `src/runtime/browser/service.ts`
 - `src/engine/tooling-descriptors.ts`
 - `docs/architecture/phases/phase-16.md`
 
 Checklist de validacao:
-- [ ] `npm run check`
-- [ ] `npm test -- src/capabilities/browser/capability.test.ts src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts`
+- [x] `npm run check`
+- [x] `npm test -- src/runtime/browser/runtime.test.ts src/runtime/browser/presentation.test.ts src/runtime/browser/service.test.ts src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts`
 
 Pendencias:
 - O catalogo de descriptors ainda nao e consumido por `/health`, docs geradas ou introspeccao em runtime.

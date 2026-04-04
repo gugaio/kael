@@ -15,7 +15,7 @@ import type {
   VideoManifestAuditService,
 } from "../capabilities/video/index.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
-import type { BrowserInteractiveCapability } from "../capabilities/browser/index.js";
+import type { BrowserRuntime } from "../runtime/browser/index.js";
 import { buildJobLogTailResult, selectJobs } from "../jobs/tooling.js";
 import type { EdgeRuntime } from "../edge/runtime.js";
 
@@ -33,7 +33,7 @@ type ChatToolingExecutors = {
   videoGeneration: ProviderBackedVideoGenerationService;
   playbackTriage: PlaybackTriageService;
   manifestAudit: VideoManifestAuditService;
-  browserInteractive: BrowserInteractiveCapability;
+  browserRuntime: BrowserRuntime;
 };
 
 export function createChatTooling(executors: ChatToolingExecutors): EngineToolingNamespaces {
@@ -180,8 +180,9 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
     },
     browser: {
       browserCommand: ({ sessionKey, action, targetId, url, selector, text, key, timeoutMs }) =>
-        executors.browserInteractive.executeAction(action, {
+        executors.browserRuntime.command({
           sessionKey,
+          action,
           targetId,
           url,
           selector,
@@ -189,7 +190,7 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
           key,
           timeoutMs,
         }),
-      browserRuntimeTelemetry: () => executors.browserInteractive.getRuntimeTelemetrySnapshot(),
+      browserRuntimeTelemetry: () => executors.browserRuntime.getRuntimeTelemetrySnapshot(),
     },
     image: {
       imageGenerate: ({ prompt, size }) => executors.imageGenerator.generate({ prompt, size }),

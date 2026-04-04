@@ -4,7 +4,7 @@ import {
   type BrowserCommandAction,
   formatBrowserToolText,
   isBrowserInteractionAction,
-} from "../../capabilities/browser/index.js";
+} from "../../runtime/browser/index.js";
 import type { EngineToolingNamespaces } from "../types.js";
 
 type TextBlock = {

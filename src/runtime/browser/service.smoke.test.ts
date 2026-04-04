@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { BrowserToolService } from "./service.js";
+import { BrowserRuntimeService } from "./service.js";
 
 function createFixtureHtml(): string {
   return `<!doctype html>
@@ -43,12 +43,12 @@ function isRestrictedRuntimeLaunchError(message: string): boolean {
   );
 }
 
-describe("BrowserToolService smoke (real browser)", () => {
+describe("BrowserRuntimeService smoke (real browser)", () => {
   it.runIf(process.env.KAEL_BROWSER_SMOKE === "1")("executa fluxo real: open -> type -> press -> wait -> screenshot -> close", async () => {
     const baseUrl = `data:text/html;charset=utf-8,${encodeURIComponent(createFixtureHtml())}`;
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-browser-smoke-"));
     const artifactsDir = path.join(root, "artifacts");
-    const service = new BrowserToolService({
+    const service = new BrowserRuntimeService({
       enabled: true,
       headless: true,
       defaultTimeoutMs: 30_000,

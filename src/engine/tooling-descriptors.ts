@@ -5,7 +5,7 @@ export type ToolingExecutionMode = "job" | "interactive" | "remote" | "service";
 export type EngineToolingNamespaceDescriptor = {
   namespace: keyof EngineToolingNamespaces;
   executionMode: ToolingExecutionMode;
-  executor: "jobManager" | "shellRuntime" | "mcpRuntime" | "edgeRuntime" | "service";
+  executor: "jobManager" | "shellRuntime" | "mcpRuntime" | "edgeRuntime" | "browserRuntime" | "service";
   description: string;
 };
 
@@ -61,7 +61,7 @@ export const ENGINE_TOOLING_NAMESPACE_DESCRIPTORS: EngineToolingNamespaceDescrip
   {
     namespace: "browser",
     executionMode: "interactive",
-    executor: "service",
+    executor: "browserRuntime",
     description: "Controle interativo e stateful de browser por sessao.",
   },
   {

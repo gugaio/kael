@@ -11,7 +11,7 @@ import { CommandRouter } from "./command-router.js";
 import { ChatRoutingTelemetry, type ChatRoutingTelemetrySnapshot } from "./routing-telemetry.js";
 import { createChatOnlyTooling } from "./tooling-factory.js";
 import type { MediaRuntimeTelemetry, MediaUnderstandingService } from "../media/service.js";
-import type { BrowserRuntimeTelemetry } from "../capabilities/browser/index.js";
+import type { BrowserRuntimeTelemetry } from "../runtime/browser/index.js";
 import { SkillService, type SkillsRuntimeTelemetry } from "../skills/service.js";
 
 function shouldResetSessionOnEngineError(error: unknown): boolean {

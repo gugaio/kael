@@ -58,7 +58,7 @@ graph TB
         end
 
         subgraph "Browser Tools"
-            Browser[BrowserToolService<br/>src/capabilities/browser/service.ts<br/>Comandos de navegador]
+            Browser[BrowserRuntimeService<br/>src/runtime/browser/service.ts<br/>Comandos de navegador]
         end
 
         subgraph "Image Generation"

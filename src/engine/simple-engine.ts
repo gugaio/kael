@@ -1,5 +1,5 @@
 import type { AgentEngine, EngineToolingNamespaces, EngineTurnInput, EngineTurnOutput } from "./types.js";
-import { BROWSER_ACTIONS, formatBrowserReplyText } from "../capabilities/browser/index.js";
+import { BROWSER_ACTIONS, formatBrowserReplyText } from "../runtime/browser/index.js";
 
 type ParsedCommand = {
   name: string;

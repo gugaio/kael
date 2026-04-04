@@ -1,5 +1,4 @@
-import { BROWSER_ACTIONS } from "./capability.js";
-import type { BrowserCommandAction, BrowserCommandResult } from "./service.js";
+import { BROWSER_ACTIONS, type BrowserCommandAction, type BrowserCommandResult } from "./service.js";
 
 export function isBrowserInteractionAction(action: string): action is BrowserCommandAction {
   return (

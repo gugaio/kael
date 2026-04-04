@@ -11,8 +11,8 @@ em etapas curtas, com observabilidade e risco operacional controlado.
 
 - Reutilizar o padrao atual do core:
   - contrato namespaced em `EngineToolingNamespaces`;
-  - capability explicita (`BrowserCapability`) no dominio `src/capabilities/browser`;
-  - runtime de browser (`BrowserToolService`) encapsulado pela capability;
+  - runtime estrutural em `src/runtime/browser`;
+  - `BrowserRuntimeService` como executor stateful por sessao;
   - wiring no `createKaelApp` e `createChatTooling`;
   - telemetria no `/health`.
 - Evitar copiar a superficie completa do OpenClaw no inicio.
@@ -24,7 +24,7 @@ em etapas curtas, com observabilidade e risco operacional controlado.
 
 Entregas:
 - Contrato `browserCommand` no namespace `browser` do `EngineToolingNamespaces`.
-- Runtime `BrowserToolService` com telemetria base e gate por config.
+- Runtime `BrowserRuntimeService` com telemetria base e gate por config.
 - Configuracoes `KAEL_BROWSER_*`.
 - Telemetria `browserRuntime` no `/health`.
 
@@ -101,7 +101,7 @@ Notas de implementacao atual:
   - `evictedSessions`;
   - `lastError`.
 - O browser permanece como executor `interactive` stateful por sessao, e nao como `job` no `JobManager`.
-- O wiring do core deve explicitar o executor de cada namespace (`jobManager`, `shellRuntime`, `edgeRuntime`, `browserInteractive`, etc.) para evitar o uso ambiguo da palavra "capability".
+- O wiring do core deve explicitar o executor de cada namespace (`jobManager`, `shellRuntime`, `edgeRuntime`, `browserRuntime`, etc.) para evitar o uso ambiguo da palavra "capability".
 
 ### Fase 16.4 - UX e docs operacionais
 

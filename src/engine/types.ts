@@ -4,7 +4,7 @@ import type {
   BrowserCommandAction,
   BrowserCommandResult,
   BrowserRuntimeTelemetry,
-} from "../capabilities/browser/index.js";
+} from "../runtime/browser/index.js";
 import type {
   HlsManifestAuditReport,
   PlaybackAnalysisReport,

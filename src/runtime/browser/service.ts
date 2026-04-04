@@ -16,6 +16,21 @@ export type BrowserCommandAction =
   | "wait_for"
   | "close";
 
+export const BROWSER_ACTIONS = {
+  start: "start",
+  open: "open",
+  navigate: "navigate",
+  snapshotText: "snapshot_text",
+  screenshot: "screenshot",
+  click: "click",
+  type: "type",
+  press: "press",
+  waitFor: "wait_for",
+  close: "close",
+} as const satisfies Record<string, BrowserCommandAction>;
+
+export const BROWSER_ACTION_VALUES = Object.values(BROWSER_ACTIONS) as BrowserCommandAction[];
+
 export type BrowserCommandInput = {
   sessionKey: string;
   action: BrowserCommandAction;
@@ -99,7 +114,7 @@ type SelectorParse =
   | { kind: "label"; value: string }
   | { kind: "css"; value: string };
 
-export class BrowserToolService implements BrowserRuntime {
+export class BrowserRuntimeService implements BrowserRuntime {
   private readonly sessions = new Map<string, BrowserSession>();
   private readonly telemetry: BrowserRuntimeTelemetry;
 

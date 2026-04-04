@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BROWSER_ACTIONS } from "./capability.js";
+import { BROWSER_ACTIONS } from "./service.js";
 import { formatBrowserReplyText, formatBrowserToolText, isBrowserInteractionAction } from "./presentation.js";
 
 describe("browser/presentation", () => {
@@ -22,4 +22,3 @@ describe("browser/presentation", () => {
     expect(formatBrowserReplyText(result)).toContain("browser action=open status=navigated");
   });
 });
-

@@ -1,16 +1,7 @@
 export {
   BROWSER_ACTIONS,
   BROWSER_ACTION_VALUES,
-  BrowserInteractiveCapability,
-} from "./capability.js";
-export {
-  formatBrowserReplyText,
-  formatBrowserToolText,
-  isBrowserInteractionAction,
-} from "./presentation.js";
-
-export {
-  BrowserToolService,
+  BrowserRuntimeService,
   type BrowserCommandAction,
   type BrowserCommandInput,
   type BrowserCommandResult,
@@ -18,3 +9,8 @@ export {
   type BrowserRuntimeTelemetry,
   type BrowserToolConfig,
 } from "./service.js";
+export {
+  formatBrowserReplyText,
+  formatBrowserToolText,
+  isBrowserInteractionAction,
+} from "./presentation.js";

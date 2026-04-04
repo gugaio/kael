@@ -17,7 +17,7 @@ import {
 import { MemoryService } from "../memory/service.js";
 import { HybridMemoryRetriever } from "../memory/retriever-hybrid.js";
 import { WorkspaceInspector } from "../workspace/inspector.js";
-import { BrowserInteractiveCapability, BrowserToolService } from "../capabilities/browser/index.js";
+import { BrowserRuntimeService, type BrowserRuntime } from "../runtime/browser/index.js";
 import { DisabledSearchProvider, TavilySearchProvider } from "../research/provider.js";
 import { ResearchService } from "../research/service.js";
 import { LlmPlanGenerator } from "../planner/llm-generator.js";
@@ -115,8 +115,8 @@ export function createWorkspaceRuntime(config: KaelConfig): WorkspaceInspector {
   });
 }
 
-export function createBrowserInteractiveCapability(config: KaelConfig): BrowserInteractiveCapability {
-  const browserRuntime = new BrowserToolService({
+export function createBrowserRuntime(config: KaelConfig): BrowserRuntime {
+  return new BrowserRuntimeService({
     enabled: config.browser.enabled,
     headless: config.browser.headless,
     defaultTimeoutMs: config.browser.defaultTimeoutMs,
@@ -126,7 +126,6 @@ export function createBrowserInteractiveCapability(config: KaelConfig): BrowserI
     maxSessions: config.browser.maxSessions,
     artifactDir: config.browser.artifactDir,
   });
-  return new BrowserInteractiveCapability(browserRuntime);
 }
 
 export function createResearchRuntime(config: KaelConfig): ResearchService {

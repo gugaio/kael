@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BrowserToolService } from "./service.js";
+import { BrowserRuntimeService } from "./service.js";
 
 const playwrightMocks = vi.hoisted(() => {
   const locator = {
@@ -51,13 +51,13 @@ vi.mock("playwright", () => ({
   chromium: playwrightMocks.chromium,
 }));
 
-describe("BrowserToolService", () => {
+describe("BrowserRuntimeService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("retorna disabled quando browser runtime esta desabilitado", async () => {
-    const service = new BrowserToolService({
+    const service = new BrowserRuntimeService({
       enabled: false,
       headless: true,
       defaultTimeoutMs: 30_000,
@@ -84,7 +84,7 @@ describe("BrowserToolService", () => {
 
   it("aceita data URL para smoke deterministico", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-browser-data-url-"));
-    const service = new BrowserToolService({
+    const service = new BrowserRuntimeService({
       enabled: true,
       headless: true,
       defaultTimeoutMs: 30_000,
@@ -108,7 +108,7 @@ describe("BrowserToolService", () => {
   it("executa fluxo read-only com start/open/snapshot/screenshot/close", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-browser-test-"));
     const artifactsDir = path.join(root, "artifacts");
-    const service = new BrowserToolService({
+    const service = new BrowserRuntimeService({
       enabled: true,
       headless: true,
       defaultTimeoutMs: 30_000,
@@ -170,7 +170,7 @@ describe("BrowserToolService", () => {
 
   it("aplica limite de screenshots por sessao", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-browser-limit-"));
-    const service = new BrowserToolService({
+    const service = new BrowserRuntimeService({
       enabled: true,
       headless: true,
       defaultTimeoutMs: 30_000,
@@ -202,7 +202,7 @@ describe("BrowserToolService", () => {
 
   it("executa click/type/wait_for/press com seletores", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-browser-actions-"));
-    const service = new BrowserToolService({
+    const service = new BrowserRuntimeService({
       enabled: true,
       headless: true,
       defaultTimeoutMs: 30_000,
@@ -259,7 +259,7 @@ describe("BrowserToolService", () => {
 
   it("fecha sessao expirada por TTL automaticamente", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-browser-ttl-"));
-    const service = new BrowserToolService({
+    const service = new BrowserRuntimeService({
       enabled: true,
       headless: true,
       defaultTimeoutMs: 30_000,
@@ -282,7 +282,7 @@ describe("BrowserToolService", () => {
 
   it("evicta sessao mais antiga quando excede maxSessions", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-browser-evict-"));
-    const service = new BrowserToolService({
+    const service = new BrowserRuntimeService({
       enabled: true,
       headless: true,
       defaultTimeoutMs: 30_000,
