@@ -13,6 +13,7 @@ import type {
   PlaybackTriageService,
   ProviderBackedVideoGenerationService,
   VideoManifestAuditService,
+  VideoManifestDiffService,
 } from "../capabilities/video/index.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
 import type { BrowserRuntime } from "../runtime/browser/index.js";
@@ -33,6 +34,7 @@ type ChatToolingExecutors = {
   videoGeneration: ProviderBackedVideoGenerationService;
   playbackTriage: PlaybackTriageService;
   manifestAudit: VideoManifestAuditService;
+  manifestDiff: VideoManifestDiffService;
   browserRuntime: BrowserRuntime;
 };
 
@@ -52,6 +54,16 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
         executors.manifestAudit.auditHlsManifest({
           sessionKey,
           url,
+          maxSegments,
+          timeoutMs,
+          followVariants,
+          maxVariants,
+        }),
+      videoManifestDiff: async ({ leftUrl, rightUrl, maxSegments, timeoutMs, followVariants, maxVariants, sessionKey }) =>
+        executors.manifestDiff.diffHlsManifests({
+          sessionKey,
+          leftUrl,
+          rightUrl,
           maxSegments,
           timeoutMs,
           followVariants,
@@ -255,6 +267,9 @@ export function createChatOnlyTooling(tooling: EngineToolingNamespaces): EngineT
       },
       videoManifestAudit: async () => {
         throw new Error("chat-only mode: video_manifest_audit disabled");
+      },
+      videoManifestDiff: async () => {
+        throw new Error("chat-only mode: video_manifest_diff disabled");
       },
       videoGenerateImage: async () => {
         throw new Error("chat-only mode: video_generate_image disabled");

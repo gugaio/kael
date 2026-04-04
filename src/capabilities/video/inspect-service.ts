@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { validateStreamUrl } from "./safety.js";
+import { validateStreamUrl } from "./jobs/safety.js";
 
 type HlsVariant = {
   uri: string;

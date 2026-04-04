@@ -7,6 +7,7 @@ import type {
 } from "../runtime/browser/index.js";
 import type {
   HlsManifestAuditReport,
+  HlsManifestDiffReport,
   PlaybackAnalysisReport,
   PlaybackEvent,
   PlaybackEngine,
@@ -111,6 +112,15 @@ export type EngineVideoTooling = {
     followVariants?: boolean;
     maxVariants?: number;
   }) => Promise<HlsManifestAuditReport>;
+  videoManifestDiff?: (params: {
+    sessionKey: string;
+    leftUrl: string;
+    rightUrl: string;
+    maxSegments?: number;
+    timeoutMs?: number;
+    followVariants?: boolean;
+    maxVariants?: number;
+  }) => Promise<HlsManifestDiffReport>;
   videoGenerateImage?: (params: {
     sessionKey: string;
     prompt: string;

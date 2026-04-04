@@ -45,4 +45,3 @@ describe("video safety", () => {
     ).resolves.toBeUndefined();
   });
 });
-

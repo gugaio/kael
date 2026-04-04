@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { VideoCapability, VIDEO_JOB_ACTIONS } from "./job-capability.js";
+import { VideoJobCapability, VIDEO_JOB_ACTIONS } from "./job-capability.js";
 import { VideoJobValidationError } from "./safety.js";
 
 function createCapability() {
-  return new VideoCapability({
+  return new VideoJobCapability({
     startTranscode: vi.fn(),
     startConvertHls: vi.fn(),
     startCaptureStream: vi.fn(),
@@ -15,7 +15,7 @@ function createCapability() {
   } as never);
 }
 
-describe("VideoCapability", () => {
+describe("VideoJobCapability", () => {
   it("rejects invalid transcode payload before reaching service", async () => {
     const capability = createCapability();
 

@@ -8,11 +8,12 @@ import { ShellToolService } from "../tools/system/shell-tool-service.js";
 import { McpBridgeService } from "../tools/mcp/mcp-bridge-service.js";
 import {
   VideoArtifactsService,
-  VideoCapability,
+  VideoJobCapability,
   VideoInspectToolService,
   VideoJobService,
   ProviderBackedVideoGenerationService,
   VideoManifestAuditService,
+  VideoManifestDiffService,
 } from "../capabilities/video/index.js";
 import { MemoryService } from "../memory/service.js";
 import { HybridMemoryRetriever } from "../memory/retriever-hybrid.js";
@@ -37,6 +38,7 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
   jobs: JobManager;
   videoInspect: VideoInspectToolService;
   manifestAudit: VideoManifestAuditService;
+  manifestDiff: VideoManifestDiffService;
   videoArtifacts: VideoArtifactsService;
 }> {
   const runner = new LocalProcessRunner();
@@ -48,15 +50,17 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
     jobTimeoutMs: config.execution.jobTimeoutMs,
     killGraceMs: config.execution.killGraceMs,
   });
-  const jobs = new JobManager(jobStore, [new VideoCapability(video)]);
+  const jobs = new JobManager(jobStore, [new VideoJobCapability(video)]);
   const videoInspect = new VideoInspectToolService();
   const manifestAudit = new VideoManifestAuditService(videoInspect);
+  const manifestDiff = new VideoManifestDiffService(manifestAudit);
   const videoArtifacts = new VideoArtifactsService(path.join(config.dataDir, "video", "artifacts"));
   await videoArtifacts.init();
   return {
     jobs,
     videoInspect,
     manifestAudit,
+    manifestDiff,
     videoArtifacts,
   };
 }

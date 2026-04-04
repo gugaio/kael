@@ -35,7 +35,12 @@ import { PlaybackTriageService } from "./capabilities/video/index.js";
 import { SkillService } from "./skills/service.js";
 import type { McpRuntime } from "./tools/mcp/mcp-bridge-service.js";
 import { EdgeRuntime } from "./edge/runtime.js";
-import type { HlsManifestAuditInput, HlsManifestAuditReport } from "./capabilities/video/index.js";
+import type {
+  HlsManifestAuditInput,
+  HlsManifestAuditReport,
+  HlsManifestDiffInput,
+  HlsManifestDiffReport,
+} from "./capabilities/video/index.js";
 
 export type KaelApp = {
   config: KaelConfig;
@@ -51,6 +56,9 @@ export type KaelApp = {
   edge: EdgeRuntime;
   manifestAudit: {
     auditHlsManifest(input: HlsManifestAuditInput): Promise<HlsManifestAuditReport>;
+  };
+  manifestDiff: {
+    diffHlsManifests(input: HlsManifestDiffInput): Promise<HlsManifestDiffReport>;
   };
   emailIngest?: {
     getRuntimeTelemetrySnapshot(): EmailIngestRuntimeTelemetry;
@@ -72,7 +80,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   await sessions.init();
   await jobStore.init();
 
-  const { jobs, videoInspect, manifestAudit, videoArtifacts } = await createVideoRuntime(config, jobStore);
+  const { jobs, videoInspect, manifestAudit, manifestDiff, videoArtifacts } = await createVideoRuntime(config, jobStore);
   const shell = await createShellRuntime(config);
   const mcp = await createMcpRuntime(config);
   const edge = new EdgeRuntime();
@@ -99,6 +107,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     planner,
     playbackTriage: new PlaybackTriageService(),
     manifestAudit,
+    manifestDiff,
     browserRuntime,
     imageGenerator,
     videoGeneration,
@@ -237,6 +246,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     mcp,
     edge,
     manifestAudit,
+    manifestDiff,
     ...(emailIngest ? { emailIngest } : {}),
   };
 }

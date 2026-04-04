@@ -16,12 +16,14 @@ inteligencia de video, capaz de:
 
 - Manter `video` como capability raiz.
 - Evoluir o dominio por subservicos, nao por um monolito:
-  - `VideoJobService`
+  - `jobs/VideoJobService`
+  - `jobs/VideoJobCapability`
   - `VideoInspectToolService`
   - `VideoManifestAuditService`
   - `PlaybackTriageService`
   - `VideoGenerationService`
   - `VideoArtifactsService`
+- Dentro de `video`, a integracao com `JobManager` deve ficar isolada no subdominio `jobs/`, deixando claro que e uma borda operacional da capability de video, nao o coracao do dominio.
 - Tratar players como adapters de ingest/normalizacao, nao como capabilities do core.
 - Tratar providers de geracao como adapters plugaveis, nao como contratos centrais.
 
@@ -65,18 +67,23 @@ Nota:
   - devolve `issues`, `variantAudits`, `aggregateIssues`, severidade e recomendacoes operacionais.
 - Tool PI `video_manifest_audit` adicionada para expor a auditoria ao agente.
 - CLI `manifest-audit` ganhou `--follow-variants` e `--max-variants` para executar auditoria expandida localmente sem persistencia.
+- Nova capability `VideoManifestDiffService` para comparar dois audits HLS e destacar:
+  - mudancas de `playlistType`;
+  - deltas de stats (`variants`, `renditions`, `segments`, `targetDuration`, etc.);
+  - issues e aggregate issues adicionadas/removidas entre esquerda e direita.
+- Tool PI `video_manifest_diff` adicionada para expor diff deterministico ao agente.
+- CLI `manifest-diff` adicionada para comparar dois manifests localmente.
 
 ## Proximos incrementos
 
 1. Expor tools dedicadas no PI:
    - `video_generate_image`
    - `video_dash_inspect`
-   - `video_manifest_diff`
 2. Adicionar adapters de normalizacao por player:
    - `hlsjs`
    - `shaka`
    - `exoplayer`
    - `avplayer`
-3. Evoluir auditoria de manifesto para DASH e diff entre versoes (`video_manifest_diff`).
+3. Evoluir auditoria de manifesto para DASH e aprofundar diff entre versoes com comparacao de variants/artifacts persistidos.
 4. Evoluir geracao de video real por providers plugaveis (`veo`, `seedance`).
 5. Integrar validacoes de playback/video QA ao planner (`assert_*`).

@@ -37,6 +37,59 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-04 - Video: manifest diff inicial e CLI local
+
+Resumo:
+- Adicionada a capability `VideoManifestDiffService`, que compara dois audits HLS e devolve delta de stats, mudanca de `playlistType` e issues adicionadas/removidas.
+- O runtime PI ganhou a tool `video_manifest_diff`, e a CLI ganhou o comando `manifest-diff`.
+- `KaelApp`, bootstrap e chat tooling agora expõem o diff de manifesto como parte nativa do dominio de video QA.
+
+Arquivos-chave:
+- `src/capabilities/video/manifest-diff-service.ts`
+- `src/capabilities/video/types.ts`
+- `src/chat/tooling-factory.ts`
+- `src/engine/tool-specs/video.ts`
+- `src/cli/index.ts`
+- `docs/architecture/phases/phase-20.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/manifest-diff-service.test.ts src/capabilities/video/jobs/job-capability.test.ts src/capabilities/video/jobs/job-service.test.ts src/capabilities/video/jobs/safety.test.ts src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- O diff ainda compara o snapshot de audit em memoria; ainda nao ha comparacao baseada em artifacts persistidos.
+- Ainda nao existe diff equivalente para DASH.
+- Ainda nao ha comparacao detalhada por variant (`uri/url`) com heuristicas proprias de regressao.
+
+Proximo passo recomendado:
+- Persistir opcionalmente os audits como artifacts e evoluir `video_manifest_diff` para comparar variants/ladders com mais granularidade.
+
+### 2026-04-04 - Video: subdominio jobs explicitado dentro da capability
+
+Resumo:
+- O bloco operacional de jobs de video foi movido para `src/capabilities/video/jobs`, separando melhor a borda de execucao (`JobManager`/ffmpeg/ffprobe) do restante do dominio de video.
+- A adaptacao para o `JobManager` foi renomeada para `VideoJobCapability`, refletindo com mais precisao o papel do registro de acoes de job.
+- O barrel de `src/capabilities/video/index.ts` continua reexportando os contratos principais para evitar quebra desnecessaria no restante do core.
+
+Arquivos-chave:
+- `src/capabilities/video/jobs/job-capability.ts`
+- `src/capabilities/video/jobs/job-service.ts`
+- `src/capabilities/video/jobs/job-contracts.ts`
+- `src/capabilities/video/jobs/safety.ts`
+- `src/capabilities/video/index.ts`
+- `docs/architecture/phases/phase-20.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/jobs/job-capability.test.ts src/capabilities/video/jobs/job-service.test.ts src/capabilities/video/jobs/safety.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- Ainda existe acoplamento semantico entre validacoes de job (`jobs/safety.ts`) e `inspect-service.ts` via `validateStreamUrl`.
+- O proximo incremento funcional de maior valor continua sendo `video_manifest_diff`.
+
+Proximo passo recomendado:
+- Implementar `video_manifest_diff` reaproveitando `VideoManifestAuditService` e `StoredArtifactRecord`, sem reabrir mais refactors estruturais antes disso.
+
 ### 2026-04-04 - Core: modos de execucao explicitos no tooling
 
 Resumo:

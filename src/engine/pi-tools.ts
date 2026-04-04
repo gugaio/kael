@@ -156,7 +156,13 @@ export function createPiShellTools(params: {
   });
 
   const [execTool, processTool] = namespaceTools.system;
-  const [videoHlsInspectTool, videoProbeTool, videoManifestAuditTool, playbackAnalyzeTool] = namespaceTools.video;
+  const [
+    videoHlsInspectTool,
+    videoProbeTool,
+    videoManifestAuditTool,
+    videoManifestDiffTool,
+    playbackAnalyzeTool,
+  ] = namespaceTools.video;
   const [jobsListTool, jobsGetTool, jobsLogTailTool] = namespaceTools.jobs;
   const [
     edgeListTool,
@@ -188,6 +194,7 @@ export function createPiShellTools(params: {
     videoHlsInspectTool,
     videoProbeTool,
     videoManifestAuditTool,
+    videoManifestDiffTool,
     playbackAnalyzeTool,
     jobsListTool,
     jobsGetTool,

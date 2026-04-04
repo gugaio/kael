@@ -11,7 +11,7 @@ import { createApiServer } from "./server.js";
 import { EdgeRuntime } from "../edge/runtime.js";
 import { JobManager } from "../jobs/manager.js";
 import { JobStore } from "../jobs/store.js";
-import { VideoCapability, VideoJobService } from "../capabilities/video/index.js";
+import { VideoJobCapability, VideoJobService } from "../capabilities/video/index.js";
 import type { ProcessRunner } from "../tools/system/process-runner.js";
 
 function sleep(ms: number): Promise<void> {
@@ -62,7 +62,7 @@ async function createJobsServer(params: {
     jobTimeoutMs: params.jobTimeoutMs ?? 60_000,
     killGraceMs: 10,
   });
-  const jobs = new JobManager(store, [new VideoCapability(video)]);
+  const jobs = new JobManager(store, [new VideoJobCapability(video)]);
 
   const app: KaelApp = {
     config: {
@@ -411,6 +411,47 @@ async function createJobsServer(params: {
         issues: [],
         variantAudits: [],
         aggregateIssues: [],
+        recommendations: [],
+      }),
+    },
+    manifestDiff: {
+      diffHlsManifests: async () => ({
+        ok: true,
+        summary: "stub diff",
+        playlistTypeChanged: false,
+        left: {
+          ok: true,
+          url: "https://example.com/left.m3u8",
+          finalUrl: "https://example.com/left.m3u8",
+          playlistType: "master",
+          summary: "left",
+          stats: { variants: 0, renditions: 0, segments: 0, variantsAudited: 0, variantsWithErrors: 0 },
+          issues: [],
+          variantAudits: [],
+          aggregateIssues: [],
+          recommendations: [],
+        },
+        right: {
+          ok: true,
+          url: "https://example.com/right.m3u8",
+          finalUrl: "https://example.com/right.m3u8",
+          playlistType: "master",
+          summary: "right",
+          stats: { variants: 0, renditions: 0, segments: 0, variantsAudited: 0, variantsWithErrors: 0 },
+          issues: [],
+          variantAudits: [],
+          aggregateIssues: [],
+          recommendations: [],
+        },
+        delta: {
+          variants: 0,
+          renditions: 0,
+          segments: 0,
+          variantsAudited: 0,
+          variantsWithErrors: 0,
+        },
+        issueDiff: { added: [], removed: [], persisted: [] },
+        aggregateIssueDiff: { added: [], removed: [], persisted: [] },
         recommendations: [],
       }),
     },

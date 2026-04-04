@@ -1,6 +1,6 @@
 import type { VideoJobService } from "./job-service.js";
-import type { VideoJob } from "../../types.js";
-import type { JobCapability } from "../../jobs/capabilities.js";
+import type { VideoJob } from "../../../types.js";
+import type { JobCapability } from "../../../jobs/capabilities.js";
 import {
   parseStartCaptureStreamParams,
   parseStartConvertHlsParams,
@@ -19,7 +19,7 @@ export const VIDEO_JOB_ACTIONS = {
   probeUrl: "probe_url",
 } as const;
 
-export class VideoCapability implements JobCapability {
+export class VideoJobCapability implements JobCapability {
   readonly name = "video";
 
   readonly actions = {

@@ -28,6 +28,16 @@ export type HlsManifestAuditInput = {
   maxVariants?: number;
 };
 
+export type HlsManifestDiffInput = {
+  sessionKey: string;
+  leftUrl: string;
+  rightUrl: string;
+  maxSegments?: number;
+  timeoutMs?: number;
+  followVariants?: boolean;
+  maxVariants?: number;
+};
+
 export type HlsVariantAuditReport = {
   uri: string;
   url: string;
@@ -65,6 +75,36 @@ export type HlsManifestAuditReport = {
   issues: ManifestAuditIssue[];
   variantAudits: HlsVariantAuditReport[];
   aggregateIssues: ManifestAuditIssue[];
+  recommendations: string[];
+};
+
+export type HlsManifestDiffReport = {
+  ok: boolean;
+  summary: string;
+  left: HlsManifestAuditReport;
+  right: HlsManifestAuditReport;
+  delta: {
+    variants: number;
+    renditions: number;
+    segments: number;
+    variantsAudited: number;
+    variantsWithErrors: number;
+    targetDuration?: number;
+    minSegmentDuration?: number;
+    maxSegmentDuration?: number;
+    averageSegmentDuration?: number;
+  };
+  playlistTypeChanged: boolean;
+  issueDiff: {
+    added: ManifestAuditIssue[];
+    removed: ManifestAuditIssue[];
+    persisted: string[];
+  };
+  aggregateIssueDiff: {
+    added: ManifestAuditIssue[];
+    removed: ManifestAuditIssue[];
+    persisted: string[];
+  };
   recommendations: string[];
 };
 

@@ -219,6 +219,94 @@ export function createVideoPiTools(params: {
     },
   };
 
+  const videoManifestDiffTool: AgentTool = {
+    name: "video_manifest_diff",
+    label: "Video Manifest Diff",
+    description:
+      "Compara dois manifestos HLS usando o audit deterministico do Kael e destaca deltas de stats e issues adicionadas/removidas entre as duas versoes.",
+    parameters: {
+      type: "object",
+      properties: {
+        leftUrl: { type: "string", description: "URL base/referencia do manifesto HLS (.m3u8)" },
+        rightUrl: { type: "string", description: "URL candidata/comparada do manifesto HLS (.m3u8)" },
+        maxSegments: { type: "number", description: "Quantidade maxima de segmentos usados no audit" },
+        timeoutMs: { type: "number", description: "Timeout de fetch dos manifests" },
+        followVariants: { type: "boolean", description: "Se true, audita variants das duas ladders antes de comparar" },
+        maxVariants: { type: "number", description: "Limite de variants auditadas por lado quando followVariants=true" },
+      },
+      required: ["leftUrl", "rightUrl"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const blocked = params.reserveToolCall("video_manifest_diff");
+      if (blocked) {
+        return blocked.blocked;
+      }
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as {
+        leftUrl: string;
+        rightUrl: string;
+        maxSegments?: number;
+        timeoutMs?: number;
+        followVariants?: boolean;
+        maxVariants?: number;
+      };
+      const intent = params.logToolStart("video_manifest_diff", args);
+      if (!params.tooling.videoManifestDiff) {
+        const reason = "video_manifest_diff_unavailable";
+        const details = { status: "blocked", blocked: true, reason };
+        params.logToolEnd("video_manifest_diff", intent, details, startedAtMs);
+        return {
+          content: params.textResult(`blocked=true\nreason=${reason}`),
+          details,
+        };
+      }
+      try {
+        const result = await params.tooling.videoManifestDiff({
+          sessionKey: params.sessionKey,
+          leftUrl: args.leftUrl,
+          rightUrl: args.rightUrl,
+          maxSegments: args.maxSegments,
+          timeoutMs: args.timeoutMs,
+          followVariants: args.followVariants,
+          maxVariants: args.maxVariants,
+        });
+        const text = [
+          `ok=${result.ok}`,
+          `summary=${result.summary}`,
+          `playlistTypeChanged=${result.playlistTypeChanged}`,
+          `delta.variants=${result.delta.variants}`,
+          `delta.renditions=${result.delta.renditions}`,
+          `delta.segments=${result.delta.segments}`,
+          `delta.variantsWithErrors=${result.delta.variantsWithErrors}`,
+          `issues.added=${result.issueDiff.added.length}`,
+          `issues.removed=${result.issueDiff.removed.length}`,
+          `aggregateIssues.added=${result.aggregateIssueDiff.added.length}`,
+          `aggregateIssues.removed=${result.aggregateIssueDiff.removed.length}`,
+          ...(result.issueDiff.added.length > 0
+            ? ["addedIssues:", ...result.issueDiff.added.map((issue) => `- ${issue.code}: ${issue.summary}`)]
+            : []),
+        ].join("\n");
+        params.logToolEnd(
+          "video_manifest_diff",
+          intent,
+          result,
+          startedAtMs,
+          `manifest_diff ok=${result.ok} added=${result.issueDiff.added.length} removed=${result.issueDiff.removed.length}`,
+        );
+        return { content: params.textResult(text), details: result };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const details = { status: "failed", blocked: false, reason: "video_manifest_diff_failed", error: message };
+        params.logToolEnd("video_manifest_diff", intent, details, startedAtMs);
+        return {
+          content: params.textResult(`ok=false\nreason=video_manifest_diff_failed\nerror=${message}`),
+          details,
+        };
+      }
+    },
+  };
+
   const playbackAnalyzeTool: AgentTool = {
     name: "playback_analyze",
     label: "Playback Analyze",
@@ -332,5 +420,5 @@ export function createVideoPiTools(params: {
     },
   };
 
-  return [videoHlsInspectTool, videoProbeTool, videoManifestAuditTool, playbackAnalyzeTool];
+  return [videoHlsInspectTool, videoProbeTool, videoManifestAuditTool, videoManifestDiffTool, playbackAnalyzeTool];
 }

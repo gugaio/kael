@@ -18,6 +18,8 @@ type ManifestAuditOptions = {
   maxVariants?: string;
 };
 
+type ManifestDiffOptions = ManifestAuditOptions;
+
 type ApiErrorShape = {
   message?: string;
 };
@@ -421,6 +423,72 @@ async function commandManifestAudit(
   console.log(lines.join("\n"));
 }
 
+async function commandManifestDiff(
+  leftUrl: string,
+  rightUrl: string,
+  options: ManifestDiffOptions,
+): Promise<void> {
+  const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
+  const maxSegments = options.maxSegments ? Number(options.maxSegments) : undefined;
+  const timeoutMs = options.timeoutMs ? Number(options.timeoutMs) : undefined;
+  const maxVariants = options.maxVariants ? Number(options.maxVariants) : undefined;
+  const report = await app.manifestDiff.diffHlsManifests({
+    sessionKey: "cli.manifest-diff",
+    leftUrl,
+    rightUrl,
+    ...(Number.isFinite(maxSegments) ? { maxSegments } : {}),
+    ...(Number.isFinite(timeoutMs) ? { timeoutMs } : {}),
+    ...(options.followVariants ? { followVariants: true } : {}),
+    ...(Number.isFinite(maxVariants) ? { maxVariants } : {}),
+  });
+
+  const lines = [
+    `ok=${report.ok}`,
+    `summary=${report.summary}`,
+    `left.url=${report.left.url}`,
+    `right.url=${report.right.url}`,
+    `playlistTypeChanged=${report.playlistTypeChanged}`,
+    `delta.variants=${report.delta.variants}`,
+    `delta.renditions=${report.delta.renditions}`,
+    `delta.segments=${report.delta.segments}`,
+    `delta.variantsAudited=${report.delta.variantsAudited}`,
+    `delta.variantsWithErrors=${report.delta.variantsWithErrors}`,
+    ...(typeof report.delta.targetDuration === "number" ? [`delta.targetDuration=${report.delta.targetDuration}`] : []),
+    ...(typeof report.delta.minSegmentDuration === "number"
+      ? [`delta.minSegmentDuration=${report.delta.minSegmentDuration.toFixed(3)}`]
+      : []),
+    ...(typeof report.delta.maxSegmentDuration === "number"
+      ? [`delta.maxSegmentDuration=${report.delta.maxSegmentDuration.toFixed(3)}`]
+      : []),
+    ...(typeof report.delta.averageSegmentDuration === "number"
+      ? [`delta.averageSegmentDuration=${report.delta.averageSegmentDuration.toFixed(3)}`]
+      : []),
+    ...(report.issueDiff.added.length > 0
+      ? ["issues.added:", ...report.issueDiff.added.map((issue) => `- [${issue.severity}] ${issue.code}: ${issue.summary}`)]
+      : []),
+    ...(report.issueDiff.removed.length > 0
+      ? ["issues.removed:", ...report.issueDiff.removed.map((issue) => `- [${issue.severity}] ${issue.code}: ${issue.summary}`)]
+      : []),
+    ...(report.aggregateIssueDiff.added.length > 0
+      ? [
+          "aggregateIssues.added:",
+          ...report.aggregateIssueDiff.added.map((issue) => `- [${issue.severity}] ${issue.code}: ${issue.summary}`),
+        ]
+      : []),
+    ...(report.aggregateIssueDiff.removed.length > 0
+      ? [
+          "aggregateIssues.removed:",
+          ...report.aggregateIssueDiff.removed.map((issue) => `- [${issue.severity}] ${issue.code}: ${issue.summary}`),
+        ]
+      : []),
+    ...(report.recommendations.length > 0
+      ? ["recommendations:", ...report.recommendations.map((item) => `- ${item}`)]
+      : []),
+  ];
+
+  console.log(lines.join("\n"));
+}
+
 async function main(): Promise<void> {
   const program = new Command();
   program
@@ -475,6 +543,19 @@ async function main(): Promise<void> {
     .option("--max-variants <n>", "limite de variants auditadas quando --follow-variants estiver ativo")
     .action(async (url: string, options: ManifestAuditOptions) => {
       await commandManifestAudit(url, options);
+    });
+
+  program
+    .command("manifest-diff")
+    .description("Compara dois manifestos HLS localmente via capability de video")
+    .argument("<leftUrl>", "URL base/referencia do manifesto HLS (.m3u8)")
+    .argument("<rightUrl>", "URL candidata/comparada do manifesto HLS (.m3u8)")
+    .option("--max-segments <n>", "quantidade maxima de segmentos considerados no audit")
+    .option("--timeout-ms <ms>", "timeout de fetch dos manifests")
+    .option("--follow-variants", "segue variants em memoria para comparar a ladder dos dois lados")
+    .option("--max-variants <n>", "limite de variants auditadas quando --follow-variants estiver ativo")
+    .action(async (leftUrl: string, rightUrl: string, options: ManifestDiffOptions) => {
+      await commandManifestDiff(leftUrl, rightUrl, options);
     });
 
   program
