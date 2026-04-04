@@ -230,6 +230,28 @@ Liste riscos por severidade.`,
     expect(result.promptMessage).not.toContain("[auto_skill_selected]");
   });
 
+  it("auto-invoca skill de hls.js quando a mensagem fala de tuning/defaults de playback", async () => {
+    const root = await createWorkspace();
+    await writeSkill(
+      root,
+      "hlsjs-config-advisor",
+      `---
+name: hlsjs-config-advisor
+description: Use quando o usuario pedir ajuda para analisar configuracao do hls.js, defaults, low latency, live edge, buffer size, maxBufferLength, liveSyncDurationCount e tuning de playback.
+---
+Use a base oficial do hls.js para responder.`,
+    );
+    const skills = new SkillService(root, undefined, { autoSkillMinScore: 2, autoSkillMaxPerTurn: 1 });
+
+    const result = await skills.prepareTurnMessage(
+      "tenho uma config do hls.js com liveSyncDurationCount e maxBufferLength, devo manter o default ou mudar?",
+    );
+
+    expect(result.autoAppliedSkillName).toBe("hlsjs-config-advisor");
+    expect(result.promptMessage).toContain("name: hlsjs-config-advisor");
+    expect(result.promptMessage).toContain("[skill_instructions]");
+  });
+
   it("respeita budget configuravel do catalogo", async () => {
     const root = await createWorkspace();
     await writeSkill(

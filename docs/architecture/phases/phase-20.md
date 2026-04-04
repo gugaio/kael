@@ -23,6 +23,7 @@ inteligencia de video, capaz de:
   - `PlaybackTriageService`
   - `VideoGenerationService`
   - `VideoArtifactsService`
+- Quando o problema for analise semantica de configuracao de player (por exemplo `hls.js`), preferir skill especializada com base oficial curada em vez de heuristica hardcoded no core.
 - Dentro de `video`, a integracao com `JobManager` deve ficar isolada no subdominio `jobs/`, deixando claro que e uma borda operacional da capability de video, nao o coracao do dominio.
 - Tratar players como adapters de ingest/normalizacao, nao como capabilities do core.
 - Tratar providers de geracao como adapters plugaveis, nao como contratos centrais.
@@ -76,17 +77,24 @@ Nota:
   - score/severidade de regressao por variant e heuristicas explicitas para mudancas de grupos `audio`/`subtitles`.
 - Tool PI `video_manifest_diff` adicionada para expor diff deterministico ao agente.
 - CLI `manifest-diff` adicionada para comparar dois manifests localmente.
+- Skill `.kael/skills/hlsjs-config-advisor` adicionada como base inicial de conhecimento para review de configuracao do `hls.js`:
+  - usa referencias oficiais curadas do projeto `hls.js`;
+  - orienta o agente a partir de defaults, tradeoffs e conflitos formais;
+  - evita cristalizar opinioes de tuning no core do Kael.
 
 ## Proximos incrementos
 
 1. Expor tools dedicadas no PI:
    - `video_generate_image`
    - `video_dash_inspect`
-2. Adicionar adapters de normalizacao por player:
+2. Cruzar a skill de configuracao com evidencia observada:
+   - usar `PlaybackAnalysisReport`/telemetria para priorizar recomendacoes;
+   - separar melhor sintoma de player config vs problema estrutural de stream/CDN.
+3. Adicionar bases equivalentes para outros players:
    - `hlsjs`
    - `shaka`
    - `exoplayer`
    - `avplayer`
-3. Evoluir auditoria de manifesto para DASH e aprofundar diff entre versoes com comparacao de variants/artifacts persistidos.
-4. Evoluir geracao de video real por providers plugaveis (`veo`, `seedance`).
-5. Integrar validacoes de playback/video QA ao planner (`assert_*`).
+4. Evoluir auditoria de manifesto para DASH e aprofundar diff entre versoes com comparacao de variants/artifacts persistidos.
+5. Evoluir geracao de video real por providers plugaveis (`veo`, `seedance`).
+6. Integrar validacoes de playback/video QA ao planner (`assert_*`).

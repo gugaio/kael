@@ -433,5 +433,11 @@ export function createVideoPiTools(params: {
     },
   };
 
-  return [videoHlsInspectTool, videoProbeTool, videoManifestAuditTool, videoManifestDiffTool, playbackAnalyzeTool];
+  return [
+    videoHlsInspectTool,
+    videoProbeTool,
+    videoManifestAuditTool,
+    videoManifestDiffTool,
+    playbackAnalyzeTool,
+  ];
 }

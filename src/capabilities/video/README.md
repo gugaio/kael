@@ -20,15 +20,15 @@ Modulo central de operacoes de video do Kael, responsavel por jobs de processame
                                     |                             |
                                     v                             v
                            +------------------+          +-----------------+
-                           | manifest-audit   |--------->| playback-adapters
-                           | (auditoria HLS)  |          | (hlsjs, etc)    |
-                           +--------+---------+          +-----------------+
-                                    |
-                                    v
-                           +------------------+
-                           | manifest-diff    |
-                           | (comparacao)     |
-                           +------------------+
+                           | manifest-audit   |          | config-advisor  |
+                           | (auditoria HLS)  |          | (tuning)        |
+                           +--------+---------+          +--------+--------+
+                                    |                             |
+                                    v                             v
+                           +------------------+          +-----------------+
+                           | manifest-diff    |          | playback-adapters
+                           | (comparacao)     |--------->| (hlsjs, etc)    |
+                           +------------------+          +-----------------+
 
 +-------------------+       +----------------------+
 | artifacts-service |<------| generation-service   |

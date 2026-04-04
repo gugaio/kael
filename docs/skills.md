@@ -199,3 +199,35 @@ Exemplos de uso:
 
 - `/youbora last24hours`
 - `/youbora "2025-03-20 00:00:00" "2025-03-20 17:50:25" views vod hour`
+
+## Skill hlsjs-config-advisor
+
+Foi adicionada:
+
+- `.kael/skills/hlsjs-config-advisor/SKILL.md`
+- `.kael/skills/hlsjs-config-advisor/references/official-sources.md`
+- `.kael/skills/hlsjs-config-advisor/references/parameter-catalog.md`
+- `.kael/skills/hlsjs-config-advisor/references/parameter-interactions.md`
+- `.kael/skills/hlsjs-config-advisor/references/analysis-playbook.md`
+
+Objetivo:
+
+- ajudar o agente a revisar configuracao do `hls.js` com base oficial, especialmente:
+  - defaults;
+  - `lowLatencyMode`;
+  - `liveSyncDurationCount`;
+  - `liveMaxLatencyDurationCount`;
+  - `maxBufferLength`;
+  - `backBufferLength`;
+  - `maxBufferSize`;
+  - `startLevel`.
+
+Uso esperado:
+
+- auto-selecao quando o usuario perguntar sobre tuning/defaults de `hls.js`;
+- invocacao manual por slash:
+  - `/hlsjs-config-advisor {"streamType":"live","goal":"low_latency"}`
+
+Regra de qualidade:
+
+- a skill deve partir do default como baseline e so recomendar override quando houver contexto e tradeoff claros.

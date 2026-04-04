@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-04-03**
+Ultima atualizacao: **2026-04-04**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -37,6 +37,33 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-04 - Video: advisor inicial de parametros para playback HLS
+
+Resumo:
+- A direcao do advisor de `hls.js` foi corrigida: em vez de capability hardcoded no core, o conhecimento agora vive em uma skill local do workspace.
+- Foi adicionada a skill `.kael/skills/hlsjs-config-advisor`, com base curada a partir de fontes oficiais do `hls.js` (`docs/API.md`, `src/config.ts` e API docs do site).
+- O advisor passa a depender de leitura contextual de defaults, conflitos formais e tradeoffs, em vez de heuristicas fixas no TypeScript.
+- O hardcoded inicial de `playback_config_advise` foi removido do core para evitar duplicar conhecimento especializado dentro do runtime.
+
+Arquivos-chave:
+- `.kael/skills/hlsjs-config-advisor/SKILL.md`
+- `.kael/skills/hlsjs-config-advisor/references/parameter-catalog.md`
+- `.kael/skills/hlsjs-config-advisor/references/parameter-interactions.md`
+- `src/skills/service.test.ts`
+- `docs/architecture/phases/phase-20.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/skills/service.test.ts src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- A skill hoje cobre apenas `hls.js`.
+- Ainda falta integrar sintomas observados (`PlaybackAnalysisReport`) de forma mais explicita no fluxo de analise recomendado.
+- A base oficial foi curada localmente; ainda nao existe pipeline de refresh por versao do player.
+
+Proximo passo recomendado:
+- Enriquecer a skill com exemplos de analise de config real e depois criar skills equivalentes para `shaka`, `AVPlayer` e `ExoPlayer`.
+
 ### 2026-04-04 - Video: manifest diff inicial e CLI local
 
 Resumo:
@@ -64,7 +91,7 @@ Pendencias:
 - Ainda faltam heuristicas mais profundas por variant, como diff dedicado de renditions/grupos completos e score agregado de severidade da ladder inteira.
 
 Proximo passo recomendado:
-- Persistir opcionalmente os audits como artifacts e evoluir `video_manifest_diff` para comparar variants/ladders com mais granularidade.
+- Integrar o novo advisor de configuracao com `playback_analyze` e depois voltar a decidir se faz sentido persistir audits para diff historico.
 
 ### 2026-04-04 - Video: subdominio jobs explicitado dentro da capability
 

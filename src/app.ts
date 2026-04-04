@@ -80,7 +80,8 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   await sessions.init();
   await jobStore.init();
 
-  const { jobs, videoInspect, manifestAudit, manifestDiff, videoArtifacts } = await createVideoRuntime(config, jobStore);
+  const { jobs, videoInspect, manifestAudit, manifestDiff, videoArtifacts } =
+    await createVideoRuntime(config, jobStore);
   const shell = await createShellRuntime(config);
   const mcp = await createMcpRuntime(config);
   const edge = new EdgeRuntime();
