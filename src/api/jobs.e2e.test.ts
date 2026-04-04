@@ -242,6 +242,7 @@ async function createJobsServer(params: {
     } as unknown as KaelApp["planner"],
     research: {} as KaelApp["research"],
     memory: {} as KaelApp["memory"],
+    knowledge: {} as KaelApp["knowledge"],
     chat: {
       handleMessage: async () => ({
         reply: "ok",
@@ -461,6 +462,24 @@ async function createJobsServer(params: {
           unchanged: [],
         },
         recommendations: [],
+      }),
+    },
+    knowledgeBase: {
+      search: async () => [],
+      get: async () => null,
+      upsert: async () => ({
+        id: "note-1",
+        project: "proj",
+        topic: "topic",
+        title: "title",
+        answer: "answer",
+        tags: [],
+        files: [],
+        evidence: [],
+        status: "draft" as const,
+        confidence: 0.7,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       }),
     },
   };

@@ -2,6 +2,7 @@ import type { EngineToolingNamespaces } from "../engine/types.js";
 import type { JobManager } from "../jobs/manager.js";
 import { VIDEO_JOB_ACTIONS } from "../capabilities/video/index.js";
 import type { MemoryService } from "../memory/service.js";
+import type { KnowledgeService } from "../knowledge/service.js";
 import type { PlannerService } from "../planner/service.js";
 import { createPlannerExecuteRuntime, createPlannerReconcileRuntime } from "../planner/runtime.js";
 import type { ResearchService } from "../research/service.js";
@@ -27,6 +28,7 @@ type ChatToolingExecutors = {
   edgeRuntime: EdgeRuntime;
   videoInspect: VideoInspectToolService;
   memory: MemoryService;
+  knowledge: KnowledgeService;
   workspace: WorkspaceInspector;
   research: ResearchService;
   planner: PlannerService;
@@ -144,6 +146,12 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
       memorySearch: ({ query, maxResults }) => executors.memory.search(query, maxResults),
       memoryGet: ({ path, from, lines }) => executors.memory.get({ relPath: path, from, lines }),
       memoryWrite: ({ content, target }) => executors.memory.write({ content, target }),
+    },
+    knowledge: {
+      knowledgeSearch: ({ query, project, tag, status, maxResults }) =>
+        executors.knowledge.search({ query, project, tag, status, maxResults }),
+      knowledgeGet: ({ noteId }) => executors.knowledge.get(noteId),
+      knowledgeUpsert: (params) => executors.knowledge.upsert(params),
     },
     workspace: {
       workspaceSearch: ({ query, maxResults }) => executors.workspace.search({ query, maxResults }),
@@ -297,6 +305,13 @@ export function createChatOnlyTooling(tooling: EngineToolingNamespaces): EngineT
       },
       mcpCall: async () => {
         throw new Error("chat-only mode: mcp_call disabled");
+      },
+    },
+    knowledge: {
+      knowledgeSearch: async () => [],
+      knowledgeGet: async () => null,
+      knowledgeUpsert: async () => {
+        throw new Error("chat-only mode: knowledge_upsert disabled");
       },
     },
     edge: {

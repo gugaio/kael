@@ -39,6 +39,12 @@ describe("createPiNamespaceTools", () => {
         logToolStart,
         logToolEnd,
       },
+      knowledge: {
+        tooling: {} as never,
+        textResult,
+        logToolStart,
+        logToolEnd,
+      },
       edge: {
         tooling: {} as never,
         textResult,
@@ -108,6 +114,11 @@ describe("createPiNamespaceTools", () => {
       "playback_analyze",
     ]);
     expect(registry.jobs.map((tool) => tool.name)).toEqual(["jobs_list", "jobs_get", "jobs_log_tail"]);
+    expect(registry.knowledge.map((tool) => tool.name)).toEqual([
+      "knowledge_search",
+      "knowledge_get",
+      "knowledge_upsert",
+    ]);
     expect(registry.edge.map((tool) => tool.name)).toEqual([
       "edge_list",
       "edge_call",

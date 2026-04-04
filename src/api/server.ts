@@ -7,6 +7,7 @@ import { registerEdgeWsGateway } from "./edge-ws.js";
 import type { RequestWithStart } from "./route-deps.js";
 import { registerChatAndLiveRoutes } from "./routes/chat-live.js";
 import { registerJobAndScheduleRoutes } from "./routes/jobs-schedules.js";
+import { registerKnowledgeRoutes } from "./routes/knowledge.js";
 import { registerPlanRoutes } from "./routes/plans.js";
 import { registerRuntimeAdminRoutes } from "./routes/runtime-admin.js";
 
@@ -99,6 +100,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
   registerPlanRoutes(server, deps);
   registerRuntimeAdminRoutes(server, deps);
   registerJobAndScheduleRoutes(server, deps);
+  registerKnowledgeRoutes(server, deps);
 
   return server;
 }

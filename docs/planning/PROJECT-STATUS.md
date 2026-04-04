@@ -37,6 +37,33 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-04 - Core: knowledge base MVP para notas curadas de projeto
+
+Resumo:
+- Foi adicionada uma knowledge base local estruturada para registrar fatos, analises e evidencias por projeto, com storage em `./.kael-data/knowledge`.
+- O core ganhou `KnowledgeService` com `upsert`, `get` e `search`, persistindo nota canônica em JSON e espelho legivel em Markdown.
+- O runtime do agente passou a expor `knowledge_search`, `knowledge_get` e `knowledge_upsert` no namespace `knowledge`, permitindo ingestao de achados de agentes externos ou do proprio Kael.
+- A API ganhou endpoints dedicados para busca e curadoria de notas: `GET /knowledge/search`, `GET /knowledge/notes/:noteId` e `POST /knowledge/notes`.
+
+Arquivos-chave:
+- `src/knowledge/service.ts`
+- `src/api/routes/knowledge.ts`
+- `src/engine/tool-specs/knowledge.ts`
+- `src/chat/tooling-factory.ts`
+- `docs/api.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/knowledge/service.test.ts src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/engine/simple-engine.test.ts`
+
+Pendencias:
+- A busca ainda e lexical; ainda nao ha retrieval semantico, consolidacao de conflitos nem revisao assistida.
+- Ainda falta uma skill/protocolo explicito para agentes externos enviarem pacotes de conhecimento com schema recomendado.
+- A base ainda nao participa automaticamente do fluxo de resposta do chat quando a pergunta toca conhecimento curado de projeto.
+
+Proximo passo recomendado:
+- Definir o contrato de ingestao para agentes externos e adicionar leitura assistida da knowledge base no fluxo de resposta quando houver match forte de projeto/topico.
+
 ### 2026-04-04 - Skills: base hls.js enriquecida com exemplos e parametros de segundo nivel
 
 Resumo:

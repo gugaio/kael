@@ -24,6 +24,13 @@ flowchart TD
             API --> Sessions[GET /sessions/:sessionKey/messages]
         end
 
+        subgraph Knowledge ["Knowledge (project notes)"]
+            direction LR
+            API --> KnowledgeSearch[GET /knowledge/search]
+            API --> KnowledgeUpsert[POST /knowledge/notes]
+            API --> KnowledgeGet[GET /knowledge/notes/:noteId]
+        end
+
         subgraph Plans ["Plans (execution)"]
             direction LR
             API --> PlansGET[GET /plans]
@@ -99,6 +106,13 @@ flowchart TD
 |--------|------|-------------|
 | POST | /chat | Send chat message (texto + anexos opcionais image/audio em base64) |
 | GET | /sessions/:sessionKey/messages | Get session messages |
+
+### Knowledge
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /knowledge/search | Search project knowledge notes by query, project, tag or status |
+| POST | /knowledge/notes | Create or update a structured knowledge note |
+| GET | /knowledge/notes/:noteId | Get a single knowledge note by id |
 
 ### Plans
 | Method | Path | Description |

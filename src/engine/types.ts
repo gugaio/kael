@@ -14,6 +14,7 @@ import type {
 } from "../capabilities/video/index.js";
 import type { McpCallResult, McpListResult } from "../tools/mcp/mcp-bridge-service.js";
 import type { EdgeCallResult, EdgeCapabilitySummary } from "../edge/runtime.js";
+import type { KnowledgeNoteStatus } from "../knowledge/service.js";
 
 export type EngineVideoTooling = {
   startTranscode: (params: {
@@ -350,6 +351,79 @@ export type EngineMemoryTooling = {
   }) => Promise<{ path: string }>;
 };
 
+export type EngineKnowledgeTooling = {
+  knowledgeSearch: (params: {
+    query: string;
+    project?: string;
+    tag?: string;
+    status?: KnowledgeNoteStatus;
+    maxResults?: number;
+  }) => Promise<
+    Array<{
+      id: string;
+      project: string;
+      topic: string;
+      title: string;
+      status: KnowledgeNoteStatus;
+      confidence: number;
+      updatedAt: string;
+      score: number;
+      snippet: string;
+    }>
+  >;
+  knowledgeGet: (params: { noteId: string }) => Promise<{
+    id: string;
+    project: string;
+    topic: string;
+    title: string;
+    question?: string;
+    answer: string;
+    summary?: string;
+    tags: string[];
+    files: string[];
+    evidence: string[];
+    status: KnowledgeNoteStatus;
+    confidence: number;
+    createdAt: string;
+    updatedAt: string;
+    updatedBy?: string;
+    source?: string;
+  } | null>;
+  knowledgeUpsert: (params: {
+    noteId?: string;
+    project: string;
+    topic: string;
+    title?: string;
+    question?: string;
+    answer: string;
+    summary?: string;
+    tags?: string[];
+    files?: string[];
+    evidence?: string[];
+    status?: KnowledgeNoteStatus;
+    confidence?: number;
+    updatedBy?: string;
+    source?: string;
+  }) => Promise<{
+    id: string;
+    project: string;
+    topic: string;
+    title: string;
+    question?: string;
+    answer: string;
+    summary?: string;
+    tags: string[];
+    files: string[];
+    evidence: string[];
+    status: KnowledgeNoteStatus;
+    confidence: number;
+    createdAt: string;
+    updatedAt: string;
+    updatedBy?: string;
+    source?: string;
+  }>;
+};
+
 export type EngineWorkspaceTooling = {
   workspaceSearch: (params: {
     query: string;
@@ -586,6 +660,7 @@ export type EngineToolingNamespaces = {
   mcp: EngineMcpTooling;
   edge: EngineEdgeTooling;
   memory: EngineMemoryTooling;
+  knowledge: EngineKnowledgeTooling;
   workspace: EngineWorkspaceTooling;
   web: EngineWebTooling;
   browser: EngineBrowserTooling;
