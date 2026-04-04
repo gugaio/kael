@@ -24,6 +24,7 @@ describe("KnowledgeService", () => {
     const saved = await service.upsert({
       project: "android-app",
       topic: "session-id-parameter",
+      kind: "fact",
       title: "Android session id parameter",
       answer: "Android envia sessionId no header X-Session-Id.",
       files: ["apps/android/network/SessionInterceptor.kt"],
@@ -36,6 +37,7 @@ describe("KnowledgeService", () => {
     });
 
     expect(saved.id).toBe("android-app--session-id-parameter");
+    expect(saved.kind).toBe("fact");
     expect(saved.status).toBe("curated");
     const jsonPath = path.join(root, "notes", "android-app", `${saved.id}.json`);
     const mdPath = path.join(root, "notes", "android-app", `${saved.id}.md`);
@@ -48,6 +50,7 @@ describe("KnowledgeService", () => {
     await service.upsert({
       project: "ios-app",
       topic: "param-x",
+      kind: "fact",
       answer: "iOS envia o parametro x no corpo JSON do endpoint /session/start.",
       files: ["ios/App/Networking/SessionStartRequest.swift"],
       tags: ["ios", "session"],
@@ -57,6 +60,7 @@ describe("KnowledgeService", () => {
     await service.upsert({
       project: "android-app",
       topic: "param-y",
+      kind: "analysis",
       answer: "Android envia outro parametro.",
       status: "draft",
     });
@@ -64,6 +68,7 @@ describe("KnowledgeService", () => {
     const results = await service.search({ query: "como o ios envia o parametro x", project: "ios-app" });
     expect(results).toHaveLength(1);
     expect(results[0]?.project).toBe("ios-app");
+    expect(results[0]?.kind).toBe("fact");
     expect(results[0]?.snippet).toContain("/session/start");
   });
 
@@ -90,5 +95,25 @@ describe("KnowledgeService", () => {
     expect(saved.files).toEqual(["A.kt", "B.kt"]);
     expect(saved.evidence).toEqual(["e1", "e2"]);
     expect(saved.answer).toBe("Resposta atualizada");
+  });
+
+  it("filters notes by kind", async () => {
+    const { service } = await createService();
+    await service.upsert({
+      project: "mobile-app",
+      topic: "auth-header-shape",
+      kind: "fact",
+      answer: "O header X-Auth leva o token bruto.",
+    });
+    await service.upsert({
+      project: "mobile-app",
+      topic: "auth-header-review",
+      kind: "analysis",
+      answer: "Ha risco de divergencia entre Android e iOS.",
+    });
+
+    const results = await service.search({ query: "auth header", project: "mobile-app", kind: "fact" });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.topic).toBe("auth-header-shape");
   });
 });

@@ -218,6 +218,26 @@ Objetivo:
   - `liveSyncDurationCount`;
   - `liveMaxLatencyDurationCount`;
   - `maxBufferLength`;
+
+## Skill project-knowledge-writer
+
+Foi adicionada:
+
+- `.kael/skills/project-knowledge-writer/SKILL.md`
+- `.kael/skills/project-knowledge-writer/references/schema.md`
+- `.kael/skills/project-knowledge-writer/references/examples.md`
+
+Objetivo:
+
+- orientar o agente a salvar achados reutilizaveis do projeto na knowledge base do Kael usando `knowledge_upsert`;
+- padronizar notas com `kind`, `status`, `confidence`, `files` e `evidence`;
+- reduzir texto solto e aumentar reaproveitamento futuro de analises de codigo e arquitetura.
+
+Quando usar:
+
+- depois de uma analise de codigo que descobriu um fato reutilizavel;
+- ao registrar uma decisao arquitetural;
+- ao salvar uma analise com incerteza ou conflito explicito.
   - `backBufferLength`;
   - `maxBufferSize`;
   - `startLevel`.

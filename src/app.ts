@@ -20,7 +20,13 @@ import { createEngine } from "./engine/factory.js";
 import { JobManager } from "./jobs/manager.js";
 import { JobStore } from "./jobs/store.js";
 import { MemoryService } from "./memory/service.js";
-import { KnowledgeService, type KnowledgeNote, type KnowledgeNoteStatus, type KnowledgeSearchResult } from "./knowledge/service.js";
+import {
+  KnowledgeService,
+  type KnowledgeNote,
+  type KnowledgeNoteKind,
+  type KnowledgeNoteStatus,
+  type KnowledgeSearchResult,
+} from "./knowledge/service.js";
 import { PlannerService } from "./planner/service.js";
 import { ResearchService } from "./research/service.js";
 import { SessionStore } from "./session/store.js";
@@ -68,6 +74,7 @@ export type KaelApp = {
       noteId?: string;
       project: string;
       topic: string;
+      kind?: KnowledgeNoteKind;
       title?: string;
       question?: string;
       answer: string;
@@ -83,6 +90,7 @@ export type KaelApp = {
     search(params: {
       query: string;
       project?: string;
+      kind?: KnowledgeNoteKind;
       tag?: string;
       status?: KnowledgeNoteStatus;
       maxResults?: number;

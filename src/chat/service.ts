@@ -14,9 +14,72 @@ import type { MediaRuntimeTelemetry, MediaUnderstandingService } from "../media/
 import type { BrowserRuntimeTelemetry } from "../runtime/browser/index.js";
 import { SkillService, type SkillsRuntimeTelemetry } from "../skills/service.js";
 
+const PROJECT_KNOWLEDGE_MAX_NOTES = 2;
+const PROJECT_KNOWLEDGE_MIN_SCORE = 10;
+const PROJECT_KNOWLEDGE_MIN_CONFIDENCE = 0.55;
+
 function shouldResetSessionOnEngineError(error: unknown): boolean {
   const normalized = normalizePiError(error);
   return normalized.code === "invalid_response" || normalized.code === "unknown";
+}
+
+function isSlashLikeCommand(message: string): boolean {
+  return message.trimStart().startsWith("/");
+}
+
+function looksLikeProjectKnowledgeQuestion(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  if (!normalized || normalized.length < 12 || isSlashLikeCommand(normalized)) {
+    return false;
+  }
+  const questionLike =
+    normalized.includes("?") ||
+    /\b(como|onde|qual|quais|porque|por que|de onde|em qual|what|where|why|how)\b/.test(normalized);
+  if (!questionLike) {
+    return false;
+  }
+  return /\b(android|ios|backend|frontend|web|player|api|app|mobile|projeto|param|parametro|header|payload|request|endpoint|contrato)\b/.test(
+    normalized,
+  );
+}
+
+function buildProjectKnowledgeContextBlock(
+  notes: Array<{
+    id: string;
+    project: string;
+    topic: string;
+    kind: "fact" | "analysis" | "decision";
+    title: string;
+    answer: string;
+    status: "draft" | "curated" | "stale" | "conflicting";
+    confidence: number;
+    files: string[];
+    evidence: string[];
+    updatedAt: string;
+  }>,
+): string {
+  const lines = [
+    "[project_knowledge_context]",
+    "Use estas notas curadas apenas se forem relevantes para responder a pergunta atual.",
+    "Se uma nota estiver stale/conflicting ou com confidence baixa, diga isso explicitamente em vez de tratá-la como verdade confirmada.",
+  ];
+
+  for (const [index, note] of notes.entries()) {
+    lines.push(
+      "",
+      `${index + 1}. id=${note.id} project=${note.project} topic=${note.topic} kind=${note.kind} status=${note.status} confidence=${note.confidence} updatedAt=${note.updatedAt}`,
+      `title=${note.title}`,
+      `answer=${note.answer}`,
+    );
+    if (note.files.length > 0) {
+      lines.push(`files=${note.files.join(", ")}`);
+    }
+    if (note.evidence.length > 0) {
+      lines.push(`evidence=${note.evidence.slice(0, 3).join(" || ")}`);
+    }
+  }
+
+  return lines.join("\n");
 }
 
 function extractPartialWebEvidence(message: string): string[] {
@@ -325,6 +388,11 @@ export class ChatService {
       }
     }
 
+    const projectKnowledgeContext = await this.buildProjectKnowledgeContext(input, llmInputMessage);
+    if (projectKnowledgeContext) {
+      llmInputMessage = `${llmInputMessage}\n\n${projectKnowledgeContext}`;
+    }
+
     const mediaPreprocess = await this.media.preprocess({
       sessionKey: input.sessionKey,
       message: llmInputMessage,
@@ -340,6 +408,49 @@ export class ChatService {
       });
     }
     return mediaPreprocess.message;
+  }
+
+  private async buildProjectKnowledgeContext(input: HandleMessageInput, llmInputMessage: string): Promise<string | null> {
+    if (!looksLikeProjectKnowledgeQuestion(input.message)) {
+      return null;
+    }
+
+    try {
+      const results = await this.tooling.knowledge.knowledgeSearch({
+        query: input.message,
+        maxResults: PROJECT_KNOWLEDGE_MAX_NOTES,
+      });
+      const strongMatches = results
+        .filter((item) => item.score >= PROJECT_KNOWLEDGE_MIN_SCORE)
+        .filter((item) => item.confidence >= PROJECT_KNOWLEDGE_MIN_CONFIDENCE)
+        .slice(0, PROJECT_KNOWLEDGE_MAX_NOTES);
+      if (strongMatches.length === 0) {
+        return null;
+      }
+
+      const notes = (
+        await Promise.all(strongMatches.map((item) => this.tooling.knowledge.knowledgeGet({ noteId: item.id })))
+      ).filter((item): item is NonNullable<typeof item> => Boolean(item));
+      if (notes.length === 0) {
+        return null;
+      }
+
+      kaelLogger.info("chat.knowledge.context_applied", {
+        sessionKey: input.sessionKey,
+        requestId: input.requestId ?? null,
+        noteIds: notes.map((item) => item.id),
+        query: input.message,
+        llmChars: llmInputMessage.length,
+      });
+      return buildProjectKnowledgeContextBlock(notes);
+    } catch (error) {
+      kaelLogger.warn("chat.knowledge.context_failed", {
+        sessionKey: input.sessionKey,
+        requestId: input.requestId ?? null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
   }
 
   private async runLlmTurnStage(

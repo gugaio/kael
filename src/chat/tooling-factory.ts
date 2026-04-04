@@ -148,8 +148,8 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
       memoryWrite: ({ content, target }) => executors.memory.write({ content, target }),
     },
     knowledge: {
-      knowledgeSearch: ({ query, project, tag, status, maxResults }) =>
-        executors.knowledge.search({ query, project, tag, status, maxResults }),
+      knowledgeSearch: ({ query, project, kind, tag, status, maxResults }) =>
+        executors.knowledge.search({ query, project, kind, tag, status, maxResults }),
       knowledgeGet: ({ noteId }) => executors.knowledge.get(noteId),
       knowledgeUpsert: (params) => executors.knowledge.upsert(params),
     },

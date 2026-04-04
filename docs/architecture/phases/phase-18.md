@@ -165,3 +165,17 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
 - Tracking por sessao no `SkillService.prepareTurnMessage(...)` via `sessionKey`.
 - Integracao no `ChatService` para repassar `sessionKey` ao preparar turno de skills.
 - Novos testes cobrindo motivos de decisao e agregacao por sessao.
+
+## Entregas implementadas (incremento 18.5)
+
+- Skill `.kael/skills/project-knowledge-writer` adicionada para padronizar a escrita de notas na knowledge base do Kael.
+- A skill orienta o agente a usar `knowledge_upsert` com:
+  - `kind` (`fact|analysis|decision`);
+  - `status`;
+  - `confidence`;
+  - `files`;
+  - `evidence`.
+- Referencias separadas foram adicionadas para:
+  - schema recomendado de payload;
+  - exemplos de nota confirmada, analise e conflito.
+- Cobertura de testes expandida para auto-selecao da skill quando a mensagem pede para salvar achados de projeto.

@@ -3,11 +3,13 @@ import path from "node:path";
 import { ensureDir, readJsonFile, writeJsonFile } from "../infra/fs.js";
 
 export type KnowledgeNoteStatus = "draft" | "curated" | "stale" | "conflicting";
+export type KnowledgeNoteKind = "fact" | "analysis" | "decision";
 
 export type KnowledgeNote = {
   id: string;
   project: string;
   topic: string;
+  kind: KnowledgeNoteKind;
   title: string;
   question?: string;
   answer: string;
@@ -27,6 +29,7 @@ export type KnowledgeSearchResult = {
   id: string;
   project: string;
   topic: string;
+  kind: KnowledgeNoteKind;
   title: string;
   status: KnowledgeNoteStatus;
   confidence: number;
@@ -39,6 +42,7 @@ export type KnowledgeUpsertInput = {
   noteId?: string;
   project: string;
   topic: string;
+  kind?: KnowledgeNoteKind;
   title?: string;
   question?: string;
   answer: string;
@@ -56,6 +60,7 @@ type KnowledgeIndexRecord = {
   id: string;
   project: string;
   topic: string;
+  kind: KnowledgeNoteKind;
   title: string;
   summary?: string;
   tags: string[];
@@ -163,6 +168,7 @@ function renderMarkdown(note: KnowledgeNote): string {
     `- id: ${note.id}`,
     `- project: ${note.project}`,
     `- topic: ${note.topic}`,
+    `- kind: ${note.kind}`,
     `- status: ${note.status}`,
     `- confidence: ${note.confidence}`,
     `- createdAt: ${note.createdAt}`,
@@ -218,6 +224,7 @@ export class KnowledgeService {
       id: noteId,
       project,
       topic,
+      kind: input.kind ?? existing?.kind ?? "analysis",
       title: input.title?.trim() || existing?.title || topic,
       question: input.question?.trim() || existing?.question,
       answer,
@@ -245,6 +252,7 @@ export class KnowledgeService {
       id: note.id,
       project: note.project,
       topic: note.topic,
+      kind: note.kind,
       title: note.title,
       summary: note.summary,
       tags: note.tags,
@@ -277,6 +285,7 @@ export class KnowledgeService {
     project?: string;
     tag?: string;
     status?: KnowledgeNoteStatus;
+    kind?: KnowledgeNoteKind;
     maxResults?: number;
   }): Promise<KnowledgeSearchResult[]> {
     const query = params.query.trim();
@@ -290,6 +299,7 @@ export class KnowledgeService {
 
     for (const item of index) {
       if (params.project && item.project !== params.project) continue;
+      if (params.kind && item.kind !== params.kind) continue;
       if (params.tag && !item.tags.includes(params.tag)) continue;
       if (params.status && item.status !== params.status) continue;
       const note = await this.get(item.id);
@@ -300,6 +310,7 @@ export class KnowledgeService {
         id: note.id,
         project: note.project,
         topic: note.topic,
+        kind: note.kind,
         title: note.title,
         status: note.status,
         confidence: note.confidence,

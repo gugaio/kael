@@ -471,6 +471,7 @@ async function createJobsServer(params: {
         id: "note-1",
         project: "proj",
         topic: "topic",
+        kind: "analysis" as const,
         title: "title",
         answer: "answer",
         tags: [],

@@ -9,6 +9,7 @@ export function registerKnowledgeRoutes(server: FastifyInstance, deps: ApiRouteD
     Querystring: {
       query?: string;
       project?: string;
+      kind?: "fact" | "analysis" | "decision";
       tag?: string;
       status?: "draft" | "curated" | "stale" | "conflicting";
       limit?: string;
@@ -23,6 +24,7 @@ export function registerKnowledgeRoutes(server: FastifyInstance, deps: ApiRouteD
     const results = await app.knowledgeBase.search({
       query,
       project: request.query.project?.trim() || undefined,
+      kind: request.query.kind,
       tag: request.query.tag?.trim() || undefined,
       status: request.query.status,
       maxResults,
@@ -47,6 +49,7 @@ export function registerKnowledgeRoutes(server: FastifyInstance, deps: ApiRouteD
       noteId?: string;
       project?: string;
       topic?: string;
+      kind?: "fact" | "analysis" | "decision";
       title?: string;
       question?: string;
       answer?: string;
@@ -76,6 +79,7 @@ export function registerKnowledgeRoutes(server: FastifyInstance, deps: ApiRouteD
       noteId: request.body.noteId?.trim() || undefined,
       project,
       topic,
+      kind: request.body.kind,
       title: request.body.title?.trim() || undefined,
       question: request.body.question?.trim() || undefined,
       answer,

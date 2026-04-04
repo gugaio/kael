@@ -75,6 +75,7 @@ function createTooling(): EngineToolingNamespaces {
         id: "note-1",
         project: "proj",
         topic: "topic",
+        kind: "analysis" as const,
         title: "title",
         answer: "answer",
         tags: [],

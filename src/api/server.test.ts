@@ -13,6 +13,7 @@ function makeFakeApp(): KaelApp {
     id: string;
     project: string;
     topic: string;
+    kind: "fact" | "analysis" | "decision";
     title: string;
     question?: string;
     answer: string;
@@ -664,9 +665,10 @@ function makeFakeApp(): KaelApp {
       }),
     },
     knowledgeBase: {
-      search: async ({ query, project }) =>
+      search: async ({ query, project, kind }) =>
         [...knowledgeNotes.values()]
           .filter((item) => (project ? item.project === project : true))
+          .filter((item) => (kind ? item.kind === kind : true))
           .filter((item) => {
             const haystack = `${item.project} ${item.topic} ${item.title} ${item.answer}`.toLowerCase();
             const tokens = query.toLowerCase().split(/\s+/).filter((token) => token.length >= 2);
@@ -676,6 +678,7 @@ function makeFakeApp(): KaelApp {
             id: item.id,
             project: item.project,
             topic: item.topic,
+            kind: item.kind,
             title: item.title,
             status: item.status,
             confidence: item.confidence,
@@ -690,6 +693,7 @@ function makeFakeApp(): KaelApp {
           id: noteId ?? `${project}--${topic}`,
           project,
           topic,
+          kind: rest.kind ?? ("analysis" as const),
           title: title ?? topic,
           answer,
           tags: rest.tags ?? [],
@@ -816,6 +820,7 @@ describe("API integration", () => {
       payload: {
         project: "ios-app",
         topic: "param-x",
+        kind: "fact",
         title: "iOS param x",
         answer: "iOS envia o parametro x no body do endpoint /session/start.",
         files: ["ios/App/SessionStartRequest.swift"],
@@ -838,6 +843,7 @@ describe("API integration", () => {
     const searchBody = search.json();
     expect(searchBody.ok).toBe(true);
     expect(searchBody.results).toHaveLength(1);
+    expect(searchBody.results[0].kind).toBe("fact");
     expect(searchBody.results[0].snippet).toContain("/session/start");
 
     const get = await server.inject({

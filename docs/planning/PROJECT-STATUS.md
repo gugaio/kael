@@ -37,6 +37,56 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-04 - Chat: retrieval leve da knowledge base para perguntas de projeto
+
+Resumo:
+- O `ChatService` agora faz busca conservadora na knowledge base antes do turno LLM quando a mensagem parece uma pergunta sobre conhecimento interno de projeto.
+- Quando encontra match forte, o runtime injeta um bloco `[project_knowledge_context]` com notas curadas, `kind`, `status`, `confidence`, `files` e `evidence`.
+- O retrieval foi desenhado com guardrails para nao disparar em conversa generica e para instruir o modelo a tratar notas `stale`/`conflicting` com cautela explicita.
+
+Arquivos-chave:
+- `src/chat/service.ts`
+- `src/chat/service.test.ts`
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/chat/service.test.ts src/knowledge/service.test.ts src/skills/service.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/engine/simple-engine.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- A heuristica de entrada ainda e lexical e conservadora; ainda nao usa projeto ativo da sessao nem retrieval semantico.
+- O ranking ainda depende do score atual da knowledge base, sem reforco por recencia/curation além do confidence retornado.
+- Ainda nao ha modo de citar automaticamente a nota usada na resposta final de forma mais formal/estruturada.
+
+Proximo passo recomendado:
+- Melhorar o ranking com projeto ativo de sessao e depois expor, na resposta, quando o Kael usou uma nota curada como base principal.
+
+### 2026-04-04 - Skills/Knowledge: protocolo inicial de ingestao para agentes externos
+
+Resumo:
+- A knowledge base ganhou `kind` por nota (`fact`, `analysis`, `decision`) e filtro correspondente em busca, deixando o schema de ingestao menos livre.
+- Foi adicionada a skill `.kael/skills/project-knowledge-writer` para orientar agentes a salvar notas com `files`, `evidence`, `confidence`, `status` e `kind`.
+- A API e as tools de knowledge foram alinhadas ao novo campo `kind`, preparando a base para ingestao mais consistente por agentes de codigo.
+
+Arquivos-chave:
+- `src/knowledge/service.ts`
+- `src/api/routes/knowledge.ts`
+- `src/engine/tool-specs/knowledge.ts`
+- `.kael/skills/project-knowledge-writer/SKILL.md`
+- `docs/architecture/phases/phase-18.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/knowledge/service.test.ts src/skills/service.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts`
+
+Pendencias:
+- O chat ainda nao consulta automaticamente a knowledge base antes de responder perguntas de projeto.
+- Ainda nao existe heuristica de conflito/staleness mais forte nem consolidacao semantica de notas proximas.
+- Agentes externos ainda dependem de usar a skill ou conhecer o endpoint; nao ha endpoint de ingestao dedicado com lote/review.
+
+Proximo passo recomendado:
+- Ligar retrieval leve no fluxo do chat para perguntas de projeto e usar `kind/status/confidence` como ranking e guardrail de resposta.
+
 ### 2026-04-04 - Core: knowledge base MVP para notas curadas de projeto
 
 Resumo:

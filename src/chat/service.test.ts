@@ -1,0 +1,262 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { ChatService } from "./service.js";
+import { SessionStore } from "../session/store.js";
+import { SkillService } from "../skills/service.js";
+import type { EngineToolingNamespaces } from "../engine/types.js";
+
+const roots: string[] = [];
+
+async function createWorkspace(): Promise<string> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-chat-service-"));
+  roots.push(root);
+  return root;
+}
+
+afterEach(async () => {
+  await Promise.all(roots.splice(0, roots.length).map((root) => fs.rm(root, { recursive: true, force: true })));
+});
+
+function createTooling(overrides?: Partial<EngineToolingNamespaces["knowledge"]>): EngineToolingNamespaces {
+  return {
+    video: {
+      startTranscode: async () => {
+        throw new Error("unused");
+      },
+      startConvertHls: async () => {
+        throw new Error("unused");
+      },
+      startCaptureStream: async () => {
+        throw new Error("unused");
+      },
+      startProbeMedia: async () => {
+        throw new Error("unused");
+      },
+      videoHlsInspect: async () => ({ ok: true, url: "", finalUrl: "", playlistType: "unknown", variants: [], renditions: [], segments: [], errors: [] }),
+      videoProbe: async () => ({ ok: true, input: "", timeoutMs: 1000, errors: [] }),
+    },
+    jobs: {
+      listJobs: () => [],
+      getJob: () => null,
+      getJobLog: async ({ jobId }: { jobId: string }) => ({ jobId, found: false }),
+    },
+    system: {
+      execCommand: async () => ({ id: "exec-1", command: "true", cwd: ".", status: "completed", startedAt: new Date().toISOString(), outputTail: "" }),
+      processCommand: async () => ({ ok: true, action: "list", sessions: [] }),
+    },
+    mcp: {
+      mcpList: async () => ({ ok: true, command: "mcporter list", schema: false, format: "json", items: [] }),
+      mcpCall: async () => ({ ok: true, command: "mcporter call", target: "stub.tool", format: "json", output: {} }),
+    },
+    edge: {
+      edgeList: () => [],
+      edgeCall: async () => ({ ok: true, capability: "system.info", output: {} }),
+      youboraMetricsGet: async () => ({ ok: true, capability: "youbora.metrics.get", output: {} }),
+      youboraRawdataGet: async () => ({ ok: true, capability: "youbora.rawdata.get", output: {} }),
+      youboraEventsGet: async () => ({ ok: true, capability: "youbora.events.get", output: {} }),
+    },
+    memory: {
+      memorySearch: async () => [],
+      memoryGet: async () => ({ path: "MEMORY.md", text: "", startLine: 1, endLine: 1 }),
+      memoryWrite: async () => ({ path: "memory/2026-01-01.md" }),
+    },
+    knowledge: {
+      knowledgeSearch: async () => [],
+      knowledgeGet: async () => null,
+      knowledgeUpsert: async () => ({
+        id: "note-1",
+        project: "proj",
+        topic: "topic",
+        kind: "analysis" as const,
+        title: "title",
+        answer: "answer",
+        tags: [],
+        files: [],
+        evidence: [],
+        status: "draft" as const,
+        confidence: 0.7,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
+      ...overrides,
+    },
+    workspace: {
+      workspaceSearch: async () => [],
+      workspaceRead: async () => ({ path: "README.md", text: "", startLine: 1, endLine: 1 }),
+    },
+    web: {
+      webSearch: async () => ({ provider: "tavily", query: "", results: [] }),
+      webFetch: async () => ({ ok: true, url: "", finalUrl: "", status: 200, contentType: "text/plain", text: "", excerpt: "", title: "", fetchedAt: new Date().toISOString(), fromCache: false }),
+      webResearch: async () => ({ provider: "tavily", query: "", summary: "", results: [] }),
+    },
+    browser: {
+      browserCommand: async () => ({ status: "started", action: "start", sessionKey: "s1" }),
+      browserRuntimeTelemetry: () => ({ enabled: true, activeSessions: 0, totalCommands: 0, failedCommands: 0, expiredSessions: 0, artifactDir: ".kael-data/browser/artifacts" }),
+    },
+    image: {
+      imageGenerate: async () => ({ kind: "image", dataBase64: "aGVsbG8=", mimeType: "image/png", fileName: "img.png" }),
+    },
+    plans: {
+      planCreate: async () => ({ id: "p1", sessionKey: "s1", title: "plan", status: "active", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), steps: [] }),
+      planGenerate: async () => ({ id: "p1", sessionKey: "s1", title: "plan", status: "active", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), steps: [] }),
+      planList: async () => [],
+      planGet: async () => null,
+      planUpdateStep: async () => null,
+      planNextAction: async () => null,
+      planExecuteNext: async () => ({ ok: true, plan: { id: "p1", sessionKey: "s1", title: "plan", status: "active", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), steps: [] }, stepIndex: 0, message: "noop" }),
+      planReconcile: async () => ({ ok: true, reconciled: 0, plans: [] }),
+    },
+  } as unknown as EngineToolingNamespaces;
+}
+
+describe("ChatService knowledge retrieval", () => {
+  it("injects project knowledge context for strong project question matches", async () => {
+    const root = await createWorkspace();
+    const sessions = new SessionStore(path.join(root, ".kael-data"));
+    await sessions.init();
+    let capturedMessage = "";
+    const orchestrator = {
+      checkCompactionNeed: async () => ({
+        compacted: false,
+        reason: "below_threshold" as const,
+        summarizedMessages: 0,
+        totalMessages: 0,
+        totalChars: 0,
+      }),
+      runConversationTurn: async ({ message }: { message: string }) => {
+        capturedMessage = message;
+        return { reply: "ok", artifacts: [] };
+      },
+      getEngineRuntimeTelemetrySnapshot: () => ({ timeouts: 0, toolCallsByName: {}, blockedCallsByTool: {} }),
+    } as unknown as ConstructorParameters<typeof ChatService>[2];
+
+    const tooling = createTooling({
+      knowledgeSearch: async () => [
+        {
+          id: "ios-app--param-x",
+          project: "ios-app",
+          topic: "param-x",
+          kind: "fact",
+          title: "iOS param x",
+          status: "curated",
+          confidence: 0.91,
+          updatedAt: new Date().toISOString(),
+          score: 17,
+          snippet: "iOS envia x no body",
+        },
+      ],
+      knowledgeGet: async () => ({
+        id: "ios-app--param-x",
+        project: "ios-app",
+        topic: "param-x",
+        kind: "fact",
+        title: "iOS param x",
+        answer: "O iOS envia o parametro x no body de /session/start.",
+        tags: ["ios"],
+        files: ["ios/App/Networking/SessionStartRequest.swift"],
+        evidence: ["SessionStartRequest serializa x no payload."],
+        status: "curated",
+        confidence: 0.91,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
+    });
+
+    const chat = new ChatService(
+      sessions,
+      { process: async () => ({ ok: true, action: "list", sessions: [] }) } as never,
+      orchestrator as never,
+      {
+        preprocess: async ({ message }: { message: string }) => ({ message, applied: false, details: [] }),
+        getRuntimeTelemetrySnapshot: () => ({
+          processedRequests: 0,
+          appliedRequests: 0,
+          imageDescribed: 0,
+          audioTranscribed: 0,
+          failures: 0,
+          processedAttachments: 0,
+          skippedTooLarge: 0,
+          skippedBySourceLimit: 0,
+          skippedByTotalBytesBudget: 0,
+          skippedByProcessingBudget: 0,
+        }),
+      },
+      {} as never,
+      tooling,
+      new SkillService(root),
+    );
+
+    const result = await chat.handleMessage({
+      sessionKey: "s1",
+      message: "Como o iOS envia o parametro x?",
+    });
+
+    expect(result.reply).toBe("ok");
+    expect(capturedMessage).toContain("[project_knowledge_context]");
+    expect(capturedMessage).toContain("id=ios-app--param-x");
+    expect(capturedMessage).toContain("answer=O iOS envia o parametro x no body de /session/start.");
+  });
+
+  it("does not query project knowledge for generic chat", async () => {
+    const root = await createWorkspace();
+    const sessions = new SessionStore(path.join(root, ".kael-data"));
+    await sessions.init();
+    let knowledgeSearchCalls = 0;
+    let capturedMessage = "";
+    const orchestrator = {
+      checkCompactionNeed: async () => ({
+        compacted: false,
+        reason: "below_threshold" as const,
+        summarizedMessages: 0,
+        totalMessages: 0,
+        totalChars: 0,
+      }),
+      runConversationTurn: async ({ message }: { message: string }) => {
+        capturedMessage = message;
+        return { reply: "ok", artifacts: [] };
+      },
+      getEngineRuntimeTelemetrySnapshot: () => ({ timeouts: 0, toolCallsByName: {}, blockedCallsByTool: {} }),
+    } as unknown as ConstructorParameters<typeof ChatService>[2];
+
+    const tooling = createTooling({
+      knowledgeSearch: async () => {
+        knowledgeSearchCalls += 1;
+        return [];
+      },
+    });
+
+    const chat = new ChatService(
+      sessions,
+      { process: async () => ({ ok: true, action: "list", sessions: [] }) } as never,
+      orchestrator as never,
+      {
+        preprocess: async ({ message }: { message: string }) => ({ message, applied: false, details: [] }),
+        getRuntimeTelemetrySnapshot: () => ({
+          processedRequests: 0,
+          appliedRequests: 0,
+          imageDescribed: 0,
+          audioTranscribed: 0,
+          failures: 0,
+          processedAttachments: 0,
+          skippedTooLarge: 0,
+          skippedBySourceLimit: 0,
+          skippedByTotalBytesBudget: 0,
+          skippedByProcessingBudget: 0,
+        }),
+      },
+      {} as never,
+      tooling,
+      new SkillService(root),
+    );
+
+    await chat.handleMessage({
+      sessionKey: "s1",
+      message: "oi, tudo bem?",
+    });
+
+    expect(knowledgeSearchCalls).toBe(0);
+    expect(capturedMessage).not.toContain("[project_knowledge_context]");
+  });
+});

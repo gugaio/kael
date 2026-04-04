@@ -14,7 +14,7 @@ import type {
 } from "../capabilities/video/index.js";
 import type { McpCallResult, McpListResult } from "../tools/mcp/mcp-bridge-service.js";
 import type { EdgeCallResult, EdgeCapabilitySummary } from "../edge/runtime.js";
-import type { KnowledgeNoteStatus } from "../knowledge/service.js";
+import type { KnowledgeNoteKind, KnowledgeNoteStatus } from "../knowledge/service.js";
 
 export type EngineVideoTooling = {
   startTranscode: (params: {
@@ -355,6 +355,7 @@ export type EngineKnowledgeTooling = {
   knowledgeSearch: (params: {
     query: string;
     project?: string;
+    kind?: KnowledgeNoteKind;
     tag?: string;
     status?: KnowledgeNoteStatus;
     maxResults?: number;
@@ -363,6 +364,7 @@ export type EngineKnowledgeTooling = {
       id: string;
       project: string;
       topic: string;
+      kind: KnowledgeNoteKind;
       title: string;
       status: KnowledgeNoteStatus;
       confidence: number;
@@ -375,6 +377,7 @@ export type EngineKnowledgeTooling = {
     id: string;
     project: string;
     topic: string;
+    kind: KnowledgeNoteKind;
     title: string;
     question?: string;
     answer: string;
@@ -393,6 +396,7 @@ export type EngineKnowledgeTooling = {
     noteId?: string;
     project: string;
     topic: string;
+    kind?: KnowledgeNoteKind;
     title?: string;
     question?: string;
     answer: string;
@@ -408,6 +412,7 @@ export type EngineKnowledgeTooling = {
     id: string;
     project: string;
     topic: string;
+    kind: KnowledgeNoteKind;
     title: string;
     question?: string;
     answer: string;

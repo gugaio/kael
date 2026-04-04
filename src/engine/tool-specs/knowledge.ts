@@ -28,6 +28,7 @@ export function createKnowledgePiTools(params: {
       properties: {
         query: { type: "string", description: "Pergunta ou consulta de busca" },
         project: { type: "string", description: "Projeto alvo opcional" },
+        kind: { type: "string", enum: ["fact", "analysis", "decision"], description: "Tipo da nota" },
         tag: { type: "string", description: "Tag opcional" },
         status: { type: "string", enum: ["draft", "curated", "stale", "conflicting"] },
         maxResults: { type: "number", description: "Quantidade maxima de resultados" },
@@ -40,6 +41,7 @@ export function createKnowledgePiTools(params: {
       const args = (rawParams ?? {}) as {
         query: string;
         project?: string;
+        kind?: "fact" | "analysis" | "decision";
         tag?: string;
         status?: "draft" | "curated" | "stale" | "conflicting";
         maxResults?: number;
@@ -54,7 +56,7 @@ export function createKnowledgePiTools(params: {
                 `results=${results.length}`,
                 ...results.map(
                   (item, idx) =>
-                    `${idx + 1}. ${item.project}/${item.topic} id=${item.id} status=${item.status} confidence=${item.confidence} score=${item.score}\n${item.snippet}`,
+                    `${idx + 1}. ${item.project}/${item.topic} id=${item.id} kind=${item.kind} status=${item.status} confidence=${item.confidence} score=${item.score}\n${item.snippet}`,
                 ),
               ].join("\n\n");
         params.logToolEnd("knowledge_search", intent, { status: "completed", resultCount: results.length }, startedAtMs);
@@ -94,6 +96,7 @@ export function createKnowledgePiTools(params: {
           `id=${result.id}`,
           `project=${result.project}`,
           `topic=${result.topic}`,
+          `kind=${result.kind}`,
           `title=${result.title}`,
           `status=${result.status}`,
           `confidence=${result.confidence}`,
@@ -121,6 +124,7 @@ export function createKnowledgePiTools(params: {
         noteId: { type: "string" },
         project: { type: "string" },
         topic: { type: "string" },
+        kind: { type: "string", enum: ["fact", "analysis", "decision"] },
         title: { type: "string" },
         question: { type: "string" },
         answer: { type: "string" },
