@@ -114,7 +114,6 @@ export function createProjectsPiTools(params: {
         tags: { type: "array", items: { type: "string" } },
         content: { type: "string" },
         mode: { type: "string", enum: ["replace", "append"] },
-        allowCreate: { type: "boolean" },
       },
       required: ["project", "content"],
       additionalProperties: false,

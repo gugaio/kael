@@ -37,6 +37,54 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-04 - Project Space: API dedicada para listar, ler e escrever documentos
+
+Resumo:
+- A API ganhou endpoints nativos de project space para listar projetos, carregar contexto de projeto, listar documentos e fazer upsert de documentos.
+- O `ProjectContextService` passou a expor `listProjects()` para discovery fora do chat.
+- `docs/api.md` foi atualizado para refletir a nova superficie `/projects/*`.
+
+Arquivos-chave:
+- `src/api/routes/projects.ts`
+- `src/api/server.ts`
+- `src/projects/service.ts`
+- `src/api/server.test.ts`
+- `docs/api.md`
+
+Checklist de validacao:
+- [ ] `npm run check`
+- [ ] `npm test -- src/api/server.test.ts src/projects/service.test.ts`
+
+Pendencias:
+- Ainda nao ha search HTTP do project space; por enquanto a busca continua disponivel via tooling do agente.
+- Nao existe controle mais fino de concorrencia/merge para edicoes simultaneas de um mesmo documento.
+
+Proximo passo recomendado:
+- Adicionar um fluxo leve de confirmacao/sugestao para novos `.md` quando o modelo quiser abrir um arquivo tematico novo e depois considerar um endpoint de search em `/projects`.
+
+### 2026-04-04 - Project Space: criacao de `.md` volta a ser guidance, nao enforcement
+
+Resumo:
+- O bloqueio estrutural de criacao de novos `.md` foi removido de `project_upsert_document`.
+- A orientacao de confirmar com o usuario quando um novo arquivo parecer melhor foi mantida apenas na skill `project-knowledge-writer`.
+- O modelo agora tem mais liberdade operacional, mas continua orientado a preferir reutilizar documentos existentes.
+
+Arquivos-chave:
+- `src/projects/service.ts`
+- `src/engine/types.ts`
+- `src/engine/tool-specs/projects.ts`
+- `.kael/skills/project-knowledge-writer/SKILL.md`
+
+Checklist de validacao:
+- [ ] `npm run check`
+- [ ] `npm test -- src/projects/service.test.ts src/chat/service.test.ts src/skills/service.test.ts src/engine/pi-tools.test.ts src/engine/tool-specs/index.test.ts`
+
+Pendencias:
+- A decisao de criar um novo `.md` ainda depende de julgamento da LLM, sem um approval flow estruturado no runtime.
+
+Proximo passo recomendado:
+- Implementar um fluxo leve de sugestao/confirmacao para novos documentos apenas quando isso melhorar a UX, sem travar o fluxo normal.
+
 ### 2026-04-04 - Project Space: remocao da superficie legada de `knowledge`
 
 Resumo:

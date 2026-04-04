@@ -9,6 +9,20 @@ import { createApiServer } from "./server.js";
 function makeFakeApp(): KaelApp {
   const schedules = new Map<string, SchedulerJob>();
   let chatCallCount = 0;
+  const projectDocs = new Map<
+    string,
+    Map<
+      string,
+      {
+        path: string;
+        title: string;
+        description: string;
+        tags: string[];
+        content: string;
+        updatedAt: string;
+      }
+    >
+  >();
   let lastChatInput:
     | {
         sessionKey: string;
@@ -24,6 +38,35 @@ function makeFakeApp(): KaelApp {
     schedule: { kind: "interval", intervalMs: 30_000 },
     nextRunAt: new Date(Date.now() + 30_000).toISOString(),
   });
+
+  const ensureProjectDocs = (project: string) => {
+    const normalized = project.trim().toLowerCase();
+    const existing = projectDocs.get(normalized);
+    if (existing) {
+      return existing;
+    }
+    const now = new Date().toISOString();
+    const docs = new Map<string, {
+      path: string;
+      title: string;
+      description: string;
+      tags: string[];
+      content: string;
+      updatedAt: string;
+    }>();
+    docs.set("PROJECT.md", {
+      path: "PROJECT.md",
+      title: "Project Overview",
+      description: "Visao geral, areas principais, convencoes e mapa do projeto.",
+      tags: ["overview"],
+      content: `# ${normalized}\n\n## Summary\nProjeto de teste.\n`,
+      updatedAt: now,
+    });
+    projectDocs.set(normalized, docs);
+    return docs;
+  };
+
+  ensureProjectDocs("ios-app");
 
   return {
     config: {
@@ -273,7 +316,90 @@ function makeFakeApp(): KaelApp {
     } as unknown as KaelApp["planner"],
     research: {} as KaelApp["research"],
     memory: {} as KaelApp["memory"],
-    projects: {} as KaelApp["projects"],
+    projects: {
+      listProjects: async () => [...projectDocs.keys()].sort((a, b) => a.localeCompare(b)),
+      ensureProject: async (projectName: string) => {
+        const docs = ensureProjectDocs(projectName);
+        const overview = docs.get("PROJECT.md")!;
+        return {
+          name: projectName.trim().toLowerCase(),
+          dirPath: `/tmp/.kael/projects/${projectName}`,
+          filePath: `/tmp/.kael/projects/${projectName}/PROJECT.md`,
+          content: overview.content,
+          created: docs.size === 1,
+          index: {
+            project: projectName.trim().toLowerCase(),
+            documents: [...docs.values()].map(({ path, title, description, tags, updatedAt }) => ({
+              path,
+              title,
+              description,
+              tags,
+              updatedAt,
+            })),
+          },
+        };
+      },
+      listDocuments: async (projectName: string) =>
+        [...ensureProjectDocs(projectName).values()]
+          .map(({ path, title, description, tags, updatedAt }) => ({ path, title, description, tags, updatedAt }))
+          .sort((a, b) => a.path.localeCompare(b.path)),
+      getDocument: async (projectName: string, docPath = "PROJECT.md") => {
+        const doc = ensureProjectDocs(projectName).get(docPath);
+        return doc
+          ? {
+              project: projectName.trim().toLowerCase(),
+              path: doc.path,
+              title: doc.title,
+              description: doc.description,
+              tags: doc.tags,
+              content: doc.content,
+              updatedAt: doc.updatedAt,
+            }
+          : null;
+      },
+      upsertDocument: async ({
+        project,
+        path = "PROJECT.md",
+        title,
+        description,
+        tags,
+        content,
+        mode,
+      }: {
+        project: string;
+        path?: string;
+        title?: string;
+        description?: string;
+        tags?: string[];
+        content: string;
+        mode?: "replace" | "append";
+      }) => {
+        const docs = ensureProjectDocs(project);
+        const existing = docs.get(path);
+        const nextContent = mode === "append" && existing?.content
+          ? `${existing.content.trimEnd()}\n\n${content.trim()}\n`
+          : `${content.trimEnd()}\n`;
+        const next = {
+          path,
+          title: title?.trim() || existing?.title || path.replace(/\.md$/i, ""),
+          description: description?.trim() || existing?.description || `Documento ${path} do projeto ${project}.`,
+          tags: [...new Set([...(existing?.tags ?? []), ...(tags ?? [])])],
+          content: nextContent,
+          updatedAt: new Date().toISOString(),
+        };
+        docs.set(path, next);
+        return {
+          project: project.trim().toLowerCase(),
+          path: next.path,
+          title: next.title,
+          description: next.description,
+          tags: next.tags,
+          content: next.content,
+          updatedAt: next.updatedAt,
+        };
+      },
+      search: async () => [],
+    } as unknown as KaelApp["projects"],
     chat: {
       handleMessage: async ({
         sessionKey,
@@ -742,6 +868,81 @@ describe("API integration", () => {
     expect(body.metrics.emailIngest.selfSkipped).toBe(0);
     expect(body.metrics.schedules.total).toBeGreaterThan(0);
     expect(body.metrics.edgeRuntime.connectedClients).toBe(0);
+    await server.close();
+  });
+
+  it("lists, reads and writes project space documents through API", async () => {
+    const server = createApiServer(makeFakeApp());
+
+    const listProjects = await server.inject({
+      method: "GET",
+      url: "/projects",
+    });
+    expect(listProjects.statusCode).toBe(200);
+    expect(listProjects.json()).toMatchObject({
+      ok: true,
+      projects: ["ios-app"],
+    });
+
+    const getProject = await server.inject({
+      method: "GET",
+      url: "/projects/ios-app",
+    });
+    expect(getProject.statusCode).toBe(200);
+    expect(getProject.json()).toMatchObject({
+      ok: true,
+      project: {
+        name: "ios-app",
+      },
+    });
+
+    const upsert = await server.inject({
+      method: "POST",
+      url: "/projects/ios-app/documents",
+      payload: {
+        path: "params.md",
+        title: "Parameters",
+        description: "Headers e payloads",
+        tags: ["ios", "params"],
+        content: "# Parameters\n\nO iOS envia x no body.",
+        mode: "replace",
+      },
+    });
+    expect(upsert.statusCode).toBe(200);
+    expect(upsert.json()).toMatchObject({
+      ok: true,
+      document: {
+        project: "ios-app",
+        path: "params.md",
+      },
+    });
+
+    const listDocs = await server.inject({
+      method: "GET",
+      url: "/projects/ios-app/documents",
+    });
+    expect(listDocs.statusCode).toBe(200);
+    expect(listDocs.json()).toMatchObject({
+      ok: true,
+      documents: [
+        expect.objectContaining({ path: "params.md" }),
+        expect.objectContaining({ path: "PROJECT.md" }),
+      ],
+    });
+
+    const getDoc = await server.inject({
+      method: "GET",
+      url: "/projects/ios-app/document?path=params.md",
+    });
+    expect(getDoc.statusCode).toBe(200);
+    expect(getDoc.json()).toMatchObject({
+      ok: true,
+      document: {
+        path: "params.md",
+        content: expect.stringContaining("envia x no body"),
+      },
+    });
+
     await server.close();
   });
 

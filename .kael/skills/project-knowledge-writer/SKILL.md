@@ -27,16 +27,14 @@ Workflow:
 
 Creation policy:
 - Do not create a new `.md` silently.
-- Only create a new Markdown file when:
-  - the user explicitly asked for a new file and named it, or
-  - you concluded a new file is better and the user approved that creation first.
-- If a new file seems best but the user did not approve it yet, stop and ask for approval with the proposed file path and purpose.
-- `project_upsert_document` requires explicit creation intent for new files; default to updating existing documents.
+- Prefer asking the user if a new file is desired before creating it.
+- If a new file seems best, confirm briefly with the user when that would not make the flow unnecessarily bureaucratic.
+- Use judgment: prefer updating an existing document unless a new thematic file is clearly better.
 
 Required quality bar before `project_upsert_document`:
 - Do not save vague summaries like "Android handles auth here".
 - Prefer updating an existing file before creating a new one.
-- Only create a new `.md` when the theme is clearly distinct and likely to recur, and only after user approval.
+- Only create a new `.md` when the theme is clearly distinct and likely to recur.
 - Include concrete file paths and evidence in the Markdown content whenever the conclusion came from code.
 - Keep `PROJECT.md` for overview, boundaries, key flows and conventions.
 - Use thematic files for narrower domains:

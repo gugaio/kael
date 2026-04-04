@@ -231,3 +231,22 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
   - sem tools PI `knowledge_*`;
   - sem endpoints `/knowledge/*` na API.
 - O `project space` em `.kael/projects/<project>/` passa a ser a unica superficie persistida de conhecimento por projeto no core.
+
+## Entregas implementadas (incremento 18.11)
+
+- O enforcement estrutural para criar novos `.md` no project space foi removido do runtime.
+- A politica passou a ser de prompt/skill:
+  - preferir reutilizar documentos existentes;
+  - confirmar com o usuario quando um novo arquivo parecer desejavel, sem tornar isso obrigatorio em todos os casos.
+- `project_upsert_document` voltou a ser uma operacao simples de upsert, reduzindo burocracia no fluxo manual.
+
+## Entregas implementadas (incremento 18.12)
+
+- A API do core ganhou superficie dedicada para `project space`:
+  - `GET /projects`
+  - `GET /projects/:project`
+  - `GET /projects/:project/documents`
+  - `GET /projects/:project/document`
+  - `POST /projects/:project/documents`
+- O `ProjectContextService` passou a expor `listProjects()` para discovery de projetos fora do chat.
+- A documentacao da API foi atualizada para refletir a nova superficie operacional de projetos.

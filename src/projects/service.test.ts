@@ -50,7 +50,6 @@ describe("ProjectContextService", () => {
       description: "Parametros e contratos",
       tags: ["ios", "params"],
       content: "O parametro x e enviado no body de /session/start.",
-      allowCreate: true,
     });
 
     expect(doc.path).toBe("params.md");
@@ -62,20 +61,5 @@ describe("ProjectContextService", () => {
 
     const results = await service.search({ query: "como o ios envia parametro x", project: "ios-app" });
     expect(results[0]?.path).toBe("params.md");
-  });
-
-  it("blocks creating a new markdown file without explicit allowCreate", async () => {
-    const root = await createWorkspace();
-    const service = new ProjectContextService(root);
-
-    await expect(
-      service.upsertDocument({
-        project: "ios-app",
-        path: "params.md",
-        title: "iOS Params",
-        description: "Parametros e contratos",
-        content: "novo doc",
-      }),
-    ).rejects.toThrow("ask for user approval before creating a new markdown file");
   });
 });

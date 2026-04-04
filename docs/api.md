@@ -24,6 +24,15 @@ flowchart TD
             API --> Sessions[GET /sessions/:sessionKey/messages]
         end
 
+        subgraph Projects ["Projects (project space)"]
+            direction LR
+            API --> ProjectsGET[GET /projects]
+            API --> ProjectGET[GET /projects/:project]
+            API --> ProjectDocsGET[GET /projects/:project/documents]
+            API --> ProjectDocGET[GET /projects/:project/document]
+            API --> ProjectDocPOST[POST /projects/:project/documents]
+        end
+
         subgraph Plans ["Plans (execution)"]
             direction LR
             API --> PlansGET[GET /plans]
@@ -99,6 +108,15 @@ flowchart TD
 |--------|------|-------------|
 | POST | /chat | Send chat message (texto + anexos opcionais image/audio em base64) |
 | GET | /sessions/:sessionKey/messages | Get session messages |
+
+### Projects
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /projects | List known projects in `.kael/projects` |
+| GET | /projects/:project | Ensure/load project scaffold and return `PROJECT.md` context + index |
+| GET | /projects/:project/documents | List indexed documents for a project |
+| GET | /projects/:project/document | Read a single project document (`path` query param, default `PROJECT.md`) |
+| POST | /projects/:project/documents | Create or update a project document |
 
 ### Plans
 | Method | Path | Description |

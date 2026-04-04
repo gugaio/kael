@@ -213,6 +213,11 @@ export class ProjectContextService {
     return { name: project, dirPath, filePath, content, created, index };
   }
 
+  async listProjects(): Promise<string[]> {
+    const names = await this.listProjectNames();
+    return names.sort((a, b) => a.localeCompare(b));
+  }
+
   async listDocuments(projectNameRaw: string): Promise<ProjectDocumentRecord[]> {
     const project = await this.ensureProject(projectNameRaw);
     return project.index.documents.slice().sort((a, b) => compareProjectDocPath(a.path, b.path));
@@ -244,7 +249,6 @@ export class ProjectContextService {
     tags?: string[];
     content: string;
     mode?: "replace" | "append";
-    allowCreate?: boolean;
   }): Promise<ProjectDocument> {
     const project = await this.ensureProject(input.project);
     const docPath = normalizeDocPath(input.path);
@@ -252,9 +256,6 @@ export class ProjectContextService {
     await ensureDir(path.dirname(fullPath));
 
     const existingRecord = project.index.documents.find((item) => item.path === docPath);
-    if (!existingRecord && !input.allowCreate) {
-      throw new Error("project document does not exist; ask for user approval before creating a new markdown file");
-    }
     const existingContent = await fs.readFile(fullPath, "utf-8").catch(() => "");
     const nextContent = (input.mode ?? "replace") === "append" && existingContent.trim()
       ? `${existingContent.trimEnd()}\n\n${input.content.trim()}\n`
