@@ -1,87 +1,49 @@
 # Worked Examples
 
-## Example 1: confirmed fact from code
+## Example 1: add a narrow facts document
 
 Use:
 
 ```json
 {
   "project": "ios-app",
-  "topic": "param-x-session-start",
-  "kind": "fact",
-  "title": "iOS param x on session start",
-  "question": "Como o iOS envia o parametro x?",
-  "summary": "iOS envia x no body de /session/start.",
-  "answer": "O iOS envia o parametro `x` no corpo JSON de `/session/start` ao serializar `SessionStartRequest` antes do POST.",
-  "files": [
-    "ios/App/Networking/SessionStartRequest.swift",
-    "ios/App/Networking/SessionApi.swift"
-  ],
-  "evidence": [
-    "SessionStartRequest declara a propriedade x.",
-    "SessionApi usa esse struct como body no endpoint /session/start."
-  ],
-  "tags": ["ios", "session", "api"],
-  "status": "curated",
-  "confidence": 0.93,
-  "updatedBy": "codex",
-  "source": "code-analysis"
+  "path": "params.md",
+  "title": "Parameters and Contracts",
+  "description": "Payloads, headers and request parameters used by the iOS app.",
+  "tags": ["ios", "params", "contracts"],
+  "content": "# Parameters and Contracts\n\n## Param x on session start\n\nO iOS envia o parametro `x` no corpo JSON de `/session/start` ao serializar `SessionStartRequest` antes do POST.\n\n### Evidence\n- `ios/App/Networking/SessionStartRequest.swift` declara a propriedade `x`.\n- `ios/App/Networking/SessionApi.swift` usa esse struct como body no endpoint `/session/start`.\n",
+  "mode": "append"
 }
 ```
 
-## Example 2: architecture reasoning, not a fact
+## Example 2: update `PROJECT.md` with stable context
 
 Use:
 
 ```json
 {
   "project": "player-web",
-  "topic": "abr-oscillation-root-cause",
-  "kind": "analysis",
-  "title": "Likely cause of ABR oscillation",
-  "question": "Por que o player web esta oscilando nivel com frequencia?",
-  "summary": "A configuracao de buffer parece agressiva para a rede observada.",
-  "answer": "A oscilacao de ABR parece mais consistente com buffer curto e throughput instavel do que com erro estrutural do manifest. A configuracao atual reduz a margem de recuperacao apos cada troca.",
-  "files": [
-    "apps/web-player/src/hls/config.ts"
-  ],
-  "evidence": [
-    "O player usa overrides de buffer mais agressivos que o default.",
-    "Nao houve evidencias de erro fatal ou variant faltando no manifest analisado."
-  ],
-  "tags": ["web", "player", "abr", "analysis"],
-  "status": "draft",
-  "confidence": 0.68,
-  "updatedBy": "codex",
-  "source": "log-review"
+  "path": "PROJECT.md",
+  "title": "Project Overview",
+  "description": "Visao geral, fluxos e convencoes do player web.",
+  "tags": ["overview", "player", "web"],
+  "content": "# player-web\n\n## Summary\nPlayer web responsavel por playback HLS e telemetria.\n\n## Key Flows\n- bootstrap do player\n- inicializacao do hls.js\n- coleta de playback events\n\n## Important Paths\n- `apps/web-player/src/player`\n- `apps/web-player/src/hls`\n- `apps/web-player/src/telemetry`\n",
+  "mode": "replace"
 }
 ```
 
-## Example 3: unresolved conflict
+## Example 3: create a decision log
 
 Use:
 
 ```json
 {
   "project": "backend-api",
-  "topic": "device-id-source",
-  "kind": "fact",
-  "title": "Backend device id source is conflicting",
-  "question": "De onde o backend le deviceId?",
-  "summary": "Ha conflito entre o controller atual e documentacao antiga.",
-  "answer": "A implementacao atual indica leitura de `X-Device-Id` no middleware, mas existe documentacao antiga apontando query param `deviceId`. A nota permanece conflitante ate validacao end-to-end.",
-  "files": [
-    "apps/api/src/http/device-middleware.ts",
-    "docs/legacy/device-contract.md"
-  ],
-  "evidence": [
-    "O middleware atual le X-Device-Id do header.",
-    "A documentacao antiga ainda menciona deviceId na query string."
-  ],
-  "tags": ["backend", "headers", "contracts"],
-  "status": "conflicting",
-  "confidence": 0.56,
-  "updatedBy": "codex",
-  "source": "code-and-doc-review"
+  "path": "decisions.md",
+  "title": "Architecture Decisions",
+  "description": "Decisoes de contrato e arquitetura do backend.",
+  "tags": ["backend", "decisions", "contracts"],
+  "content": "# Architecture Decisions\n\n## Device Id contract\n\nA leitura oficial de `deviceId` deve ocorrer via header `X-Device-Id`. Referencias antigas em query string devem ser tratadas como legado e removidas da documentacao operacional.\n\n### Evidence\n- `apps/api/src/http/device-middleware.ts` le `X-Device-Id` no middleware atual.\n- `docs/legacy/device-contract.md` ainda menciona query string e precisa ser corrigido.\n",
+  "mode": "append"
 }
 ```

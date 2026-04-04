@@ -9,6 +9,7 @@ import type {
   EngineMcpTooling,
   EngineMemoryTooling,
   EnginePlansTooling,
+  EngineProjectsTooling,
   EngineSystemTooling,
   EngineToolingNamespaces,
   EngineVideoTooling,
@@ -20,6 +21,7 @@ type ToolingOverrides = {
   video?: Partial<EngineVideoTooling>;
   jobs?: Partial<EngineJobsTooling>;
   knowledge?: Partial<EngineKnowledgeTooling>;
+  projects?: Partial<EngineProjectsTooling>;
   system?: Partial<EngineSystemTooling>;
   mcp?: Partial<EngineMcpTooling>;
   edge?: Partial<EngineEdgeTooling>;
@@ -86,6 +88,21 @@ function createTooling(overrides: ToolingOverrides = {}): EngineToolingNamespace
         updatedAt: new Date().toISOString(),
       }),
       ...overrides.knowledge,
+    },
+    projects: {
+      projectSearch: async () => [],
+      projectGetDocument: async () => null,
+      projectUpsertDocument: async () => ({
+        project: "proj",
+        path: "PROJECT.md",
+        title: "Project Overview",
+        description: "Visao geral",
+        tags: [],
+        content: "# proj",
+        updatedAt: new Date().toISOString(),
+      }),
+      projectListDocuments: async () => [],
+      ...overrides.projects,
     },
     system: {
       execCommand: async () => ({

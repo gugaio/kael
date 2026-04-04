@@ -1,6 +1,6 @@
 ---
 name: project-knowledge-writer
-description: Use when the task is to save, curate, or update project-specific knowledge in Kael's knowledge base after code analysis, investigation, or architecture review. Best for turning findings into structured notes with evidence, files, confidence, and note kind.
+description: Use when the task is to save, curate, or update project-specific knowledge inside a project space under `.kael/projects/<project>/`. Best for deciding whether to update `PROJECT.md` or create thematic Markdown documents such as `params.md`, `networking.md`, or `playback.md`.
 argument-hint: "[project] [topic opcional]"
 disable-model-invocation: false
 user-invocable: true
@@ -16,40 +16,36 @@ Workflow:
    - code flow
    - endpoint or payload shape
    - uncertainty or conflicts
-4. Call `knowledge_upsert` with a structured note.
+4. Inspect the current project space with:
+   - `project_list_documents`
+   - `project_get_document`
+5. Decide whether to:
+   - update `PROJECT.md` for stable project-level context
+   - update an existing thematic document
+   - create a new thematic `.md` and register it through `project_upsert_document`
 
-Required quality bar before `knowledge_upsert`:
+Required quality bar before `project_upsert_document`:
 - Do not save vague summaries like "Android handles auth here".
-- Prefer one topic per note.
-- `answer` must be directly reusable in a future question.
-- Include `files` whenever the conclusion came from code.
-- Include `evidence` as short factual bullets, not raw speculation.
-- Set `kind`:
-  - `fact`: confirmed implementation detail or behavior.
-  - `analysis`: interpretation, reasoning, or likely explanation.
-  - `decision`: agreed architecture or policy decision.
-- Set `status`:
-  - `curated` when evidence is strong.
-  - `draft` when still provisional.
-  - `conflicting` when sources disagree.
-  - `stale` when likely outdated.
-- Set `confidence` honestly.
+- Prefer updating an existing file before creating a new one.
+- Only create a new `.md` when the theme is clearly distinct and likely to recur.
+- Include concrete file paths and evidence in the Markdown content whenever the conclusion came from code.
+- Keep `PROJECT.md` for overview, boundaries, key flows and conventions.
+- Use thematic files for narrower domains:
+  - `params.md`
+  - `networking.md`
+  - `playback.md`
+  - `auth.md`
+  - `decisions.md`
 
-Preferred note shape:
+Preferred document metadata:
 - `project`: stable project/app/domain name
-- `topic`: narrow slug-like topic
-- `kind`: `fact|analysis|decision`
+- `path`: `PROJECT.md` or a thematic file like `params.md`
 - `title`: short human label
-- `question`: optional question this note answers
-- `summary`: optional 1-line summary
-- `answer`: final reusable answer
-- `files`: relevant file paths
-- `evidence`: short bullets with the concrete support
+- `description`: what this file is for
 - `tags`: compact retrieval hints
-- `updatedBy`: agent name
-- `source`: where the analysis came from
+- `content`: Markdown content that future agents can read directly
 
 After writing:
-- tell the user what note was saved
-- include `noteId`
-- mention if confidence is low or status is not `curated`
+- tell the user what file was updated
+- include the project and path
+- mention whether the file was reused or created now

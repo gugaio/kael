@@ -17,7 +17,6 @@ import { SkillService, type SkillsRuntimeTelemetry } from "../skills/service.js"
 
 const PROJECT_KNOWLEDGE_MAX_NOTES = 2;
 const PROJECT_KNOWLEDGE_MIN_SCORE = 10;
-const PROJECT_KNOWLEDGE_MIN_CONFIDENCE = 0.55;
 const PROJECT_CONTEXT_MAX_CHARS = 1400;
 
 function shouldResetSessionOnEngineError(error: unknown): boolean {
@@ -45,40 +44,29 @@ function looksLikeProjectKnowledgeQuestion(message: string): boolean {
   );
 }
 
-function buildProjectKnowledgeContextBlock(
-  notes: Array<{
-    id: string;
+function buildProjectDocumentsContextBlock(
+  docs: Array<{
     project: string;
-    topic: string;
-    kind: "fact" | "analysis" | "decision";
+    path: string;
     title: string;
-    answer: string;
-    status: "draft" | "curated" | "stale" | "conflicting";
-    confidence: number;
-    files: string[];
-    evidence: string[];
+    description: string;
     updatedAt: string;
+    content: string;
   }>,
 ): string {
   const lines = [
-    "[project_knowledge_context]",
-    "Use estas notas curadas apenas se forem relevantes para responder a pergunta atual.",
-    "Se uma nota estiver stale/conflicting ou com confidence baixa, diga isso explicitamente em vez de tratá-la como verdade confirmada.",
+    "[project_documents_context]",
+    "Use estes documentos do project space apenas se forem relevantes para responder a pergunta atual.",
   ];
 
-  for (const [index, note] of notes.entries()) {
+  for (const [index, doc] of docs.entries()) {
     lines.push(
       "",
-      `${index + 1}. id=${note.id} project=${note.project} topic=${note.topic} kind=${note.kind} status=${note.status} confidence=${note.confidence} updatedAt=${note.updatedAt}`,
-      `title=${note.title}`,
-      `answer=${note.answer}`,
+      `${index + 1}. project=${doc.project} path=${doc.path} updatedAt=${doc.updatedAt}`,
+      `title=${doc.title}`,
+      `description=${doc.description}`,
+      doc.content.trim().slice(0, PROJECT_CONTEXT_MAX_CHARS),
     );
-    if (note.files.length > 0) {
-      lines.push(`files=${note.files.join(", ")}`);
-    }
-    if (note.evidence.length > 0) {
-      lines.push(`evidence=${note.evidence.slice(0, 3).join(" || ")}`);
-    }
   }
 
   return lines.join("\n");
@@ -442,38 +430,39 @@ export class ChatService {
         const project = await this.projects.ensureProject(projectName);
         blocks.push(buildProjectOverviewContextBlock(project));
       }
-      const results = await this.tooling.knowledge.knowledgeSearch({
+      const results = await this.projects.search({
         query: input.message,
         ...(projectName ? { project: projectName } : {}),
         maxResults: PROJECT_KNOWLEDGE_MAX_NOTES,
       });
       const strongMatches = results
         .filter((item) => item.score >= PROJECT_KNOWLEDGE_MIN_SCORE)
-        .filter((item) => item.confidence >= PROJECT_KNOWLEDGE_MIN_CONFIDENCE)
         .slice(0, PROJECT_KNOWLEDGE_MAX_NOTES);
       if (strongMatches.length === 0) {
         return blocks;
       }
 
-      const notes = (
-        await Promise.all(strongMatches.map((item) => this.tooling.knowledge.knowledgeGet({ noteId: item.id })))
+      const docs = (
+        await Promise.all(
+          strongMatches.map((item) => this.projects.getDocument(item.project, item.path)),
+        )
       ).filter((item): item is NonNullable<typeof item> => Boolean(item));
-      if (notes.length === 0) {
+      if (docs.length === 0) {
         return blocks;
       }
 
-      kaelLogger.info("chat.knowledge.context_applied", {
+      kaelLogger.info("chat.project_documents.context_applied", {
         sessionKey: input.sessionKey,
         requestId: input.requestId ?? null,
         projectName: projectName ?? null,
-        noteIds: notes.map((item) => item.id),
+        docs: docs.map((item) => `${item.project}/${item.path}`),
         query: input.message,
         llmChars: llmInputMessage.length,
       });
-      blocks.push(buildProjectKnowledgeContextBlock(notes));
+      blocks.push(buildProjectDocumentsContextBlock(docs));
       return blocks;
     } catch (error) {
-      kaelLogger.warn("chat.knowledge.context_failed", {
+      kaelLogger.warn("chat.project_documents.context_failed", {
         sessionKey: input.sessionKey,
         requestId: input.requestId ?? null,
         projectName: projectName ?? null,

@@ -229,18 +229,37 @@ Foi adicionada:
 
 Objetivo:
 
-- orientar o agente a salvar achados reutilizaveis do projeto na knowledge base do Kael usando `knowledge_upsert`;
-- padronizar notas com `kind`, `status`, `confidence`, `files` e `evidence`;
-- reduzir texto solto e aumentar reaproveitamento futuro de analises de codigo e arquitetura.
+- orientar o agente a salvar achados reutilizaveis diretamente no project space em `.kael/projects/<project>/`;
+- decidir quando atualizar `PROJECT.md` e quando criar/atualizar documentos tematicos como `params.md`, `networking.md` e `decisions.md`;
+- usar as tools `project_list_documents`, `project_get_document` e `project_upsert_document`.
 
 Quando usar:
 
 - depois de uma analise de codigo que descobriu um fato reutilizavel;
 - ao registrar uma decisao arquitetural;
-- ao salvar uma analise com incerteza ou conflito explicito.
-  - `backBufferLength`;
-  - `maxBufferSize`;
-  - `startLevel`.
+- ao consolidar contexto estrutural de um projeto especifico.
+
+## Project Space (`.kael/projects`)
+
+O Kael agora aceita `@project-name` como hint forte de escopo.
+
+Quando o usuario menciona um projeto:
+
+- o runtime provisiona `.kael/projects/<project>/PROJECT.md` se ainda nao existir;
+- o `PROJECT.md` pode ser usado como contexto de alto nivel do projeto;
+- documentos tematicos adicionais podem ser criados no mesmo diretorio e registrados em `index.json`.
+
+Estrutura tipica:
+
+```text
+.kael/
+  projects/
+    ios-app/
+      PROJECT.md
+      index.json
+      params.md
+      networking.md
+```
 
 Uso esperado:
 

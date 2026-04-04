@@ -4,6 +4,7 @@ import { VIDEO_JOB_ACTIONS } from "../capabilities/video/index.js";
 import type { MemoryService } from "../memory/service.js";
 import type { KnowledgeService } from "../knowledge/service.js";
 import type { PlannerService } from "../planner/service.js";
+import type { ProjectContextService } from "../projects/service.js";
 import { createPlannerExecuteRuntime, createPlannerReconcileRuntime } from "../planner/runtime.js";
 import type { ResearchService } from "../research/service.js";
 import type { ImageGeneratorService } from "../media/image-generator.js";
@@ -29,6 +30,7 @@ type ChatToolingExecutors = {
   videoInspect: VideoInspectToolService;
   memory: MemoryService;
   knowledge: KnowledgeService;
+  projects: ProjectContextService;
   workspace: WorkspaceInspector;
   research: ResearchService;
   planner: PlannerService;
@@ -152,6 +154,12 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
         executors.knowledge.search({ query, project, kind, tag, status, maxResults }),
       knowledgeGet: ({ noteId }) => executors.knowledge.get(noteId),
       knowledgeUpsert: (params) => executors.knowledge.upsert(params),
+    },
+    projects: {
+      projectSearch: ({ query, project, maxResults }) => executors.projects.search({ query, project, maxResults }),
+      projectGetDocument: ({ project, path }) => executors.projects.getDocument(project, path),
+      projectUpsertDocument: (params) => executors.projects.upsertDocument(params),
+      projectListDocuments: ({ project }) => executors.projects.listDocuments(project),
     },
     workspace: {
       workspaceSearch: ({ query, maxResults }) => executors.workspace.search({ query, maxResults }),
@@ -313,6 +321,14 @@ export function createChatOnlyTooling(tooling: EngineToolingNamespaces): EngineT
       knowledgeUpsert: async () => {
         throw new Error("chat-only mode: knowledge_upsert disabled");
       },
+    },
+    projects: {
+      projectSearch: async () => [],
+      projectGetDocument: async () => null,
+      projectUpsertDocument: async () => {
+        throw new Error("chat-only mode: project_upsert_document disabled");
+      },
+      projectListDocuments: async () => [],
     },
     edge: {
       edgeList: () => [],

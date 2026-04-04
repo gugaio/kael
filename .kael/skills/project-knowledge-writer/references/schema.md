@@ -1,49 +1,36 @@
-# Project Knowledge Writer Schema
+# Project Space Writer Schema
 
-Use `knowledge_upsert` with this contract:
+Use `project_upsert_document` with this contract:
 
 ```json
 {
   "project": "android-app",
-  "topic": "session-id-header",
-  "kind": "fact",
-  "title": "Android session id header",
-  "question": "Como o Android envia o sessionId?",
-  "summary": "Android envia sessionId no header X-Session-Id.",
-  "answer": "Android envia `sessionId` no header `X-Session-Id` dentro do interceptor de rede usado por chamadas autenticadas.",
-  "files": ["apps/android/network/SessionInterceptor.kt"],
-  "evidence": [
-    "O interceptor adiciona o header X-Session-Id antes do request seguir.",
-    "O valor vem do SessionStore atual."
-  ],
-  "tags": ["android", "network", "headers", "session"],
-  "status": "curated",
-  "confidence": 0.92,
-  "updatedBy": "codex",
-  "source": "code-analysis"
+  "path": "params.md",
+  "title": "Parameters and Contracts",
+  "description": "Headers, payloads and request parameters used by the Android app.",
+  "tags": ["android", "params", "contracts", "headers"],
+  "content": "# Parameters and Contracts\n\n## Session Id Header\n\nAndroid envia `sessionId` no header `X-Session-Id` dentro do interceptor de rede usado por chamadas autenticadas.\n\n### Evidence\n- `apps/android/network/SessionInterceptor.kt` adiciona o header antes do request seguir.\n- O valor vem do `SessionStore` atual.\n",
+  "mode": "append"
 }
 ```
 
 Field guidance:
 - `project`: use a stable bucket like `android-app`, `ios-app`, `backend-api`, `player-web`.
-- `topic`: keep it narrow and slug-like. Good: `session-id-header`. Bad: `networking`.
-- `kind`:
-  - `fact`: confirmed implementation detail.
-  - `analysis`: explanation, inference, risk, or diagnosis.
-  - `decision`: architecture decision or agreed contract.
-- `summary`: one-line retrieval summary.
-- `answer`: write for future reuse. It should stand alone.
-- `files`: use repo-relative paths when possible.
-- `evidence`: 1-4 short bullets.
-- `status`: prefer `curated` only when the evidence is explicit.
-- `confidence`: use a real number from `0` to `1`.
+- `path`: use `PROJECT.md` for overview or a stable thematic file like `params.md`, `networking.md`, `playback.md`, `decisions.md`.
+- `title`: human-readable title for `index.json`.
+- `description`: concise purpose of the file.
+- `tags`: retrieval hints.
+- `content`: the Markdown body to write.
+- `mode`:
+  - `replace` when curating/restructuring the whole file.
+  - `append` when adding a new section to an existing document.
 
 When not to write:
 - when the conclusion is only a guess
-- when the topic is too broad
-- when there is no reusable answer yet
+- when there is no reusable Markdown content yet
+- when you have not checked whether an existing project document already fits the topic
 
-Conflict policy:
-- if a new finding contradicts an old one and you cannot resolve it, write the note as `conflicting`
-- state both sides in `answer`
-- make the uncertainty explicit in `evidence`
+Document selection policy:
+- prefer `PROJECT.md` for stable context shared by the whole project
+- prefer thematic documents for narrow recurring knowledge
+- avoid creating many tiny files when an existing thematic document is a better fit

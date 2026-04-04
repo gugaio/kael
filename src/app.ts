@@ -146,6 +146,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     videoInspect,
     memory,
     knowledge,
+    projects,
     workspace,
     research,
     planner,

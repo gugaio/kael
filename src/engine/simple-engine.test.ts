@@ -107,6 +107,20 @@ function createTooling(
         updatedAt: new Date().toISOString(),
       }),
     },
+    projects: {
+      projectSearch: async () => [],
+      projectGetDocument: async () => null,
+      projectUpsertDocument: async () => ({
+        project: "proj",
+        path: "PROJECT.md",
+        title: "Project Overview",
+        description: "Visao geral",
+        tags: [],
+        content: "# proj",
+        updatedAt: new Date().toISOString(),
+      }),
+      projectListDocuments: async () => [],
+    },
     workspace: {
       workspaceSearch: async () => [],
       workspaceRead: async () => ({ path: "README.md", text: "", startLine: 1, endLine: 1 }),

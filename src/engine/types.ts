@@ -429,6 +429,63 @@ export type EngineKnowledgeTooling = {
   }>;
 };
 
+export type EngineProjectsTooling = {
+  projectSearch: (params: {
+    query: string;
+    project?: string;
+    maxResults?: number;
+  }) => Promise<
+    Array<{
+      project: string;
+      path: string;
+      title: string;
+      description: string;
+      tags: string[];
+      updatedAt: string;
+      score: number;
+      snippet: string;
+    }>
+  >;
+  projectGetDocument: (params: {
+    project: string;
+    path?: string;
+  }) => Promise<{
+    project: string;
+    path: string;
+    title: string;
+    description: string;
+    tags: string[];
+    content: string;
+    updatedAt: string;
+  } | null>;
+  projectUpsertDocument: (params: {
+    project: string;
+    path?: string;
+    title?: string;
+    description?: string;
+    tags?: string[];
+    content: string;
+    mode?: "replace" | "append";
+  }) => Promise<{
+    project: string;
+    path: string;
+    title: string;
+    description: string;
+    tags: string[];
+    content: string;
+    updatedAt: string;
+  }>;
+  projectListDocuments: (params: { project: string }) => Promise<
+    Array<{
+      path: string;
+      title: string;
+      description: string;
+      tags: string[];
+      updatedAt: string;
+    }>
+  >;
+};
+
 export type EngineWorkspaceTooling = {
   workspaceSearch: (params: {
     query: string;
@@ -666,6 +723,7 @@ export type EngineToolingNamespaces = {
   edge: EngineEdgeTooling;
   memory: EngineMemoryTooling;
   knowledge: EngineKnowledgeTooling;
+  projects: EngineProjectsTooling;
   workspace: EngineWorkspaceTooling;
   web: EngineWebTooling;
   browser: EngineBrowserTooling;

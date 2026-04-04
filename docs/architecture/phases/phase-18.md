@@ -187,5 +187,19 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
 - Quando `@project` aparece:
   - o scaffold do projeto e provisionado automaticamente se ainda nao existir;
   - o `PROJECT.md` e injetado no turno;
-  - a busca na knowledge base passa a priorizar aquele projeto.
+  - a busca no project space passa a priorizar aquele projeto.
 - Cobertura de testes adicionada para parser de `@project`, scaffold inicial e injecao de contexto no `ChatService`.
+
+## Entregas implementadas (incremento 18.7)
+
+- O conceito de `project space` foi consolidado em `.kael/projects/<project>/` com:
+  - `PROJECT.md`;
+  - `index.json`;
+  - documentos Markdown tematicos adicionais.
+- Novo conjunto de tools do agente adicionado:
+  - `project_search`;
+  - `project_get_document`;
+  - `project_upsert_document`;
+  - `project_list_documents`.
+- A skill `project-knowledge-writer` foi ajustada para escrever no project space, em vez de depender exclusivamente de `knowledge_upsert`.
+- O `ChatService` passou a usar o project space como fonte principal de retrieval para perguntas de projeto.

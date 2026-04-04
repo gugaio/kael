@@ -37,6 +37,33 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-04 - Project Space: diretorio por projeto com `PROJECT.md`, `index.json` e documentos tematicos
+
+Resumo:
+- O Kael ganhou um `project space` unificado em `.kael/projects/<project>/`, com `PROJECT.md`, `index.json` e suporte a documentos Markdown tematicos.
+- Foram adicionadas tools nativas de projeto para busca, leitura, listagem e escrita (`project_search`, `project_get_document`, `project_upsert_document`, `project_list_documents`).
+- O retrieval do chat para perguntas de projeto passou a usar documentos do project space como fonte principal, simplificando o modelo mental em torno de `@project`.
+- A skill `project-knowledge-writer` foi atualizada para escrever no project space, deixando `knowledge` como legado/compatibilidade e nao mais como superficie principal.
+
+Arquivos-chave:
+- `src/projects/service.ts`
+- `src/engine/tool-specs/projects.ts`
+- `src/chat/service.ts`
+- `.kael/skills/project-knowledge-writer/SKILL.md`
+- `docs/architecture/phases/phase-18.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/projects/service.test.ts src/chat/service.test.ts src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/engine/simple-engine.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- A API ainda nao expõe endpoints dedicados do project space.
+- `knowledge` ainda existe no runtime por compatibilidade e precisa ser removido ou migrado em etapa posterior.
+- A skill writer ainda nao herda automaticamente `@project` como default explicito na tool call.
+
+Proximo passo recomendado:
+- Fazer a skill writer propagar automaticamente `@project` para `project_upsert_document` e depois decidir se migra ou remove a API/tooling legado de `knowledge`.
+
 ### 2026-04-04 - Chat: escopo explicito por projeto com `@project` e `.kael/projects`
 
 Resumo:

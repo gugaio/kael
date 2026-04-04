@@ -113,10 +113,19 @@ function createTooling(overrides?: Partial<EngineToolingNamespaces["knowledge"]>
 }
 
 describe("ChatService knowledge retrieval", () => {
-  it("injects project knowledge context for strong project question matches", async () => {
+  it("injects project documents context for strong project question matches", async () => {
     const root = await createWorkspace();
     const sessions = new SessionStore(path.join(root, ".kael-data"));
     await sessions.init();
+    const projects = new ProjectContextService(root);
+    await projects.upsertDocument({
+      project: "ios-app",
+      path: "params.md",
+      title: "iOS Params",
+      description: "Parametros e contratos do app iOS.",
+      tags: ["ios", "params"],
+      content: "O iOS envia o parametro x no body de /session/start.",
+    });
     let capturedMessage = "";
     const orchestrator = {
       checkCompactionNeed: async () => ({
@@ -133,37 +142,7 @@ describe("ChatService knowledge retrieval", () => {
       getEngineRuntimeTelemetrySnapshot: () => ({ timeouts: 0, toolCallsByName: {}, blockedCallsByTool: {} }),
     } as unknown as ConstructorParameters<typeof ChatService>[2];
 
-    const tooling = createTooling({
-      knowledgeSearch: async () => [
-        {
-          id: "ios-app--param-x",
-          project: "ios-app",
-          topic: "param-x",
-          kind: "fact",
-          title: "iOS param x",
-          status: "curated",
-          confidence: 0.91,
-          updatedAt: new Date().toISOString(),
-          score: 17,
-          snippet: "iOS envia x no body",
-        },
-      ],
-      knowledgeGet: async () => ({
-        id: "ios-app--param-x",
-        project: "ios-app",
-        topic: "param-x",
-        kind: "fact",
-        title: "iOS param x",
-        answer: "O iOS envia o parametro x no body de /session/start.",
-        tags: ["ios"],
-        files: ["ios/App/Networking/SessionStartRequest.swift"],
-        evidence: ["SessionStartRequest serializa x no payload."],
-        status: "curated",
-        confidence: 0.91,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }),
-    });
+    const tooling = createTooling();
 
     const chat = new ChatService(
       sessions,
@@ -186,7 +165,7 @@ describe("ChatService knowledge retrieval", () => {
       },
       {} as never,
       tooling,
-      new ProjectContextService(root),
+      projects,
       new SkillService(root),
     );
 
@@ -196,9 +175,9 @@ describe("ChatService knowledge retrieval", () => {
     });
 
     expect(result.reply).toBe("ok");
-    expect(capturedMessage).toContain("[project_knowledge_context]");
-    expect(capturedMessage).toContain("id=ios-app--param-x");
-    expect(capturedMessage).toContain("answer=O iOS envia o parametro x no body de /session/start.");
+    expect(capturedMessage).toContain("[project_documents_context]");
+    expect(capturedMessage).toContain("project=ios-app path=params.md");
+    expect(capturedMessage).toContain("O iOS envia o parametro x no body de /session/start.");
   });
 
   it("does not query project knowledge for generic chat", async () => {
@@ -260,7 +239,7 @@ describe("ChatService knowledge retrieval", () => {
     });
 
     expect(knowledgeSearchCalls).toBe(0);
-    expect(capturedMessage).not.toContain("[project_knowledge_context]");
+    expect(capturedMessage).not.toContain("[project_documents_context]");
   });
 
   it("uses @project hint to scaffold and inject project context", async () => {
@@ -284,12 +263,13 @@ describe("ChatService knowledge retrieval", () => {
       getEngineRuntimeTelemetrySnapshot: () => ({ timeouts: 0, toolCallsByName: {}, blockedCallsByTool: {} }),
     } as unknown as ConstructorParameters<typeof ChatService>[2];
 
-    const tooling = createTooling({
-      knowledgeSearch: async ({ project }) => {
-        capturedProject = project;
-        return [];
-      },
-    });
+    const projects = new ProjectContextService(root);
+    const originalSearch = projects.search.bind(projects);
+    projects.search = async (params) => {
+      capturedProject = params.project;
+      return originalSearch(params);
+    };
+    const tooling = createTooling();
 
     const chat = new ChatService(
       sessions,
@@ -312,7 +292,7 @@ describe("ChatService knowledge retrieval", () => {
       },
       {} as never,
       tooling,
-      new ProjectContextService(root),
+      projects,
       new SkillService(root),
     );
 

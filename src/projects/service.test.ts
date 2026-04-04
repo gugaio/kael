@@ -34,5 +34,32 @@ describe("ProjectContextService", () => {
     expect(project.created).toBe(true);
     expect(project.content).toContain("# ios-app");
     await expect(fs.readFile(project.filePath, "utf-8")).resolves.toContain("## Summary");
+    await expect(fs.readFile(path.join(root, ".kael", "projects", "ios-app", "index.json"), "utf-8")).resolves.toContain(
+      "\"PROJECT.md\"",
+    );
+  });
+
+  it("upserts documents, indexes them and searches by content", async () => {
+    const root = await createWorkspace();
+    const service = new ProjectContextService(root);
+
+    const doc = await service.upsertDocument({
+      project: "ios-app",
+      path: "params.md",
+      title: "iOS Params",
+      description: "Parametros e contratos",
+      tags: ["ios", "params"],
+      content: "O parametro x e enviado no body de /session/start.",
+    });
+
+    expect(doc.path).toBe("params.md");
+    const listed = await service.listDocuments("ios-app");
+    expect(listed.map((item) => item.path)).toEqual(["PROJECT.md", "params.md"]);
+
+    const found = await service.getDocument("ios-app", "params.md");
+    expect(found?.content).toContain("/session/start");
+
+    const results = await service.search({ query: "como o ios envia parametro x", project: "ios-app" });
+    expect(results[0]?.path).toBe("params.md");
   });
 });
