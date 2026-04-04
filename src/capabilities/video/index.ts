@@ -10,6 +10,7 @@ export { deriveHlsJsIssues, parseHlsJsLogText } from "./playback-adapters/hlsjs.
 export type {
   HlsManifestAuditInput,
   HlsManifestAuditReport,
+  HlsVariantAuditReport,
   ManifestAuditIssue,
   PlaybackAnalysisReport,
   PlaybackEngine,

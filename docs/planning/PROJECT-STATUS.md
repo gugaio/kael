@@ -37,6 +37,32 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-03 - Video: manifest audit expandido em memoria para variants
+
+Resumo:
+- `VideoManifestAuditService` agora consegue descer opcionalmente nas media playlists das variants de uma master playlist sem persistir artifacts.
+- O relatorio passou a incluir `variantAudits`, `aggregateIssues`, `variantsAudited` e `variantsWithErrors` para diagnostico da ladder inteira.
+- O CLI `manifest-audit` ganhou `--follow-variants` e `--max-variants`, e a tool `video_manifest_audit` passou a aceitar esses parametros.
+
+Arquivos-chave:
+- `src/capabilities/video/manifest-audit-service.ts`
+- `src/capabilities/video/types.ts`
+- `src/cli/index.ts`
+- `src/engine/tool-specs/video.ts`
+- `docs/architecture/phases/phase-20.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/manifest-audit-service.test.ts src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- Ainda nao ha persistencia opcional dos manifests auditados para diff/historico.
+- Os `aggregateIssues` ainda cobrem um conjunto inicial de heuristicas, sem score de qualidade mais avancado da ladder.
+- Ainda nao ha follow equivalente para DASH.
+
+Proximo passo recomendado:
+- Adicionar persistencia opcional (`--save`) para evidencias brutas/normalizadas e depois implementar `video_manifest_diff` sobre esses artifacts.
+
 ### 2026-04-03 - Video: capability inicial de manifest audit para HLS
 
 Resumo:

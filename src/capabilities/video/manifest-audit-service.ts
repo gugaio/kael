@@ -1,7 +1,18 @@
 import type { VideoHlsInspectResult, VideoInspectToolService } from "./inspect-service.js";
-import type { HlsManifestAuditInput, HlsManifestAuditReport, ManifestAuditIssue, PlaybackIssueSeverity } from "./types.js";
+import type {
+  HlsManifestAuditInput,
+  HlsManifestAuditReport,
+  HlsVariantAuditReport,
+  ManifestAuditIssue,
+  PlaybackIssueSeverity,
+} from "./types.js";
 
 type HlsInspectLike = Pick<VideoInspectToolService, "inspectHls">;
+
+type RootAuditContext = {
+  variantAudits: HlsVariantAuditReport[];
+  aggregateIssues: ManifestAuditIssue[];
+};
 
 export class VideoManifestAuditService {
   constructor(private readonly inspect: HlsInspectLike) {}
@@ -13,34 +24,179 @@ export class VideoManifestAuditService {
       timeoutMs: input.timeoutMs,
     });
 
-    const issues = buildIssues(inspected);
-    const recommendations = buildRecommendations(inspected, issues);
-    const segmentDurations = inspected.segments
-      .map((segment) => segment.duration)
-      .filter((duration): duration is number => typeof duration === "number" && Number.isFinite(duration));
+    const rootContext =
+      input.followVariants && inspected.playlistType === "master"
+        ? await this.auditVariants(inspected, input)
+        : { variantAudits: [], aggregateIssues: [] };
+
+    return buildRootReport(inspected, rootContext);
+  }
+
+  private async auditVariants(
+    inspected: VideoHlsInspectResult,
+    input: HlsManifestAuditInput,
+  ): Promise<RootAuditContext> {
+    const maxVariants = Math.max(1, Math.min(12, Math.floor(input.maxVariants ?? inspected.variants.length)));
+    const selectedVariants = inspected.variants.slice(0, maxVariants);
+    const variantAudits = await Promise.all(
+      selectedVariants.map(async (variant) => {
+        const variantInspected = await this.inspect.inspectHls({
+          url: variant.url,
+          maxSegments: input.maxSegments,
+          timeoutMs: input.timeoutMs,
+        });
+        return buildVariantReport(variant, variantInspected);
+      }),
+    );
 
     return {
-      ok: !issues.some((issue) => issue.severity === "error"),
-      url: inspected.url,
-      finalUrl: inspected.finalUrl,
-      playlistType: inspected.playlistType,
-      summary: buildSummary(inspected, issues),
-      stats: {
-        variants: inspected.variants.length,
-        renditions: inspected.renditions.length,
-        segments: inspected.segments.length,
-        targetDuration: inspected.targetDuration,
-        maxSegmentDuration: segmentDurations.length > 0 ? Math.max(...segmentDurations) : undefined,
-        minSegmentDuration: segmentDurations.length > 0 ? Math.min(...segmentDurations) : undefined,
-        averageSegmentDuration:
-          segmentDurations.length > 0
-            ? segmentDurations.reduce((acc, duration) => acc + duration, 0) / segmentDurations.length
-            : undefined,
-      },
-      issues,
-      recommendations,
+      variantAudits,
+      aggregateIssues: buildAggregateIssues(inspected, variantAudits),
     };
   }
+}
+
+function buildRootReport(
+  inspected: VideoHlsInspectResult,
+  context: RootAuditContext = { variantAudits: [], aggregateIssues: [] },
+): HlsManifestAuditReport {
+  const rootIssues = buildIssues(inspected);
+  const allIssues = [...rootIssues, ...context.aggregateIssues, ...context.variantAudits.flatMap((variant) => variant.issues)];
+  const segmentDurations = collectSegmentDurations(inspected);
+  const recommendations = buildRecommendations(inspected, rootIssues, context);
+
+  return {
+    ok: !allIssues.some((issue) => issue.severity === "error"),
+    url: inspected.url,
+    finalUrl: inspected.finalUrl,
+    playlistType: inspected.playlistType,
+    summary: buildSummary(inspected, rootIssues, context),
+    stats: {
+      variants: inspected.variants.length,
+      renditions: inspected.renditions.length,
+      segments: inspected.segments.length,
+      variantsAudited: context.variantAudits.length,
+      variantsWithErrors: context.variantAudits.filter((variant) =>
+        variant.issues.some((issue) => issue.severity === "error"),
+      ).length,
+      targetDuration: inspected.targetDuration,
+      maxSegmentDuration: segmentDurations.length > 0 ? Math.max(...segmentDurations) : undefined,
+      minSegmentDuration: segmentDurations.length > 0 ? Math.min(...segmentDurations) : undefined,
+      averageSegmentDuration:
+        segmentDurations.length > 0 ? segmentDurations.reduce((acc, duration) => acc + duration, 0) / segmentDurations.length : undefined,
+    },
+    issues: rootIssues,
+    variantAudits: context.variantAudits,
+    aggregateIssues: context.aggregateIssues,
+    recommendations,
+  };
+}
+
+function buildVariantReport(
+  variant: VideoHlsInspectResult["variants"][number],
+  inspected: VideoHlsInspectResult,
+): HlsVariantAuditReport {
+  const issues = buildIssues(inspected);
+  const segmentDurations = collectSegmentDurations(inspected);
+
+  if (inspected.playlistType !== "media") {
+    issues.push({
+      code: "variant_not_media_playlist",
+      severity: "error",
+      summary: "A variant auditada nao resolveu para uma media playlist valida.",
+      evidence: [variant.url, `playlistType=${inspected.playlistType}`],
+    });
+  }
+
+  return {
+    uri: variant.uri,
+    url: variant.url,
+    finalUrl: inspected.finalUrl,
+    playlistType: inspected.playlistType,
+    summary: buildVariantSummary(variant, inspected, issues),
+    ok: !issues.some((issue) => issue.severity === "error"),
+    stats: {
+      segments: inspected.segments.length,
+      targetDuration: inspected.targetDuration,
+      maxSegmentDuration: segmentDurations.length > 0 ? Math.max(...segmentDurations) : undefined,
+      minSegmentDuration: segmentDurations.length > 0 ? Math.min(...segmentDurations) : undefined,
+      averageSegmentDuration:
+        segmentDurations.length > 0 ? segmentDurations.reduce((acc, duration) => acc + duration, 0) / segmentDurations.length : undefined,
+    },
+    issues,
+  };
+}
+
+function buildAggregateIssues(
+  root: VideoHlsInspectResult,
+  variantAudits: HlsVariantAuditReport[],
+): ManifestAuditIssue[] {
+  const issues: ManifestAuditIssue[] = [];
+  if (variantAudits.length === 0) {
+    return issues;
+  }
+
+  const successfulVariants = variantAudits.filter((variant) => variant.playlistType === "media" && variant.issues.every((issue) => issue.severity !== "error"));
+  if (root.variants.length > 1 && successfulVariants.length <= 1) {
+    issues.push({
+      code: "single_working_variant",
+      severity: "error",
+      summary: "A ladder auditada tem no maximo uma variant realmente saudavel entre as variants verificadas.",
+      evidence: [`variantsAudited=${variantAudits.length}`, `workingVariants=${successfulVariants.length}`],
+    });
+  }
+
+  const failedFetches = variantAudits.filter((variant) => variant.issues.some((issue) => issue.code === "inspect_error"));
+  if (failedFetches.length > 0) {
+    issues.push({
+      code: "variant_fetch_failures",
+      severity: "error",
+      summary: `${failedFetches.length} variant(s) falharam durante fetch/parse da media playlist.`,
+      evidence: failedFetches.slice(0, 3).map((variant) => variant.url),
+    });
+  }
+
+  const targetDurations = variantAudits
+    .map((variant) => variant.stats.targetDuration)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (targetDurations.length >= 2) {
+    const minTarget = Math.min(...targetDurations);
+    const maxTarget = Math.max(...targetDurations);
+    if (maxTarget - minTarget > 2) {
+      issues.push({
+        code: "inconsistent_target_duration",
+        severity: "warning",
+        summary: "As variants auditadas usam TARGETDURATION inconsistente entre si.",
+        evidence: [`min=${minTarget}s`, `max=${maxTarget}s`],
+      });
+    }
+  }
+
+  const duplicateResolutions = collectDuplicateResolutions(root);
+  if (duplicateResolutions.length > 0) {
+    issues.push({
+      code: "duplicate_resolution_variants",
+      severity: "warning",
+      summary: "A master playlist declara multiplas variants com a mesma resolucao, o que pode confundir a ladder ABR.",
+      evidence: duplicateResolutions.slice(0, 3),
+    });
+  }
+
+  const codecFamilies = new Set(
+    root.variants
+      .map((variant) => normalizeCodecFamily(variant.codecs))
+      .filter((value): value is string => Boolean(value)),
+  );
+  if (codecFamilies.size > 1) {
+    issues.push({
+      code: "codec_family_inconsistency",
+      severity: "warning",
+      summary: "A ladder mistura familias de codec diferentes entre variants auditadas.",
+      evidence: [...codecFamilies].slice(0, 4),
+    });
+  }
+
+  return issues;
 }
 
 function buildIssues(inspected: VideoHlsInspectResult): ManifestAuditIssue[] {
@@ -62,7 +218,7 @@ function buildIssues(inspected: VideoHlsInspectResult): ManifestAuditIssue[] {
       summary: "O manifesto nao foi reconhecido como HLS master nem media playlist.",
       evidence: [inspected.finalUrl],
     });
-    return issues;
+    return dedupeIssues(issues);
   }
 
   if (inspected.playlistType === "master") {
@@ -73,7 +229,7 @@ function buildIssues(inspected: VideoHlsInspectResult): ManifestAuditIssue[] {
     issues.push(...buildMediaIssues(inspected));
   }
 
-  return issues;
+  return dedupeIssues(issues);
 }
 
 function buildMasterIssues(inspected: VideoHlsInspectResult): ManifestAuditIssue[] {
@@ -136,9 +292,7 @@ function buildMasterIssues(inspected: VideoHlsInspectResult): ManifestAuditIssue
 
 function buildMediaIssues(inspected: VideoHlsInspectResult): ManifestAuditIssue[] {
   const issues: ManifestAuditIssue[] = [];
-  const segmentDurations = inspected.segments
-    .map((segment) => segment.duration)
-    .filter((duration): duration is number => typeof duration === "number" && Number.isFinite(duration));
+  const segmentDurations = collectSegmentDurations(inspected);
 
   if (inspected.segments.length === 0) {
     issues.push({
@@ -207,10 +361,18 @@ function buildMediaIssues(inspected: VideoHlsInspectResult): ManifestAuditIssue[
   return issues;
 }
 
-function buildSummary(inspected: VideoHlsInspectResult, issues: ManifestAuditIssue[]): string {
-  const severity = highestSeverity(issues);
+function buildSummary(
+  inspected: VideoHlsInspectResult,
+  rootIssues: ManifestAuditIssue[],
+  context: RootAuditContext,
+): string {
+  const severity = highestSeverity([...rootIssues, ...context.aggregateIssues, ...context.variantAudits.flatMap((variant) => variant.issues)]);
   if (inspected.playlistType === "master") {
-    return `Auditoria de manifesto HLS master concluida com status ${severity}. variants=${inspected.variants.length}, renditions=${inspected.renditions.length}.`;
+    const expansionSuffix =
+      context.variantAudits.length > 0
+        ? ` variantsAudited=${context.variantAudits.length}, aggregateIssues=${context.aggregateIssues.length}.`
+        : "";
+    return `Auditoria de manifesto HLS master concluida com status ${severity}. variants=${inspected.variants.length}, renditions=${inspected.renditions.length}.${expansionSuffix}`;
   }
   if (inspected.playlistType === "media") {
     return `Auditoria de manifesto HLS media concluida com status ${severity}. segments=${inspected.segments.length}, targetDuration=${inspected.targetDuration ?? "n/a"}.`;
@@ -218,32 +380,54 @@ function buildSummary(inspected: VideoHlsInspectResult, issues: ManifestAuditIss
   return `Auditoria de manifesto HLS concluida com status ${severity}.`;
 }
 
-function buildRecommendations(inspected: VideoHlsInspectResult, issues: ManifestAuditIssue[]): string[] {
-  const recommendations = new Set<string>();
+function buildVariantSummary(
+  variant: VideoHlsInspectResult["variants"][number],
+  inspected: VideoHlsInspectResult,
+  issues: ManifestAuditIssue[],
+): string {
+  const severity = highestSeverity(issues);
+  return `Variant ${variant.uri} auditada com status ${severity}. playlistType=${inspected.playlistType}, segments=${inspected.segments.length}, targetDuration=${inspected.targetDuration ?? "n/a"}.`;
+}
 
-  if (issues.some((issue) => issue.code === "master_without_variants" || issue.code === "single_variant_ladder")) {
+function buildRecommendations(
+  inspected: VideoHlsInspectResult,
+  rootIssues: ManifestAuditIssue[],
+  context: RootAuditContext,
+): string[] {
+  const recommendations = new Set<string>();
+  const allIssues = [...rootIssues, ...context.aggregateIssues, ...context.variantAudits.flatMap((variant) => variant.issues)];
+
+  if (allIssues.some((issue) => issue.code === "master_without_variants" || issue.code === "single_variant_ladder")) {
     recommendations.add("Revisar a ladder ABR e garantir mais de uma variant para degradacao controlada de bitrate.");
   }
-  if (issues.some((issue) => issue.code === "variant_missing_bandwidth" || issue.code === "variant_missing_codecs")) {
+  if (allIssues.some((issue) => issue.code === "variant_missing_bandwidth" || issue.code === "variant_missing_codecs")) {
     recommendations.add("Normalizar tags de variant (BANDWIDTH, CODECS, RESOLUTION) no packager para melhorar compatibilidade e observabilidade.");
   }
-  if (issues.some((issue) => issue.code === "missing_audio_group_rendition")) {
+  if (allIssues.some((issue) => issue.code === "missing_audio_group_rendition")) {
     recommendations.add("Corrigir o mapeamento entre EXT-X-STREAM-INF:AUDIO e EXT-X-MEDIA para evitar falhas de selecao de trilha.");
   }
-  if (issues.some((issue) => issue.code === "missing_target_duration" || issue.code === "segment_exceeds_target_duration")) {
+  if (allIssues.some((issue) => issue.code === "missing_target_duration" || issue.code === "segment_exceeds_target_duration")) {
     recommendations.add("Validar segmentacao no encoder/packager e alinhar EXTINF/TARGETDURATION com a duracao real dos segmentos.");
   }
-  if (issues.some((issue) => issue.code === "high_target_duration" || issue.code === "segment_duration_variation")) {
+  if (allIssues.some((issue) => issue.code === "high_target_duration" || issue.code === "segment_duration_variation")) {
     recommendations.add("Revisar tamanho dos segmentos e consistencia do GOP para reduzir latencia e oscilacao de playback.");
   }
-  if (issues.some((issue) => issue.severity === "error")) {
+  if (allIssues.some((issue) => issue.code === "inconsistent_target_duration")) {
+    recommendations.add("Garantir que todas as variants usem segmentacao e TARGETDURATION alinhados para evitar drift na ladder.");
+  }
+  if (allIssues.some((issue) => issue.code === "variant_fetch_failures" || issue.code === "single_working_variant")) {
+    recommendations.add("Auditar a disponibilidade real de todas as variants criticas e bloquear release se a ladder nao sustentar fallback de ABR.");
+  }
+  if (allIssues.some((issue) => issue.code === "duplicate_resolution_variants" || issue.code === "codec_family_inconsistency")) {
+    recommendations.add("Revisar a consistencia global da ladder para evitar niveis redundantes ou incompatibilidades por codec.");
+  }
+  if (allIssues.some((issue) => issue.severity === "error")) {
     recommendations.add("Cruzar este manifesto com `video_probe` e com a sessao de playback afetada antes de liberar para producao.");
   }
   if (recommendations.size === 0) {
     recommendations.add("Manifesto sem sinais fortes de erro estrutural nos checks atuais; seguir com validacao em player/device real.");
   }
-
-  if (inspected.playlistType === "master") {
+  if (inspected.playlistType === "master" && context.variantAudits.length === 0) {
     recommendations.add("Auditar ao menos uma media playlist derivada de cada variant critica para validar segmentos reais.");
   }
 
@@ -256,10 +440,51 @@ function highestSeverity(issues: ManifestAuditIssue[]): PlaybackIssueSeverity {
   return "info";
 }
 
+function collectSegmentDurations(inspected: VideoHlsInspectResult): number[] {
+  return inspected.segments
+    .map((segment) => segment.duration)
+    .filter((duration): duration is number => typeof duration === "number" && Number.isFinite(duration));
+}
+
+function dedupeIssues(issues: ManifestAuditIssue[]): ManifestAuditIssue[] {
+  const seen = new Set<string>();
+  const out: ManifestAuditIssue[] = [];
+  for (const issue of issues) {
+    const key = `${issue.code}|${issue.summary}|${issue.evidence.join("|")}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(issue);
+  }
+  return out;
+}
+
+function collectDuplicateResolutions(inspected: VideoHlsInspectResult): string[] {
+  const counts = new Map<string, number>();
+  for (const variant of inspected.variants) {
+    if (!variant.resolution) continue;
+    counts.set(variant.resolution, (counts.get(variant.resolution) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([resolution, count]) => `${resolution} x${count}`);
+}
+
+function normalizeCodecFamily(codecs: string | undefined): string | undefined {
+  if (!codecs?.trim()) {
+    return undefined;
+  }
+  const normalized = codecs.toLowerCase();
+  if (normalized.includes("avc1")) return "avc";
+  if (normalized.includes("hvc1") || normalized.includes("hev1")) return "hevc";
+  if (normalized.includes("av01")) return "av1";
+  if (normalized.includes("vp9")) return "vp9";
+  return codecs.split(",")[0]?.trim().toLowerCase() || undefined;
+}
+
 function formatVariantEvidence(variant: VideoHlsInspectResult["variants"][number]): string {
   return `${variant.uri} bandwidth=${variant.bandwidth ?? "n/a"} codecs=${variant.codecs ?? "n/a"} resolution=${variant.resolution ?? "n/a"}`;
 }
 
 function formatSegmentEvidence(segment: VideoHlsInspectResult["segments"][number]): string {
-  return `${segment.uri} duration=${typeof segment.duration === "number" ? segment.duration.toFixed(3) : "n/a"}s`;
+  return `${segment.uri} duration=${segment.duration ?? "n/a"}s`;
 }

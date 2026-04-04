@@ -48,8 +48,8 @@ export function createChatTooling(deps: ChatToolingDeps): EngineToolingNamespace
         deps.videoInspect.inspectHls({ url, maxSegments, timeoutMs }),
       videoProbe: async ({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }) =>
         deps.videoInspect.probe({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }),
-      videoManifestAudit: async ({ url, maxSegments, timeoutMs, sessionKey }) =>
-        deps.manifestAudit.auditHlsManifest({ sessionKey, url, maxSegments, timeoutMs }),
+      videoManifestAudit: async ({ url, maxSegments, timeoutMs, followVariants, maxVariants, sessionKey }) =>
+        deps.manifestAudit.auditHlsManifest({ sessionKey, url, maxSegments, timeoutMs, followVariants, maxVariants }),
       videoGenerateImage: ({ sessionKey, prompt, provider, size }) =>
         deps.videoGeneration.generateImage({ sessionKey, prompt, provider, size }),
       playbackAnalyze: async ({ sessionKey, player, source, streamUrl, logText, events }) =>

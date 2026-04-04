@@ -581,6 +581,20 @@ function makeFakeApp(): KaelApp {
       }),
     },
     edge: new EdgeRuntime(),
+    manifestAudit: {
+      auditHlsManifest: async () => ({
+        ok: true,
+        url: "https://example.com/master.m3u8",
+        finalUrl: "https://example.com/master.m3u8",
+        playlistType: "master",
+        summary: "stub",
+        stats: { variants: 0, renditions: 0, segments: 0, variantsAudited: 0, variantsWithErrors: 0 },
+        issues: [],
+        variantAudits: [],
+        aggregateIssues: [],
+        recommendations: [],
+      }),
+    },
   };
 }
 

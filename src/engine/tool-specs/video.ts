@@ -141,6 +141,11 @@ export function createVideoPiTools(params: {
         url: { type: "string", description: "URL do manifesto HLS (.m3u8)" },
         maxSegments: { type: "number", description: "Quantidade maxima de segmentos usados na auditoria" },
         timeoutMs: { type: "number", description: "Timeout de fetch do manifesto" },
+        followVariants: {
+          type: "boolean",
+          description: "Se true, desce em memoria nas media playlists das variants selecionadas para auditoria expandida da ladder",
+        },
+        maxVariants: { type: "number", description: "Limite de variants auditadas quando followVariants=true" },
       },
       required: ["url"],
       additionalProperties: false,
@@ -151,7 +156,13 @@ export function createVideoPiTools(params: {
         return blocked.blocked;
       }
       const startedAtMs = Date.now();
-      const args = (rawParams ?? {}) as { url: string; maxSegments?: number; timeoutMs?: number };
+      const args = (rawParams ?? {}) as {
+        url: string;
+        maxSegments?: number;
+        timeoutMs?: number;
+        followVariants?: boolean;
+        maxVariants?: number;
+      };
       const intent = params.logToolStart("video_manifest_audit", args);
       if (!params.tooling.videoManifestAudit) {
         const reason = "video_manifest_audit_unavailable";
@@ -168,6 +179,8 @@ export function createVideoPiTools(params: {
           url: args.url,
           maxSegments: args.maxSegments,
           timeoutMs: args.timeoutMs,
+          followVariants: args.followVariants,
+          maxVariants: args.maxVariants,
         });
         const text = [
           `ok=${result.ok}`,
@@ -176,10 +189,15 @@ export function createVideoPiTools(params: {
           `variants=${result.stats.variants}`,
           `renditions=${result.stats.renditions}`,
           `segments=${result.stats.segments}`,
+          `variantsAudited=${result.stats.variantsAudited}`,
+          `variantsWithErrors=${result.stats.variantsWithErrors}`,
           ...(typeof result.stats.targetDuration === "number"
             ? [`targetDuration=${result.stats.targetDuration}`]
             : []),
           ...(result.issues.length > 0 ? ["issues:", ...result.issues.map((issue) => `- ${issue.code}: ${issue.summary}`)] : []),
+          ...(result.aggregateIssues.length > 0
+            ? ["aggregateIssues:", ...result.aggregateIssues.map((issue) => `- ${issue.code}: ${issue.summary}`)]
+            : []),
         ].join("\n");
         params.logToolEnd(
           "video_manifest_audit",

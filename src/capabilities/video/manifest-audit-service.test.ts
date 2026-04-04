@@ -45,6 +45,9 @@ describe("VideoManifestAuditService", () => {
     expect(result.ok).toBe(true);
     expect(result.playlistType).toBe("master");
     expect(result.issues).toHaveLength(0);
+    expect(result.variantAudits).toHaveLength(0);
+    expect(result.aggregateIssues).toHaveLength(0);
+    expect(result.stats.variantsAudited).toBe(0);
     expect(result.recommendations.length).toBeGreaterThan(0);
   });
 
@@ -98,5 +101,71 @@ describe("VideoManifestAuditService", () => {
     expect(result.issues.map((issue) => issue.code)).toContain("segment_exceeds_target_duration");
     expect(result.issues.map((issue) => issue.code)).toContain("segment_duration_variation");
     expect(result.stats.maxSegmentDuration).toBeCloseTo(10.2);
+  });
+
+  it("expande a auditoria em memoria para variants e gera aggregate issues", async () => {
+    const service = new VideoManifestAuditService({
+      inspectHls: async ({ url }) => {
+        if (url === "https://example.com/master.m3u8") {
+          return createInspectResult({
+            variants: [
+              {
+                uri: "720p.m3u8",
+                url: "https://example.com/720p.m3u8",
+                bandwidth: 2_000_000,
+                codecs: "avc1.4d401f,mp4a.40.2",
+                resolution: "1280x720",
+              },
+              {
+                uri: "720p-alt.m3u8",
+                url: "https://example.com/720p-alt.m3u8",
+                bandwidth: 2_100_000,
+                codecs: "hvc1.1.6.L93,mp4a.40.2",
+                resolution: "1280x720",
+              },
+            ],
+          });
+        }
+
+        if (url === "https://example.com/720p.m3u8") {
+          return createInspectResult({
+            url,
+            finalUrl: url,
+            playlistType: "media",
+            variants: [],
+            segments: [
+              { uri: "seg-1.ts", url: "https://example.com/seg-1.ts", duration: 6 },
+              { uri: "seg-2.ts", url: "https://example.com/seg-2.ts", duration: 6.1 },
+            ],
+            targetDuration: 6,
+          });
+        }
+
+        return createInspectResult({
+          url,
+          finalUrl: url,
+          playlistType: "media",
+          variants: [],
+          segments: [
+            { uri: "seg-a.ts", url: "https://example.com/seg-a.ts", duration: 10.7 },
+          ],
+          targetDuration: 10,
+        });
+      },
+    });
+
+    const result = await service.auditHlsManifest({
+      sessionKey: "s4",
+      url: "https://example.com/master.m3u8",
+      followVariants: true,
+    });
+
+    expect(result.stats.variantsAudited).toBe(2);
+    expect(result.variantAudits).toHaveLength(2);
+    expect(result.aggregateIssues.map((issue) => issue.code)).toContain("inconsistent_target_duration");
+    expect(result.aggregateIssues.map((issue) => issue.code)).toContain("duplicate_resolution_variants");
+    expect(result.aggregateIssues.map((issue) => issue.code)).toContain("codec_family_inconsistency");
+    expect(result.variantAudits[1]?.issues.map((issue) => issue.code)).toContain("segment_exceeds_target_duration");
+    expect(result.ok).toBe(false);
   });
 });

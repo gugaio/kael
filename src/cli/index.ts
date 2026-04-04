@@ -11,6 +11,13 @@ type UrlOption = {
   url?: string;
 };
 
+type ManifestAuditOptions = {
+  maxSegments?: string;
+  timeoutMs?: string;
+  followVariants?: boolean;
+  maxVariants?: string;
+};
+
 type ApiErrorShape = {
   message?: string;
 };
@@ -348,6 +355,72 @@ async function commandApprovalDecision(
   console.log(`Approval ${data.approval?.id ?? options.id} => ${data.approval?.status ?? decision}`);
 }
 
+async function commandManifestAudit(
+  url: string,
+  options: ManifestAuditOptions,
+): Promise<void> {
+  const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
+  const maxSegments = options.maxSegments ? Number(options.maxSegments) : undefined;
+  const timeoutMs = options.timeoutMs ? Number(options.timeoutMs) : undefined;
+  const maxVariants = options.maxVariants ? Number(options.maxVariants) : undefined;
+  const report = await app.manifestAudit.auditHlsManifest({
+    sessionKey: "cli.manifest-audit",
+    url,
+    ...(Number.isFinite(maxSegments) ? { maxSegments } : {}),
+    ...(Number.isFinite(timeoutMs) ? { timeoutMs } : {}),
+    ...(options.followVariants ? { followVariants: true } : {}),
+    ...(Number.isFinite(maxVariants) ? { maxVariants } : {}),
+  });
+
+  const lines = [
+    `ok=${report.ok}`,
+    `url=${report.url}`,
+    `finalUrl=${report.finalUrl}`,
+    `playlistType=${report.playlistType}`,
+    `summary=${report.summary}`,
+    `variants=${report.stats.variants}`,
+    `renditions=${report.stats.renditions}`,
+    `segments=${report.stats.segments}`,
+    `variantsAudited=${report.stats.variantsAudited}`,
+    `variantsWithErrors=${report.stats.variantsWithErrors}`,
+    ...(typeof report.stats.targetDuration === "number"
+      ? [`targetDuration=${report.stats.targetDuration}`]
+      : []),
+    ...(typeof report.stats.minSegmentDuration === "number"
+      ? [`minSegmentDuration=${report.stats.minSegmentDuration.toFixed(3)}`]
+      : []),
+    ...(typeof report.stats.maxSegmentDuration === "number"
+      ? [`maxSegmentDuration=${report.stats.maxSegmentDuration.toFixed(3)}`]
+      : []),
+    ...(typeof report.stats.averageSegmentDuration === "number"
+      ? [`averageSegmentDuration=${report.stats.averageSegmentDuration.toFixed(3)}`]
+      : []),
+    ...(report.issues.length > 0
+      ? ["issues:", ...report.issues.map((issue) => `- [${issue.severity}] ${issue.code}: ${issue.summary}`)]
+      : ["issues:", "- nenhuma issue relevante detectada"]),
+    ...(report.aggregateIssues.length > 0
+      ? [
+          "aggregateIssues:",
+          ...report.aggregateIssues.map((issue) => `- [${issue.severity}] ${issue.code}: ${issue.summary}`),
+        ]
+      : []),
+    ...(report.variantAudits.length > 0
+      ? [
+          "variantAudits:",
+          ...report.variantAudits.flatMap((variant) => [
+            `- ${variant.uri} | ok=${variant.ok} | playlistType=${variant.playlistType} | segments=${variant.stats.segments} | targetDuration=${variant.stats.targetDuration ?? "n/a"}`,
+            ...variant.issues.map((issue) => `  * [${issue.severity}] ${issue.code}: ${issue.summary}`),
+          ]),
+        ]
+      : []),
+    ...(report.recommendations.length > 0
+      ? ["recommendations:", ...report.recommendations.map((item) => `- ${item}`)]
+      : []),
+  ];
+
+  console.log(lines.join("\n"));
+}
+
 async function main(): Promise<void> {
   const program = new Command();
   program
@@ -390,6 +463,18 @@ async function main(): Promise<void> {
       await bot.start();
       console.log("Discord bot conectado (chat-only).");
       // Mantem processo vivo; o WebSocket/Timers sustentam o event loop.
+    });
+
+  program
+    .command("manifest-audit")
+    .description("Audita manifesto HLS localmente via capability de video")
+    .argument("<url>", "URL do manifesto HLS (.m3u8)")
+    .option("--max-segments <n>", "quantidade maxima de segmentos considerados no audit")
+    .option("--timeout-ms <ms>", "timeout de fetch do manifesto")
+    .option("--follow-variants", "segue variants em memoria para auditar media playlists da ladder")
+    .option("--max-variants <n>", "limite de variants auditadas quando --follow-variants estiver ativo")
+    .action(async (url: string, options: ManifestAuditOptions) => {
+      await commandManifestAudit(url, options);
     });
 
   program

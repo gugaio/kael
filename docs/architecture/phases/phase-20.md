@@ -61,8 +61,10 @@ Nota:
   - classifica master/media playlist;
   - detecta falhas estruturais em ladder e grupos de audio;
   - valida `TARGETDURATION` e duracao dos primeiros segmentos;
-  - devolve `issues`, severidade e recomendacoes operacionais.
+  - pode expandir a auditoria em memoria para variants de uma master playlist;
+  - devolve `issues`, `variantAudits`, `aggregateIssues`, severidade e recomendacoes operacionais.
 - Tool PI `video_manifest_audit` adicionada para expor a auditoria ao agente.
+- CLI `manifest-audit` ganhou `--follow-variants` e `--max-variants` para executar auditoria expandida localmente sem persistencia.
 
 ## Proximos incrementos
 

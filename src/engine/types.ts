@@ -108,6 +108,8 @@ export type EngineVideoTooling = {
     url: string;
     maxSegments?: number;
     timeoutMs?: number;
+    followVariants?: boolean;
+    maxVariants?: number;
   }) => Promise<HlsManifestAuditReport>;
   videoGenerateImage?: (params: {
     sessionKey: string;
