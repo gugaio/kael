@@ -37,6 +37,28 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-04 - Project Space: sugestao/confirmacao leve de novos `.md` no prompt
+
+Resumo:
+- O `ChatService` passou a injetar uma politica explicita de documentos do project space quando existe `@project`.
+- Quando a mensagem traz um caminho `.md` com linguagem de pedido ou confirmacao, o turno agora ganha um bloco estruturado `[project_document_intent]`.
+- A skill `project-knowledge-writer` foi ajustada para tratar esse bloco como o sinal mais forte sobre o alvo do documento e sobre se o usuario ja pediu/aprovou aquele arquivo.
+
+Arquivos-chave:
+- `src/chat/service.ts`
+- `src/chat/service.test.ts`
+- `.kael/skills/project-knowledge-writer/SKILL.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/chat/service.test.ts src/skills/service.test.ts src/projects/service.test.ts`
+
+Pendencias:
+- A deteccao de confirmacao ainda e heuristica por texto; nao ha estado conversacional explicito de “proposal pending”.
+
+Proximo passo recomendado:
+- Se esse fluxo mostrar valor real, adicionar um mecanismo mais robusto de sugestao pendente por sessao sem virar approval formal pesado.
+
 ### 2026-04-04 - Project Space: API dedicada para listar, ler e escrever documentos
 
 Resumo:

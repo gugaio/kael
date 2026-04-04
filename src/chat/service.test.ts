@@ -283,4 +283,61 @@ describe("ChatService project retrieval", () => {
     const scaffoldPath = path.join(root, ".kael", "projects", "ios-app", "PROJECT.md");
     await expect(fs.readFile(scaffoldPath, "utf-8")).resolves.toContain("# ios-app");
   });
+
+  it("injects project document intent when user confirms a new markdown path", async () => {
+    const root = await createWorkspace();
+    const sessions = new SessionStore(path.join(root, ".kael-data"));
+    await sessions.init();
+    let capturedMessage = "";
+    const orchestrator = {
+      checkCompactionNeed: async () => ({
+        compacted: false,
+        reason: "below_threshold" as const,
+        summarizedMessages: 0,
+        totalMessages: 0,
+        totalChars: 0,
+      }),
+      runConversationTurn: async ({ message }: { message: string }) => {
+        capturedMessage = message;
+        return { reply: "ok", artifacts: [] };
+      },
+      getEngineRuntimeTelemetrySnapshot: () => ({ timeouts: 0, toolCallsByName: {}, blockedCallsByTool: {} }),
+    } as unknown as ConstructorParameters<typeof ChatService>[2];
+
+    const chat = new ChatService(
+      sessions,
+      { process: async () => ({ ok: true, action: "list", sessions: [] }) } as never,
+      orchestrator as never,
+      {
+        preprocess: async ({ message }: { message: string }) => ({ message, applied: false, details: [] }),
+        getRuntimeTelemetrySnapshot: () => ({
+          processedRequests: 0,
+          appliedRequests: 0,
+          imageDescribed: 0,
+          audioTranscribed: 0,
+          failures: 0,
+          processedAttachments: 0,
+          skippedTooLarge: 0,
+          skippedBySourceLimit: 0,
+          skippedByTotalBytesBudget: 0,
+          skippedByProcessingBudget: 0,
+        }),
+      },
+      {} as never,
+      createTooling(),
+      new ProjectContextService(root),
+      new SkillService(root),
+    );
+
+    await chat.handleMessage({
+      sessionKey: "s1",
+      message: "@ios-app aprovado criar params.md para contratos de parametros",
+    });
+
+    expect(capturedMessage).toContain("[project_document_policy]");
+    expect(capturedMessage).toContain("[project_document_intent]");
+    expect(capturedMessage).toContain("project=ios-app");
+    expect(capturedMessage).toContain("path=params.md");
+    expect(capturedMessage).toContain("state=approved");
+  });
 });

@@ -250,3 +250,12 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
   - `POST /projects/:project/documents`
 - O `ProjectContextService` passou a expor `listProjects()` para discovery de projetos fora do chat.
 - A documentacao da API foi atualizada para refletir a nova superficie operacional de projetos.
+
+## Entregas implementadas (incremento 18.13)
+
+- O `ChatService` passou a injetar uma politica estruturada de documentos do project space quando ha `@project` no turno.
+- Quando a mensagem menciona um arquivo `.md` junto com linguagem de pedido/confirmacao, o prompt agora recebe:
+  - `[project_document_intent]`
+  - `path=<arquivo>`
+  - `state=requested|approved`
+- A skill `project-knowledge-writer` foi ajustada para tratar esse bloco como a principal pista sobre criar ou atualizar um documento tematico.

@@ -94,6 +94,43 @@ function buildProjectScopeContextBlock(project: { name: string; cleanedMessage: 
     .join("\n");
 }
 
+function buildProjectDocumentPolicyBlock(): string {
+  return [
+    "[project_document_policy]",
+    "No project space, prefira atualizar documentos existentes.",
+    "Se um novo .md parecer melhor e a intencao do usuario nao estiver clara, pergunte de forma curta antes de criar.",
+    "Se o usuario ja tiver pedido ou confirmado explicitamente um arquivo .md especifico, voce pode seguir com esse caminho.",
+  ].join("\n");
+}
+
+function extractMarkdownDocumentIntent(message: string): { path: string; state: "requested" | "approved" } | null {
+  const pathMatch = message.match(/\b([A-Za-z0-9._/-]+\.md)\b/);
+  const path = pathMatch?.[1]?.trim();
+  if (!path) {
+    return null;
+  }
+  const normalized = message.toLowerCase();
+  const approved =
+    /\b(aprovad[oa]|pode criar|pode seguir|segue com|sim[, ]+cria|sim[, ]+pode criar)\b/.test(normalized);
+  if (approved) {
+    return { path, state: "approved" };
+  }
+  const requested = /\b(criar|crie|novo arquivo|novo md|novo markdown)\b/.test(normalized);
+  if (requested) {
+    return { path, state: "requested" };
+  }
+  return null;
+}
+
+function buildProjectDocumentIntentBlock(params: { project: string; path: string; state: "requested" | "approved" }): string {
+  return [
+    "[project_document_intent]",
+    `project=${params.project}`,
+    `path=${params.path}`,
+    `state=${params.state}`,
+  ].join("\n");
+}
+
 function extractPartialWebEvidence(message: string): string[] {
   const marker = "partial_web_evidence:";
   const idx = message.indexOf(marker);
@@ -411,6 +448,15 @@ export class ChatService {
         name: projectHint.projectName,
         cleanedMessage: projectHint.cleanedMessage,
       })}`;
+      llmInputMessage = `${llmInputMessage}\n\n${buildProjectDocumentPolicyBlock()}`;
+      const docIntent = extractMarkdownDocumentIntent(input.message);
+      if (docIntent) {
+        llmInputMessage = `${llmInputMessage}\n\n${buildProjectDocumentIntentBlock({
+          project: projectHint.projectName,
+          path: docIntent.path,
+          state: docIntent.state,
+        })}`;
+      }
     }
 
     const projectContextBlocks = await this.buildProjectContextBlocks(input, llmInputMessage, projectHint?.projectName);

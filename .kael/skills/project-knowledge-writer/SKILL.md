@@ -20,6 +20,7 @@ Workflow:
    - `project_list_documents`
    - `project_get_document`
    - If `[project_scope]` is present in the turn context, reuse that `project=<name>` as the default project instead of inferring another one.
+   - If `[project_document_intent]` is present, treat it as the strongest hint about the target `.md` and whether the user already requested or approved that file.
 5. Decide whether to:
    - update `PROJECT.md` for stable project-level context
    - update an existing thematic document
