@@ -37,6 +37,30 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-04 - Project Space: `@project` como escopo explicito de turno
+
+Resumo:
+- O `ChatService` agora injeta um bloco `[project_scope]` sempre que a mensagem inclui `@project`, deixando o escopo do projeto explicito para o turno LLM.
+- O `@project` passa a ser removido da pergunta base enviada ao modelo quando apropriado, reduzindo ruido e mantendo o nome do projeto em contexto estruturado em vez de texto solto.
+- A skill `project-knowledge-writer` foi ajustada para reutilizar `[project_scope] project=<name>` como projeto default ao ler ou escrever no project space.
+
+Arquivos-chave:
+- `src/chat/service.ts`
+- `src/chat/service.test.ts`
+- `.kael/skills/project-knowledge-writer/SKILL.md`
+- `.kael/skills/project-knowledge-writer/references/schema.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/chat/service.test.ts src/projects/service.test.ts src/skills/service.test.ts src/engine/pi-tools.test.ts`
+
+Pendencias:
+- `project_upsert_document` ainda exige `project` explicito na chamada; o default hoje e de prompt/contexto, nao de schema.
+- Ainda nao ha comando dedicado para inspecionar rapidamente o estado do project space de um projeto.
+
+Proximo passo recomendado:
+- Propagar o escopo do projeto tambem para a UX de escrita manual e depois decidir se a API/tooling legado de `knowledge` pode ser removido.
+
 ### 2026-04-04 - Project Space: diretorio por projeto com `PROJECT.md`, `index.json` e documentos tematicos
 
 Resumo:

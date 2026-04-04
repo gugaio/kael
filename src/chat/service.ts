@@ -83,6 +83,17 @@ function buildProjectOverviewContextBlock(project: { name: string; content: stri
   ].join("\n");
 }
 
+function buildProjectScopeContextBlock(project: { name: string; cleanedMessage: string }): string {
+  return [
+    "[project_scope]",
+    `project=${project.name}`,
+    "Use este projeto como escopo padrao para project tools e skills que escrevem no project space.",
+    project.cleanedMessage ? `user_message=${project.cleanedMessage}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 function extractPartialWebEvidence(message: string): string[] {
   const marker = "partial_web_evidence:";
   const idx = message.indexOf(marker);
@@ -377,8 +388,10 @@ export class ChatService {
   }
 
   private async prepareLlmMessageStage(input: HandleMessageInput, pipeline: PipelineState): Promise<string> {
-    let llmInputMessage = pipeline.llmInputMessage;
     const projectHint = extractProjectMention(input.message);
+    let llmInputMessage = projectHint && !pipeline.skillManualApplied
+      ? projectHint.cleanedMessage || pipeline.llmInputMessage
+      : pipeline.llmInputMessage;
     if (!pipeline.skillManualApplied) {
       const preparedSkillTurn = await this.skills.prepareTurnMessage(llmInputMessage, {
         sessionKey: input.sessionKey,
@@ -391,6 +404,13 @@ export class ChatService {
           skillName: preparedSkillTurn.autoAppliedSkillName,
         });
       }
+    }
+
+    if (projectHint) {
+      llmInputMessage = `${llmInputMessage}\n\n${buildProjectScopeContextBlock({
+        name: projectHint.projectName,
+        cleanedMessage: projectHint.cleanedMessage,
+      })}`;
     }
 
     const projectContextBlocks = await this.buildProjectContextBlocks(input, llmInputMessage, projectHint?.projectName);

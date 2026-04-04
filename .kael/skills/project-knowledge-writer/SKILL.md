@@ -19,6 +19,7 @@ Workflow:
 4. Inspect the current project space with:
    - `project_list_documents`
    - `project_get_document`
+   - If `[project_scope]` is present in the turn context, reuse that `project=<name>` as the default project instead of inferring another one.
 5. Decide whether to:
    - update `PROJECT.md` for stable project-level context
    - update an existing thematic document

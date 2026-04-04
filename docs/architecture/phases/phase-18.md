@@ -203,3 +203,14 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
   - `project_list_documents`.
 - A skill `project-knowledge-writer` foi ajustada para escrever no project space, em vez de depender exclusivamente de `knowledge_upsert`.
 - O `ChatService` passou a usar o project space como fonte principal de retrieval para perguntas de projeto.
+
+## Entregas implementadas (incremento 18.8)
+
+- O marcador `@project` passou a gerar um bloco estruturado `[project_scope]` no turno do modelo com:
+  - `project=<name>`;
+  - mensagem limpa (`user_message=...`) sem o marcador inline.
+- O `ChatService` agora remove `@project` da pergunta base enviada ao modelo quando o turno nao e uma invocacao manual de skill, reduzindo ruido textual.
+- A skill `project-knowledge-writer` passou a tratar `[project_scope]` como fonte padrao de escopo para:
+  - `project_list_documents`;
+  - `project_get_document`;
+  - `project_upsert_document`.

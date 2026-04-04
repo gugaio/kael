@@ -302,8 +302,11 @@ describe("ChatService knowledge retrieval", () => {
     });
 
     expect(capturedProject).toBe("ios-app");
+    expect(capturedMessage).toContain("[project_scope]");
     expect(capturedMessage).toContain("[project_context]");
     expect(capturedMessage).toContain("project=ios-app");
+    expect(capturedMessage).toContain("user_message=como o parametro x e enviado?");
+    expect(capturedMessage).not.toContain("@ios-app");
     const scaffoldPath = path.join(root, ".kael", "projects", "ios-app", "PROJECT.md");
     await expect(fs.readFile(scaffoldPath, "utf-8")).resolves.toContain("# ios-app");
   });

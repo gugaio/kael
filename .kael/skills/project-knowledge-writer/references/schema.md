@@ -16,6 +16,7 @@ Use `project_upsert_document` with this contract:
 
 Field guidance:
 - `project`: use a stable bucket like `android-app`, `ios-app`, `backend-api`, `player-web`.
+  - If the turn already includes `[project_scope] project=<name>`, reuse that same project by default.
 - `path`: use `PROJECT.md` for overview or a stable thematic file like `params.md`, `networking.md`, `playback.md`, `decisions.md`.
 - `title`: human-readable title for `index.json`.
 - `description`: concise purpose of the file.
