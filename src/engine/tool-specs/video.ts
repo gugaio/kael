@@ -292,7 +292,12 @@ export function createVideoPiTools(params: {
             ? ["addedIssues:", ...result.issueDiff.added.map((issue) => `- ${issue.code}: ${issue.summary}`)]
             : []),
           ...(result.variantDiff.regressed.length > 0
-            ? ["regressedVariants:", ...result.variantDiff.regressed.map((item) => `- ${item.summary}`)]
+            ? [
+                "regressedVariants:",
+                ...result.variantDiff.regressed.map((item) =>
+                  `- severity=${item.regressionSeverity} score=${item.regressionScore} ${item.summary}`
+                ),
+              ]
             : []),
         ].join("\n");
         params.logToolEnd(

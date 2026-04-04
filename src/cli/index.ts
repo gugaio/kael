@@ -489,19 +489,25 @@ async function commandManifestDiff(
     ...(report.variantDiff.regressed.length > 0
       ? [
           "variants.regressed:",
-          ...report.variantDiff.regressed.map((item) => `- ${item.summary}`),
+          ...report.variantDiff.regressed.map((item) =>
+            `- severity=${item.regressionSeverity} score=${item.regressionScore} ${item.summary}`
+          ),
         ]
       : []),
     ...(report.variantDiff.added.length > 0
       ? [
           "variants.added:",
-          ...report.variantDiff.added.map((item) => `- ${item.summary}`),
+          ...report.variantDiff.added.map((item) =>
+            `- severity=${item.regressionSeverity} score=${item.regressionScore} ${item.summary}`
+          ),
         ]
       : []),
     ...(report.variantDiff.removed.length > 0
       ? [
           "variants.removed:",
-          ...report.variantDiff.removed.map((item) => `- ${item.summary}`),
+          ...report.variantDiff.removed.map((item) =>
+            `- severity=${item.regressionSeverity} score=${item.regressionScore} ${item.summary}`
+          ),
         ]
       : []),
     ...(report.recommendations.length > 0

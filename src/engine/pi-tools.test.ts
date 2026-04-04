@@ -372,9 +372,11 @@ describe("createPiShellTools video_manifest_diff", () => {
                 {
                   matchKey: "v1.m3u8",
                   status: "regressed",
+                  regressionSeverity: "high",
+                  regressionScore: 85,
                   delta: {},
                   issueDiff: { added: [], removed: [], persisted: [] },
-                  changedFields: ["targetDuration"],
+                  changedFields: ["targetDuration", "audioGroupId"],
                   summary: "Variant v1.m3u8 regrediu",
                 },
               ],

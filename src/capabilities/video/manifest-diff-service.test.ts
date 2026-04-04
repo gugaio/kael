@@ -30,6 +30,7 @@ describe("VideoManifestDiffService", () => {
               resolution: "1280x720",
               bandwidth: 2500000,
               codecs: "avc1.64001f,mp4a.40.2",
+              audioGroupId: "aud-main",
               playlistType: "media",
               summary: "left variant",
               ok: true,
@@ -66,6 +67,7 @@ describe("VideoManifestDiffService", () => {
               resolution: "1280x720",
               bandwidth: 2500000,
               codecs: "avc1.64001f,mp4a.40.2",
+              audioGroupId: "aud-alt",
               playlistType: "media",
               summary: "right variant",
               ok: false,
@@ -115,8 +117,12 @@ describe("VideoManifestDiffService", () => {
     expect(result.issueDiff.removed.map((item) => item.code)).toEqual(["single_variant_ladder"]);
     expect(result.variantDiff.regressed).toHaveLength(1);
     expect(result.variantDiff.regressed[0]?.left?.uri).toBe("v1.m3u8");
+    expect(result.variantDiff.regressed[0]?.changedFields).toContain("audioGroupId");
+    expect(result.variantDiff.regressed[0]?.regressionSeverity).toBe("high");
+    expect((result.variantDiff.regressed[0]?.regressionScore ?? 0) > 0).toBe(true);
     expect(result.variantDiff.added).toHaveLength(1);
     expect(result.variantDiff.added[0]?.right?.uri).toBe("v2.m3u8");
-    expect(result.summary).toContain("issue");
+    expect(result.recommendations.some((item) => item.includes("audio"))).toBe(true);
+    expect(result.summary).toContain("variant");
   });
 });

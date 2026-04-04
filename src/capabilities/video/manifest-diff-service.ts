@@ -128,6 +128,7 @@ function buildRecommendations(
   variantDiff: HlsManifestDiffReport["variantDiff"],
 ): string[] {
   const out = new Set<string>();
+  const changedOrRegressedVariants = [...variantDiff.changed, ...variantDiff.regressed];
   if (left.playlistType !== right.playlistType) {
     out.add("Verificar regressao estrutural do manifesto entre os dois ambientes/versoes.");
   }
@@ -139,6 +140,12 @@ function buildRecommendations(
   }
   if (variantDiff.regressed.length > 0) {
     out.add("Inspecionar as variants que regrediram e validar bitrate/resolution/targetDuration na ladder publicada.");
+  }
+  if (changedOrRegressedVariants.some((item) => item.changedFields.includes("audioGroupId"))) {
+    out.add("Validar mudancas de grupo de audio nas variants e checar alinhamento com EXT-X-MEDIA/AUDIO.");
+  }
+  if (changedOrRegressedVariants.some((item) => item.changedFields.includes("subtitlesGroupId"))) {
+    out.add("Validar mudancas de grupo de subtitles e conferir se as renditions continuam publicadas e vinculadas.");
   }
   if (variantDiff.added.length > 0 || variantDiff.removed.length > 0) {
     out.add("Conferir se as mudancas de ladder foram intencionais e compativeis com o catalogo ABR esperado.");
@@ -202,6 +209,8 @@ function buildAddedOrRemovedVariant(
   return {
     matchKey: variantMatchKey(variant),
     status,
+    regressionSeverity: status === "added" ? "low" : "medium",
+    regressionScore: status === "added" ? 20 : 50,
     ...(status === "added" ? { right: variant } : { left: variant }),
     delta: {},
     issueDiff: {
@@ -237,9 +246,14 @@ function buildMatchedVariantDiff(left: HlsVariantAuditReport, right: HlsVariantA
           ? "changed"
           : "unchanged";
 
+  const regressionScore = computeRegressionScore(status, issueDiff, changedFields, delta);
+  const regressionSeverity = classifyRegressionSeverity(regressionScore);
+
   return {
     matchKey: variantMatchKey(left),
     status,
+    regressionSeverity,
+    regressionScore,
     left,
     right,
     delta,
@@ -273,7 +287,8 @@ function buildVariantDiffSummary(
 ): string {
   const base = variantLabel(left);
   if (status === "regressed") {
-    return `Variant ${base} regrediu (${issueDiff.added.length} nova(s) issue(s), ok ${left.ok} -> ${right.ok})`;
+    const groupNotes = changedFields.filter((field) => field === "audioGroupId" || field === "subtitlesGroupId");
+    return `Variant ${base} regrediu (${issueDiff.added.length} nova(s) issue(s), ok ${left.ok} -> ${right.ok}${groupNotes.length > 0 ? `, groups=${groupNotes.join(",")}` : ""})`;
   }
   if (status === "improved") {
     return `Variant ${base} melhorou (${issueDiff.removed.length} issue(s) removida(s), ok ${left.ok} -> ${right.ok})`;
@@ -322,4 +337,32 @@ function variantSignature(variant: HlsVariantAuditReport): string {
 
 function variantLabel(variant: HlsVariantAuditReport): string {
   return variant.uri || variant.resolution || variant.url;
+}
+
+function computeRegressionScore(
+  status: HlsVariantDiffEntry["status"],
+  issueDiff: HlsVariantDiffEntry["issueDiff"],
+  changedFields: string[],
+  delta: HlsVariantDiffEntry["delta"],
+): number {
+  let score = 0;
+  if (status === "regressed") score += 60;
+  if (status === "changed") score += 20;
+  if (issueDiff.added.some((issue) => issue.severity === "error")) score += 30;
+  if (issueDiff.added.some((issue) => issue.severity === "warning")) score += 10;
+  if (changedFields.includes("audioGroupId")) score += 15;
+  if (changedFields.includes("subtitlesGroupId")) score += 10;
+  if (changedFields.includes("codecs")) score += 20;
+  if (changedFields.includes("resolution")) score += 10;
+  if (changedFields.includes("bandwidth")) score += 10;
+  if (typeof delta.targetDuration === "number" && Math.abs(delta.targetDuration) >= 2) score += 10;
+  if (typeof delta.averageSegmentDuration === "number" && Math.abs(delta.averageSegmentDuration) >= 1.5) score += 10;
+  return Math.min(100, score);
+}
+
+function classifyRegressionSeverity(score: number): HlsVariantDiffEntry["regressionSeverity"] {
+  if (score >= 80) return "high";
+  if (score >= 45) return "medium";
+  if (score > 0) return "low";
+  return "none";
 }

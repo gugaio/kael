@@ -126,6 +126,8 @@ export type HlsManifestDiffReport = {
 export type HlsVariantDiffEntry = {
   matchKey: string;
   status: "added" | "removed" | "changed" | "regressed" | "improved" | "unchanged";
+  regressionSeverity: "none" | "low" | "medium" | "high";
+  regressionScore: number;
   left?: HlsVariantAuditReport;
   right?: HlsVariantAuditReport;
   delta: {
