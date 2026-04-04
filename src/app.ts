@@ -5,7 +5,7 @@ import { PersistentScheduler } from "./automation/persistent-scheduler.js";
 import { AutomationService } from "./automation/service.js";
 import { loadConfig, type KaelConfig } from "./config.js";
 import {
-  createBrowserRuntime,
+  createBrowserInteractiveCapability,
   createMediaRuntime,
   createMcpRuntime,
   createMemoryRuntime,
@@ -78,7 +78,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   const edge = new EdgeRuntime();
   const memory = await createMemoryRuntime(config);
   const workspace = createWorkspaceRuntime(config);
-  const browser = createBrowserRuntime(config);
+  const browserInteractive = createBrowserInteractiveCapability(config);
   const research = createResearchRuntime(config);
   const planner = await createPlannerRuntime(config);
   const engine = createEngine(config);
@@ -88,10 +88,10 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   });
   const { mediaUnderstanding, imageGenerator, videoGeneration } = createMediaRuntime(config, videoArtifacts);
   const tooling = createChatTooling({
-    jobs,
-    shell,
-    mcp,
-    edge,
+    jobManager: jobs,
+    shellRuntime: shell,
+    mcpRuntime: mcp,
+    edgeRuntime: edge,
     videoInspect,
     memory,
     workspace,
@@ -99,7 +99,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     planner,
     playbackTriage: new PlaybackTriageService(),
     manifestAudit,
-    browser,
+    browserInteractive,
     imageGenerator,
     videoGeneration,
   });

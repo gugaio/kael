@@ -37,6 +37,31 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-04 - Core: modos de execucao explicitos no tooling
+
+Resumo:
+- O wiring de `createChatTooling` passou a usar nomes de executor explicitos (`jobManager`, `shellRuntime`, `edgeRuntime`, `browserInteractive`) em vez de dependencias ambigamente chamadas de capability.
+- O wrapper de browser foi renomeado para `BrowserInteractiveCapability`, deixando claro que browser opera como runtime interativo stateful por sessao, nao como job persistente.
+- Foi adicionado um catalogo central de namespaces com `executionMode` para documentar a diferenca entre `job`, `interactive`, `remote` e `service`.
+
+Arquivos-chave:
+- `src/chat/tooling-factory.ts`
+- `src/bootstrap/runtime.ts`
+- `src/capabilities/browser/capability.ts`
+- `src/engine/tooling-descriptors.ts`
+- `docs/architecture/phases/phase-16.md`
+
+Checklist de validacao:
+- [ ] `npm run check`
+- [ ] `npm test -- src/capabilities/browser/capability.test.ts src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts`
+
+Pendencias:
+- O catalogo de descriptors ainda nao e consumido por `/health`, docs geradas ou introspeccao em runtime.
+- Ainda existem usos historicos do termo "capability" no PI/tool-specs que podem ser simplificados depois.
+
+Proximo passo recomendado:
+- Expor os descriptors de namespace em uma superficie observavel do core e alinhar a documentacao operacional do engine com esses modos de execucao.
+
 ### 2026-04-03 - Video: manifest audit expandido em memoria para variants
 
 Resumo:

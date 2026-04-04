@@ -1,7 +1,7 @@
 export {
   BROWSER_ACTIONS,
   BROWSER_ACTION_VALUES,
-  BrowserCapability,
+  BrowserInteractiveCapability,
 } from "./capability.js";
 export {
   formatBrowserReplyText,

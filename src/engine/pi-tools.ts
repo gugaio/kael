@@ -1,5 +1,5 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { createPiCapabilityTools } from "./tool-specs/index.js";
+import { createPiNamespaceTools } from "./tool-specs/index.js";
 import type { EngineOutputArtifact, EngineToolingNamespaces } from "./types.js";
 import type { ToolLoopGuard } from "./tool-loop-guard.js";
 import { createToolBudget } from "./pi-tools-budget.js";
@@ -55,7 +55,7 @@ export function createPiShellTools(params: {
     },
   });
 
-  const capabilityTools = createPiCapabilityTools({
+  const namespaceTools = createPiNamespaceTools({
     system: {
       sessionKey: params.sessionKey,
       tooling: params.tooling.system,
@@ -155,21 +155,21 @@ export function createPiShellTools(params: {
     },
   });
 
-  const [execTool, processTool] = capabilityTools.system;
-  const [videoHlsInspectTool, videoProbeTool, videoManifestAuditTool, playbackAnalyzeTool] = capabilityTools.video;
-  const [jobsListTool, jobsGetTool, jobsLogTailTool] = capabilityTools.jobs;
+  const [execTool, processTool] = namespaceTools.system;
+  const [videoHlsInspectTool, videoProbeTool, videoManifestAuditTool, playbackAnalyzeTool] = namespaceTools.video;
+  const [jobsListTool, jobsGetTool, jobsLogTailTool] = namespaceTools.jobs;
   const [
     edgeListTool,
     edgeCallTool,
     youboraMetricsGetTool,
     youboraRawdataGetTool,
     youboraEventsGetTool,
-  ] = capabilityTools.edge;
-  const [mcpListTool, mcpCallTool] = capabilityTools.mcp;
-  const [memorySearchTool, memoryGetTool, memoryWriteTool] = capabilityTools.memory;
-  const [workspaceSearchTool, workspaceReadTool] = capabilityTools.workspace;
-  const [webSearchTool, webFetchTool, webResearchTool] = capabilityTools.web;
-  const browserTool = capabilityTools.browser;
+  ] = namespaceTools.edge;
+  const [mcpListTool, mcpCallTool] = namespaceTools.mcp;
+  const [memorySearchTool, memoryGetTool, memoryWriteTool] = namespaceTools.memory;
+  const [workspaceSearchTool, workspaceReadTool] = namespaceTools.workspace;
+  const [webSearchTool, webFetchTool, webResearchTool] = namespaceTools.web;
+  const browserTool = namespaceTools.browser;
   const [
     planCreateTool,
     planGenerateTool,
@@ -179,8 +179,8 @@ export function createPiShellTools(params: {
     planNextTool,
     planExecuteNextTool,
     planReconcileTool,
-  ] = capabilityTools.plans;
-  const imageGenerateTool = capabilityTools.image;
+  ] = namespaceTools.plans;
+  const imageGenerateTool = namespaceTools.image;
 
   return [
     execTool,

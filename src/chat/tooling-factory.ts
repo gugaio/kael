@@ -15,15 +15,15 @@ import type {
   VideoManifestAuditService,
 } from "../capabilities/video/index.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
-import type { BrowserCapability } from "../capabilities/browser/index.js";
+import type { BrowserInteractiveCapability } from "../capabilities/browser/index.js";
 import { buildJobLogTailResult, selectJobs } from "../jobs/tooling.js";
 import type { EdgeRuntime } from "../edge/runtime.js";
 
-type ChatToolingDeps = {
-  jobs: JobManager;
-  shell: ShellRuntime;
-  mcp: McpRuntime;
-  edge: EdgeRuntime;
+type ChatToolingExecutors = {
+  jobManager: JobManager;
+  shellRuntime: ShellRuntime;
+  mcpRuntime: McpRuntime;
+  edgeRuntime: EdgeRuntime;
   videoInspect: VideoInspectToolService;
   memory: MemoryService;
   workspace: WorkspaceInspector;
@@ -33,57 +33,64 @@ type ChatToolingDeps = {
   videoGeneration: ProviderBackedVideoGenerationService;
   playbackTriage: PlaybackTriageService;
   manifestAudit: VideoManifestAuditService;
-  browser: BrowserCapability;
+  browserInteractive: BrowserInteractiveCapability;
 };
 
-export function createChatTooling(deps: ChatToolingDeps): EngineToolingNamespaces {
+export function createChatTooling(executors: ChatToolingExecutors): EngineToolingNamespaces {
   return {
     video: {
-      startTranscode: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.transcode, params),
-      startConvertHls: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.convertHls, params),
-      startCaptureStream: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.captureStream, params),
-      startProbeMedia: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.probeMedia, params),
-      startPlayVlc: (params) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.playVlc, params),
+      startTranscode: (params) => executors.jobManager.startAction(VIDEO_JOB_ACTIONS.transcode, params),
+      startConvertHls: (params) => executors.jobManager.startAction(VIDEO_JOB_ACTIONS.convertHls, params),
+      startCaptureStream: (params) => executors.jobManager.startAction(VIDEO_JOB_ACTIONS.captureStream, params),
+      startProbeMedia: (params) => executors.jobManager.startAction(VIDEO_JOB_ACTIONS.probeMedia, params),
+      startPlayVlc: (params) => executors.jobManager.startAction(VIDEO_JOB_ACTIONS.playVlc, params),
       videoHlsInspect: async ({ url, maxSegments, timeoutMs }) =>
-        deps.videoInspect.inspectHls({ url, maxSegments, timeoutMs }),
+        executors.videoInspect.inspectHls({ url, maxSegments, timeoutMs }),
       videoProbe: async ({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }) =>
-        deps.videoInspect.probe({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }),
+        executors.videoInspect.probe({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }),
       videoManifestAudit: async ({ url, maxSegments, timeoutMs, followVariants, maxVariants, sessionKey }) =>
-        deps.manifestAudit.auditHlsManifest({ sessionKey, url, maxSegments, timeoutMs, followVariants, maxVariants }),
+        executors.manifestAudit.auditHlsManifest({
+          sessionKey,
+          url,
+          maxSegments,
+          timeoutMs,
+          followVariants,
+          maxVariants,
+        }),
       videoGenerateImage: ({ sessionKey, prompt, provider, size }) =>
-        deps.videoGeneration.generateImage({ sessionKey, prompt, provider, size }),
+        executors.videoGeneration.generateImage({ sessionKey, prompt, provider, size }),
       playbackAnalyze: async ({ sessionKey, player, source, streamUrl, logText, events }) =>
-        deps.playbackTriage.analyzeSession({ sessionKey, player, source, streamUrl, logText, events }),
+        executors.playbackTriage.analyzeSession({ sessionKey, player, source, streamUrl, logText, events }),
     },
     jobs: {
       listJobs: ({ sessionKey, capability, action, status, limit } = {}) =>
-        selectJobs(deps.jobs.listJobs(), { sessionKey, capability, action, status, limit }),
-      getJob: ({ jobId }) => deps.jobs.getJob(jobId),
+        selectJobs(executors.jobManager.listJobs(), { sessionKey, capability, action, status, limit }),
+      getJob: ({ jobId }) => executors.jobManager.getJob(jobId),
       getJobLog: async ({ jobId, tailChars }) => {
-        const text = await deps.jobs.getJobLog(jobId);
+        const text = await executors.jobManager.getJobLog(jobId);
         return buildJobLogTailResult({ jobId, text, tailChars });
       },
     },
     system: {
-      execCommand: (params) => deps.shell.exec(params),
-      processCommand: (params) => deps.shell.process(params),
+      execCommand: (params) => executors.shellRuntime.exec(params),
+      processCommand: (params) => executors.shellRuntime.process(params),
     },
     mcp: {
       mcpList: ({ sessionKey, server, schema, timeoutMs }) =>
-        deps.mcp.list({ sessionKey, server, schema, timeoutMs }),
+        executors.mcpRuntime.list({ sessionKey, server, schema, timeoutMs }),
       mcpCall: ({ sessionKey, target, argumentsJson, stdioCommand, timeoutMs }) =>
-        deps.mcp.call({ sessionKey, target, argumentsJson, stdioCommand, timeoutMs }),
+        executors.mcpRuntime.call({ sessionKey, target, argumentsJson, stdioCommand, timeoutMs }),
     },
     edge: {
       edgeList: ({ clientId, capability } = {}) =>
-        deps.edge
+        executors.edgeRuntime
           .listCapabilities()
           .filter((item) => (clientId ? item.clientId === clientId : true))
           .filter((item) => (capability ? item.name === capability : true)),
       edgeCall: ({ capability, input, clientId, timeoutMs }) =>
-        deps.edge.dispatchTask({ capability, input, clientId, timeoutMs }),
+        executors.edgeRuntime.dispatchTask({ capability, input, clientId, timeoutMs }),
       youboraMetricsGet: ({ fromDate, toDate, metrics, type, granularity, filters, clientId, timeoutMs }) =>
-        deps.edge.dispatchTask({
+        executors.edgeRuntime.dispatchTask({
           capability: "youbora.metrics.get",
           input: {
             fromDate,
@@ -97,7 +104,7 @@ export function createChatTooling(deps: ChatToolingDeps): EngineToolingNamespace
           timeoutMs,
         }),
       youboraRawdataGet: ({ fromDate, toDate, type, filters, clientId, timeoutMs }) =>
-        deps.edge.dispatchTask({
+        executors.edgeRuntime.dispatchTask({
           capability: "youbora.rawdata.get",
           input: {
             fromDate,
@@ -109,7 +116,7 @@ export function createChatTooling(deps: ChatToolingDeps): EngineToolingNamespace
           timeoutMs,
         }),
       youboraEventsGet: ({ fromDate, toDate, type, filters, clientId, timeoutMs }) =>
-        deps.edge.dispatchTask({
+        executors.edgeRuntime.dispatchTask({
           capability: "youbora.events.get",
           input: {
             fromDate,
@@ -122,17 +129,17 @@ export function createChatTooling(deps: ChatToolingDeps): EngineToolingNamespace
         }),
     },
     memory: {
-      memorySearch: ({ query, maxResults }) => deps.memory.search(query, maxResults),
-      memoryGet: ({ path, from, lines }) => deps.memory.get({ relPath: path, from, lines }),
-      memoryWrite: ({ content, target }) => deps.memory.write({ content, target }),
+      memorySearch: ({ query, maxResults }) => executors.memory.search(query, maxResults),
+      memoryGet: ({ path, from, lines }) => executors.memory.get({ relPath: path, from, lines }),
+      memoryWrite: ({ content, target }) => executors.memory.write({ content, target }),
     },
     workspace: {
-      workspaceSearch: ({ query, maxResults }) => deps.workspace.search({ query, maxResults }),
-      workspaceRead: ({ path, from, lines }) => deps.workspace.read({ relPath: path, from, lines }),
+      workspaceSearch: ({ query, maxResults }) => executors.workspace.search({ query, maxResults }),
+      workspaceRead: ({ path, from, lines }) => executors.workspace.read({ relPath: path, from, lines }),
     },
     web: {
       webSearch: ({ sessionKey, query, maxResults, recencyDays, domainsAllow, domainsBlock, signal }) =>
-        deps.research.search({
+        executors.research.search({
           sessionKey,
           query,
           maxResults,
@@ -142,7 +149,7 @@ export function createChatTooling(deps: ChatToolingDeps): EngineToolingNamespace
           signal,
         }),
       webFetch: ({ sessionKey, url, maxChars, signal }) =>
-        deps.research.fetchUrl({
+        executors.research.fetchUrl({
           sessionKey,
           url,
           maxChars,
@@ -159,7 +166,7 @@ export function createChatTooling(deps: ChatToolingDeps): EngineToolingNamespace
         domainsBlock,
         signal,
       }) =>
-        deps.research.research({
+        executors.research.research({
           sessionKey,
           query,
           maxResults,
@@ -173,7 +180,7 @@ export function createChatTooling(deps: ChatToolingDeps): EngineToolingNamespace
     },
     browser: {
       browserCommand: ({ sessionKey, action, targetId, url, selector, text, key, timeoutMs }) =>
-        deps.browser.executeAction(action, {
+        executors.browserInteractive.executeAction(action, {
           sessionKey,
           targetId,
           url,
@@ -182,36 +189,36 @@ export function createChatTooling(deps: ChatToolingDeps): EngineToolingNamespace
           key,
           timeoutMs,
         }),
-      browserRuntimeTelemetry: () => deps.browser.getRuntimeTelemetrySnapshot(),
+      browserRuntimeTelemetry: () => executors.browserInteractive.getRuntimeTelemetrySnapshot(),
     },
     image: {
-      imageGenerate: ({ prompt, size }) => deps.imageGenerator.generate({ prompt, size }),
+      imageGenerate: ({ prompt, size }) => executors.imageGenerator.generate({ prompt, size }),
     },
     plans: {
-      planCreate: ({ sessionKey, title, steps }) => deps.planner.create({ sessionKey, title, steps }),
+      planCreate: ({ sessionKey, title, steps }) => executors.planner.create({ sessionKey, title, steps }),
       planGenerate: ({ sessionKey, objective, maxSteps }) =>
-        deps.planner.generate({ sessionKey, objective, maxSteps }),
-      planList: ({ sessionKey, status, limit }) => deps.planner.list({ sessionKey, status, limit }),
-      planGet: ({ planId }) => deps.planner.get(planId),
+        executors.planner.generate({ sessionKey, objective, maxSteps }),
+      planList: ({ sessionKey, status, limit }) => executors.planner.list({ sessionKey, status, limit }),
+      planGet: ({ planId }) => executors.planner.get(planId),
       planUpdateStep: ({ planId, stepIndex, status, notes }) =>
-        deps.planner.updateStep({ planId, stepIndex, status, notes }),
-      planNextAction: ({ planId }) => deps.planner.nextAction(planId),
+        executors.planner.updateStep({ planId, stepIndex, status, notes }),
+      planNextAction: ({ planId }) => executors.planner.nextAction(planId),
       planExecuteNext: ({ planId, inputs }) =>
-        deps.planner.executeNext({
+        executors.planner.executeNext({
           planId,
           inputs,
           runtime: createPlannerExecuteRuntime({
-            jobs: deps.jobs,
-            shell: deps.shell,
+            jobs: executors.jobManager,
+            shell: executors.shellRuntime,
           }),
         }),
       planReconcile: ({ planId, limit }) =>
-        deps.planner.reconcile({
+        executors.planner.reconcile({
           planId,
           limit,
           runtime: createPlannerReconcileRuntime({
-            jobs: deps.jobs,
-            shell: deps.shell,
+            jobs: executors.jobManager,
+            shell: executors.shellRuntime,
           }),
         }),
     },

@@ -25,7 +25,7 @@ export {
   createWorkspacePiTools,
 };
 
-export function createPiCapabilityTools(params: {
+export function createPiNamespaceTools(params: {
   system: Parameters<typeof createSystemPiTools>[0];
   video: Parameters<typeof createVideoPiTools>[0];
   jobs: Parameters<typeof createJobsPiTools>[0];
@@ -53,4 +53,4 @@ export function createPiCapabilityTools(params: {
   };
 }
 
-export type PiCapabilityTooling = EngineToolingNamespaces;
+export type PiNamespaceTooling = EngineToolingNamespaces;

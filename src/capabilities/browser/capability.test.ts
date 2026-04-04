@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { BROWSER_ACTIONS, BrowserCapability } from "./capability.js";
+import { BROWSER_ACTIONS, BrowserInteractiveCapability } from "./capability.js";
 import type { BrowserRuntime } from "./service.js";
 
-describe("BrowserCapability", () => {
+describe("BrowserInteractiveCapability", () => {
   it("delega acao para o runtime com action + params", async () => {
     const command = vi.fn(async () => ({
       ok: true,
@@ -60,7 +60,7 @@ describe("BrowserCapability", () => {
       command,
       getRuntimeTelemetrySnapshot: () => telemetry,
     };
-    const capability = new BrowserCapability(runtime);
+    const capability = new BrowserInteractiveCapability(runtime);
 
     const result = await capability.executeAction(BROWSER_ACTIONS.open, {
       sessionKey: "s1",

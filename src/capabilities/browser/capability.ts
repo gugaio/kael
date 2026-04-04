@@ -23,7 +23,7 @@ export const BROWSER_ACTION_VALUES = Object.values(BROWSER_ACTIONS) as BrowserCo
 
 type BrowserActionParams = Omit<BrowserCommandInput, "action">;
 
-export class BrowserCapability {
+export class BrowserInteractiveCapability {
   readonly name = "browser";
   readonly actions = BROWSER_ACTION_VALUES;
 

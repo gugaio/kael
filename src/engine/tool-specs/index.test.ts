@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createPiCapabilityTools } from "./index.js";
+import { createPiNamespaceTools } from "./index.js";
 
-describe("createPiCapabilityTools", () => {
+describe("createPiNamespaceTools", () => {
   it("compoe tools por capability com nomes esperados", () => {
     const textResult = (text: string) => [{ type: "text" as const, text }];
     const logToolStart = () => "intent";
@@ -12,7 +12,7 @@ describe("createPiCapabilityTools", () => {
     });
     const reserveNone = () => null;
 
-    const registry = createPiCapabilityTools({
+    const registry = createPiNamespaceTools({
       system: {
         sessionKey: "s1",
         tooling: {} as never,
