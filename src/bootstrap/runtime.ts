@@ -17,7 +17,6 @@ import {
 } from "../capabilities/video/index.js";
 import { MemoryService } from "../memory/service.js";
 import { HybridMemoryRetriever } from "../memory/retriever-hybrid.js";
-import { KnowledgeService } from "../knowledge/service.js";
 import { ProjectContextService } from "../projects/service.js";
 import { WorkspaceInspector } from "../workspace/inspector.js";
 import { BrowserRuntimeService, type BrowserRuntime } from "../runtime/browser/index.js";
@@ -111,15 +110,6 @@ export async function createMemoryRuntime(config: KaelConfig): Promise<MemorySer
   });
   await memory.init();
   return memory;
-}
-
-export async function createKnowledgeRuntime(config: KaelConfig): Promise<KnowledgeService> {
-  const knowledge = new KnowledgeService({
-    rootDir: path.join(config.dataDir, "knowledge"),
-    maxSnippetChars: 700,
-  });
-  await knowledge.init();
-  return knowledge;
 }
 
 export function createProjectContextRuntime(config: KaelConfig): ProjectContextService {

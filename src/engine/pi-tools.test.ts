@@ -5,7 +5,6 @@ import type {
   EngineEdgeTooling,
   EngineImageTooling,
   EngineJobsTooling,
-  EngineKnowledgeTooling,
   EngineMcpTooling,
   EngineMemoryTooling,
   EnginePlansTooling,
@@ -20,7 +19,6 @@ import type {
 type ToolingOverrides = {
   video?: Partial<EngineVideoTooling>;
   jobs?: Partial<EngineJobsTooling>;
-  knowledge?: Partial<EngineKnowledgeTooling>;
   projects?: Partial<EngineProjectsTooling>;
   system?: Partial<EngineSystemTooling>;
   mcp?: Partial<EngineMcpTooling>;
@@ -68,26 +66,6 @@ function createTooling(overrides: ToolingOverrides = {}): EngineToolingNamespace
       getJob: () => null,
       getJobLog: async ({ jobId }) => ({ jobId, found: false }),
       ...overrides.jobs,
-    },
-    knowledge: {
-      knowledgeSearch: async () => [],
-      knowledgeGet: async () => null,
-      knowledgeUpsert: async () => ({
-        id: "note-1",
-        project: "proj",
-        topic: "topic",
-        kind: "analysis" as const,
-        title: "title",
-        answer: "answer",
-        tags: [],
-        files: [],
-        evidence: [],
-        status: "draft" as const,
-        confidence: 0.7,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }),
-      ...overrides.knowledge,
     },
     projects: {
       projectSearch: async () => [],
@@ -355,52 +333,6 @@ describe("createPiShellTools playback_analyze", () => {
     expect(text).toContain("playback_analyze_unavailable");
   });
 });
-
-describe("createPiShellTools knowledge tools", () => {
-  it("exposes knowledge_search and knowledge_upsert", async () => {
-    const tools = createPiShellTools({
-      sessionKey: "s-knowledge",
-      tooling: createTooling({
-        knowledge: {
-          knowledgeSearch: async ({ query }) => [
-            {
-              id: "ios-app--param-x",
-              project: "ios-app",
-              topic: "param-x",
-              kind: "fact" as const,
-              title: "iOS param x",
-              status: "curated",
-              confidence: 0.9,
-              updatedAt: new Date().toISOString(),
-              score: 17,
-              snippet: `resultado para ${query}`,
-            },
-          ],
-        },
-      }),
-    });
-    const searchTool = tools.find((item) => item.name === "knowledge_search");
-    const upsertTool = tools.find((item) => item.name === "knowledge_upsert");
-    expect(searchTool).toBeTruthy();
-    expect(upsertTool).toBeTruthy();
-
-    const search = await searchTool!.execute("tc-knowledge-search", { query: "param x ios" });
-    const upsert = await upsertTool!.execute("tc-knowledge-upsert", {
-      project: "ios-app",
-      topic: "param-x",
-      answer: "iOS envia no body",
-    });
-
-    const searchText = String((search.content?.[0] as { text?: unknown })?.text ?? "");
-    const upsertText = String((upsert.content?.[0] as { text?: unknown })?.text ?? "");
-
-    expect(searchText).toContain("results=1");
-    expect(searchText).toContain("ios-app/param-x");
-    expect(upsertText).toContain("saved=true");
-    expect(upsertText).toContain("project=proj");
-  });
-});
-
 
 describe("createPiShellTools video_manifest_diff", () => {
   it("exposes video_manifest_diff and reports added issues", async () => {

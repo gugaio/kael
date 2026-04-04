@@ -86,13 +86,6 @@ export function createPiShellTools(params: {
       logToolEnd: (tool, intent, result, startedAtMs, summary) =>
         telemetry.logToolEnd(tool, intent, result, startedAtMs, summary),
     },
-    knowledge: {
-      tooling: params.tooling.knowledge,
-      textResult,
-      logToolStart: telemetry.logToolStart,
-      logToolEnd: (tool, intent, result, startedAtMs, summary) =>
-        telemetry.logToolEnd(tool, intent, result, startedAtMs, summary),
-    },
     projects: {
       tooling: params.tooling.projects,
       textResult,
@@ -178,7 +171,6 @@ export function createPiShellTools(params: {
     playbackAnalyzeTool,
   ] = namespaceTools.video;
   const [jobsListTool, jobsGetTool, jobsLogTailTool] = namespaceTools.jobs;
-  const [knowledgeSearchTool, knowledgeGetTool, knowledgeUpsertTool] = namespaceTools.knowledge;
   const [projectSearchTool, projectGetDocumentTool, projectUpsertDocumentTool, projectListDocumentsTool] = namespaceTools.projects;
   const [
     edgeListTool,
@@ -215,9 +207,6 @@ export function createPiShellTools(params: {
     jobsListTool,
     jobsGetTool,
     jobsLogTailTool,
-    knowledgeSearchTool,
-    knowledgeGetTool,
-    knowledgeUpsertTool,
     projectSearchTool,
     projectGetDocumentTool,
     projectUpsertDocumentTool,

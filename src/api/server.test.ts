@@ -9,25 +9,6 @@ import { createApiServer } from "./server.js";
 function makeFakeApp(): KaelApp {
   const schedules = new Map<string, SchedulerJob>();
   let chatCallCount = 0;
-  const knowledgeNotes = new Map<string, {
-    id: string;
-    project: string;
-    topic: string;
-    kind: "fact" | "analysis" | "decision";
-    title: string;
-    question?: string;
-    answer: string;
-    summary?: string;
-    tags: string[];
-    files: string[];
-    evidence: string[];
-    status: "draft" | "curated" | "stale" | "conflicting";
-    confidence: number;
-    createdAt: string;
-    updatedAt: string;
-    updatedBy?: string;
-    source?: string;
-  }>();
   let lastChatInput:
     | {
         sessionKey: string;
@@ -292,7 +273,6 @@ function makeFakeApp(): KaelApp {
     } as unknown as KaelApp["planner"],
     research: {} as KaelApp["research"],
     memory: {} as KaelApp["memory"],
-    knowledge: {} as KaelApp["knowledge"],
     projects: {} as KaelApp["projects"],
     chat: {
       handleMessage: async ({
@@ -665,54 +645,6 @@ function makeFakeApp(): KaelApp {
         recommendations: [],
       }),
     },
-    knowledgeBase: {
-      search: async ({ query, project, kind }) =>
-        [...knowledgeNotes.values()]
-          .filter((item) => (project ? item.project === project : true))
-          .filter((item) => (kind ? item.kind === kind : true))
-          .filter((item) => {
-            const haystack = `${item.project} ${item.topic} ${item.title} ${item.answer}`.toLowerCase();
-            const tokens = query.toLowerCase().split(/\s+/).filter((token) => token.length >= 2);
-            return tokens.some((token) => haystack.includes(token));
-          })
-          .map((item) => ({
-            id: item.id,
-            project: item.project,
-            topic: item.topic,
-            kind: item.kind,
-            title: item.title,
-            status: item.status,
-            confidence: item.confidence,
-            updatedAt: item.updatedAt,
-            score: 10,
-            snippet: item.answer,
-          })),
-      get: async (noteId: string) => knowledgeNotes.get(noteId) ?? null,
-      upsert: async ({ noteId, project, topic, title, answer, ...rest }) => {
-        const now = new Date().toISOString();
-        const note = {
-          id: noteId ?? `${project}--${topic}`,
-          project,
-          topic,
-          kind: rest.kind ?? ("analysis" as const),
-          title: title ?? topic,
-          answer,
-          tags: rest.tags ?? [],
-          files: rest.files ?? [],
-          evidence: rest.evidence ?? [],
-          status: rest.status ?? ("draft" as const),
-          confidence: rest.confidence ?? 0.7,
-          createdAt: knowledgeNotes.get(noteId ?? `${project}--${topic}`)?.createdAt ?? now,
-          updatedAt: now,
-          ...(rest.question ? { question: rest.question } : {}),
-          ...(rest.summary ? { summary: rest.summary } : {}),
-          ...(rest.updatedBy ? { updatedBy: rest.updatedBy } : {}),
-          ...(rest.source ? { source: rest.source } : {}),
-        };
-        knowledgeNotes.set(note.id, note);
-        return note;
-      },
-    },
   };
 }
 
@@ -810,50 +742,6 @@ describe("API integration", () => {
     expect(body.metrics.emailIngest.selfSkipped).toBe(0);
     expect(body.metrics.schedules.total).toBeGreaterThan(0);
     expect(body.metrics.edgeRuntime.connectedClients).toBe(0);
-    await server.close();
-  });
-
-  it("upserts and searches knowledge notes through API", async () => {
-    const server = createApiServer(makeFakeApp());
-    const upsert = await server.inject({
-      method: "POST",
-      url: "/knowledge/notes",
-      payload: {
-        project: "ios-app",
-        topic: "param-x",
-        kind: "fact",
-        title: "iOS param x",
-        answer: "iOS envia o parametro x no body do endpoint /session/start.",
-        files: ["ios/App/SessionStartRequest.swift"],
-        evidence: ["Struct SessionStartRequest serializa x no corpo."],
-        status: "curated",
-        confidence: 0.9,
-      },
-    });
-
-    expect(upsert.statusCode).toBe(200);
-    const upsertBody = upsert.json();
-    expect(upsertBody.ok).toBe(true);
-    expect(upsertBody.note.id).toBe("ios-app--param-x");
-
-    const search = await server.inject({
-      method: "GET",
-      url: "/knowledge/search?query=como%20o%20ios%20envia%20o%20parametro%20x&project=ios-app",
-    });
-    expect(search.statusCode).toBe(200);
-    const searchBody = search.json();
-    expect(searchBody.ok).toBe(true);
-    expect(searchBody.results).toHaveLength(1);
-    expect(searchBody.results[0].kind).toBe("fact");
-    expect(searchBody.results[0].snippet).toContain("/session/start");
-
-    const get = await server.inject({
-      method: "GET",
-      url: "/knowledge/notes/ios-app--param-x",
-    });
-    expect(get.statusCode).toBe(200);
-    const getBody = get.json();
-    expect(getBody.note.answer).toContain("body");
     await server.close();
   });
 

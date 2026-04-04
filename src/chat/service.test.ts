@@ -20,7 +20,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0, roots.length).map((root) => fs.rm(root, { recursive: true, force: true })));
 });
 
-function createTooling(overrides?: Partial<EngineToolingNamespaces["knowledge"]>): EngineToolingNamespaces {
+function createTooling(): EngineToolingNamespaces {
   return {
     video: {
       startTranscode: async () => {
@@ -63,26 +63,6 @@ function createTooling(overrides?: Partial<EngineToolingNamespaces["knowledge"]>
       memoryGet: async () => ({ path: "MEMORY.md", text: "", startLine: 1, endLine: 1 }),
       memoryWrite: async () => ({ path: "memory/2026-01-01.md" }),
     },
-    knowledge: {
-      knowledgeSearch: async () => [],
-      knowledgeGet: async () => null,
-      knowledgeUpsert: async () => ({
-        id: "note-1",
-        project: "proj",
-        topic: "topic",
-        kind: "analysis" as const,
-        title: "title",
-        answer: "answer",
-        tags: [],
-        files: [],
-        evidence: [],
-        status: "draft" as const,
-        confidence: 0.7,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }),
-      ...overrides,
-    },
     workspace: {
       workspaceSearch: async () => [],
       workspaceRead: async () => ({ path: "README.md", text: "", startLine: 1, endLine: 1 }),
@@ -112,7 +92,7 @@ function createTooling(overrides?: Partial<EngineToolingNamespaces["knowledge"]>
   } as unknown as EngineToolingNamespaces;
 }
 
-describe("ChatService knowledge retrieval", () => {
+describe("ChatService project retrieval", () => {
   it("injects project documents context for strong project question matches", async () => {
     const root = await createWorkspace();
     const sessions = new SessionStore(path.join(root, ".kael-data"));
@@ -181,11 +161,10 @@ describe("ChatService knowledge retrieval", () => {
     expect(capturedMessage).toContain("O iOS envia o parametro x no body de /session/start.");
   });
 
-  it("does not query project knowledge for generic chat", async () => {
+  it("does not inject project context for generic chat", async () => {
     const root = await createWorkspace();
     const sessions = new SessionStore(path.join(root, ".kael-data"));
     await sessions.init();
-    let knowledgeSearchCalls = 0;
     let capturedMessage = "";
     const orchestrator = {
       checkCompactionNeed: async () => ({
@@ -202,12 +181,7 @@ describe("ChatService knowledge retrieval", () => {
       getEngineRuntimeTelemetrySnapshot: () => ({ timeouts: 0, toolCallsByName: {}, blockedCallsByTool: {} }),
     } as unknown as ConstructorParameters<typeof ChatService>[2];
 
-    const tooling = createTooling({
-      knowledgeSearch: async () => {
-        knowledgeSearchCalls += 1;
-        return [];
-      },
-    });
+    const tooling = createTooling();
 
     const chat = new ChatService(
       sessions,
@@ -239,7 +213,6 @@ describe("ChatService knowledge retrieval", () => {
       message: "oi, tudo bem?",
     });
 
-    expect(knowledgeSearchCalls).toBe(0);
     expect(capturedMessage).not.toContain("[project_documents_context]");
   });
 

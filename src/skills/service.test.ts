@@ -261,7 +261,7 @@ Use a base oficial do hls.js para responder.`,
 name: project-knowledge-writer
 description: Use quando for preciso salvar, curar ou atualizar conhecimento do projeto no Kael depois de analise de codigo, incluindo arquivos, evidencias, confidence e kind da nota.
 ---
-Depois da analise, escreva a nota com knowledge_upsert.`,
+Depois da analise, escreva isso no project space do projeto.`,
     );
     const skills = new SkillService(root, undefined, { autoSkillMinScore: 2, autoSkillMaxPerTurn: 1 });
 

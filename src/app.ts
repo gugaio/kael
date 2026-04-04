@@ -6,7 +6,6 @@ import { AutomationService } from "./automation/service.js";
 import { loadConfig, type KaelConfig } from "./config.js";
 import {
   createBrowserRuntime,
-  createKnowledgeRuntime,
   createMediaRuntime,
   createMcpRuntime,
   createMemoryRuntime,
@@ -21,13 +20,6 @@ import { createEngine } from "./engine/factory.js";
 import { JobManager } from "./jobs/manager.js";
 import { JobStore } from "./jobs/store.js";
 import { MemoryService } from "./memory/service.js";
-import {
-  KnowledgeService,
-  type KnowledgeNote,
-  type KnowledgeNoteKind,
-  type KnowledgeNoteStatus,
-  type KnowledgeSearchResult,
-} from "./knowledge/service.js";
 import { ProjectContextService } from "./projects/service.js";
 import { PlannerService } from "./planner/service.js";
 import { ResearchService } from "./research/service.js";
@@ -57,7 +49,6 @@ export type KaelApp = {
   sessions: SessionStore;
   jobs: JobManager;
   memory: MemoryService;
-  knowledge: KnowledgeService;
   projects: ProjectContextService;
   planner: PlannerService;
   research: ResearchService;
@@ -71,34 +62,6 @@ export type KaelApp = {
   };
   manifestDiff: {
     diffHlsManifests(input: HlsManifestDiffInput): Promise<HlsManifestDiffReport>;
-  };
-  knowledgeBase: {
-    upsert(input: {
-      noteId?: string;
-      project: string;
-      topic: string;
-      kind?: KnowledgeNoteKind;
-      title?: string;
-      question?: string;
-      answer: string;
-      summary?: string;
-      tags?: string[];
-      files?: string[];
-      evidence?: string[];
-      status?: KnowledgeNoteStatus;
-      confidence?: number;
-      updatedBy?: string;
-      source?: string;
-    }): Promise<KnowledgeNote>;
-    search(params: {
-      query: string;
-      project?: string;
-      kind?: KnowledgeNoteKind;
-      tag?: string;
-      status?: KnowledgeNoteStatus;
-      maxResults?: number;
-    }): Promise<KnowledgeSearchResult[]>;
-    get(noteId: string): Promise<KnowledgeNote | null>;
   };
   emailIngest?: {
     getRuntimeTelemetrySnapshot(): EmailIngestRuntimeTelemetry;
@@ -126,7 +89,6 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   const mcp = await createMcpRuntime(config);
   const edge = new EdgeRuntime();
   const memory = await createMemoryRuntime(config);
-  const knowledge = await createKnowledgeRuntime(config);
   const projects = createProjectContextRuntime(config);
   const workspace = createWorkspaceRuntime(config);
   const browserRuntime = createBrowserRuntime(config);
@@ -145,7 +107,6 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     edgeRuntime: edge,
     videoInspect,
     memory,
-    knowledge,
     projects,
     workspace,
     research,
@@ -284,7 +245,6 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     sessions,
     jobs,
     memory,
-    knowledge,
     projects,
     planner,
     research,
@@ -295,7 +255,6 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     edge,
     manifestAudit,
     manifestDiff,
-    knowledgeBase: knowledge,
     ...(emailIngest ? { emailIngest } : {}),
   };
 }

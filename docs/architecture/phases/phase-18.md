@@ -223,3 +223,11 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
   - atualizar arquivos existentes e reutilizar documentos tematicos ja indexados;
   - bloquear criacao silenciosa de novos arquivos.
 - A skill `project-knowledge-writer` foi ajustada para pedir aprovacao do usuario quando concluir que um novo `.md` seria melhor do que atualizar um documento existente.
+
+## Entregas implementadas (incremento 18.10)
+
+- A superficie legada de `knowledge` foi removida do runtime principal:
+  - sem namespace `knowledge` na engine;
+  - sem tools PI `knowledge_*`;
+  - sem endpoints `/knowledge/*` na API.
+- O `project space` em `.kael/projects/<project>/` passa a ser a unica superficie persistida de conhecimento por projeto no core.

@@ -2,7 +2,6 @@ import type { EngineToolingNamespaces } from "../engine/types.js";
 import type { JobManager } from "../jobs/manager.js";
 import { VIDEO_JOB_ACTIONS } from "../capabilities/video/index.js";
 import type { MemoryService } from "../memory/service.js";
-import type { KnowledgeService } from "../knowledge/service.js";
 import type { PlannerService } from "../planner/service.js";
 import type { ProjectContextService } from "../projects/service.js";
 import { createPlannerExecuteRuntime, createPlannerReconcileRuntime } from "../planner/runtime.js";
@@ -29,7 +28,6 @@ type ChatToolingExecutors = {
   edgeRuntime: EdgeRuntime;
   videoInspect: VideoInspectToolService;
   memory: MemoryService;
-  knowledge: KnowledgeService;
   projects: ProjectContextService;
   workspace: WorkspaceInspector;
   research: ResearchService;
@@ -148,12 +146,6 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
       memorySearch: ({ query, maxResults }) => executors.memory.search(query, maxResults),
       memoryGet: ({ path, from, lines }) => executors.memory.get({ relPath: path, from, lines }),
       memoryWrite: ({ content, target }) => executors.memory.write({ content, target }),
-    },
-    knowledge: {
-      knowledgeSearch: ({ query, project, kind, tag, status, maxResults }) =>
-        executors.knowledge.search({ query, project, kind, tag, status, maxResults }),
-      knowledgeGet: ({ noteId }) => executors.knowledge.get(noteId),
-      knowledgeUpsert: (params) => executors.knowledge.upsert(params),
     },
     projects: {
       projectSearch: ({ query, project, maxResults }) => executors.projects.search({ query, project, maxResults }),
@@ -313,13 +305,6 @@ export function createChatOnlyTooling(tooling: EngineToolingNamespaces): EngineT
       },
       mcpCall: async () => {
         throw new Error("chat-only mode: mcp_call disabled");
-      },
-    },
-    knowledge: {
-      knowledgeSearch: async () => [],
-      knowledgeGet: async () => null,
-      knowledgeUpsert: async () => {
-        throw new Error("chat-only mode: knowledge_upsert disabled");
       },
     },
     projects: {

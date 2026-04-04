@@ -37,6 +37,31 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-04 - Project Space: remocao da superficie legada de `knowledge`
+
+Resumo:
+- O namespace `knowledge` saiu do contrato central da engine e do `KaelApp`.
+- As tools PI `knowledge_search`, `knowledge_get` e `knowledge_upsert` foram removidas, assim como os endpoints `/knowledge/*` da API.
+- O runtime principal agora usa apenas `projects/` como superficie de conhecimento persistido por projeto, e os arquivos legados de `src/knowledge/*` foram removidos.
+
+Arquivos-chave:
+- `src/app.ts`
+- `src/engine/types.ts`
+- `src/engine/pi-tools.ts`
+- `src/api/server.ts`
+- `docs/api.md`
+
+Checklist de validacao:
+- [ ] `npm run check`
+- [ ] `npm test -- src/chat/service.test.ts src/projects/service.test.ts src/skills/service.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/engine/simple-engine.test.ts`
+
+Pendencias:
+- Ainda faltam limpar referencias historicas a `knowledge` em documentos de status/arquitetura mais antigos.
+- O fluxo de aprovacao estruturado para criar um novo `.md` ainda nao existe; a skill pede aprovacao em linguagem natural.
+
+Proximo passo recomendado:
+- Implementar o approval flow estruturado para criacao de novos documentos no project space e depois expor endpoints dedicados de `projects`.
+
 ### 2026-04-04 - Project Space: criacao de novos `.md` exige aprovacao explicita
 
 Resumo:
