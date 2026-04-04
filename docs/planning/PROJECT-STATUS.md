@@ -37,6 +37,29 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-04 - Skills: base hls.js enriquecida com exemplos e parametros de segundo nivel
+
+Resumo:
+- A skill `.kael/skills/hlsjs-config-advisor` foi enriquecida com checklist de coleta de contexto, guardrails mais fortes e exemplos trabalhados de analise.
+- A base local agora cobre mais parametros/documentos do `hls.js`, incluindo `frontBufferFlushThreshold`, `liveSyncDuration`, `liveMaxLatencyDuration`, `initialLiveManifestSize`, `maxStarvationDelay` e `maxLoadingDelay`.
+- Foram adicionados exemplos concretos de resposta para cenarios como `live` sem sintoma claro, conflito formal de config, device com pressao de memoria e startup ruim com `startLevel` alto.
+
+Arquivos-chave:
+- `.kael/skills/hlsjs-config-advisor/SKILL.md`
+- `.kael/skills/hlsjs-config-advisor/references/parameter-catalog.md`
+- `.kael/skills/hlsjs-config-advisor/references/analysis-playbook.md`
+- `.kael/skills/hlsjs-config-advisor/references/worked-examples.md`
+
+Checklist de validacao:
+- [x] `npm test -- src/skills/service.test.ts`
+
+Pendencias:
+- Ainda faltam exemplos com logs/telemetria reais cruzando config e sintomas.
+- Ainda nao ha segmentacao explicita por versao do `hls.js` dentro da base.
+
+Proximo passo recomendado:
+- Adicionar exemplos reais de review com manifest/playback logs e depois versionar a base por release relevante do `hls.js`.
+
 ### 2026-04-04 - Video: advisor inicial de parametros para playback HLS
 
 Resumo:
