@@ -14,15 +14,21 @@ Modulo central de operacoes de video do Kael, responsavel por jobs de processame
         |                            |                            |
         v                            v                            v
 +---------------+          +------------------+          +-----------------+
-| safety.ts     |          | inspect-service  |          | playback-triage |
+| jobs/safety   |          | inspect-service  |          | playback-triage |
 | (validacoes)  |          | (probe/HLS)      |          | (analise)       |
 +---------------+          +--------+---------+          +--------+--------+
                                     |                             |
                                     v                             v
                            +------------------+          +-----------------+
-                           | manifest-audit   |          | playback-adapters
+                           | manifest-audit   |--------->| playback-adapters
                            | (auditoria HLS)  |          | (hlsjs, etc)    |
-                           +------------------+          +-----------------+
+                           +--------+---------+          +-----------------+
+                                    |
+                                    v
+                           +------------------+
+                           | manifest-diff    |
+                           | (comparacao)     |
+                           +------------------+
 
 +-------------------+       +----------------------+
 | artifacts-service |<------| generation-service   |

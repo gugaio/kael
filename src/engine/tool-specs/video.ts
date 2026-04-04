@@ -283,8 +283,16 @@ export function createVideoPiTools(params: {
           `issues.removed=${result.issueDiff.removed.length}`,
           `aggregateIssues.added=${result.aggregateIssueDiff.added.length}`,
           `aggregateIssues.removed=${result.aggregateIssueDiff.removed.length}`,
+          `variants.added=${result.variantDiff.added.length}`,
+          `variants.removed=${result.variantDiff.removed.length}`,
+          `variants.regressed=${result.variantDiff.regressed.length}`,
+          `variants.improved=${result.variantDiff.improved.length}`,
+          `variants.changed=${result.variantDiff.changed.length}`,
           ...(result.issueDiff.added.length > 0
             ? ["addedIssues:", ...result.issueDiff.added.map((issue) => `- ${issue.code}: ${issue.summary}`)]
+            : []),
+          ...(result.variantDiff.regressed.length > 0
+            ? ["regressedVariants:", ...result.variantDiff.regressed.map((item) => `- ${item.summary}`)]
             : []),
         ].join("\n");
         params.logToolEnd(

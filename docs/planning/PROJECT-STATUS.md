@@ -41,6 +41,7 @@ Proximo passo recomendado:
 
 Resumo:
 - Adicionada a capability `VideoManifestDiffService`, que compara dois audits HLS e devolve delta de stats, mudanca de `playlistType` e issues adicionadas/removidas.
+- O diff agora compara tambem variants/ladders em memoria, com matching explicito e classificacao de regressao/melhoria por variant.
 - O runtime PI ganhou a tool `video_manifest_diff`, e a CLI ganhou o comando `manifest-diff`.
 - `KaelApp`, bootstrap e chat tooling agora expõem o diff de manifesto como parte nativa do dominio de video QA.
 
@@ -59,7 +60,7 @@ Checklist de validacao:
 Pendencias:
 - O diff ainda compara o snapshot de audit em memoria; ainda nao ha comparacao baseada em artifacts persistidos.
 - Ainda nao existe diff equivalente para DASH.
-- Ainda nao ha comparacao detalhada por variant (`uri/url`) com heuristicas proprias de regressao.
+- Ainda faltam heuristicas mais profundas por variant, como diff dedicado de grupos de audio/subtitles e score de severidade da regressao da ladder.
 
 Proximo passo recomendado:
 - Persistir opcionalmente os audits como artifacts e evoluir `video_manifest_diff` para comparar variants/ladders com mais granularidade.

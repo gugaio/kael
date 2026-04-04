@@ -364,6 +364,23 @@ describe("createPiShellTools video_manifest_diff", () => {
               persisted: [],
             },
             aggregateIssueDiff: { added: [], removed: [], persisted: [] },
+            variantDiff: {
+              added: [],
+              removed: [],
+              changed: [],
+              regressed: [
+                {
+                  matchKey: "v1.m3u8",
+                  status: "regressed",
+                  delta: {},
+                  issueDiff: { added: [], removed: [], persisted: [] },
+                  changedFields: ["targetDuration"],
+                  summary: "Variant v1.m3u8 regrediu",
+                },
+              ],
+              improved: [],
+              unchanged: [],
+            },
             recommendations: ["Priorizar as novas issues"],
           }),
         },
@@ -380,6 +397,7 @@ describe("createPiShellTools video_manifest_diff", () => {
 
     expect(text).toContain("ok=false");
     expect(text).toContain("issues.added=1");
+    expect(text).toContain("variants.regressed=1");
     expect(text).toContain("variant_fetch_failures");
   });
 });

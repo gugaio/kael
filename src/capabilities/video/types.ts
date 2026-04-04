@@ -42,6 +42,13 @@ export type HlsVariantAuditReport = {
   uri: string;
   url: string;
   finalUrl: string;
+  bandwidth?: number;
+  averageBandwidth?: number;
+  resolution?: string;
+  frameRate?: number;
+  codecs?: string;
+  audioGroupId?: string;
+  subtitlesGroupId?: string;
   playlistType: "master" | "media" | "unknown";
   summary: string;
   ok: boolean;
@@ -105,7 +112,36 @@ export type HlsManifestDiffReport = {
     removed: ManifestAuditIssue[];
     persisted: string[];
   };
+  variantDiff: {
+    added: HlsVariantDiffEntry[];
+    removed: HlsVariantDiffEntry[];
+    changed: HlsVariantDiffEntry[];
+    regressed: HlsVariantDiffEntry[];
+    improved: HlsVariantDiffEntry[];
+    unchanged: HlsVariantDiffEntry[];
+  };
   recommendations: string[];
+};
+
+export type HlsVariantDiffEntry = {
+  matchKey: string;
+  status: "added" | "removed" | "changed" | "regressed" | "improved" | "unchanged";
+  left?: HlsVariantAuditReport;
+  right?: HlsVariantAuditReport;
+  delta: {
+    targetDuration?: number;
+    minSegmentDuration?: number;
+    maxSegmentDuration?: number;
+    averageSegmentDuration?: number;
+    segments?: number;
+  };
+  issueDiff: {
+    added: ManifestAuditIssue[];
+    removed: ManifestAuditIssue[];
+    persisted: string[];
+  };
+  changedFields: string[];
+  summary: string;
 };
 
 export type PlaybackEvent = {

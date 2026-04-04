@@ -71,6 +71,8 @@ Nota:
   - mudancas de `playlistType`;
   - deltas de stats (`variants`, `renditions`, `segments`, `targetDuration`, etc.);
   - issues e aggregate issues adicionadas/removidas entre esquerda e direita.
+  - diff de variants em memoria com matching por `uri`, path comparavel e fallback por assinatura de ladder (`resolution|bandwidth|codecs`);
+  - classificacao de variants em `added|removed|changed|regressed|improved|unchanged`.
 - Tool PI `video_manifest_diff` adicionada para expor diff deterministico ao agente.
 - CLI `manifest-diff` adicionada para comparar dois manifests localmente.
 

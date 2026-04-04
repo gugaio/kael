@@ -453,6 +453,11 @@ async function commandManifestDiff(
     `delta.segments=${report.delta.segments}`,
     `delta.variantsAudited=${report.delta.variantsAudited}`,
     `delta.variantsWithErrors=${report.delta.variantsWithErrors}`,
+    `variants.added=${report.variantDiff.added.length}`,
+    `variants.removed=${report.variantDiff.removed.length}`,
+    `variants.regressed=${report.variantDiff.regressed.length}`,
+    `variants.improved=${report.variantDiff.improved.length}`,
+    `variants.changed=${report.variantDiff.changed.length}`,
     ...(typeof report.delta.targetDuration === "number" ? [`delta.targetDuration=${report.delta.targetDuration}`] : []),
     ...(typeof report.delta.minSegmentDuration === "number"
       ? [`delta.minSegmentDuration=${report.delta.minSegmentDuration.toFixed(3)}`]
@@ -479,6 +484,24 @@ async function commandManifestDiff(
       ? [
           "aggregateIssues.removed:",
           ...report.aggregateIssueDiff.removed.map((issue) => `- [${issue.severity}] ${issue.code}: ${issue.summary}`),
+        ]
+      : []),
+    ...(report.variantDiff.regressed.length > 0
+      ? [
+          "variants.regressed:",
+          ...report.variantDiff.regressed.map((item) => `- ${item.summary}`),
+        ]
+      : []),
+    ...(report.variantDiff.added.length > 0
+      ? [
+          "variants.added:",
+          ...report.variantDiff.added.map((item) => `- ${item.summary}`),
+        ]
+      : []),
+    ...(report.variantDiff.removed.length > 0
+      ? [
+          "variants.removed:",
+          ...report.variantDiff.removed.map((item) => `- ${item.summary}`),
         ]
       : []),
     ...(report.recommendations.length > 0
