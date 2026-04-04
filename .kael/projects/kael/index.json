@@ -1,0 +1,18 @@
+{
+  "project": "kael",
+  "documents": [
+    {
+      "path": "PROJECT.md",
+      "title": "Project Overview",
+      "description": "Visao geral, areas principais, convencoes e mapa do projeto.",
+      "tags": [
+        "overview",
+        "architecture",
+        "typescript",
+        "video",
+        "agent"
+      ],
+      "updatedAt": "2026-04-04T21:39:06.518Z"
+    }
+  ]
+}

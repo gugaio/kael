@@ -10,7 +10,8 @@ Use `project_upsert_document` with this contract:
   "description": "Headers, payloads and request parameters used by the Android app.",
   "tags": ["android", "params", "contracts", "headers"],
   "content": "# Parameters and Contracts\n\n## Session Id Header\n\nAndroid envia `sessionId` no header `X-Session-Id` dentro do interceptor de rede usado por chamadas autenticadas.\n\n### Evidence\n- `apps/android/network/SessionInterceptor.kt` adiciona o header antes do request seguir.\n- O valor vem do `SessionStore` atual.\n",
-  "mode": "append"
+  "mode": "append",
+  "allowCreate": true
 }
 ```
 
@@ -25,11 +26,15 @@ Field guidance:
 - `mode`:
   - `replace` when curating/restructuring the whole file.
   - `append` when adding a new section to an existing document.
+- `allowCreate`:
+  - omit or use `false` when updating an existing document.
+  - use `true` only after the user explicitly asked for a new file or approved the creation of the proposed `.md`.
 
 When not to write:
 - when the conclusion is only a guess
 - when there is no reusable Markdown content yet
 - when you have not checked whether an existing project document already fits the topic
+- when the best target would be a brand new `.md` but the user has not approved creating it yet
 
 Document selection policy:
 - prefer `PROJECT.md` for stable context shared by the whole project

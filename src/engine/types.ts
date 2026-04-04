@@ -466,6 +466,7 @@ export type EngineProjectsTooling = {
     tags?: string[];
     content: string;
     mode?: "replace" | "append";
+    allowCreate?: boolean;
   }) => Promise<{
     project: string;
     path: string;

@@ -214,3 +214,12 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
   - `project_list_documents`;
   - `project_get_document`;
   - `project_upsert_document`.
+
+## Entregas implementadas (incremento 18.9)
+
+- A criacao de novos documentos tematicos no project space passou a exigir autorizacao explicita:
+  - `project_upsert_document` so cria um novo `.md` quando recebe `allowCreate=true`.
+- O comportamento padrao agora e conservador:
+  - atualizar arquivos existentes e reutilizar documentos tematicos ja indexados;
+  - bloquear criacao silenciosa de novos arquivos.
+- A skill `project-knowledge-writer` foi ajustada para pedir aprovacao do usuario quando concluir que um novo `.md` seria melhor do que atualizar um documento existente.

@@ -37,6 +37,30 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-04 - Project Space: criacao de novos `.md` exige aprovacao explicita
+
+Resumo:
+- `project_upsert_document` passou a bloquear a criacao silenciosa de novos arquivos Markdown no project space.
+- Novos `.md` agora exigem `allowCreate=true`, pensado para ser usado apenas quando o usuario pediu explicitamente o arquivo ou aprovou a criacao proposta pela LLM.
+- A skill `project-knowledge-writer` foi atualizada para priorizar reaproveitamento de documentos existentes e pedir aprovacao antes de propor um novo arquivo.
+
+Arquivos-chave:
+- `src/projects/service.ts`
+- `src/projects/service.test.ts`
+- `src/engine/tool-specs/projects.ts`
+- `.kael/skills/project-knowledge-writer/SKILL.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [ ] `npm test -- src/projects/service.test.ts src/chat/service.test.ts src/skills/service.test.ts src/engine/pi-tools.test.ts`
+
+Pendencias:
+- Ainda nao existe um fluxo de aprovacao estruturado no runtime; por enquanto a LLM precisa perguntar ao usuario em linguagem natural.
+- `PROJECT.md` continua sendo criado automaticamente no scaffold do projeto, por ser parte do provisionamento base e nao um documento tematico ad hoc.
+
+Proximo passo recomendado:
+- Adicionar um pequeno protocolo de aprovacao para criacao de documento tematico e depois refletir essa politica na API do project space.
+
 ### 2026-04-04 - Project Space: `@project` como escopo explicito de turno
 
 Resumo:

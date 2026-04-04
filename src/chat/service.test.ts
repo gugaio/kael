@@ -125,6 +125,7 @@ describe("ChatService knowledge retrieval", () => {
       description: "Parametros e contratos do app iOS.",
       tags: ["ios", "params"],
       content: "O iOS envia o parametro x no body de /session/start.",
+      allowCreate: true,
     });
     let capturedMessage = "";
     const orchestrator = {
