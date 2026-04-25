@@ -93,7 +93,7 @@ function createTooling(): EngineToolingNamespaces {
 }
 
 describe("ChatService project retrieval", () => {
-  it("injects project documents context for strong project question matches", async () => {
+  it("does not inject project documents context without explicit @project", async () => {
     const root = await createWorkspace();
     const sessions = new SessionStore(path.join(root, ".kael-data"));
     await sessions.init();
@@ -155,9 +155,10 @@ describe("ChatService project retrieval", () => {
     });
 
     expect(result.reply).toBe("ok");
-    expect(capturedMessage).toContain("[project_documents_context]");
-    expect(capturedMessage).toContain("project=ios-app path=params.md");
-    expect(capturedMessage).toContain("O iOS envia o parametro x no body de /session/start.");
+    expect(capturedMessage).toBe("Como o iOS envia o parametro x?");
+    expect(capturedMessage).not.toContain("[project_context]");
+    expect(capturedMessage).not.toContain("[project_documents_context]");
+    expect(capturedMessage).not.toContain("O iOS envia o parametro x no body de /session/start.");
   });
 
   it("does not inject project context for generic chat", async () => {

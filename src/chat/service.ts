@@ -12,123 +12,13 @@ import { ChatRoutingTelemetry, type ChatRoutingTelemetrySnapshot } from "./routi
 import { createChatOnlyTooling } from "./tooling-factory.js";
 import type { MediaRuntimeTelemetry, MediaUnderstandingService } from "../media/service.js";
 import type { BrowserRuntimeTelemetry } from "../runtime/browser/index.js";
-import { extractProjectMention, type ProjectContextService } from "../projects/service.js";
+import type { ProjectContextService } from "../projects/service.js";
+import { ProjectPromptContextBuilder } from "../projects/prompt-context.js";
 import { SkillService, type SkillsRuntimeTelemetry } from "../skills/service.js";
-
-const PROJECT_KNOWLEDGE_MAX_NOTES = 2;
-const PROJECT_KNOWLEDGE_MIN_SCORE = 10;
-const PROJECT_CONTEXT_MAX_CHARS = 1400;
 
 function shouldResetSessionOnEngineError(error: unknown): boolean {
   const normalized = normalizePiError(error);
   return normalized.code === "invalid_response" || normalized.code === "unknown";
-}
-
-function isSlashLikeCommand(message: string): boolean {
-  return message.trimStart().startsWith("/");
-}
-
-function looksLikeProjectKnowledgeQuestion(message: string): boolean {
-  const normalized = message.trim().toLowerCase();
-  if (!normalized || normalized.length < 12 || isSlashLikeCommand(normalized)) {
-    return false;
-  }
-  const questionLike =
-    normalized.includes("?") ||
-    /\b(como|onde|qual|quais|porque|por que|de onde|em qual|what|where|why|how)\b/.test(normalized);
-  if (!questionLike) {
-    return false;
-  }
-  return /\b(android|ios|backend|frontend|web|player|api|app|mobile|projeto|param|parametro|header|payload|request|endpoint|contrato)\b/.test(
-    normalized,
-  );
-}
-
-function buildProjectDocumentsContextBlock(
-  docs: Array<{
-    project: string;
-    path: string;
-    title: string;
-    description: string;
-    updatedAt: string;
-    content: string;
-  }>,
-): string {
-  const lines = [
-    "[project_documents_context]",
-    "Use estes documentos do project space apenas se forem relevantes para responder a pergunta atual.",
-  ];
-
-  for (const [index, doc] of docs.entries()) {
-    lines.push(
-      "",
-      `${index + 1}. project=${doc.project} path=${doc.path} updatedAt=${doc.updatedAt}`,
-      `title=${doc.title}`,
-      `description=${doc.description}`,
-      doc.content.trim().slice(0, PROJECT_CONTEXT_MAX_CHARS),
-    );
-  }
-
-  return lines.join("\n");
-}
-
-function buildProjectOverviewContextBlock(project: { name: string; content: string; filePath: string }): string {
-  const trimmedContent = project.content.trim().slice(0, PROJECT_CONTEXT_MAX_CHARS);
-  return [
-    "[project_context]",
-    `project=${project.name}`,
-    `file=${project.filePath}`,
-    "Use este contexto do projeto quando ele ajudar a interpretar a pergunta atual.",
-    trimmedContent,
-  ].join("\n");
-}
-
-function buildProjectScopeContextBlock(project: { name: string; cleanedMessage: string }): string {
-  return [
-    "[project_scope]",
-    `project=${project.name}`,
-    "Use este projeto como escopo padrao para project tools e skills que escrevem no project space.",
-    project.cleanedMessage ? `user_message=${project.cleanedMessage}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function buildProjectDocumentPolicyBlock(): string {
-  return [
-    "[project_document_policy]",
-    "No project space, prefira atualizar documentos existentes.",
-    "Se um novo .md parecer melhor e a intencao do usuario nao estiver clara, pergunte de forma curta antes de criar.",
-    "Se o usuario ja tiver pedido ou confirmado explicitamente um arquivo .md especifico, voce pode seguir com esse caminho.",
-  ].join("\n");
-}
-
-function extractMarkdownDocumentIntent(message: string): { path: string; state: "requested" | "approved" } | null {
-  const pathMatch = message.match(/\b([A-Za-z0-9._/-]+\.md)\b/);
-  const path = pathMatch?.[1]?.trim();
-  if (!path) {
-    return null;
-  }
-  const normalized = message.toLowerCase();
-  const approved =
-    /\b(aprovad[oa]|pode criar|pode seguir|segue com|sim[, ]+cria|sim[, ]+pode criar)\b/.test(normalized);
-  if (approved) {
-    return { path, state: "approved" };
-  }
-  const requested = /\b(criar|crie|novo arquivo|novo md|novo markdown)\b/.test(normalized);
-  if (requested) {
-    return { path, state: "requested" };
-  }
-  return null;
-}
-
-function buildProjectDocumentIntentBlock(params: { project: string; path: string; state: "requested" | "approved" }): string {
-  return [
-    "[project_document_intent]",
-    `project=${params.project}`,
-    `path=${params.path}`,
-    `state=${params.state}`,
-  ].join("\n");
 }
 
 function extractPartialWebEvidence(message: string): string[] {
@@ -199,7 +89,7 @@ export class ChatService {
   private readonly commandRouter = new CommandRouter();
   private readonly routingTelemetry = new ChatRoutingTelemetry();
   private readonly skills: SkillService;
-  private readonly projects: ProjectContextService;
+  private readonly projectPromptContext: ProjectPromptContextBuilder;
 
   constructor(
     private readonly sessions: SessionStore,
@@ -214,7 +104,7 @@ export class ChatService {
     this.memoryOrchestrator = new MemoryOrchestrator(this.sessions, memory, this.orchestrator);
     this.tooling = tooling;
     this.chatOnlyTooling = createChatOnlyTooling(tooling);
-    this.projects = projects;
+    this.projectPromptContext = new ProjectPromptContextBuilder(projects);
     this.skills = skills;
   }
 
@@ -444,7 +334,7 @@ export class ChatService {
   }
 
   private async prepareLlmMessageStage(input: HandleMessageInput, pipeline: PipelineState): Promise<string> {
-    const projectHint = extractProjectMention(input.message);
+    const projectHint = this.projectPromptContext.extractMention(input.message);
     let llmInputMessage = projectHint && !pipeline.skillManualApplied
       ? projectHint.cleanedMessage || pipeline.llmInputMessage
       : pipeline.llmInputMessage;
@@ -463,24 +353,13 @@ export class ChatService {
     }
 
     if (projectHint) {
-      llmInputMessage = `${llmInputMessage}\n\n${buildProjectScopeContextBlock({
-        name: projectHint.projectName,
-        cleanedMessage: projectHint.cleanedMessage,
-      })}`;
-      llmInputMessage = `${llmInputMessage}\n\n${buildProjectDocumentPolicyBlock()}`;
-      const docIntent = extractMarkdownDocumentIntent(input.message);
-      if (docIntent) {
-        llmInputMessage = `${llmInputMessage}\n\n${buildProjectDocumentIntentBlock({
-          project: projectHint.projectName,
-          path: docIntent.path,
-          state: docIntent.state,
-        })}`;
-      }
-    }
-
-    const projectContextBlocks = await this.buildProjectContextBlocks(input, llmInputMessage, projectHint?.projectName);
-    if (projectContextBlocks.length > 0) {
-      llmInputMessage = `${llmInputMessage}\n\n${projectContextBlocks.join("\n\n")}`;
+      llmInputMessage = await this.projectPromptContext.appendMentionedProjectContext({
+        sessionKey: input.sessionKey,
+        requestId: input.requestId,
+        originalMessage: input.message,
+        message: llmInputMessage,
+        projectHint,
+      });
     }
 
     const mediaPreprocess = await this.media.preprocess({
@@ -498,63 +377,6 @@ export class ChatService {
       });
     }
     return mediaPreprocess.message;
-  }
-
-  private async buildProjectContextBlocks(
-    input: HandleMessageInput,
-    llmInputMessage: string,
-    projectName?: string,
-  ): Promise<string[]> {
-    const blocks: string[] = [];
-    if (!projectName && !looksLikeProjectKnowledgeQuestion(input.message)) {
-      return blocks;
-    }
-
-    try {
-      if (projectName) {
-        const project = await this.projects.ensureProject(projectName);
-        blocks.push(buildProjectOverviewContextBlock(project));
-      }
-      const results = await this.projects.search({
-        query: input.message,
-        ...(projectName ? { project: projectName } : {}),
-        maxResults: PROJECT_KNOWLEDGE_MAX_NOTES,
-      });
-      const strongMatches = results
-        .filter((item) => item.score >= PROJECT_KNOWLEDGE_MIN_SCORE)
-        .slice(0, PROJECT_KNOWLEDGE_MAX_NOTES);
-      if (strongMatches.length === 0) {
-        return blocks;
-      }
-
-      const docs = (
-        await Promise.all(
-          strongMatches.map((item) => this.projects.getDocument(item.project, item.path)),
-        )
-      ).filter((item): item is NonNullable<typeof item> => Boolean(item));
-      if (docs.length === 0) {
-        return blocks;
-      }
-
-      kaelLogger.info("chat.project_documents.context_applied", {
-        sessionKey: input.sessionKey,
-        requestId: input.requestId ?? null,
-        projectName: projectName ?? null,
-        docs: docs.map((item) => `${item.project}/${item.path}`),
-        query: input.message,
-        llmChars: llmInputMessage.length,
-      });
-      blocks.push(buildProjectDocumentsContextBlock(docs));
-      return blocks;
-    } catch (error) {
-      kaelLogger.warn("chat.project_documents.context_failed", {
-        sessionKey: input.sessionKey,
-        requestId: input.requestId ?? null,
-        projectName: projectName ?? null,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return blocks;
-    }
   }
 
   private async runLlmTurnStage(
