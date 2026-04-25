@@ -1,7 +1,7 @@
 import "dotenv/config";
 import path from "node:path";
 import { HeartbeatRunner } from "./automation/heartbeat-runner.js";
-import { PersistentScheduler } from "./automation/persistent-scheduler.js";
+import { PersistentScheduler } from "./automation/scheduler/persistent-scheduler.js";
 import { AutomationService } from "./automation/service.js";
 import { loadConfig, type KaelConfig } from "./config.js";
 import {

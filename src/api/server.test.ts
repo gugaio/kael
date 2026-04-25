@@ -2,7 +2,7 @@ import { once } from "node:events";
 import { describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import type { KaelApp } from "../app.js";
-import type { SchedulerJob } from "../automation/persistent-scheduler.js";
+import type { SchedulerJob } from "../automation/scheduler/persistent-scheduler.js";
 import { EdgeRuntime } from "../edge/runtime.js";
 import { createApiServer } from "./server.js";
 

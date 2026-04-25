@@ -599,6 +599,6 @@ private async startJob(params): Promise<VideoJob> {
 - `src/jobs/store.ts` - Persistência JSON
 - `src/capabilities/video/job-service.ts` - Executor de ffmpeg
 - `src/automation/heartbeat-runner.ts` - Monitorador de status
-- `src/automation/persistent-scheduler.ts` - Agendador
+- `src/automation/scheduler/persistent-scheduler.ts` - Agendador
 - `src/config.ts` - Configuração de heartbeat/scheduler
 - `src/global-config.ts` - Defaults globais

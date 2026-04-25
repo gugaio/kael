@@ -1,4 +1,4 @@
-import { PersistentScheduler, type SchedulerJob } from "./persistent-scheduler.js";
+import { PersistentScheduler, type SchedulerJob } from "./scheduler/persistent-scheduler.js";
 
 export class AutomationService {
   constructor(private readonly scheduler: PersistentScheduler) {}

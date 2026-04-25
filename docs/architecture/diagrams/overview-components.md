@@ -23,7 +23,7 @@ graph TB
         subgraph "Orchestration Layer"
             Chat[ChatService<br/>src/chat/service.ts]
             Auto[AutomationService<br/>src/automation/service.ts]
-            Scheduler[PersistentScheduler<br/>src/automation/persistent-scheduler.ts]
+            Scheduler[PersistentScheduler<br/>src/automation/scheduler/persistent-scheduler.ts]
             Heartbeat[HeartbeatRunner<br/>src/automation/heartbeat-runner.ts]
         end
 

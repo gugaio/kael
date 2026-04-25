@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-04-04**
+Ultima atualizacao: **2026-04-25**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,29 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-04-25 - Automation: scheduler isolado em submodulo
+
+Resumo:
+- O scheduler persistente e o parser cron foram movidos para `src/automation/scheduler/`.
+- `src/automation/` permanece como dominio de automacoes/runners, deixando o scheduler como infraestrutura interna de agendamento.
+- Documentos e diagramas ativos foram atualizados para refletir a nova fronteira.
+
+Arquivos-chave:
+- `src/automation/scheduler/persistent-scheduler.ts`
+- `src/automation/scheduler/cron.ts`
+- `src/automation/service.ts`
+- `docs/architecture/phases/phase-4.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/automation/scheduler/cron.test.ts src/automation/scheduler/persistent-scheduler.test.ts`
+
+Pendencias:
+- O modulo `automation` ainda nao possui workflows/triggers genericos; por enquanto a automacao concreta continua baseada em schedules e runners.
+
+Proximo passo recomendado:
+- Quando houver demanda real, introduzir automacoes como composicao de trigger, condition, action e audit sem expandir prematuramente o runtime.
 
 ### 2026-04-04 - Skill: `project-writer` evoluida para curadoria incremental
 

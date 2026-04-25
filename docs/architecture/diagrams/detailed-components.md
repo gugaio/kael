@@ -86,7 +86,7 @@ graph TB
     end
 
     subgraph "Automation"
-        Scheduler[PersistentScheduler<br/>src/automation/persistent-scheduler.ts<br/>Interval/Cron + catch-up]
+        Scheduler[PersistentScheduler<br/>src/automation/scheduler/persistent-scheduler.ts<br/>Interval/Cron + catch-up]
         Heartbeat[HeartbeatRunner<br/>src/automation/heartbeat-runner.ts<br/>Verificações proativas]
     end
 

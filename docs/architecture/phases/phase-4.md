@@ -9,7 +9,7 @@ Adicionar autonomia operacional inicial com heartbeat produtivo e agendamento pe
 ## Entregas implementadas (incremento atual)
 
 - Scheduler persistente em JSON:
-  - `src/automation/persistent-scheduler.ts`
+  - `src/automation/scheduler/persistent-scheduler.ts`
   - store em `dataDir/automation/scheduler-jobs.json`
 - Catch-up basico apos restart:
   - se `nextRunAt` ja passou, executa no proximo tick e recalcula proximo horario.
@@ -21,6 +21,9 @@ Adicionar autonomia operacional inicial com heartbeat produtivo e agendamento pe
 - Scheduler com dois modos de agenda:
   - intervalo em ms
   - cron expression (5 campos)
+- Fronteira de modulo:
+  - `src/automation/scheduler/` contem infraestrutura de tempo/agendamento.
+  - `src/automation/` permanece como dominio maior para rotinas autonomas, runners e futuras automacoes.
 - API de gerenciamento de schedules:
   - `GET /schedules`
   - `GET /schedules/:scheduleId`
@@ -43,7 +46,7 @@ Adicionar autonomia operacional inicial com heartbeat produtivo e agendamento pe
 
 ## Comportamento atual
 
-1. App sobe e inicializa scheduler persistente.
+1. App sobe e inicializa o scheduler persistente dentro do dominio de automation.
 2. Job `heartbeat.main` roda por intervalo configuravel.
 3. Heartbeat compara snapshot de jobs com estado atual.
 4. Quando job muda para `succeeded` ou `failed`, cria mensagem de sistema na sessao do job.
