@@ -14,6 +14,11 @@ Use `project_upsert_document` with this contract:
 }
 ```
 
+Important:
+- `content` is the full payload that will be written by the tool.
+- If you are fixing or consolidating an existing section, prefer preparing the curated final content and using `mode=replace`.
+- Do not use `append` as a default just because it is easier.
+
 Field guidance:
 - `project`: use a stable bucket like `android-app`, `ios-app`, `backend-api`, `player-web`.
   - If the turn already includes `[project_scope] project=<name>`, reuse that same project by default.
@@ -36,3 +41,8 @@ Document selection policy:
 - prefer thematic documents for narrow recurring knowledge
 - avoid creating many tiny files when an existing thematic document is a better fit
 - when a new file seems best, prefer confirming that direction with the user unless the intent is already clear
+
+Editing policy:
+- if the same concept already exists in the file, update it instead of appending a second section
+- if the file contains overlapping headings, consolidate them in the new content
+- prefer `replace` for curation and `append` only for genuinely new sections

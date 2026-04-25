@@ -168,7 +168,7 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
 
 ## Entregas implementadas (incremento 18.5)
 
-- Skill `.kael/skills/project-knowledge-writer` adicionada para padronizar a escrita de notas na knowledge base do Kael.
+- Skill `.kael/skills/project-writer` adicionada para padronizar a escrita de notas na knowledge base do Kael.
 - A skill orienta o agente a usar `knowledge_upsert` com:
   - `kind` (`fact|analysis|decision`);
   - `status`;
@@ -201,7 +201,7 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
   - `project_get_document`;
   - `project_upsert_document`;
   - `project_list_documents`.
-- A skill `project-knowledge-writer` foi ajustada para escrever no project space, em vez de depender exclusivamente de `knowledge_upsert`.
+- A skill `project-writer` foi ajustada para escrever no project space, em vez de depender exclusivamente de `knowledge_upsert`.
 - O `ChatService` passou a usar o project space como fonte principal de retrieval para perguntas de projeto.
 
 ## Entregas implementadas (incremento 18.8)
@@ -210,7 +210,7 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
   - `project=<name>`;
   - mensagem limpa (`user_message=...`) sem o marcador inline.
 - O `ChatService` agora remove `@project` da pergunta base enviada ao modelo quando o turno nao e uma invocacao manual de skill, reduzindo ruido textual.
-- A skill `project-knowledge-writer` passou a tratar `[project_scope]` como fonte padrao de escopo para:
+- A skill `project-writer` passou a tratar `[project_scope]` como fonte padrao de escopo para:
   - `project_list_documents`;
   - `project_get_document`;
   - `project_upsert_document`.
@@ -222,7 +222,7 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
 - O comportamento padrao agora e conservador:
   - atualizar arquivos existentes e reutilizar documentos tematicos ja indexados;
   - bloquear criacao silenciosa de novos arquivos.
-- A skill `project-knowledge-writer` foi ajustada para pedir aprovacao do usuario quando concluir que um novo `.md` seria melhor do que atualizar um documento existente.
+- A skill `project-writer` foi ajustada para pedir aprovacao do usuario quando concluir que um novo `.md` seria melhor do que atualizar um documento existente.
 
 ## Entregas implementadas (incremento 18.10)
 
@@ -258,4 +258,14 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
   - `[project_document_intent]`
   - `path=<arquivo>`
   - `state=requested|approved`
-- A skill `project-knowledge-writer` foi ajustada para tratar esse bloco como a principal pista sobre criar ou atualizar um documento tematico.
+- A skill `project-writer` foi ajustada para tratar esse bloco como a principal pista sobre criar ou atualizar um documento tematico.
+
+## Entregas implementadas (incremento 18.14)
+
+- A skill `project-writer` passou a operar como skill de curadoria incremental, nao apenas de escrita.
+- Novo `editing-playbook` adicionado com regras para:
+  - ler antes de escrever;
+  - escolher `append` vs `replace`;
+  - consolidar secoes sobrepostas;
+  - normalizar headings e preservar contexto correto.
+- Os exemplos da skill foram expandidos para cobrir consolidacao de secoes existentes em vez de append cego.

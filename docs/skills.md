@@ -219,18 +219,20 @@ Objetivo:
   - `liveMaxLatencyDurationCount`;
   - `maxBufferLength`;
 
-## Skill project-knowledge-writer
+## Skill project-writer
 
 Foi adicionada:
 
-- `.kael/skills/project-knowledge-writer/SKILL.md`
-- `.kael/skills/project-knowledge-writer/references/schema.md`
-- `.kael/skills/project-knowledge-writer/references/examples.md`
+- `.kael/skills/project-writer/SKILL.md`
+- `.kael/skills/project-writer/references/schema.md`
+- `.kael/skills/project-writer/references/editing-playbook.md`
+- `.kael/skills/project-writer/references/examples.md`
 
 Objetivo:
 
 - orientar o agente a salvar achados reutilizaveis diretamente no project space em `.kael/projects/<project>/`;
 - decidir quando atualizar `PROJECT.md` e quando criar/atualizar documentos tematicos como `params.md`, `networking.md` e `decisions.md`;
+- priorizar curadoria incremental de documentos existentes, evitando headings duplicados e append indiscriminado;
 - usar as tools `project_list_documents`, `project_get_document` e `project_upsert_document`.
 
 Quando usar:

@@ -16,6 +16,11 @@ Use:
 }
 ```
 
+Why:
+- `params.md` is already the right thematic file
+- this is a genuinely new section
+- `append` is acceptable because the example assumes the file does not yet contain a section for this concept
+
 ## Example 2: update `PROJECT.md` with stable context
 
 Use:
@@ -32,6 +37,10 @@ Use:
 }
 ```
 
+Why:
+- this belongs to project-wide context, not a narrow thematic file
+- `replace` is better because `PROJECT.md` should stay curated and internally consistent
+
 ## Example 3: create a decision log
 
 Use:
@@ -47,3 +56,41 @@ Use:
   "mode": "append"
 }
 ```
+
+Why:
+- the information is a durable decision, not just a narrow implementation fact
+- `decisions.md` is the right long-term target for this type of content
+
+## Example 4: consolidate an existing section instead of appending a duplicate
+
+Current `params.md` already contains:
+
+```md
+# Parameters and Contracts
+
+## Session Id
+
+Session id vai no request.
+```
+
+New finding:
+- the exact header is `X-Session-Id`
+- the value is injected in `SessionInterceptor.kt`
+
+Prefer:
+
+```json
+{
+  "project": "android-app",
+  "path": "params.md",
+  "title": "Parameters and Contracts",
+  "description": "Headers, payloads and request parameters used by the Android app.",
+  "tags": ["android", "params", "contracts", "headers"],
+  "content": "# Parameters and Contracts\n\n## Session Id Header\n\nAndroid envia `sessionId` no header `X-Session-Id` dentro do interceptor usado por chamadas autenticadas.\n\n### Evidence\n- `apps/android/network/SessionInterceptor.kt` adiciona o header antes do request seguir.\n- O valor atual vem do `SessionStore` da sessao.\n",
+  "mode": "replace"
+}
+```
+
+Why:
+- appending another section like `## Session Id Header` criaria duplicacao
+- o melhor resultado e consolidar a secao existente numa versao mais precisa

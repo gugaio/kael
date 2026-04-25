@@ -37,17 +37,40 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-04 - Skill: `project-writer` evoluida para curadoria incremental
+
+Resumo:
+- A skill passou a carregar um `editing-playbook` dedicado para orientar curadoria de documentos existentes, nao apenas escrita.
+- O workflow agora enfatiza ler o documento atual, decidir entre `append` e `replace`, consolidar secoes sobrepostas e evitar headings duplicados.
+- Foram adicionados exemplos de consolidacao de secao existente e guidance mais forte sobre estrutura de secoes e evidencia.
+
+Arquivos-chave:
+- `.kael/skills/project-writer/SKILL.md`
+- `.kael/skills/project-writer/references/editing-playbook.md`
+- `.kael/skills/project-writer/references/examples.md`
+- `.kael/skills/project-writer/references/schema.md`
+- `docs/skills.md`
+
+Checklist de validacao:
+- [x] `npm test -- src/skills/service.test.ts`
+
+Pendencias:
+- A skill ainda depende do modelo montar manualmente o `content` final para updates com `mode=replace`; nao existe patch semantico de secao por tool.
+
+Proximo passo recomendado:
+- Se essa curadoria mostrar valor real, considerar uma tool futura de edicao por secao para reduzir rewrites completos em arquivos longos.
+
 ### 2026-04-04 - Project Space: sugestao/confirmacao leve de novos `.md` no prompt
 
 Resumo:
 - O `ChatService` passou a injetar uma politica explicita de documentos do project space quando existe `@project`.
 - Quando a mensagem traz um caminho `.md` com linguagem de pedido ou confirmacao, o turno agora ganha um bloco estruturado `[project_document_intent]`.
-- A skill `project-knowledge-writer` foi ajustada para tratar esse bloco como o sinal mais forte sobre o alvo do documento e sobre se o usuario ja pediu/aprovou aquele arquivo.
+- A skill `project-writer` foi ajustada para tratar esse bloco como o sinal mais forte sobre o alvo do documento e sobre se o usuario ja pediu/aprovou aquele arquivo.
 
 Arquivos-chave:
 - `src/chat/service.ts`
 - `src/chat/service.test.ts`
-- `.kael/skills/project-knowledge-writer/SKILL.md`
+- `.kael/skills/project-writer/SKILL.md`
 
 Checklist de validacao:
 - [x] `npm run check`
@@ -88,14 +111,14 @@ Proximo passo recomendado:
 
 Resumo:
 - O bloqueio estrutural de criacao de novos `.md` foi removido de `project_upsert_document`.
-- A orientacao de confirmar com o usuario quando um novo arquivo parecer melhor foi mantida apenas na skill `project-knowledge-writer`.
+- A orientacao de confirmar com o usuario quando um novo arquivo parecer melhor foi mantida apenas na skill `project-writer`.
 - O modelo agora tem mais liberdade operacional, mas continua orientado a preferir reutilizar documentos existentes.
 
 Arquivos-chave:
 - `src/projects/service.ts`
 - `src/engine/types.ts`
 - `src/engine/tool-specs/projects.ts`
-- `.kael/skills/project-knowledge-writer/SKILL.md`
+- `.kael/skills/project-writer/SKILL.md`
 
 Checklist de validacao:
 - [ ] `npm run check`
@@ -137,13 +160,13 @@ Proximo passo recomendado:
 Resumo:
 - `project_upsert_document` passou a bloquear a criacao silenciosa de novos arquivos Markdown no project space.
 - Novos `.md` agora exigem `allowCreate=true`, pensado para ser usado apenas quando o usuario pediu explicitamente o arquivo ou aprovou a criacao proposta pela LLM.
-- A skill `project-knowledge-writer` foi atualizada para priorizar reaproveitamento de documentos existentes e pedir aprovacao antes de propor um novo arquivo.
+- A skill `project-writer` foi atualizada para priorizar reaproveitamento de documentos existentes e pedir aprovacao antes de propor um novo arquivo.
 
 Arquivos-chave:
 - `src/projects/service.ts`
 - `src/projects/service.test.ts`
 - `src/engine/tool-specs/projects.ts`
-- `.kael/skills/project-knowledge-writer/SKILL.md`
+- `.kael/skills/project-writer/SKILL.md`
 
 Checklist de validacao:
 - [x] `npm run check`
@@ -161,13 +184,13 @@ Proximo passo recomendado:
 Resumo:
 - O `ChatService` agora injeta um bloco `[project_scope]` sempre que a mensagem inclui `@project`, deixando o escopo do projeto explicito para o turno LLM.
 - O `@project` passa a ser removido da pergunta base enviada ao modelo quando apropriado, reduzindo ruido e mantendo o nome do projeto em contexto estruturado em vez de texto solto.
-- A skill `project-knowledge-writer` foi ajustada para reutilizar `[project_scope] project=<name>` como projeto default ao ler ou escrever no project space.
+- A skill `project-writer` foi ajustada para reutilizar `[project_scope] project=<name>` como projeto default ao ler ou escrever no project space.
 
 Arquivos-chave:
 - `src/chat/service.ts`
 - `src/chat/service.test.ts`
-- `.kael/skills/project-knowledge-writer/SKILL.md`
-- `.kael/skills/project-knowledge-writer/references/schema.md`
+- `.kael/skills/project-writer/SKILL.md`
+- `.kael/skills/project-writer/references/schema.md`
 
 Checklist de validacao:
 - [x] `npm run check`
@@ -186,13 +209,13 @@ Resumo:
 - O Kael ganhou um `project space` unificado em `.kael/projects/<project>/`, com `PROJECT.md`, `index.json` e suporte a documentos Markdown tematicos.
 - Foram adicionadas tools nativas de projeto para busca, leitura, listagem e escrita (`project_search`, `project_get_document`, `project_upsert_document`, `project_list_documents`).
 - O retrieval do chat para perguntas de projeto passou a usar documentos do project space como fonte principal, simplificando o modelo mental em torno de `@project`.
-- A skill `project-knowledge-writer` foi atualizada para escrever no project space, deixando `knowledge` como legado/compatibilidade e nao mais como superficie principal.
+- A skill `project-writer` foi atualizada para escrever no project space, deixando `knowledge` como legado/compatibilidade e nao mais como superficie principal.
 
 Arquivos-chave:
 - `src/projects/service.ts`
 - `src/engine/tool-specs/projects.ts`
 - `src/chat/service.ts`
-- `.kael/skills/project-knowledge-writer/SKILL.md`
+- `.kael/skills/project-writer/SKILL.md`
 - `docs/architecture/phases/phase-18.md`
 
 Checklist de validacao:
@@ -260,14 +283,14 @@ Proximo passo recomendado:
 
 Resumo:
 - A knowledge base ganhou `kind` por nota (`fact`, `analysis`, `decision`) e filtro correspondente em busca, deixando o schema de ingestao menos livre.
-- Foi adicionada a skill `.kael/skills/project-knowledge-writer` para orientar agentes a salvar notas com `files`, `evidence`, `confidence`, `status` e `kind`.
+- Foi adicionada a skill `.kael/skills/project-writer` para orientar agentes a salvar notas com `files`, `evidence`, `confidence`, `status` e `kind`.
 - A API e as tools de knowledge foram alinhadas ao novo campo `kind`, preparando a base para ingestao mais consistente por agentes de codigo.
 
 Arquivos-chave:
 - `src/knowledge/service.ts`
 - `src/api/routes/knowledge.ts`
 - `src/engine/tool-specs/knowledge.ts`
-- `.kael/skills/project-knowledge-writer/SKILL.md`
+- `.kael/skills/project-writer/SKILL.md`
 - `docs/architecture/phases/phase-18.md`
 
 Checklist de validacao:

@@ -3,6 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "dist/cli/index.js",
+  "exports": {
+    ".": "./dist/cli/index.js"
+  },
+  "bin": {
+    "kael": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist"
+  ],
   "description": "Kael - super agente de video e automacao",
   "scripts": {
     "dev": "tsx src/cli/index.ts server",
