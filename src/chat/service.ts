@@ -188,6 +188,10 @@ type PipelineState = {
   skillManualApplied: boolean;
 };
 
+type PreLlmDeterministicRouteResult =
+  | { reply: ChatReplyEnvelope }
+  | { pipeline: PipelineState };
+
 export class ChatService {
   private readonly tooling: EngineToolingNamespaces;
   private readonly chatOnlyTooling: EngineToolingNamespaces;
@@ -265,24 +269,14 @@ export class ChatService {
   ): Promise<ChatReplyEnvelope> {
     const userMessage = appendAttachmentSummaryToMessage(input.message, input.attachments);
     let user = await this.sessions.appendMessage(input.sessionKey, "user", userMessage);
-    const manualSkillResult = await this.applyManualSkillStage(input, user);
-    if ("reply" in manualSkillResult) {
-      return manualSkillResult;
-    }
-    const pipeline = manualSkillResult;
-
-    const compactReply = await this.tryCompactStage(input, tooling, user);
-    if (compactReply) {
-      return compactReply;
-    }
 
     try {
-      const fastPathReply = await this.tryOperationalFastPathStage(input, tooling, opts, user, pipeline);
-      if (fastPathReply) {
-        return fastPathReply;
+      const preLlmRoute = await this.tryHandlePreLlmDeterministicRoute(input, tooling, opts, user);
+      if ("reply" in preLlmRoute) {
+        return preLlmRoute.reply;
       }
 
-      const llmMessage = await this.prepareLlmMessageStage(input, pipeline);
+      const llmMessage = await this.prepareLlmMessageStage(input, preLlmRoute.pipeline);
       return this.runLlmTurnStage(input, tooling, user, llmMessage);
     } catch (error) {
       return this.handlePipelineError(input, tooling, userMessage, user, error);
@@ -317,6 +311,31 @@ export class ChatService {
     ].filter(Boolean);
 
     return { reply: lines.join("\n") };
+  }
+
+  private async tryHandlePreLlmDeterministicRoute(
+    input: HandleMessageInput,
+    tooling: EngineToolingNamespaces,
+    opts: { allowOperationalShortcuts: boolean },
+    user: SessionMessage,
+  ): Promise<PreLlmDeterministicRouteResult> {
+    const manualSkillResult = await this.applyManualSkillStage(input, user);
+    if ("reply" in manualSkillResult) {
+      return { reply: manualSkillResult };
+    }
+    const pipeline = manualSkillResult;
+
+    const compactReply = await this.tryCompactStage(input, tooling, user);
+    if (compactReply) {
+      return { reply: compactReply };
+    }
+
+    const fastPathReply = await this.tryOperationalFastPathStage(input, tooling, opts, user, pipeline);
+    if (fastPathReply) {
+      return { reply: fastPathReply };
+    }
+
+    return { pipeline };
   }
 
   private async applyManualSkillStage(
