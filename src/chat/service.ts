@@ -154,7 +154,7 @@ function summarizeAttachmentForTranscript(attachment: EngineInboundAttachment): 
   return `- ${attachment.kind}: ${name} (${mime})`;
 }
 
-function buildStoredUserMessage(message: string, attachments?: EngineInboundAttachment[]): string {
+function appendAttachmentSummaryToMessage(message: string, attachments?: EngineInboundAttachment[]): string {
   if (!attachments || attachments.length === 0) {
     return message;
   }
@@ -263,8 +263,8 @@ export class ChatService {
     tooling: EngineToolingNamespaces,
     opts: { allowOperationalShortcuts: boolean },
   ): Promise<ChatReplyEnvelope> {
-    const storedUserMessage = buildStoredUserMessage(input.message, input.attachments);
-    let user = await this.sessions.appendMessage(input.sessionKey, "user", storedUserMessage);
+    const userMessage = appendAttachmentSummaryToMessage(input.message, input.attachments);
+    let user = await this.sessions.appendMessage(input.sessionKey, "user", userMessage);
     const manualSkillResult = await this.applyManualSkillStage(input, user);
     if ("reply" in manualSkillResult) {
       return manualSkillResult;
@@ -285,7 +285,7 @@ export class ChatService {
       const llmMessage = await this.prepareLlmMessageStage(input, pipeline);
       return this.runLlmTurnStage(input, tooling, user, llmMessage);
     } catch (error) {
-      return this.handlePipelineError(input, tooling, storedUserMessage, user, error);
+      return this.handlePipelineError(input, tooling, userMessage, user, error);
     }
   }
 
