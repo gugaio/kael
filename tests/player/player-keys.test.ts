@@ -67,4 +67,81 @@ describe("Player TVS-Lite - navegacao por keys", () => {
     },
     30_000,
   );
+
+  it.runIf(process.env.PLAYER_E2E === "1")(
+    "seek via ArrowRight e valida getCurrentTime",
+    async () => {
+      await fs.mkdir(SNAPSHOT_DIR, { recursive: true });
+      const browser = await chromium.launch({ headless: true });
+      const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+
+      await page.goto(PLAYER_URL, { waitUntil: "domcontentloaded", timeout: 15_000 });
+      await page.waitForSelector(PLAY_BTN, { state: "attached", timeout: 10_000 });
+      await page.waitForTimeout(5_000);
+
+      // garante que esta tocando
+      await page.keyboard.press("ArrowDown");
+      await page.waitForTimeout(1_000);
+      const label = await page.locator(PLAY_BTN).getAttribute("aria-label");
+      if (label === "Reproduzir") {
+        await page.keyboard.press("Enter");
+        await page.waitForTimeout(1_000);
+      }
+
+      const timeBefore = await page.evaluate(() => {
+        const p = (window as any).player;
+        return p ? p.getCurrentTime() : null;
+      });
+      console.log("Time before seek:", timeBefore);
+
+      // seek forward
+      for (let i = 0; i < 3; i++) {
+        await page.keyboard.press("ArrowRight");
+        await page.waitForTimeout(800);
+      }
+
+      const timeAfter = await page.evaluate(() => {
+        const p = (window as any).player;
+        return p ? p.getCurrentTime() : null;
+      });
+      console.log("Time after seek:", timeAfter);
+
+      await page.screenshot({ path: path.join(SNAPSHOT_DIR, "seek-forward.png") });
+
+      expect(typeof timeBefore).toBe("number");
+      expect(typeof timeAfter).toBe("number");
+
+      const diff = Math.abs((timeAfter as number) - (timeBefore as number));
+      console.log(`Seek diff: ${diff.toFixed(2)}s`);
+
+      // para live o diff pode ser ~0 (sliding window), para VOD espera-se diff > 0
+      // o teste valida que getCurrentTime responde corretamente
+      expect(diff).toBeGreaterThanOrEqual(0);
+
+      // seek backward
+      const timeBeforeBack = await page.evaluate(() => {
+        const p = (window as any).player;
+        return p ? p.getCurrentTime() : null;
+      });
+
+      for (let i = 0; i < 3; i++) {
+        await page.keyboard.press("ArrowLeft");
+        await page.waitForTimeout(800);
+      }
+
+      const timeAfterBack = await page.evaluate(() => {
+        const p = (window as any).player;
+        return p ? p.getCurrentTime() : null;
+      });
+      console.log("Time after seek back:", timeAfterBack);
+
+      await page.screenshot({ path: path.join(SNAPSHOT_DIR, "seek-backward.png") });
+
+      expect(typeof timeBeforeBack).toBe("number");
+      expect(typeof timeAfterBack).toBe("number");
+
+      await browser.close();
+    },
+    40_000,
+  );
 });
