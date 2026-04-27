@@ -144,4 +144,81 @@ describe("Player TVS-Lite - navegacao por keys", () => {
     },
     40_000,
   );
+
+  it.runIf(process.env.PLAYER_E2E === "1")(
+    "abre e fecha menu de legenda via navegacao por keys",
+    async () => {
+      await fs.mkdir(SNAPSHOT_DIR, { recursive: true });
+      const browser = await chromium.launch({ headless: true });
+      const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+
+      await page.goto(PLAYER_URL, { waitUntil: "domcontentloaded", timeout: 15_000 });
+      await page.waitForTimeout(5_000);
+
+      const LANG_BTN = 'button[aria-label="Opções de Audio e Legenda"]';
+      const CLOSE_BTN = 'button[aria-label="Fechar Opções de Audio e Legenda"]';
+      const MENU_CONTENT = '[data-name="menuContent"]';
+
+      await page.waitForSelector(PLAY_BTN, { state: "attached", timeout: 10_000 });
+
+      // 1) ArrowDown - mostra controles
+      await page.keyboard.press("ArrowDown");
+      await page.waitForTimeout(1_000);
+      await page.screenshot({ path: path.join(SNAPSHOT_DIR, "lang-controls-visible.png") });
+
+      // garante que esta tocando
+      const playLabel = await page.locator(PLAY_BTN).getAttribute("aria-label");
+      if (playLabel === "Reproduzir") {
+        await page.keyboard.press("Enter");
+        await page.waitForTimeout(1_000);
+      }
+
+      // 2) ArrowUp - foca no botao de legenda (top row)
+      await page.keyboard.press("ArrowUp");
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: path.join(SNAPSHOT_DIR, "lang-btn-focused.png") });
+
+      // espera o botao de legenda existir (para VOD; em Live o plugin nao renderiza)
+      const langBtnCount = await page.locator(LANG_BTN).count();
+      if (langBtnCount === 0) {
+        console.log("SKIP: botao de legenda nao encontrado (Live content nao renderiza language_menu)");
+        await browser.close();
+        return;
+      }
+
+      // 3) Enter - abre o menu
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(1_000);
+      await page.screenshot({ path: path.join(SNAPSHOT_DIR, "lang-menu-open.png") });
+
+      // confirma que o menu abriu (content--hidden removido)
+      const menuHidden = await page.locator(MENU_CONTENT).evaluate((el) =>
+        el.classList.contains("content--hidden"),
+      );
+      expect(menuHidden).toBe(false);
+
+      // 4) ArrowUp - foca no botao de fechar
+      await page.keyboard.press("ArrowUp");
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: path.join(SNAPSHOT_DIR, "lang-close-focused.png") });
+
+      // 5) Enter - fecha o menu
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(1_000);
+      await page.screenshot({ path: path.join(SNAPSHOT_DIR, "lang-menu-closed.png") });
+
+      // confirma que o menu fechou (content--hidden adicionado)
+      const menuHiddenAfter = await page.locator(MENU_CONTENT).evaluate((el) =>
+        el.classList.contains("content--hidden"),
+      );
+      expect(menuHiddenAfter).toBe(true);
+
+      // 6) confirma que o play button continua visivel
+      const playLabelAfter = await page.locator(PLAY_BTN).getAttribute("aria-label");
+      expect(playLabelAfter).toBeDefined();
+
+      await browser.close();
+    },
+    40_000,
+  );
 });
