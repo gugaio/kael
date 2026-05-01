@@ -464,6 +464,13 @@ async function createJobsServer(params: {
         recommendations: [],
       }),
     },
+    streamMonitor: {
+      startWatch: () => "watch-stub",
+      stopWatch: () => true,
+      getStatus: () => null,
+      listWatches: () => [],
+      stopAll: () => {},
+    },
   };
 
   return { server: createApiServer(app), jobs };

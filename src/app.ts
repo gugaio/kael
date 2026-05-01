@@ -34,6 +34,7 @@ import { createChatTooling } from "./chat/tooling-factory.js";
 import { TurnOrchestrator } from "./chat/turn-orchestrator.js";
 import type { ShellRuntime } from "./tools/system/shell-tool-service.js";
 import { PlaybackTriageService } from "./capabilities/video/index.js";
+import type { StreamWatchParams, StreamWatchStatus } from "./capabilities/video/index.js";
 import { SkillService } from "./skills/service.js";
 import type { McpRuntime } from "./tools/mcp/mcp-bridge-service.js";
 import { EdgeRuntime } from "./edge/runtime.js";
@@ -63,6 +64,13 @@ export type KaelApp = {
   manifestDiff: {
     diffHlsManifests(input: HlsManifestDiffInput): Promise<HlsManifestDiffReport>;
   };
+  streamMonitor: {
+    startWatch(params: StreamWatchParams): string;
+    stopWatch(id: string): boolean;
+    getStatus(id: string): StreamWatchStatus | null;
+    listWatches(): StreamWatchStatus[];
+    stopAll(): void;
+  };
   emailIngest?: {
     getRuntimeTelemetrySnapshot(): EmailIngestRuntimeTelemetry;
   };
@@ -83,7 +91,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   await sessions.init();
   await jobStore.init();
 
-  const { jobs, videoInspect, manifestAudit, manifestDiff, videoArtifacts } =
+  const { jobs, videoInspect, manifestAudit, manifestDiff, videoArtifacts, streamMonitor } =
     await createVideoRuntime(config, jobStore);
   const shell = await createShellRuntime(config);
   const mcp = await createMcpRuntime(config);
@@ -114,6 +122,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     playbackTriage: new PlaybackTriageService(),
     manifestAudit,
     manifestDiff,
+    streamMonitor,
     browserRuntime,
     imageGenerator,
     videoGeneration,
@@ -255,6 +264,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     edge,
     manifestAudit,
     manifestDiff,
+    streamMonitor,
     ...(emailIngest ? { emailIngest } : {}),
   };
 }

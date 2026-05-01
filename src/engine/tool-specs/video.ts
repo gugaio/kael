@@ -433,11 +433,129 @@ export function createVideoPiTools(params: {
     },
   };
 
+  const videoStreamWatchTool: AgentTool = {
+    name: "video_stream_watch",
+    label: "Video Stream Watch",
+    description:
+      "Inicia, para ou consulta uma sessao de monitoramento continuo de stream HLS. " +
+      "Quando action=start, o Kael passa a fazer polling periodico do manifesto e detecta automaticamente: " +
+      "descontinuidades (#EXT-X-DISCONTINUITY), gaps de mediaSequence, manifest congelado (stale), " +
+      "anomalias de duracao de segmento e desaparecimento de rendisoes de audio. " +
+      "Use action=status para consultar eventos detectados e action=stop para encerrar a sessao.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["start", "stop", "status", "list"],
+          description: "Acao a executar: start=inicia monitoramento, stop=encerra, status=consulta eventos, list=lista sessoes",
+        },
+        url: {
+          type: "string",
+          description: "URL do manifesto HLS (.m3u8) a monitorar. Obrigatorio quando action=start.",
+        },
+        pollIntervalMs: {
+          type: "number",
+          description: "Intervalo entre polls em ms. Padrao: 5000. Minimo: 1000.",
+        },
+        maxPollCount: {
+          type: "number",
+          description: "Numero maximo de polls antes de encerrar automaticamente. Omitir para monitoramento continuo.",
+        },
+        timeoutMs: {
+          type: "number",
+          description: "Timeout de fetch por poll em ms. Padrao: 15000.",
+        },
+        watchId: {
+          type: "string",
+          description: "ID da sessao de monitoramento. Obrigatorio para action=stop e action=status.",
+        },
+      },
+      required: ["action"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const blocked = params.reserveToolCall("video_stream_watch");
+      if (blocked) {
+        return blocked.blocked;
+      }
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as {
+        action: "start" | "stop" | "status" | "list";
+        url?: string;
+        pollIntervalMs?: number;
+        maxPollCount?: number;
+        timeoutMs?: number;
+        watchId?: string;
+      };
+      const intent = params.logToolStart("video_stream_watch", args);
+      if (!params.tooling.videoStreamWatch) {
+        const reason = "video_stream_watch_unavailable";
+        const details = { status: "blocked", blocked: true, reason };
+        params.logToolEnd("video_stream_watch", intent, details, startedAtMs);
+        return {
+          content: params.textResult(`blocked=true\nreason=${reason}`),
+          details,
+        };
+      }
+      try {
+        const result = await params.tooling.videoStreamWatch({
+          action: args.action,
+          sessionKey: params.sessionKey,
+          url: args.url,
+          pollIntervalMs: args.pollIntervalMs,
+          maxPollCount: args.maxPollCount,
+          timeoutMs: args.timeoutMs,
+          watchId: args.watchId,
+        });
+        const textLines = [
+          `ok=${result.ok}`,
+          `action=${result.action}`,
+        ];
+        if (result.watchId) textLines.push(`watchId=${result.watchId}`);
+        if (result.stopped !== undefined) textLines.push(`stopped=${result.stopped}`);
+        if (result.status) {
+          const s = result.status;
+          textLines.push(
+            `running=${s.running}`,
+            `pollCount=${s.pollCount}`,
+            `errorCount=${s.errorCount}`,
+            `events=${s.events.length}`,
+            `lastPollAt=${s.lastPollAt ?? "never"}`,
+          );
+          if (s.events.length > 0) {
+            textLines.push("detectedEvents:");
+            for (const ev of s.events.slice(-10)) {
+              textLines.push(`- [${ev.severity}] ${ev.code}: ${ev.summary}`);
+            }
+          }
+        }
+        if (result.watches) {
+          textLines.push(`sessions=${result.watches.length}`);
+          for (const w of result.watches) {
+            textLines.push(`- id=${w.id} running=${w.running} polls=${w.pollCount} events=${w.events.length} url=${w.url}`);
+          }
+        }
+        params.logToolEnd("video_stream_watch", intent, result, startedAtMs);
+        return { content: params.textResult(textLines.join("\n")), details: result };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const details = { status: "failed", blocked: false, reason: "video_stream_watch_failed", error: message };
+        params.logToolEnd("video_stream_watch", intent, details, startedAtMs);
+        return {
+          content: params.textResult(`ok=false\nreason=video_stream_watch_failed\nerror=${message}`),
+          details,
+        };
+      }
+    },
+  };
+
   return [
     videoHlsInspectTool,
     videoProbeTool,
     videoManifestAuditTool,
     videoManifestDiffTool,
     playbackAnalyzeTool,
+    videoStreamWatchTool,
   ];
 }

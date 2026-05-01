@@ -771,6 +771,13 @@ function makeFakeApp(): KaelApp {
         recommendations: [],
       }),
     },
+    streamMonitor: {
+      startWatch: () => "watch-stub",
+      stopWatch: () => true,
+      getStatus: () => null,
+      listWatches: () => [],
+      stopAll: () => {},
+    },
   };
 }
 

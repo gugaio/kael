@@ -4,11 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { MemoryService } from "./service.js";
 
-async function makeService() {
-  return makeServiceWithOptions();
-}
-
-async function makeServiceWithOptions(options?: ConstructorParameters<typeof MemoryService>[0]["semanticDedupe"]) {
+async function makeService(options?: ConstructorParameters<typeof MemoryService>[0]["semanticDedupe"]) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-memory-"));
   const storageRoot = path.join(root, ".kael", "data", "memory");
   const service = new MemoryService({
@@ -101,7 +97,7 @@ describe("MemoryService", () => {
   });
 
   it("allows tuning semantic dedupe thresholds via constructor", async () => {
-    const { service, storageRoot } = await makeServiceWithOptions({
+    const { service, storageRoot } = await makeService({
       minTokens: 999,
     });
 

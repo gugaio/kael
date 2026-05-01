@@ -7,6 +7,8 @@ export { ProviderBackedVideoGenerationService, NoopVideoGenerationService } from
 export { PlaybackTriageService } from "./playback-triage-service.js";
 export { VideoManifestAuditService } from "./manifest-audit-service.js";
 export { VideoManifestDiffService } from "./manifest-diff-service.js";
+export { HlsStreamMonitorService } from "./stream-monitor-service.js";
+export { analyzeSnapshotTransition, toStreamSnapshot } from "./stream-snapshot-analyzer.js";
 export { deriveHlsJsIssues, parseHlsJsLogText } from "./playback-adapters/hlsjs.js";
 export type {
   HlsManifestAuditInput,
@@ -22,5 +24,9 @@ export type {
   PlaybackIssueSeverity,
   PlaybackSessionInput,
   StoredArtifactRecord,
+  StreamSnapshot,
+  StreamWatchEvent,
+  StreamWatchParams,
+  StreamWatchStatus,
   VideoGenerationRequest,
 } from "./types.js";

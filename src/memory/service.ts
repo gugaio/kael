@@ -2,18 +2,12 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { ensureDir } from "../infra/fs.js";
-import { BuiltinMemoryRetriever } from "./retriever.js";
-import type { MemoryRetriever } from "./types.js";
+import { searchMemoryTexts } from "./retriever.js";
+import type { MemorySearchFn, MemorySearchResult } from "./types.js";
 
 export type MemoryWriteTarget = "daily" | "long_term";
 
-export type MemorySearchResult = {
-  path: string;
-  startLine: number;
-  endLine: number;
-  snippet: string;
-  score: number;
-};
+export type { MemorySearchResult };
 
 export type MemoryGetResult = {
   path: string;
@@ -27,7 +21,7 @@ type MemoryServiceConfig = {
   storageRoot?: string;
   defaultMaxResults: number;
   maxSnippetChars: number;
-  retriever?: MemoryRetriever;
+  searchFn?: MemorySearchFn;
   semanticDedupe?: {
     minTokens?: number;
     jaccardThreshold?: number;
@@ -54,45 +48,11 @@ function normalizeForDedupe(input: string): string {
 const SEMANTIC_DEDUPE_MIN_TOKENS = 4;
 const SEMANTIC_DEDUPE_JACCARD_THRESHOLD = 0.72;
 const SEMANTIC_DEDUPE_CONTAINMENT_THRESHOLD = 0.85;
+
 const SEMANTIC_DEDUPE_STOPWORDS = new Set([
-  "a",
-  "o",
-  "os",
-  "as",
-  "de",
-  "do",
-  "da",
-  "dos",
-  "das",
-  "e",
-  "em",
-  "no",
-  "na",
-  "nos",
-  "nas",
-  "para",
-  "por",
-  "com",
-  "sem",
-  "um",
-  "uma",
-  "uns",
-  "umas",
-  "que",
-  "se",
-  "ao",
-  "aos",
-  "à",
-  "às",
-  "the",
-  "and",
-  "or",
-  "to",
-  "of",
-  "in",
-  "on",
-  "for",
-  "with",
+  "a", "o", "os", "as", "de", "do", "da", "dos", "das", "e", "em", "no", "na",
+  "nos", "nas", "para", "por", "com", "sem", "um", "uma", "uns", "umas", "que",
+  "se", "ao", "aos", "à", "às", "the", "and", "or", "to", "of", "in", "on", "for", "with",
 ]);
 
 function tokenizeForSemanticDedupe(input: string): string[] {
@@ -187,7 +147,7 @@ export class MemoryService {
   private readonly dailyDir: string;
   private readonly legacyLongTermPath: string;
   private readonly legacyDailyDir: string;
-  private readonly retriever: MemoryRetriever;
+  private readonly searchFn: MemorySearchFn;
   private readonly semanticDedupe: {
     minTokens: number;
     jaccardThreshold: number;
@@ -203,7 +163,7 @@ export class MemoryService {
     this.dailyDir = path.join(this.storageRoot, "daily");
     this.legacyLongTermPath = path.join(this.workspaceRoot, "MEMORY.md");
     this.legacyDailyDir = path.join(this.workspaceRoot, "memory");
-    this.retriever = cfg.retriever ?? new BuiltinMemoryRetriever();
+    this.searchFn = cfg.searchFn ?? searchMemoryTexts;
     this.semanticDedupe = {
       minTokens: Math.max(1, Math.floor(cfg.semanticDedupe?.minTokens ?? SEMANTIC_DEDUPE_MIN_TOKENS)),
       jaccardThreshold: Math.min(
@@ -259,8 +219,8 @@ export class MemoryService {
 
   async search(query: string, maxResults?: number): Promise<MemorySearchResult[]> {
     const files = await this.listMemoryFiles();
-    const targetResults = Number.isFinite(maxResults ?? NaN)
-      ? Math.max(1, Math.floor(maxResults ?? this.defaultMaxResults))
+    const targetResults = maxResults != null && Number.isFinite(maxResults)
+      ? Math.max(1, Math.floor(maxResults))
       : this.defaultMaxResults;
     const entries = await Promise.all(
       files.map(async (filePath) => ({
@@ -268,7 +228,7 @@ export class MemoryService {
         text: await fs.readFile(filePath, "utf-8").catch(() => ""),
       })),
     );
-    return this.retriever.search({
+    return this.searchFn({
       query,
       entries,
       maxResults: targetResults,
@@ -331,7 +291,6 @@ export class MemoryService {
     };
     await tryAdd(this.longTermPath);
     await walk(this.dailyDir);
-    // Compatibilidade de leitura com legado no workspace.
     await tryAdd(this.legacyLongTermPath);
     await walk(this.legacyDailyDir);
     return files;
@@ -405,7 +364,6 @@ export class MemoryService {
   }
 
   private pickExistingOrPrimary(primary: string, fallback: string): string {
-    // Prefer novo storage; se nao existir ainda, aceita legado para leitura.
     if (existsSync(primary)) {
       return primary;
     }

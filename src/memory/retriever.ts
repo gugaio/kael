@@ -1,23 +1,9 @@
 import { kaelLogger } from "../infra/logger.js";
-import type { MemoryRetriever, MemorySearchQuery } from "./types.js";
+import type { MemorySearchFn, MemorySearchParams, MemorySearchResult } from "./types.js";
 import {
   MEMORY_SEARCH_PT_STOPWORDS,
   MEMORY_SEARCH_PT_SYNONYMS,
 } from "./query-expansion.pt-br.js";
-import type { MemorySearchResult } from "./service.js";
-
-type MemoryTextEntry = {
-  path: string;
-  text: string;
-};
-
-type SearchMemoryTextsParams = SearchMemoryTextsParamsInternal;
-type SearchMemoryTextsParamsInternal = {
-  query: string;
-  entries: MemoryTextEntry[];
-  maxResults: number;
-  maxSnippetChars: number;
-};
 
 function clip(input: string, maxChars: number): string {
   if (input.length <= maxChars) {
@@ -71,7 +57,7 @@ function recencyBoostFromPath(relPath: string): number {
   return 0.95;
 }
 
-export function searchMemoryTexts(params: SearchMemoryTextsParams): MemorySearchResult[] {
+export const searchMemoryTexts: MemorySearchFn = (params: MemorySearchParams): MemorySearchResult[] => {
   const normalizedQuery = normalizeForSearch(params.query.trim());
   if (!normalizedQuery) {
     return [];
@@ -82,7 +68,6 @@ export function searchMemoryTexts(params: SearchMemoryTextsParams): MemorySearch
   }
   const { terms, weights } = expandTerms(baseTerms);
   const hits: MemorySearchResult[] = [];
-  const topPathsForLog: string[] = [];
 
   for (const entry of params.entries) {
     const content = entry.text;
@@ -152,27 +137,13 @@ export function searchMemoryTexts(params: SearchMemoryTextsParams): MemorySearch
     })
     .slice(0, params.maxResults);
 
-  for (const result of results.slice(0, 5)) {
-    topPathsForLog.push(`${result.path}:${result.startLine}-${result.endLine}`);
-  }
   kaelLogger.info("memory.search.finished", {
     query: clip(params.query, 180),
     baseTerms,
     expandedTerms: terms,
     resultCount: results.length,
-    topPaths: topPathsForLog,
+    topPaths: results.slice(0, 5).map((r) => `${r.path}:${r.startLine}-${r.endLine}`),
   });
 
   return results;
-}
-
-export class BuiltinMemoryRetriever implements MemoryRetriever {
-  search(params: MemorySearchQuery): MemorySearchResult[] {
-    return searchMemoryTexts({
-      query: params.query,
-      entries: params.entries,
-      maxResults: params.maxResults,
-      maxSnippetChars: params.maxSnippetChars,
-    });
-  }
-}
+};

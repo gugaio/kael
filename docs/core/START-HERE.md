@@ -47,6 +47,7 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 19: em andamento (MCP bridge via `mcporter` com `mcp_list`/`mcp_call` e skill operacional).
 - Fase 20: em andamento (video intelligence platform: playback analysis + generation/artifacts base).
 - Fase 21: concluida (Clark runtime satelite incubado em `apps/clark` com daemon, protocolo WS com handshake + dispatch remoto baseline, capabilities MVP e bindings explicitos para MCP HTTP).
+- Fase 22: em andamento (stream watch: monitoramento continuo HLS + deteccao de discontinuities, gaps de audio, manifest stale e anomalias de duracao).
 
 ## Estudos e referencias tecnicas
 

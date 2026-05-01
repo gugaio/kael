@@ -54,6 +54,9 @@ export function inferToolIntent(tool: string, rawParams: unknown): string {
   }
   if (tool === "video_hls_inspect") return "video:hls_inspect";
   if (tool === "video_probe") return "video:probe";
+  if (tool === "video_manifest_audit") return "video:manifest_audit";
+  if (tool === "video_manifest_diff") return "video:manifest_diff";
+  if (tool === "video_stream_watch") return "video:stream_watch";
   if (tool === "playback_analyze") return "video:playback_analyze";
   if (tool === "web_search") return "web:search";
   if (tool === "web_fetch") return "web:fetch";

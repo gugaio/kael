@@ -11,6 +11,7 @@ import type {
   PlaybackAnalysisReport,
   PlaybackEvent,
   PlaybackEngine,
+  StreamWatchStatus,
 } from "../capabilities/video/index.js";
 import type { McpCallResult, McpListResult } from "../tools/mcp/mcp-bridge-service.js";
 import type { EdgeCallResult, EdgeCapabilitySummary } from "../edge/runtime.js";
@@ -150,6 +151,22 @@ export type EngineVideoTooling = {
     logText?: string;
     events?: PlaybackEvent[];
   }) => Promise<PlaybackAnalysisReport>;
+  videoStreamWatch?: (params: {
+    action: "start" | "stop" | "status" | "list";
+    sessionKey: string;
+    url?: string;
+    pollIntervalMs?: number;
+    maxPollCount?: number;
+    timeoutMs?: number;
+    watchId?: string;
+  }) => Promise<{
+    ok: boolean;
+    action: string;
+    watchId?: string;
+    status?: StreamWatchStatus;
+    watches?: StreamWatchStatus[];
+    stopped?: boolean;
+  }>;
 };
 
 export type EngineJobsTooling = {

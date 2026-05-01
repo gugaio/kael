@@ -2,44 +2,46 @@ import { kaelLogger } from "../infra/logger.js";
 import type { SessionStore } from "../session/store.js";
 import type { EngineToolingNamespaces } from "../engine/types.js";
 import type { MemoryService } from "./service.js";
-import type { MemoryPolicy } from "./types.js";
-import { DefaultMemoryPolicy } from "./policy.js";
 import type { TurnOrchestrator } from "../chat/turn-orchestrator.js";
+import {
+  isCompactCommand,
+  todayMemoryRelPath,
+  buildMemoryFlushPrompt,
+  buildLongTermPromotionPrompt,
+  buildHeuristicDailyFlushNote,
+} from "./policy.js";
 
-export type MemoryFlushResult = {
+type MemoryFlushResult = {
   written: boolean;
   path?: string;
   reason?: string;
   includedMessages: number;
 };
 
-export type LongTermPromoteResult = {
+type LongTermPromoteResult = {
   written: boolean;
   reason?: string;
 };
 
-export class MemoryOrchestrator {
-  private readonly policy: MemoryPolicy;
+type OrchestratorParams = {
+  sessionKey: string;
+  currentMessage: string;
+  tooling: EngineToolingNamespaces;
+  requestId?: string;
+};
 
+export class MemoryOrchestrator {
   constructor(
     private readonly sessions: SessionStore,
     private readonly memory: MemoryService,
     private readonly turns: TurnOrchestrator,
-    policy?: MemoryPolicy,
-  ) {
-    this.policy = policy ?? new DefaultMemoryPolicy();
-  }
+  ) {}
 
   isCompactCommand(input: string): boolean {
-    return this.policy.isCompactCommand(input);
+    return isCompactCommand(input);
   }
 
-  async runManualCompact(params: {
-    sessionKey: string;
-    currentMessage: string;
-    tooling: EngineToolingNamespaces;
-    requestId?: string;
-  }): Promise<{
+  async runManualCompact(params: OrchestratorParams): Promise<{
     flush: MemoryFlushResult;
     promote: LongTermPromoteResult;
     compaction: Awaited<ReturnType<TurnOrchestrator["compactNow"]>>;
@@ -53,12 +55,7 @@ export class MemoryOrchestrator {
     return { flush, promote, compaction };
   }
 
-  async runAutoCompactionWithMemoryFlushIfNeeded(params: {
-    sessionKey: string;
-    currentMessage: string;
-    tooling: EngineToolingNamespaces;
-    requestId?: string;
-  }): Promise<void> {
+  async runAutoCompactionWithMemoryFlushIfNeeded(params: OrchestratorParams): Promise<void> {
     const need = await this.turns.checkCompactionNeed({
       sessionKey: params.sessionKey,
       currentMessage: params.currentMessage,
@@ -96,19 +93,14 @@ export class MemoryOrchestrator {
     });
   }
 
-  private async flushSessionToDailyMemory(params: {
-    sessionKey: string;
-    currentMessage: string;
-    tooling: EngineToolingNamespaces;
-    requestId?: string;
-  }): Promise<MemoryFlushResult> {
+  private async flushSessionToDailyMemory(params: OrchestratorParams): Promise<MemoryFlushResult> {
     const llmFlush = await this.tryLlmMemoryFlush(params);
     if (llmFlush.written) {
       return llmFlush;
     }
 
     const history = await this.sessions.getMessages(params.sessionKey, 80);
-    const heuristic = this.policy.buildHeuristicDailyFlushNote({
+    const heuristic = buildHeuristicDailyFlushNote({
       sessionKey: params.sessionKey,
       currentMessage: params.currentMessage,
       history,
@@ -132,13 +124,8 @@ export class MemoryOrchestrator {
     };
   }
 
-  private async tryLlmMemoryFlush(params: {
-    sessionKey: string;
-    currentMessage: string;
-    tooling: EngineToolingNamespaces;
-    requestId?: string;
-  }): Promise<MemoryFlushResult> {
-    const relPath = this.policy.todayDailyRelPath();
+  private async tryLlmMemoryFlush(params: OrchestratorParams): Promise<MemoryFlushResult> {
+    const relPath = todayMemoryRelPath();
     const before = await this.readMemorySnapshot(relPath);
     kaelLogger.info("chat.compact.memory_flush.started", {
       sessionKey: params.sessionKey,
@@ -148,7 +135,7 @@ export class MemoryOrchestrator {
     try {
       await this.turns.runTurnWithExcludedMessage({
         sessionKey: params.sessionKey,
-        message: this.policy.buildMemoryFlushPrompt(),
+        message: buildMemoryFlushPrompt(),
         requestId: params.requestId ? `${params.requestId}:compact-flush` : undefined,
         tooling: params.tooling,
         excludeCurrentMessage: params.currentMessage,
@@ -181,12 +168,7 @@ export class MemoryOrchestrator {
     };
   }
 
-  private async promoteLongTermMemoryIfNeeded(params: {
-    sessionKey: string;
-    currentMessage: string;
-    tooling: EngineToolingNamespaces;
-    requestId?: string;
-  }): Promise<LongTermPromoteResult> {
+  private async promoteLongTermMemoryIfNeeded(params: OrchestratorParams): Promise<LongTermPromoteResult> {
     const before = await this.readMemorySnapshot("MEMORY.md");
     kaelLogger.info("chat.compact.long_term_promote.started", {
       sessionKey: params.sessionKey,
@@ -195,7 +177,7 @@ export class MemoryOrchestrator {
     try {
       await this.turns.runTurnWithExcludedMessage({
         sessionKey: params.sessionKey,
-        message: this.policy.buildLongTermPromotionPrompt(),
+        message: buildLongTermPromotionPrompt(),
         requestId: params.requestId ? `${params.requestId}:compact-promote` : undefined,
         tooling: params.tooling,
         excludeCurrentMessage: params.currentMessage,

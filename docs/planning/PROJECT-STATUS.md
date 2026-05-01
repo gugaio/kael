@@ -37,6 +37,38 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-04-27 - Fase 22.0: Stream Watch & Quality Monitor
+
+Resumo:
+- Implementado monitoramento continuo de streams HLS com deteccao automatica de problemas de qualidade
+- Parser de manifest estendido para capturar `#EXT-X-DISCONTINUITY` e `#EXT-X-DISCONTINUITY-SEQUENCE`
+- `stream-snapshot-analyzer.ts`: 5 detectores (discontinuity_inserted, media_sequence_gap, stale_manifest, segment_duration_anomaly, audio_rendition_gap)
+- `HlsStreamMonitorService`: servico stateful com polling recursivo via `setTimeout`, gerenciamento de sessoes por ID
+- 4 endpoints REST: `POST/GET/DELETE /streams/watch`, `GET /streams/watch/:id`
+- PI tool `video_stream_watch` para o agente iniciar/parar/consultar watches via linguagem natural
+- Arquitetura documentada em `docs/architecture/phases/phase-22.md`
+
+Arquivos-chave:
+- `src/capabilities/video/stream-snapshot-analyzer.ts`
+- `src/capabilities/video/stream-monitor-service.ts`
+- `src/capabilities/video/stream-snapshot-analyzer.test.ts`
+- `src/api/routes/stream-watch.ts`
+- `src/engine/tool-specs/video.ts`
+- `docs/architecture/phases/phase-22.md`
+
+Checklist de validacao:
+- [x] `npm run check` (0 erros)
+- [ ] teste manual com URL de manifest HLS real
+
+Pendencias:
+- Testes automatizados requerem Node >=18 (crypto.getRandomValues) — issue preexistente no ambiente
+- Fase 22.1: deteccao de regressao ABR (bitrate ladder)
+- Fase 22.2: lipsync / keyframe alignment
+- Fase 22.3: integracao com planner (alertas proativos)
+
+Proximo passo recomendado:
+- Testar manualmente `POST /streams/watch` com uma URL HLS real e verificar eventos detectados
+
 ### 2026-04-25 - Automation: scheduler isolado em submodulo
 
 Resumo:

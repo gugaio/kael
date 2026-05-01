@@ -15,6 +15,7 @@ import type {
   ProviderBackedVideoGenerationService,
   VideoManifestAuditService,
   VideoManifestDiffService,
+  HlsStreamMonitorService,
 } from "../capabilities/video/index.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
 import type { BrowserRuntime } from "../runtime/browser/index.js";
@@ -37,6 +38,7 @@ type ChatToolingExecutors = {
   playbackTriage: PlaybackTriageService;
   manifestAudit: VideoManifestAuditService;
   manifestDiff: VideoManifestDiffService;
+  streamMonitor: HlsStreamMonitorService;
   browserRuntime: BrowserRuntime;
 };
 
@@ -75,6 +77,31 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
         executors.videoGeneration.generateImage({ sessionKey, prompt, provider, size }),
       playbackAnalyze: async ({ sessionKey, player, source, streamUrl, logText, events }) =>
         executors.playbackTriage.analyzeSession({ sessionKey, player, source, streamUrl, logText, events }),
+      videoStreamWatch: async ({ action, sessionKey, url, pollIntervalMs, maxPollCount, timeoutMs, watchId }) => {
+        if (action === "start") {
+          if (!url) return { ok: false, action, watchId: undefined };
+          const id = executors.streamMonitor.startWatch({
+            sessionKey,
+            url,
+            pollIntervalMs,
+            maxPollCount,
+            timeoutMs,
+          });
+          return { ok: true, action, watchId: id, status: executors.streamMonitor.getStatus(id) ?? undefined };
+        }
+        if (action === "stop") {
+          if (!watchId) return { ok: false, action };
+          const stopped = executors.streamMonitor.stopWatch(watchId);
+          return { ok: stopped, action, stopped, status: executors.streamMonitor.getStatus(watchId) ?? undefined };
+        }
+        if (action === "status") {
+          if (!watchId) return { ok: false, action };
+          const status = executors.streamMonitor.getStatus(watchId);
+          return { ok: status !== null, action, watchId, status: status ?? undefined };
+        }
+        // list
+        return { ok: true, action: "list", watches: executors.streamMonitor.listWatches() };
+      },
     },
     jobs: {
       listJobs: ({ sessionKey, capability, action, status, limit } = {}) =>

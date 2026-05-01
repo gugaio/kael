@@ -211,3 +211,67 @@ export type StoredArtifactRecord = {
   bytes: number;
   createdAt: string;
 };
+
+// ─── Stream Watch (Fase 22) ───────────────────────────────────────────────────
+
+/**
+ * Snapshot imutável de uma única leitura do manifesto HLS durante monitoramento.
+ */
+export type StreamSnapshot = {
+  /** Timestamp Unix em ms do momento do fetch. */
+  fetchedAt: number;
+  /** Valor de EXT-X-MEDIA-SEQUENCE (0 se ausente). */
+  mediaSequence: number;
+  /** Valor de EXT-X-DISCONTINUITY-SEQUENCE (0 se ausente). */
+  discontinuitySequence: number;
+  /** Valor de EXT-X-TARGETDURATION (0 se ausente). */
+  targetDuration: number;
+  /** Segmentos capturados no manifest. */
+  segments: Array<{ uri: string; duration?: number }>;
+  /**
+   * Índices (0-based) dentro do array `segments` onde apareceu
+   * #EXT-X-DISCONTINUITY antes do segmento.
+   */
+  discontinuityMarkers: number[];
+  /** Se o manifesto declara rendições de áudio (EXT-X-MEDIA TYPE=AUDIO). */
+  hasAudioRenditions: boolean;
+  /** Quantidade de rendições de áudio declaradas. */
+  audioRenditionCount: number;
+};
+
+/** Evento detectado durante monitoramento de stream. */
+export type StreamWatchEvent = {
+  code: string;
+  severity: PlaybackIssueSeverity;
+  summary: string;
+  evidence: string[];
+  /** ISO 8601 do momento da detecção. */
+  detectedAt: string;
+};
+
+/** Parâmetros para iniciar uma sessão de monitoramento. */
+export type StreamWatchParams = {
+  sessionKey: string;
+  url: string;
+  /** Intervalo entre polls em ms. Padrão: 5000. Mínimo: 1000. */
+  pollIntervalMs?: number;
+  /** Número máximo de polls (undefined = infinito). */
+  maxPollCount?: number;
+  /** Timeout de fetch por poll. Padrão: 15000. */
+  timeoutMs?: number;
+  /** Máximo de eventos armazenados por sessão antes de rotacionar. Padrão: 500. */
+  maxEvents?: number;
+};
+
+/** Estado atual de uma sessão de monitoramento. */
+export type StreamWatchStatus = {
+  id: string;
+  sessionKey: string;
+  url: string;
+  startedAt: string;
+  lastPollAt: string | null;
+  pollCount: number;
+  errorCount: number;
+  events: StreamWatchEvent[];
+  running: boolean;
+};

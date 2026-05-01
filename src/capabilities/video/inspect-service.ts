@@ -42,6 +42,10 @@ export type VideoHlsInspectResult = {
   segments: HlsSegment[];
   targetDuration?: number;
   mediaSequence?: number;
+  /** Valor declarado em #EXT-X-DISCONTINUITY-SEQUENCE (se presente). */
+  discontinuitySequence?: number;
+  /** Índices (0-based) no array de segmentos onde apareceu #EXT-X-DISCONTINUITY. */
+  discontinuityMarkers: number[];
   errors: string[];
 };
 
@@ -158,6 +162,9 @@ export class VideoInspectToolService {
     let playlistType: VideoHlsInspectResult["playlistType"] = "unknown";
     let targetDuration: number | undefined;
     let mediaSequence: number | undefined;
+    let discontinuitySequence: number | undefined;
+    const discontinuityMarkers: number[] = [];
+    let nextSegmentHasDiscontinuity = false;
     let pendingVariantAttrs: Record<string, string> | null = null;
     let pendingSegment: { duration?: number; title?: string } | null = null;
 
@@ -207,6 +214,15 @@ export class VideoInspectToolService {
         mediaSequence = Number.isFinite(num) ? num : undefined;
         continue;
       }
+      if (line.startsWith("#EXT-X-DISCONTINUITY-SEQUENCE:")) {
+        const num = Number.parseInt(line.slice("#EXT-X-DISCONTINUITY-SEQUENCE:".length), 10);
+        discontinuitySequence = Number.isFinite(num) ? num : undefined;
+        continue;
+      }
+      if (line === "#EXT-X-DISCONTINUITY") {
+        nextSegmentHasDiscontinuity = true;
+        continue;
+      }
       if (line.startsWith("#")) continue;
 
       if (pendingVariantAttrs) {
@@ -230,6 +246,9 @@ export class VideoInspectToolService {
       }
 
       if (segments.length < maxSegments) {
+        if (nextSegmentHasDiscontinuity) {
+          discontinuityMarkers.push(segments.length);
+        }
         segments.push({
           uri: line,
           url: resolveUrl(fetched.finalUrl, line),
@@ -237,6 +256,7 @@ export class VideoInspectToolService {
           title: pendingSegment?.title,
         });
       }
+      nextSegmentHasDiscontinuity = false;
       pendingSegment = null;
     }
 
@@ -254,6 +274,8 @@ export class VideoInspectToolService {
       segments,
       targetDuration,
       mediaSequence,
+      discontinuitySequence,
+      discontinuityMarkers,
       errors,
     };
   }

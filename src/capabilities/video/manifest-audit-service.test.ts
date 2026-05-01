@@ -27,6 +27,7 @@ function createInspectResult(overrides: Partial<VideoHlsInspectResult> = {}): Vi
     renditions: [],
     segments: [],
     errors: [],
+    discontinuityMarkers: [],
     ...overrides,
   };
 }

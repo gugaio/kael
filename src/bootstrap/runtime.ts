@@ -14,9 +14,9 @@ import {
   ProviderBackedVideoGenerationService,
   VideoManifestAuditService,
   VideoManifestDiffService,
+  HlsStreamMonitorService,
 } from "../capabilities/video/index.js";
 import { MemoryService } from "../memory/service.js";
-import { HybridMemoryRetriever } from "../memory/retriever-hybrid.js";
 import { ProjectContextService } from "../projects/service.js";
 import { WorkspaceInspector } from "../workspace/inspector.js";
 import { BrowserRuntimeService, type BrowserRuntime } from "../runtime/browser/index.js";
@@ -41,6 +41,7 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
   manifestAudit: VideoManifestAuditService;
   manifestDiff: VideoManifestDiffService;
   videoArtifacts: VideoArtifactsService;
+  streamMonitor: HlsStreamMonitorService;
 }> {
   const runner = new LocalProcessRunner();
   const video = new VideoJobService(jobStore, runner, {
@@ -57,12 +58,14 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
   const manifestDiff = new VideoManifestDiffService(manifestAudit);
   const videoArtifacts = new VideoArtifactsService(path.join(config.dataDir, "video", "artifacts"));
   await videoArtifacts.init();
+  const streamMonitor = new HlsStreamMonitorService(videoInspect);
   return {
     jobs,
     videoInspect,
     manifestAudit,
     manifestDiff,
     videoArtifacts,
+    streamMonitor,
   };
 }
 
@@ -106,7 +109,7 @@ export async function createMemoryRuntime(config: KaelConfig): Promise<MemorySer
     storageRoot: path.join(resolveKaelHome(), "data", "memory"),
     defaultMaxResults: 6,
     maxSnippetChars: 1200,
-    retriever: new HybridMemoryRetriever(),
+
   });
   await memory.init();
   return memory;

@@ -77,6 +77,14 @@ flowchart TD
             API --> ProbeUrl[POST /jobs/probe-url]
         end
 
+        subgraph StreamWatch ["Stream Watch (quality monitor)"]
+            direction LR
+            API --> StreamWatchPOST[POST /streams/watch]
+            API --> StreamWatchGET[GET /streams/watch]
+            API --> StreamWatchId[GET /streams/watch/:id]
+            API --> StreamWatchDEL[DELETE /streams/watch/:id]
+        end
+
         subgraph Schedules ["Schedules (automation)"]
             direction LR
             API --> SchedulesGET[GET /schedules]
@@ -204,6 +212,14 @@ Exemplo resumido de item em `GET /jobs`:
   "output": "/videos/probe.json"
 }
 ```
+
+### Stream Watch (Quality Monitor)
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | /streams/watch | Start a new HLS stream watch session |
+| GET | /streams/watch | List all active watch sessions |
+| GET | /streams/watch/:id | Get status and events for a watch session |
+| DELETE | /streams/watch/:id | Stop a watch session |
 
 ### Schedules (Automation)
 | Method | Path | Description |

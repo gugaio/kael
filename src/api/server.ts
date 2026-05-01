@@ -10,6 +10,7 @@ import { registerJobAndScheduleRoutes } from "./routes/jobs-schedules.js";
 import { registerPlanRoutes } from "./routes/plans.js";
 import { registerProjectRoutes } from "./routes/projects.js";
 import { registerRuntimeAdminRoutes } from "./routes/runtime-admin.js";
+import { registerStreamWatchRoutes } from "./routes/stream-watch.js";
 
 export function createApiServer(app: KaelApp): FastifyInstance {
   const server = Fastify({ logger: false });
@@ -101,6 +102,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
   registerProjectRoutes(server, deps);
   registerRuntimeAdminRoutes(server, deps);
   registerJobAndScheduleRoutes(server, deps);
+  registerStreamWatchRoutes(server, deps);
 
   return server;
 }
