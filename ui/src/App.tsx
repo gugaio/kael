@@ -21,11 +21,11 @@ export function App(): JSX.Element {
             <Routes>
               <Route path="/" element={<OpsPage />} />
               <Route path="/plans" element={<PlansPage />} />
+              <Route path="/chat" element={<ChatPage />} />
               <Route path="/jobs" element={<JobsPage />} />
               <Route path="/jobs/:jobId" element={<JobDetailPage />} />
               <Route path="/exec" element={<ExecSessionsPage />} />
               <Route path="/schedules" element={<SchedulesPage />} />
-              <Route path="/chat" element={<ChatPage />} />
               <Route path="/health" element={<HealthPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

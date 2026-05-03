@@ -1,20 +1,21 @@
 import type { ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { approveExecApproval, denyExecApproval, getExecApprovals } from "../lib/api";
 import { useLiveEvents } from "../lib/live-events";
 
 const navItems = [
   { to: "/", label: "Ops" },
+  { to: "/chat", label: "Chat" },
   { to: "/plans", label: "Plans" },
   { to: "/jobs", label: "Jobs" },
   { to: "/exec", label: "Execuções" },
   { to: "/schedules", label: "Schedules" },
-  { to: "/chat", label: "Chat" },
   { to: "/health", label: "Health" },
 ];
 
 export function AppShell(props: { children: ReactNode }): JSX.Element {
+  const location = useLocation();
   const queryClient = useQueryClient();
   const live = useLiveEvents();
   const approvals = useQuery({
@@ -38,49 +39,90 @@ export function AppShell(props: { children: ReactNode }): JSX.Element {
 
   const pendingApprovals = approvals.data ?? [];
   const firstApproval = pendingApprovals[0];
+  const activeNav = navItems.find((item) => item.to === location.pathname) ?? navItems[0];
 
   return (
-    <div className="min-h-screen p-4 md:p-6">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4">
-        <header className="rounded-2xl border border-kael-border bg-kael-panel/80 p-4 shadow-glow backdrop-blur">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-kael-muted">Kael Operator Console</p>
-              <h1 className="text-2xl font-bold">Kael</h1>
-              <p className="mt-1 text-xs text-kael-muted">
-                realtime: {live.mode}
-                {live.lastEventAt ? ` • last event ${new Date(live.lastEventAt).toLocaleTimeString()}` : ""}
-              </p>
-            </div>
-            <nav className="flex flex-wrap gap-2">
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) =>
-                    [
-                      "rounded-full border px-3 py-1.5 text-sm transition",
-                      isActive
-                        ? "border-kael-accent bg-kael-accent/20 text-kael-text"
-                        : "border-kael-border bg-kael-panelSoft text-kael-muted hover:text-kael-text",
-                    ].join(" ")
-                  }
-                >
-                  {item.label}
-                  {item.to === "/" && pendingApprovals.length > 0 && (
-                    <span className="ml-2 rounded-full border border-amber-400/50 bg-amber-500/20 px-1.5 py-0.5 text-[10px] text-amber-200">
-                      {pendingApprovals.length}
-                    </span>
-                  )}
-                </NavLink>
-              ))}
-            </nav>
+    <div className="dashboard-grid min-h-screen md:p-5">
+      <div className="relative min-h-[calc(100vh-24px)] w-full">
+        <aside className="rounded-[32px] border border-kael-border bg-kael-panel p-4 shadow-shell lg:fixed lg:left-5 lg:top-5 lg:h-[calc(100vh-40px)] lg:w-[280px] lg:overflow-y-auto">
+          <div className="border-b border-kael-border pb-4">
+            <p className="text-xs uppercase tracking-[0.28em] text-kael-muted">Kael Dashboard</p>
           </div>
-        </header>
+
+          <div className="mt-4 rounded-[24px] border border-kael-border bg-kael-panelSoft p-4">
+            <p className="text-xs uppercase tracking-[0.22em] text-kael-muted">Realtime</p>
+            <p className="mt-2 text-lg font-semibold text-kael-text">{live.mode}</p>
+            <p className="mt-1 text-xs text-kael-muted">
+              {live.lastEventAt ? `Ultimo evento ${new Date(live.lastEventAt).toLocaleTimeString()}` : "Sem eventos recentes"}
+            </p>
+          </div>
+
+          <nav className="mt-4 flex flex-col gap-2">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  [
+                    "flex items-center justify-between rounded-2xl border px-4 py-3 text-sm font-medium transition",
+                    isActive
+                      ? "border-kael-accent bg-blue-50 text-blue-700 shadow-sm"
+                      : "border-transparent text-kael-muted hover:border-kael-border hover:bg-kael-panelSoft hover:text-kael-text",
+                  ].join(" ")
+                }
+              >
+                <span>{item.label}</span>
+                {item.to === "/" && pendingApprovals.length > 0 && (
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">
+                    {pendingApprovals.length}
+                  </span>
+                )}
+              </NavLink>
+            ))}
+          </nav>
+
+          <div className="mt-6 rounded-[24px] border border-kael-border bg-slate-50 p-4">
+            <p className="text-xs uppercase tracking-[0.22em] text-kael-muted">Aprovacoes</p>
+            <p className="mt-2 text-2xl font-semibold text-kael-text">{pendingApprovals.length}</p>
+            <p className="mt-1 text-sm text-kael-muted">
+              {pendingApprovals.length > 0 ? "Comandos aguardando decisao manual." : "Nenhum comando pendente agora."}
+            </p>
+          </div>
+        </aside>
+
+        <div className="mt-4 min-w-0 space-y-4 lg:mt-0 lg:flex lg:min-h-[calc(100vh-40px)] lg:flex-col lg:pl-[304px]">
+          <header className="rounded-[32px] border border-kael-border bg-kael-panel px-5 py-5 shadow-glow">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.26em] text-kael-muted">Workspace</p>
+                <h2 className="mt-2 text-3xl font-bold tracking-tight text-kael-text">{activeNav.label}</h2>
+                <p className="mt-2 max-w-2xl text-sm text-kael-muted">
+                  Navegacao lateral persistente e area principal dedicada ao contexto ativo da operacao.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[360px]">
+                <div className="rounded-2xl border border-kael-border bg-kael-panelSoft px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.2em] text-kael-muted">Modo</p>
+                  <p className="mt-1 text-base font-semibold text-kael-text">{live.mode}</p>
+                </div>
+                <div className="rounded-2xl border border-kael-border bg-kael-panelSoft px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.2em] text-kael-muted">Ultimo evento</p>
+                  <p className="mt-1 text-base font-semibold text-kael-text">
+                    {live.lastEventAt ? new Date(live.lastEventAt).toLocaleTimeString() : "-"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <main className="min-w-0 lg:flex-1 lg:min-h-0">{props.children}</main>
+        </div>
         {firstApproval && (
-          <div className="fixed bottom-4 right-4 z-50 w-[min(92vw,460px)] rounded-xl border border-amber-400/40 bg-kael-panel p-3 shadow-glow">
-            <p className="text-xs uppercase tracking-wider text-amber-200">Approval Required</p>
-            <p className="mt-1 text-sm text-kael-text">{pendingApprovals.length} comando(s) aguardando aprovacao</p>
+          <div className="fixed bottom-4 right-4 z-50 w-[min(92vw,460px)] rounded-[24px] border border-amber-200 bg-white p-4 shadow-shell">
+            <p className="text-xs uppercase tracking-[0.22em] text-amber-700">Approval Required</p>
+            <p className="mt-1 text-sm font-medium text-kael-text">
+              {pendingApprovals.length} comando(s) aguardando aprovacao
+            </p>
             <p className="mt-2 truncate text-xs text-kael-muted">{firstApproval.command}</p>
             <p className="truncate text-xs text-kael-muted">cwd: {firstApproval.cwd}</p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -88,7 +130,7 @@ export function AppShell(props: { children: ReactNode }): JSX.Element {
                 type="button"
                 onClick={() => approve.mutate(firstApproval.id)}
                 disabled={approve.isPending || deny.isPending}
-                className="rounded border border-emerald-500/40 px-2 py-1 text-xs text-emerald-200 hover:bg-emerald-500/10 disabled:opacity-60"
+                className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
               >
                 Approve now
               </button>
@@ -96,20 +138,19 @@ export function AppShell(props: { children: ReactNode }): JSX.Element {
                 type="button"
                 onClick={() => deny.mutate(firstApproval.id)}
                 disabled={approve.isPending || deny.isPending}
-                className="rounded border border-rose-500/40 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/10 disabled:opacity-60"
+                className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
               >
                 Deny
               </button>
               <NavLink
                 to="/"
-                className="rounded border border-kael-border px-2 py-1 text-xs text-kael-muted hover:border-kael-accent/50 hover:text-kael-text"
+                className="rounded-xl border border-kael-border px-3 py-1.5 text-xs font-medium text-kael-muted hover:border-kael-accent/40 hover:text-kael-text"
               >
                 Open Ops
               </NavLink>
             </div>
           </div>
         )}
-        <main>{props.children}</main>
       </div>
     </div>
   );

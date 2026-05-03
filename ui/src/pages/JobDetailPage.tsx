@@ -40,7 +40,7 @@ export function JobDetailPage(): JSX.Element {
         title={`Job ${jobId.slice(0, 8)}`}
         right={
           <button
-            className="rounded border border-kael-danger/50 px-2 py-1 text-xs text-orange-200 hover:bg-kael-danger/20 disabled:opacity-50"
+            className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50"
             disabled={!job.data || !["running", "queued"].includes(job.data.status) || cancel.isPending}
             onClick={() => {
               void cancel.mutateAsync(jobId);
@@ -64,13 +64,13 @@ export function JobDetailPage(): JSX.Element {
             <p>Created: {formatDate(job.data.createdAt)}</p>
             <p>Started: {formatDate(job.data.startedAt)}</p>
             <p>Ended: {formatDate(job.data.endedAt)}</p>
-            {job.data.error && <p className="text-orange-200">Error: {job.data.error}</p>}
+            {job.data.error && <p className="text-rose-700">Error: {job.data.error}</p>}
           </div>
         )}
       </Panel>
       <div className="lg:col-span-2">
         <Panel title="Live Log">
-          <pre className="kael-scroll max-h-[65vh] overflow-auto rounded-lg border border-kael-border bg-[#091521] p-3 font-mono text-xs leading-5 text-slate-200">
+          <pre className="kael-scroll max-h-[65vh] overflow-auto rounded-2xl border border-kael-border bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100">
             {log.data ?? "No log data yet."}
           </pre>
         </Panel>

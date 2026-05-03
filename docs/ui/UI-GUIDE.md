@@ -66,6 +66,7 @@ Escopo minimo:
 - [x] Chat com sugestao contextual de plano + composer de geracao de plano.
 - [x] Health badge e pagina de saude.
 - [x] Painel de approvals de exec no Ops (approve/deny).
+- [x] Shell visual de dashboard claro com sidebar esquerda e workspace principal a direita.
 - [ ] Cards operacionais de job inline no chat.
 
 DoD:
@@ -132,3 +133,4 @@ DoD:
 - 2026-02-19: Chat nao sera homepage; Ops Overview sera a entrada principal.
 - 2026-02-19: UI-1 iniciada em `ui/` com React + Vite + Tailwind + TanStack Query + React Router + Zod.
 - 2026-02-20: Ops ganhou painel de approvals de exec para fechar o ciclo de autorizacao manual.
+- 2026-05-03: Tema base da UI mudou para layout claro estilo dashboard, com navegacao lateral persistente e cards mais densos para operacao.

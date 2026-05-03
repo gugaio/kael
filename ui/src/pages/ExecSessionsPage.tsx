@@ -36,7 +36,7 @@ export function ExecSessionsPage(): JSX.Element {
           <select
             value={status}
             onChange={(event) => setStatus(event.target.value)}
-            className="rounded border border-kael-border bg-kael-panelSoft px-2 py-1 text-xs text-kael-text"
+            className="rounded-xl border border-kael-border bg-kael-panelSoft px-3 py-1.5 text-xs text-kael-text"
           >
             {statusFilters.map((item) => (
               <option key={item} value={item}>
@@ -56,7 +56,7 @@ export function ExecSessionsPage(): JSX.Element {
               className={[
                 "mb-2 w-full rounded-lg border p-3 text-left",
                 selected?.id === session.id
-                  ? "border-kael-accent bg-kael-accent/10"
+                  ? "border-kael-accent bg-blue-50"
                   : "border-kael-border bg-kael-panelSoft hover:border-kael-accent/40",
               ].join(" ")}
             >
@@ -69,7 +69,7 @@ export function ExecSessionsPage(): JSX.Element {
               <p className="mt-2 truncate font-mono text-xs text-kael-text">{session.command}</p>
               <p className="truncate text-[11px] text-kael-muted">{session.cwd}</p>
               {session.failureCode && session.failureCode !== "none" && (
-                <p className="mt-1 text-[11px] text-rose-200">failure: {session.failureCode}</p>
+                <p className="mt-1 text-[11px] text-rose-700">failure: {session.failureCode}</p>
               )}
             </button>
           ))}
@@ -94,7 +94,7 @@ export function ExecSessionsPage(): JSX.Element {
               <p className="mb-2 truncate rounded border border-kael-border bg-kael-panelSoft px-2 py-1 font-mono text-xs">
                 {selected.command}
               </p>
-              <pre className="kael-scroll max-h-[52vh] overflow-auto rounded-lg border border-kael-border bg-[#091521] p-3 font-mono text-xs leading-5 text-slate-200">
+              <pre className="kael-scroll max-h-[52vh] overflow-auto rounded-2xl border border-kael-border bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100">
                 {(log.data?.output || log.data?.session.outputTail || "").trim() || "Sem output."}
               </pre>
             </>

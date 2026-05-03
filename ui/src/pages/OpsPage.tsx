@@ -45,7 +45,7 @@ export function OpsPage(): JSX.Element {
   );
 
   return (
-    <div className="grid gap-4 md:grid-cols-4">
+    <div className="grid gap-4 xl:grid-cols-4">
       <Panel title="System Pulse">
         {health.isLoading && <p className="text-sm text-kael-muted">Loading health...</p>}
         {health.data && (
@@ -78,7 +78,7 @@ export function OpsPage(): JSX.Element {
                 </p>
                 <p>
                   Email dedupe:{" "}
-                  <span className={hasEmailAlert ? "font-semibold text-amber-300" : "font-semibold"}>
+                  <span className={hasEmailAlert ? "font-semibold text-amber-700" : "font-semibold"}>
                     {emailIngest.duplicateSkipped} duplicate / {emailIngest.inFlightSkipped} in-flight
                   </span>
                 </p>
@@ -86,7 +86,7 @@ export function OpsPage(): JSX.Element {
             )}
             {!emailIngest && <p className="text-xs text-kael-muted">Email ingest telemetry unavailable.</p>}
             {hasEmailAlert && (
-              <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200">
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-700">
                 Alert: duplicate/in-flight skips acima do limiar. Verificar workers concorrentes e intervalo do poll.
               </p>
             )}
@@ -101,7 +101,7 @@ export function OpsPage(): JSX.Element {
             <Link
               key={job.id}
               to={`/jobs/${job.id}`}
-              className="block rounded-lg border border-kael-border bg-kael-panelSoft p-2 text-sm hover:border-kael-accent/50"
+              className="block rounded-2xl border border-kael-border bg-kael-panelSoft p-3 text-sm hover:border-kael-accent/50"
             >
               <div className="mb-1 flex items-center justify-between gap-2">
                 <span className="truncate font-medium">{job.type}</span>
@@ -116,7 +116,7 @@ export function OpsPage(): JSX.Element {
       <Panel title="Next Schedule Runs" right={<Link className="text-xs text-kael-accent" to="/schedules">Open Schedules</Link>}>
         <div className="space-y-2">
           {(schedules.data ?? []).slice(0, 6).map((schedule) => (
-            <div key={schedule.id} className="rounded-lg border border-kael-border bg-kael-panelSoft p-2 text-sm">
+            <div key={schedule.id} className="rounded-2xl border border-kael-border bg-kael-panelSoft p-3 text-sm">
               <p className="font-medium">{schedule.id}</p>
               <p className="text-xs text-kael-muted">next: {formatDate(schedule.nextRunAt)}</p>
             </div>
@@ -131,7 +131,7 @@ export function OpsPage(): JSX.Element {
             <p className="text-sm text-kael-muted">No pending approvals.</p>
           )}
           {(approvals.data ?? []).slice(0, 5).map((approval) => (
-            <div key={approval.id} className="rounded-lg border border-kael-border bg-kael-panelSoft p-2 text-sm">
+            <div key={approval.id} className="rounded-2xl border border-kael-border bg-kael-panelSoft p-3 text-sm">
               <p className="truncate font-medium">{approval.command}</p>
               <p className="truncate text-xs text-kael-muted">cwd: {approval.cwd}</p>
               <p className="text-xs text-kael-muted">created: {formatDate(approval.createdAt)}</p>
@@ -139,14 +139,14 @@ export function OpsPage(): JSX.Element {
                 <button
                   type="button"
                   onClick={() => approve.mutate(approval.id)}
-                  className="rounded border border-emerald-500/40 px-2 py-1 text-xs text-emerald-200 hover:bg-emerald-500/10"
+                  className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
                 >
                   Approve
                 </button>
                 <button
                   type="button"
                   onClick={() => deny.mutate(approval.id)}
-                  className="rounded border border-rose-500/40 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/10"
+                  className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100"
                 >
                   Deny
                 </button>

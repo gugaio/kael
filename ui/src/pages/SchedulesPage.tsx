@@ -29,8 +29,8 @@ export function SchedulesPage(): JSX.Element {
               <span
                 className={`rounded-full border px-2 py-0.5 text-xs ${
                   schedule.enabled
-                    ? "border-emerald-400/40 bg-emerald-500/20 text-emerald-200"
-                    : "border-slate-400/40 bg-slate-500/20 text-slate-200"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-slate-200 bg-slate-100 text-slate-600"
                 }`}
               >
                 {schedule.enabled ? "enabled" : "paused"}
@@ -45,7 +45,7 @@ export function SchedulesPage(): JSX.Element {
             <div className="mt-3">
               {schedule.enabled ? (
                 <button
-                  className="rounded border border-amber-300/50 px-2 py-1 text-xs text-amber-100 hover:bg-amber-400/20"
+                  className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
                   disabled={pause.isPending}
                   onClick={() => {
                     void pause.mutateAsync(schedule.id);
@@ -55,7 +55,7 @@ export function SchedulesPage(): JSX.Element {
                 </button>
               ) : (
                 <button
-                  className="rounded border border-emerald-300/50 px-2 py-1 text-xs text-emerald-100 hover:bg-emerald-400/20"
+                  className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
                   disabled={resume.isPending}
                   onClick={() => {
                     void resume.mutateAsync(schedule.id);

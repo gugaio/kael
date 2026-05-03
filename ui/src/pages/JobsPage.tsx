@@ -43,7 +43,7 @@ export function JobsPage(): JSX.Element {
                 <td className="py-2 pr-4 text-kael-muted">{formatDate(job.createdAt)}</td>
                 <td className="py-2 pr-4">
                   <button
-                    className="rounded border border-kael-danger/50 px-2 py-1 text-xs text-orange-200 hover:bg-kael-danger/20 disabled:opacity-50"
+                    className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50"
                     disabled={!["running", "queued"].includes(job.status) || cancel.isPending}
                     onClick={() => {
                       void cancel.mutateAsync(job.id);

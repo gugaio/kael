@@ -219,7 +219,7 @@ export function PlansPage(): JSX.Element {
                   onClick={() => setSelectedPlanId(plan.id)}
                   className={`w-full rounded-lg border p-2 text-left text-sm ${
                     isSelected
-                      ? "border-kael-accent bg-kael-accent/10"
+                      ? "border-kael-accent bg-blue-50"
                       : "border-kael-border bg-kael-panelSoft hover:border-kael-accent/40"
                   }`}
                 >
@@ -291,7 +291,7 @@ export function PlansPage(): JSX.Element {
                       void executeNext.mutateAsync();
                     }}
                     disabled={!selectedPlanId || executeNext.isPending}
-                    className="rounded border border-kael-accent/60 bg-kael-accent/20 px-3 py-1.5 text-xs font-medium hover:bg-kael-accent/30 disabled:opacity-60"
+                    className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-60"
                   >
                     Execute Next
                   </button>
@@ -311,7 +311,7 @@ export function PlansPage(): JSX.Element {
                       void cancel.mutateAsync();
                     }}
                     disabled={!selected || cancel.isPending}
-                    className="rounded border border-kael-danger/50 px-3 py-1.5 text-xs text-orange-200 hover:bg-kael-danger/20 disabled:opacity-60"
+                    className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
                   >
                     Cancel Plan
                   </button>
@@ -326,8 +326,8 @@ export function PlansPage(): JSX.Element {
                     Este step shell usa action estruturada; ajuste o campo command apenas se quiser override.
                   </p>
                 )}
-                {actionMessage && <p className="text-xs text-emerald-200 md:col-span-2">{actionMessage}</p>}
-                {actionError && <p className="text-xs text-rose-200 md:col-span-2">{actionError}</p>}
+                {actionMessage && <p className="text-xs text-emerald-700 md:col-span-2">{actionMessage}</p>}
+                {actionError && <p className="text-xs text-rose-700 md:col-span-2">{actionError}</p>}
               </div>
 
               <div className="space-y-2">
@@ -353,7 +353,7 @@ export function PlansPage(): JSX.Element {
                         execution={step.execution.kind}:{step.execution.refId} status={step.execution.status}
                       </p>
                     )}
-                    {step.notes && <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-200">{step.notes}</pre>}
+                    {step.notes && <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-700">{step.notes}</pre>}
                     {(step.checkpoints ?? []).length > 0 && (
                       <div className="mt-2 space-y-1">
                         <p className="text-xs uppercase tracking-wider text-kael-muted">checkpoints</p>

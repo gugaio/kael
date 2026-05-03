@@ -14,19 +14,19 @@ export function statusTone(status: string): string {
     case "running":
     case "in_progress":
     case "active":
-      return "bg-cyan-500/20 text-cyan-200 border-cyan-400/40";
+      return "border-sky-200 bg-sky-50 text-sky-700";
     case "queued":
     case "pending":
-      return "bg-amber-500/20 text-amber-200 border-amber-400/40";
+      return "border-amber-200 bg-amber-50 text-amber-700";
     case "succeeded":
     case "completed":
-      return "bg-emerald-500/20 text-emerald-200 border-emerald-400/40";
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "failed":
     case "blocked":
-      return "bg-rose-500/20 text-rose-200 border-rose-400/40";
+      return "border-rose-200 bg-rose-50 text-rose-700";
     case "canceled":
-      return "bg-slate-500/20 text-slate-200 border-slate-300/40";
+      return "border-slate-200 bg-slate-100 text-slate-600";
     default:
-      return "bg-slate-500/20 text-slate-200 border-slate-300/40";
+      return "border-slate-200 bg-slate-100 text-slate-600";
   }
 }

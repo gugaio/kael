@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-04-25**
+Ultima atualizacao: **2026-05-03**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,31 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-05-03 - UI-1: shell claro de dashboard com sidebar
+
+Resumo:
+- UI web migrou do tema escuro com header horizontal para um shell claro com menu lateral persistente
+- Tokens visuais, badges de status e cards principais foram recalibrados para leitura em layout branco/dashboard
+- Pags Ops, Chat, Plans, Jobs, Schedules, Exec e detalhes ficaram consistentes com a nova direcao visual
+
+Arquivos-chave:
+- `ui/src/components/AppShell.tsx`
+- `ui/src/styles.css`
+- `ui/tailwind.config.ts`
+- `ui/src/components/Panel.tsx`
+- `docs/ui/UI-GUIDE.md`
+
+Checklist de validacao:
+- [ ] `npm run ui:check`
+- [ ] teste manual da navegacao principal em desktop/mobile
+
+Pendencias:
+- Ainda falta revisar microcopy e espacos finos de algumas tabelas/listas para o novo shell
+- Ainda nao existem cards operacionais inline no chat
+
+Proximo passo recomendado:
+- Validar o comportamento responsivo do sidebar e depois evoluir o Ops com filtros/resumos mais executivos
 
 ### 2026-04-27 - Fase 22.0: Stream Watch & Quality Monitor
 

@@ -106,65 +106,67 @@ export function ChatPage(): JSX.Element {
   }, [messages.data?.length, pendingUserMessage, send.isPending]);
 
   return (
-    <div className="grid min-w-0 gap-4 lg:grid-cols-4">
+    <div className="grid min-w-0 gap-4 lg:min-h-full lg:grid-cols-[280px_minmax(0,1fr)]">
       <Panel title="Session" right={<span className="text-xs text-kael-muted">live updates</span>}>
         <label className="text-xs text-kael-muted" htmlFor="sessionKey">Session key</label>
         <input
           id="sessionKey"
           value={sessionKey}
           onChange={(event) => setSessionKey(event.target.value || "main")}
-          className="mt-2 w-full rounded border border-kael-border bg-kael-panelSoft px-2 py-1.5 text-sm outline-none focus:border-kael-accent"
+          className="mt-2 w-full rounded-xl border border-kael-border bg-kael-panelSoft px-3 py-2 text-sm outline-none focus:border-kael-accent"
         />
       </Panel>
-      <div className="min-w-0 lg:col-span-3">
+      <div className="min-w-0">
         <Panel
           title="Conversation"
           right={(
             <Link
               to="/chat/daily"
-              className="rounded border border-kael-border px-2 py-1 text-xs text-kael-muted hover:border-kael-accent/50 hover:text-kael-text"
+              className="rounded-xl border border-kael-border px-3 py-1.5 text-xs text-kael-muted hover:border-kael-accent/50 hover:text-kael-text"
             >
               Daily Chat UI
             </Link>
           )}
         >
-          <div className="kael-scroll mb-3 max-h-[55vh] min-w-0 space-y-2 overflow-y-auto overflow-x-hidden rounded-xl border border-kael-border bg-kael-panelSoft p-3">
+          <div className="kael-scroll mb-3 min-w-0 space-y-3 overflow-y-auto overflow-x-hidden rounded-[24px] border border-slate-300 bg-slate-100 p-4 lg:max-h-[calc(100vh-290px)]">
             {(messages.data ?? []).map((item) => (
               <div
                 key={item.id}
-                className={`min-w-0 rounded-lg border p-2 text-sm ${
+                className={`w-full min-w-0 rounded-2xl border px-4 py-3 text-base shadow-sm font-reading ${
                   item.role === "user"
-                    ? "border-cyan-400/30 bg-cyan-500/10"
+                    ? "border-sky-300 bg-sky-100/90 text-slate-900"
                     : item.role === "assistant"
-                      ? "border-emerald-400/30 bg-emerald-500/10"
-                      : "border-amber-400/30 bg-amber-500/10"
+                      ? "border-emerald-300 bg-white text-slate-900"
+                      : "border-amber-300 bg-amber-100/80 text-slate-900"
                 }`}
               >
                 <div className="mb-1 flex min-w-0 items-center justify-between gap-2 text-xs">
-                  <span className="truncate uppercase tracking-wider text-kael-muted">{item.role}</span>
-                  <span className="shrink-0 text-kael-muted">{formatDate(item.createdAt)}</span>
+                  <span className="truncate uppercase tracking-wider text-slate-600">{item.role}</span>
+                  <span className="shrink-0 text-slate-500">{formatDate(item.createdAt)}</span>
                 </div>
-                <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{item.content}</p>
+                <p className="whitespace-pre-wrap break-words text-[17px] leading-8 tracking-[0.01em] text-slate-900 [overflow-wrap:anywhere]">
+                  {item.content}
+                </p>
               </div>
             ))}
             {pendingUserMessage && (
               <>
-                <div className="min-w-0 rounded-lg border border-cyan-400/30 bg-cyan-500/10 p-2 text-sm">
+                <div className="w-full min-w-0 rounded-2xl border border-sky-300 bg-sky-100/90 px-4 py-3 text-base text-slate-900 shadow-sm font-reading">
                   <div className="mb-1 flex min-w-0 items-center justify-between gap-2 text-xs">
-                    <span className="truncate uppercase tracking-wider text-kael-muted">user</span>
-                    <span className="shrink-0 text-kael-muted">sending...</span>
+                    <span className="truncate uppercase tracking-wider text-slate-600">user</span>
+                    <span className="shrink-0 text-slate-500">sending...</span>
                   </div>
-                  <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{pendingUserMessage}</p>
+                  <p className="whitespace-pre-wrap break-words text-[17px] leading-8 tracking-[0.01em] [overflow-wrap:anywhere]">{pendingUserMessage}</p>
                 </div>
-                <div className="min-w-0 rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-2 text-sm">
+                <div className="w-full min-w-0 rounded-2xl border border-emerald-300 bg-white px-4 py-3 text-base text-slate-900 shadow-sm font-reading">
                   <div className="mb-1 flex min-w-0 items-center justify-between gap-2 text-xs">
-                    <span className="truncate uppercase tracking-wider text-kael-muted">assistant</span>
-                    <span className="shrink-0 text-kael-muted">thinking...</span>
+                    <span className="truncate uppercase tracking-wider text-slate-600">assistant</span>
+                    <span className="shrink-0 text-slate-500">thinking...</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-200/80 animate-pulse" />
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-200/80 animate-pulse [animation-delay:120ms]" />
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-200/80 animate-pulse [animation-delay:240ms]" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/70 animate-pulse" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/70 animate-pulse [animation-delay:120ms]" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/70 animate-pulse [animation-delay:240ms]" />
                   </div>
                 </div>
               </>
@@ -172,11 +174,11 @@ export function ChatPage(): JSX.Element {
             {(messages.data ?? []).length === 0 && <p className="text-sm text-kael-muted">No messages yet.</p>}
             <div ref={messagesEndRef} />
           </div>
-          {sendError && <p className="mb-3 text-xs text-rose-200">{sendError}</p>}
+          {sendError && <p className="mb-3 text-xs text-rose-700">{sendError}</p>}
           {planSuggestionVisible && (
-            <div className="mb-3 rounded-xl border border-cyan-400/30 bg-cyan-500/10 p-3">
-              <p className="text-sm font-medium">Parece uma tarefa multi-etapa.</p>
-              <p className="mt-1 text-xs text-kael-muted">
+            <div className="mb-3 rounded-2xl border border-sky-300 bg-sky-100/80 p-3">
+              <p className="text-sm font-medium text-slate-900">Parece uma tarefa multi-etapa.</p>
+              <p className="mt-1 text-xs text-slate-600">
                 Criar um plano antes da execucao melhora rastreabilidade e seguranca operacional.
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -186,14 +188,14 @@ export function ChatPage(): JSX.Element {
                     setPlanComposerOpen(true);
                     setPlanObjective(draft.trim());
                   }}
-                  className="rounded border border-kael-accent/60 bg-kael-accent/20 px-2 py-1 text-xs hover:bg-kael-accent/30"
+                  className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
                 >
                   Criar Plano (Recomendado)
                 </button>
                 <button
                   type="button"
                   onClick={() => setPlanHintDismissed(true)}
-                  className="rounded border border-kael-border px-2 py-1 text-xs hover:border-kael-accent/50"
+                  className="rounded-xl border border-kael-border px-3 py-1.5 text-xs hover:border-kael-accent/50"
                 >
                   Seguir sem plano
                 </button>
@@ -201,16 +203,16 @@ export function ChatPage(): JSX.Element {
             </div>
           )}
           {planComposerOpen && (
-            <div className="mb-3 rounded-xl border border-kael-border bg-kael-panelSoft p-3">
-              <p className="mb-2 text-sm font-medium">Gerar plano para esta sessao</p>
-              <label className="text-xs text-kael-muted">Objetivo</label>
+            <div className="mb-3 rounded-2xl border border-slate-300 bg-slate-100 p-4">
+              <p className="mb-2 text-sm font-medium text-slate-900">Gerar plano para esta sessao</p>
+              <label className="text-xs text-slate-600">Objetivo</label>
               <textarea
                 value={planObjective}
                 onChange={(event) => setPlanObjective(event.target.value)}
-                className="mt-1 min-h-[90px] w-full rounded border border-kael-border bg-kael-panel px-2 py-2 text-sm outline-none focus:border-kael-accent"
+                className="mt-1 min-h-[90px] w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-kael-accent"
               />
               <div className="mt-2 flex items-center gap-2">
-                <label className="text-xs text-kael-muted" htmlFor="planMaxSteps">
+                <label className="text-xs text-slate-600" htmlFor="planMaxSteps">
                   Max steps
                 </label>
                 <input
@@ -220,11 +222,11 @@ export function ChatPage(): JSX.Element {
                   max={12}
                   value={planMaxSteps}
                   onChange={(event) => setPlanMaxSteps(Number(event.target.value) || 8)}
-                  className="w-20 rounded border border-kael-border bg-kael-panel px-2 py-1 text-xs outline-none focus:border-kael-accent"
+                  className="w-20 rounded-xl border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 outline-none focus:border-kael-accent"
                 />
               </div>
               {createPlan.error && (
-                <p className="mt-2 text-xs text-rose-200">
+                <p className="mt-2 text-xs text-rose-700">
                   {createPlan.error instanceof Error ? createPlan.error.message : "Falha ao gerar plano."}
                 </p>
               )}
@@ -235,7 +237,7 @@ export function ChatPage(): JSX.Element {
                   onClick={() => {
                     void createPlan.mutateAsync({ openAfterCreate: false });
                   }}
-                  className="rounded border border-kael-accent/60 bg-kael-accent/20 px-2 py-1 text-xs hover:bg-kael-accent/30 disabled:opacity-60"
+                  className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-60"
                 >
                   Gerar plano
                 </button>
@@ -245,14 +247,14 @@ export function ChatPage(): JSX.Element {
                   onClick={() => {
                     void createPlan.mutateAsync({ openAfterCreate: true });
                   }}
-                  className="rounded border border-kael-border px-2 py-1 text-xs hover:border-kael-accent/50 disabled:opacity-60"
+                  className="rounded-xl border border-kael-border px-3 py-1.5 text-xs hover:border-kael-accent/50 disabled:opacity-60"
                 >
                   Gerar e abrir Plans
                 </button>
                 <button
                   type="button"
                   onClick={() => setPlanComposerOpen(false)}
-                  className="rounded border border-kael-border px-2 py-1 text-xs hover:border-kael-accent/50"
+                  className="rounded-xl border border-kael-border px-3 py-1.5 text-xs hover:border-kael-accent/50"
                 >
                   Cancelar
                 </button>
@@ -264,12 +266,12 @@ export function ChatPage(): JSX.Element {
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               placeholder="Talk to Kael..."
-              className="min-w-0 flex-1 rounded border border-kael-border bg-kael-panelSoft px-3 py-2 text-sm outline-none focus:border-kael-accent"
+              className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-base text-slate-900 outline-none focus:border-kael-accent font-reading"
             />
             <button
               type="submit"
               disabled={send.isPending}
-              className="rounded border border-kael-accent/60 bg-kael-accent/20 px-3 py-2 text-sm font-medium hover:bg-kael-accent/30 disabled:opacity-60"
+              className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-60"
             >
               {send.isPending ? "Sending..." : "Send"}
             </button>
@@ -279,7 +281,7 @@ export function ChatPage(): JSX.Element {
                 setPlanComposerOpen(true);
                 setPlanObjective(draft.trim());
               }}
-              className="rounded border border-kael-border px-3 py-2 text-sm hover:border-kael-accent/50"
+              className="rounded-xl border border-kael-border px-3 py-2 text-sm hover:border-kael-accent/50"
             >
               Plan
             </button>
