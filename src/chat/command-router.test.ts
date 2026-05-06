@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { CommandRouter } from "./command-router.js";
-import type { AgentEngine, EngineToolingNamespaces } from "../engine/types.js";
+import type { AgentEngine, EngineToolingNamespaces } from "../agents/types.js";
 
 function createTooling(): EngineToolingNamespaces {
   return {

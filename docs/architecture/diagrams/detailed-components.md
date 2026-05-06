@@ -17,9 +17,9 @@ graph TB
         end
 
         subgraph "Implementations"
-            SimpleEngine[SimpleCommandEngine<br/>src/engine/simple-engine.ts<br/>Comandos locais determinísticos]
-            PiEngine[PiEngineAdapter<br/>src/engine/pi-engine-adapter.ts<br/>PI SDK embedded + PiTools]
-            HybridEngine[HybridEngine<br/>src/engine/hybrid-engine.ts<br/>Simple + PI com fallback]
+            SimpleEngine[SimpleCommandEngine<br/>src/agents/simple-engine.ts<br/>Comandos locais determinísticos]
+            PiEngine[PiEngineAdapter<br/>src/agents/pi-engine-adapter.ts<br/>PI SDK embedded + PiTools]
+            HybridEngine[HybridEngine<br/>src/agents/hybrid-engine.ts<br/>Simple + PI com fallback]
         end
     end
 

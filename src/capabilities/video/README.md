@@ -490,7 +490,7 @@ import { VIDEO_JOB_ACTIONS } from "../capabilities/video";
 const videoActions = Object.values(VIDEO_JOB_ACTIONS);
 ```
 
-### Engine (src/engine/types.ts)
+### Agents (src/agents/types.ts)
 
 ```typescript
 import type { GeneratedMediaKind } from "../capabilities/video";

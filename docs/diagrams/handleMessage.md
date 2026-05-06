@@ -228,5 +228,5 @@ O comando `/compact` executa manualmente as operações de gerenciamento de mem�
 - `src/chat/service.ts:228` - `handleMessageInternal()`
 - `src/chat/turn-orchestrator.ts:78` - `TurnOrchestrator.run()`
 - `src/memory/orchestrator.ts:56` - `runAutoCompactionWithMemoryFlushIfNeeded()`
-- `src/engine/simple-engine.ts:36` - `SimpleCommandEngine.runTurn()`
-- `src/engine/pi-engine-adapter.ts` - PiEngineAdapter (engine baseada em LLM)
+- `src/agents/simple-engine.ts:36` - `SimpleCommandEngine.runTurn()`
+- `src/agents/pi-engine-adapter.ts` - PiEngineAdapter (engine baseada em LLM)

@@ -1,4 +1,4 @@
-import type { EngineInboundAttachment } from "../engine/types.js";
+import type { EngineInboundAttachment } from "../agents/types.js";
 import type { IdempotencyStore } from "../infra/idempotency-store.js";
 import { ApiError } from "./errors.js";
 

@@ -1,17 +1,17 @@
-# Arquitetura - Fase 2 (Engine Hibrida + Video Runtime)
+# Arquitetura - Fase 2 (Agents Hibridos + Video Runtime)
 
 Status: em andamento (implementacao principal entregue)
 
 ## Objetivo
 
-Acoplar um engine de IA real sem perder operacao local deterministica para comandos de video.
+Acoplar um runtime de agentes real sem perder operacao local deterministica para comandos de video.
 
 ## Componentes-chave
 
-- Engine factory (`src/engine/factory.ts`)
-- Pi adapter (`src/engine/pi-engine-adapter.ts`)
+- Agents factory (`src/agents/factory.ts`)
+- Pi adapter (`src/agents/pi-engine-adapter.ts`)
 - Bootstrap de prompt/identidade via `SOUL.md` (`src/config.ts`)
-- Engine hibrida (`src/engine/hybrid-engine.ts`)
+- Agents hibridos (`src/agents/hybrid-engine.ts`)
 - Video capability runtime (`src/capabilities/video/job-service.ts`)
 - Config global/home (`src/global-config.ts`, `src/config.ts`)
 

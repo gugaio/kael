@@ -14,7 +14,7 @@ sequenceDiagram
     participant MemOrch as MemoryOrchestrator<br/>src/memory/orchestrator.ts
     participant TurnOrch as TurnOrchestrator<br/>src/chat/turn-orchestrator.ts
     participant Session as SessionStore<br/>src/session/store.ts
-    participant Engine as PiEngineAdapter<br/>src/engine/pi-engine-adapter.ts
+    participant Engine as PiEngineAdapter<br/>src/agents/pi-engine-adapter.ts
     participant PiSDK as PI Agent SDK
     participant Tooling as EngineToolingNamespaces
     participant VideoJob as VideoJobService

@@ -29,7 +29,7 @@ Arquivos-chave:
 - `src/config.ts`
 - `src/global-config.ts`
 - `src/api/server.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/pi-tools.ts`
 
 Proximo passo:
 - Fase 8.5: reduzir polling com stream/eventos (SSE) para update de plano em baixa latencia.

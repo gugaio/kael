@@ -1,5 +1,5 @@
-import type { AgentEngine, EngineToolingNamespaces } from "../engine/types.js";
-import { isSlashCommand, SimpleCommandEngine } from "../engine/simple-engine.js";
+import type { AgentEngine, EngineToolingNamespaces } from "../agents/types.js";
+import { isSlashCommand, SimpleCommandEngine } from "../agents/simple-engine.js";
 
 export type CommandRouterInput = {
   sessionKey: string;

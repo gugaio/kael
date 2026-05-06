@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { EngineOutputArtifact } from "../../engine/types.js";
+import type { EngineOutputArtifact } from "../../agents/types.js";
 import type { StoredArtifactRecord } from "./types.js";
 
 export class VideoArtifactsService {

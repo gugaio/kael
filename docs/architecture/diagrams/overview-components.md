@@ -28,7 +28,7 @@ graph TB
         end
 
         subgraph "Domain Services Layer"
-            Engine[Engine<br/>Simple/PI/Hybrid<br/>src/engine/]
+            Agents[Agents<br/>Simple/PI/Hybrid<br/>src/agents/]
             Memory[MemoryService<br/>src/memory/service.ts]
             Planner[PlannerService<br/>src/planner/service.ts]
             Research[ResearchService<br/>src/research/service.ts]

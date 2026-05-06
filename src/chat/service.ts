@@ -1,5 +1,5 @@
-import type { EngineInboundAttachment, EngineOutputArtifact, EngineToolingNamespaces } from "../engine/types.js";
-import { normalizePiError } from "../engine/pi-errors.js";
+import type { EngineInboundAttachment, EngineOutputArtifact, EngineToolingNamespaces } from "../agents/types.js";
+import { normalizePiError } from "../agents/pi-errors.js";
 import type { MemoryService } from "../memory/service.js";
 import type { SessionStore } from "../session/store.js";
 import type { ShellRuntime } from "../tools/system/shell-tool-service.js";

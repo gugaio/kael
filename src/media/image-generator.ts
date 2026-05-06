@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { EngineOutputArtifact } from "../engine/types.js";
+import type { EngineOutputArtifact } from "../agents/types.js";
 import { kaelLogger } from "../infra/logger.js";
 
 export interface ImageGeneratorService {

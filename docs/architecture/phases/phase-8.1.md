@@ -31,8 +31,8 @@ Entregas:
 Arquivos-chave:
 - `src/planner/service.ts`
 - `src/planner/service.test.ts`
-- `src/engine/types.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/types.ts`
+- `src/agents/pi-tools.ts`
 - `src/chat/service.ts`
 - `src/app.ts`
 - `src/api/server.ts`

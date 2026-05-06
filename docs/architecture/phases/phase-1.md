@@ -12,7 +12,7 @@ Estabelecer um loop minimo funcional: receber mensagem, persistir sessao, dispar
 - API Fastify (`src/api/server.ts`)
 - Session store JSONL (`src/session/store.ts`)
 - Job store JSON (`src/jobs/store.ts`)
-- Engine de comandos inicial (`src/engine/simple-engine.ts`)
+- Engine de comandos inicial (`src/agents/simple-engine.ts`)
 
 ## Fluxo
 

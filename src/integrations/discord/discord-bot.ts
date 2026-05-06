@@ -1,7 +1,7 @@
 import WebSocket from "ws";
 import type { KaelApp } from "../../app.js";
 import { kaelLogger } from "../../infra/logger.js";
-import type { EngineInboundAttachment } from "../../engine/types.js";
+import type { EngineInboundAttachment } from "../../agents/types.js";
 
 type DiscordGatewayHello = {
   op: 10;

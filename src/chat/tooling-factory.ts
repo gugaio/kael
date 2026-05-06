@@ -1,4 +1,4 @@
-import type { EngineToolingNamespaces } from "../engine/types.js";
+import type { EngineToolingNamespaces } from "../agents/types.js";
 import type { JobManager } from "../jobs/manager.js";
 import { VIDEO_JOB_ACTIONS } from "../capabilities/video/index.js";
 import type { MemoryService } from "../memory/service.js";

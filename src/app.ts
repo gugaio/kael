@@ -16,7 +16,7 @@ import {
   createVideoRuntime,
   createWorkspaceRuntime,
 } from "./bootstrap/runtime.js";
-import { createEngine } from "./engine/factory.js";
+import { createEngine } from "./agents/factory.js";
 import { JobManager } from "./jobs/manager.js";
 import { JobStore } from "./jobs/store.js";
 import { MemoryService } from "./memory/service.js";

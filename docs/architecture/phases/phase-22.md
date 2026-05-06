@@ -48,7 +48,7 @@ src/capabilities/video/
 src/api/routes/
   stream-watch.ts             # rotas POST/GET /streams/watch
 
-src/engine/tool-specs/
+src/agents/tool-specs/
   video.ts                    # + tool video_stream_watch
 ```
 

@@ -1,6 +1,6 @@
 import { kaelLogger } from "../infra/logger.js";
 import type { SessionStore } from "../session/store.js";
-import type { EngineToolingNamespaces } from "../engine/types.js";
+import type { EngineToolingNamespaces } from "../agents/types.js";
 import type { MemoryService } from "./service.js";
 import type { TurnOrchestrator } from "../chat/turn-orchestrator.js";
 import {

@@ -6,7 +6,7 @@ import { ChatService } from "./service.js";
 import { ProjectContextService } from "../projects/service.js";
 import { SessionStore } from "../session/store.js";
 import { SkillService } from "../skills/service.js";
-import type { EngineToolingNamespaces } from "../engine/types.js";
+import type { EngineToolingNamespaces } from "../agents/types.js";
 
 const roots: string[] = [];
 

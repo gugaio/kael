@@ -39,8 +39,8 @@ Dar capacidade real de shell ao Kael no engine PI, com controle de processo e po
 
 - `src/tools/system/shell-tool-service.ts`
 - `src/tools/system/shell-approvals.ts`
-- `src/engine/pi-tools.ts`
-- `src/engine/pi-engine-adapter.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/pi-engine-adapter.ts`
 - `src/config.ts`
 
 ## Comportamento atual

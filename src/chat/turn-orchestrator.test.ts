@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AgentEngine, EngineToolingNamespaces, EngineTurnInput, EngineTurnOutput } from "../engine/types.js";
+import type { AgentEngine, EngineToolingNamespaces, EngineTurnInput, EngineTurnOutput } from "../agents/types.js";
 import type { SessionMessage } from "../types.js";
 import { TurnOrchestrator } from "./turn-orchestrator.js";
 

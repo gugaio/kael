@@ -1,4 +1,4 @@
-import type { EngineInboundAttachment } from "../engine/types.js";
+import type { EngineInboundAttachment } from "../agents/types.js";
 import { kaelLogger } from "../infra/logger.js";
 
 export type MediaPreprocessInput = {

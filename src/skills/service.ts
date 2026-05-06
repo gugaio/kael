@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { isSlashCommand } from "../engine/simple-engine.js";
+import { isSlashCommand } from "../agents/simple-engine.js";
 
 const DEFAULT_SKILLS_RELATIVE_DIR = path.join(".kael", "skills");
 const SKILL_ENTRY_FILE = "SKILL.md";

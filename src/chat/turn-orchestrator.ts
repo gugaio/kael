@@ -1,4 +1,4 @@
-import type { AgentEngine, EngineToolingNamespaces, EngineTurnInput, EngineTurnOutput } from "../engine/types.js";
+import type { AgentEngine, EngineToolingNamespaces, EngineTurnInput, EngineTurnOutput } from "../agents/types.js";
 import { kaelLogger } from "../infra/logger.js";
 import type { SessionStore } from "../session/store.js";
 import type { SessionMessage } from "../types.js";

@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-05-03**
+Ultima atualizacao: **2026-05-05**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,47 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-05-05 - Core: modulo `engine` renomeado para `agents`
+
+Resumo:
+- Fronteira de runtime foi renomeada de `src/engine` para `src/agents`
+- Imports do core foram ajustados sem alterar o contrato `AgentEngine`
+- Documentacao ativa de arquitetura foi atualizada para refletir o novo caminho
+
+Arquivos-chave:
+- `src/agents/factory.ts`
+- `src/app.ts`
+- `src/chat/turn-orchestrator.ts`
+- `docs/architecture/phases/phase-2.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/agents/simple-engine.test.ts src/agents/pi-engine-adapter.test.ts src/chat/turn-orchestrator.test.ts`
+
+Pendencias:
+- Restam referencias conceituais a "engine" em docs onde o contrato `AgentEngine` continua sendo o nome oficial
+
+Proximo passo recomendado:
+- Se quiser reduzir ambiguidade futura, avaliar renomear tambem labels textuais de "engine" para "runtime de agents" onde nao houver referencia ao contrato `AgentEngine`
+
+### 2026-05-05 - Docs: curadoria do historico para `src/agents`
+
+Resumo:
+- O historico de `PROJECT-STATUS.md` foi atualizado para apontar para `src/agents/*` em vez de caminhos removidos
+- O status do rename passou a refletir as validacoes realmente executadas
+
+Arquivos-chave:
+- `docs/planning/PROJECT-STATUS.md`
+
+Checklist de validacao:
+- [x] `rg -n "src/engine" .`
+
+Pendencias:
+- Nenhuma referencia residual a `src/engine` permanece no repositorio
+
+Proximo passo recomendado:
+- Manter novos registros de status usando apenas `src/agents/*`
 
 ### 2026-05-03 - UI-1: shell claro de dashboard com sidebar
 
@@ -78,7 +119,7 @@ Arquivos-chave:
 - `src/capabilities/video/stream-monitor-service.ts`
 - `src/capabilities/video/stream-snapshot-analyzer.test.ts`
 - `src/api/routes/stream-watch.ts`
-- `src/engine/tool-specs/video.ts`
+- `src/agents/tool-specs/video.ts`
 - `docs/architecture/phases/phase-22.md`
 
 Checklist de validacao:
@@ -196,13 +237,13 @@ Resumo:
 
 Arquivos-chave:
 - `src/projects/service.ts`
-- `src/engine/types.ts`
-- `src/engine/tool-specs/projects.ts`
+- `src/agents/types.ts`
+- `src/agents/tool-specs/projects.ts`
 - `.kael/skills/project-writer/SKILL.md`
 
 Checklist de validacao:
 - [ ] `npm run check`
-- [ ] `npm test -- src/projects/service.test.ts src/chat/service.test.ts src/skills/service.test.ts src/engine/pi-tools.test.ts src/engine/tool-specs/index.test.ts`
+- [ ] `npm test -- src/projects/service.test.ts src/chat/service.test.ts src/skills/service.test.ts src/agents/pi-tools.test.ts src/agents/tool-specs/index.test.ts`
 
 Pendencias:
 - A decisao de criar um novo `.md` ainda depende de julgamento da LLM, sem um approval flow estruturado no runtime.
@@ -219,14 +260,14 @@ Resumo:
 
 Arquivos-chave:
 - `src/app.ts`
-- `src/engine/types.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/types.ts`
+- `src/agents/pi-tools.ts`
 - `src/api/server.ts`
 - `docs/api.md`
 
 Checklist de validacao:
 - [ ] `npm run check`
-- [ ] `npm test -- src/chat/service.test.ts src/projects/service.test.ts src/skills/service.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/engine/simple-engine.test.ts`
+- [ ] `npm test -- src/chat/service.test.ts src/projects/service.test.ts src/skills/service.test.ts src/agents/pi-tools.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/agents/simple-engine.test.ts`
 
 Pendencias:
 - Ainda faltam limpar referencias historicas a `knowledge` em documentos de status/arquitetura mais antigos.
@@ -245,12 +286,12 @@ Resumo:
 Arquivos-chave:
 - `src/projects/service.ts`
 - `src/projects/service.test.ts`
-- `src/engine/tool-specs/projects.ts`
+- `src/agents/tool-specs/projects.ts`
 - `.kael/skills/project-writer/SKILL.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [ ] `npm test -- src/projects/service.test.ts src/chat/service.test.ts src/skills/service.test.ts src/engine/pi-tools.test.ts`
+- [ ] `npm test -- src/projects/service.test.ts src/chat/service.test.ts src/skills/service.test.ts src/agents/pi-tools.test.ts`
 
 Pendencias:
 - Ainda nao existe um fluxo de aprovacao estruturado no runtime; por enquanto a LLM precisa perguntar ao usuario em linguagem natural.
@@ -274,7 +315,7 @@ Arquivos-chave:
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/chat/service.test.ts src/projects/service.test.ts src/skills/service.test.ts src/engine/pi-tools.test.ts`
+- [x] `npm test -- src/chat/service.test.ts src/projects/service.test.ts src/skills/service.test.ts src/agents/pi-tools.test.ts`
 
 Pendencias:
 - `project_upsert_document` ainda exige `project` explicito na chamada; o default hoje e de prompt/contexto, nao de schema.
@@ -293,14 +334,14 @@ Resumo:
 
 Arquivos-chave:
 - `src/projects/service.ts`
-- `src/engine/tool-specs/projects.ts`
+- `src/agents/tool-specs/projects.ts`
 - `src/chat/service.ts`
 - `.kael/skills/project-writer/SKILL.md`
 - `docs/architecture/phases/phase-18.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/projects/service.test.ts src/chat/service.test.ts src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/engine/simple-engine.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+- [x] `npm test -- src/projects/service.test.ts src/chat/service.test.ts src/agents/tool-specs/index.test.ts src/agents/pi-tools.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/agents/simple-engine.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
 
 Pendencias:
 - A API ainda nao expõe endpoints dedicados do project space.
@@ -325,7 +366,7 @@ Arquivos-chave:
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/projects/service.test.ts src/chat/service.test.ts src/knowledge/service.test.ts src/skills/service.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/engine/simple-engine.test.ts src/api/jobs.e2e.test.ts`
+- [x] `npm test -- src/projects/service.test.ts src/chat/service.test.ts src/knowledge/service.test.ts src/skills/service.test.ts src/agents/pi-tools.test.ts src/api/server.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/agents/simple-engine.test.ts src/api/jobs.e2e.test.ts`
 
 Pendencias:
 - O `PROJECT.md` inicial ainda e so um scaffold, sem schema/frontmatter mais forte.
@@ -349,7 +390,7 @@ Arquivos-chave:
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/chat/service.test.ts src/knowledge/service.test.ts src/skills/service.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/engine/simple-engine.test.ts src/api/jobs.e2e.test.ts`
+- [x] `npm test -- src/chat/service.test.ts src/knowledge/service.test.ts src/skills/service.test.ts src/agents/pi-tools.test.ts src/api/server.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/agents/simple-engine.test.ts src/api/jobs.e2e.test.ts`
 
 Pendencias:
 - A heuristica de entrada ainda e lexical e conservadora; ainda nao usa projeto ativo da sessao nem retrieval semantico.
@@ -369,13 +410,13 @@ Resumo:
 Arquivos-chave:
 - `src/knowledge/service.ts`
 - `src/api/routes/knowledge.ts`
-- `src/engine/tool-specs/knowledge.ts`
+- `src/agents/tool-specs/knowledge.ts`
 - `.kael/skills/project-writer/SKILL.md`
 - `docs/architecture/phases/phase-18.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/knowledge/service.test.ts src/skills/service.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts`
+- [x] `npm test -- src/knowledge/service.test.ts src/skills/service.test.ts src/agents/pi-tools.test.ts src/api/server.test.ts`
 
 Pendencias:
 - O chat ainda nao consulta automaticamente a knowledge base antes de responder perguntas de projeto.
@@ -396,13 +437,13 @@ Resumo:
 Arquivos-chave:
 - `src/knowledge/service.ts`
 - `src/api/routes/knowledge.ts`
-- `src/engine/tool-specs/knowledge.ts`
+- `src/agents/tool-specs/knowledge.ts`
 - `src/chat/tooling-factory.ts`
 - `docs/api.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/knowledge/service.test.ts src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/engine/simple-engine.test.ts`
+- [x] `npm test -- src/knowledge/service.test.ts src/agents/tool-specs/index.test.ts src/agents/pi-tools.test.ts src/api/server.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/agents/simple-engine.test.ts`
 
 Pendencias:
 - A busca ainda e lexical; ainda nao ha retrieval semantico, consolidacao de conflitos nem revisao assistida.
@@ -452,7 +493,7 @@ Arquivos-chave:
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/skills/service.test.ts src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+- [x] `npm test -- src/skills/service.test.ts src/agents/tool-specs/index.test.ts src/agents/pi-tools.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
 
 Pendencias:
 - A skill hoje cobre apenas `hls.js`.
@@ -475,13 +516,13 @@ Arquivos-chave:
 - `src/capabilities/video/manifest-diff-service.ts`
 - `src/capabilities/video/types.ts`
 - `src/chat/tooling-factory.ts`
-- `src/engine/tool-specs/video.ts`
+- `src/agents/tool-specs/video.ts`
 - `src/cli/index.ts`
 - `docs/architecture/phases/phase-20.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/capabilities/video/manifest-diff-service.test.ts src/capabilities/video/jobs/job-capability.test.ts src/capabilities/video/jobs/job-service.test.ts src/capabilities/video/jobs/safety.test.ts src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+- [x] `npm test -- src/capabilities/video/manifest-diff-service.test.ts src/capabilities/video/jobs/job-capability.test.ts src/capabilities/video/jobs/job-service.test.ts src/capabilities/video/jobs/safety.test.ts src/agents/tool-specs/index.test.ts src/agents/pi-tools.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
 
 Pendencias:
 - O diff ainda compara o snapshot de audit em memoria; ainda nao ha comparacao baseada em artifacts persistidos.
@@ -528,12 +569,12 @@ Arquivos-chave:
 - `src/chat/tooling-factory.ts`
 - `src/bootstrap/runtime.ts`
 - `src/runtime/browser/service.ts`
-- `src/engine/tooling-descriptors.ts`
+- `src/agents/tooling-descriptors.ts`
 - `docs/architecture/phases/phase-16.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/runtime/browser/runtime.test.ts src/runtime/browser/presentation.test.ts src/runtime/browser/service.test.ts src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts`
+- [x] `npm test -- src/runtime/browser/runtime.test.ts src/runtime/browser/presentation.test.ts src/runtime/browser/service.test.ts src/agents/tool-specs/index.test.ts src/agents/pi-tools.test.ts`
 
 Pendencias:
 - O catalogo de descriptors ainda nao e consumido por `/health`, docs geradas ou introspeccao em runtime.
@@ -553,12 +594,12 @@ Arquivos-chave:
 - `src/capabilities/video/manifest-audit-service.ts`
 - `src/capabilities/video/types.ts`
 - `src/cli/index.ts`
-- `src/engine/tool-specs/video.ts`
+- `src/agents/tool-specs/video.ts`
 - `docs/architecture/phases/phase-20.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/capabilities/video/manifest-audit-service.test.ts src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+- [x] `npm test -- src/capabilities/video/manifest-audit-service.test.ts src/agents/tool-specs/index.test.ts src/agents/pi-tools.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
 
 Pendencias:
 - Ainda nao ha persistencia opcional dos manifests auditados para diff/historico.
@@ -578,14 +619,14 @@ Resumo:
 Arquivos-chave:
 - `src/capabilities/video/manifest-audit-service.ts`
 - `src/capabilities/video/types.ts`
-- `src/engine/tool-specs/video.ts`
+- `src/agents/tool-specs/video.ts`
 - `src/chat/tooling-factory.ts`
 - `src/bootstrap/runtime.ts`
 - `docs/architecture/phases/phase-20.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/capabilities/video/manifest-audit-service.test.ts src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts`
+- [x] `npm test -- src/capabilities/video/manifest-audit-service.test.ts src/agents/tool-specs/index.test.ts src/agents/pi-tools.test.ts`
 
 Pendencias:
 - Ainda nao ha auditoria equivalente para DASH.
@@ -599,24 +640,24 @@ Proximo passo recomendado:
 
 Resumo:
 - O contrato flat legado de tooling do engine foi removido do runtime e dos testes.
-- `src/engine/types.ts` passou a expor contratos reais por namespace (`video`, `jobs`, `system`, `mcp`, `edge`, `memory`, `workspace`, `web`, `browser`, `image`, `plans`).
+- `src/agents/types.ts` passou a expor contratos reais por namespace (`video`, `jobs`, `system`, `mcp`, `edge`, `memory`, `workspace`, `web`, `browser`, `image`, `plans`).
 - `ChatService`, `SimpleCommandEngine`, `pi-tools` e `tool-specs` agora consomem `EngineToolingNamespaces` de ponta a ponta, sem adapter de flatten/resolve.
 
 Arquivos-chave:
-- `src/engine/types.ts`
+- `src/agents/types.ts`
 - `src/chat/tooling-factory.ts`
 - `src/chat/service.ts`
-- `src/engine/pi-tools.ts`
-- `src/engine/simple-engine.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/simple-engine.ts`
 - `docs/architecture/phases/phase-19.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/engine/simple-engine.test.ts src/engine/pi-tools.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/api/server.test.ts`
+- [x] `npm test -- src/agents/simple-engine.test.ts src/agents/pi-tools.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/api/server.test.ts`
 
 Pendencias:
 - Ainda existem referencias historicas a `EngineTooling` flat em diagramas e registros antigos do status.
-- Falta avaliar se vale quebrar `src/engine/types.ts` em arquivos menores por dominio para reduzir densidade do contrato central.
+- Falta avaliar se vale quebrar `src/agents/types.ts` em arquivos menores por dominio para reduzir densidade do contrato central.
 
 Proximo passo recomendado:
 - Continuar a simplificacao estrutural extraindo tipos/tool contracts por modulo de dominio e revisar os hotspots restantes (`PiEngineAdapter` e planner runtime) com a mesma abordagem.
@@ -629,16 +670,16 @@ Resumo:
 - O consumo do Youbora ficou menos dependente da escolha autonoma do modelo e mais previsivel para operacao/manual test.
 
 Arquivos-chave:
-- `src/engine/tool-specs/edge.ts`
-- `src/engine/pi-tools.ts`
-- `src/engine/simple-engine.ts`
-- `src/engine/types.ts`
+- `src/agents/tool-specs/edge.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/simple-engine.ts`
+- `src/agents/types.ts`
 - `src/chat/tooling-factory.ts`
 - `docs/architecture/phases/phase-21.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/engine/simple-engine.test.ts src/engine/pi-tools.test.ts src/engine/tool-specs/index.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts`
+- [x] `npm test -- src/agents/simple-engine.test.ts src/agents/pi-tools.test.ts src/agents/tool-specs/index.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts`
 
 Pendencias:
 - Ainda falta definir um contrato mais ergonomico para filtros complexos do Youbora, evitando `filtersJson` cru nos subcomandos.
@@ -655,7 +696,7 @@ Resumo:
 - Mantido o principio de descoberta por tools/contratos em vez de inferencia lexical fragil.
 
 Arquivos-chave:
-- `src/engine/pi-engine-adapter.ts`
+- `src/agents/pi-engine-adapter.ts`
 
 Checklist de validacao:
 - [x] `npm run check`
@@ -675,15 +716,15 @@ Resumo:
 - A skill local `youbora` foi atualizada para preferir Clark/MCP e usar o script HTTP/MD5 apenas como fallback.
 
 Arquivos-chave:
-- `src/engine/tool-specs/edge.ts`
-- `src/engine/pi-tools.ts`
-- `src/engine/pi-engine-adapter.ts`
+- `src/agents/tool-specs/edge.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/pi-engine-adapter.ts`
 - `.kael/skills/youbora/SKILL.md`
 - `docs/architecture/phases/phase-21.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/engine/pi-tools.test.ts src/engine/tool-specs/index.test.ts src/api/server.test.ts`
+- [x] `npm test -- src/agents/pi-tools.test.ts src/agents/tool-specs/index.test.ts src/api/server.test.ts`
 
 Pendencias:
 - Ainda falta wrapper dedicado para outras capabilities do MCP do Youbora (`rawdata`, `events`, `metrics_help`, `filters_help`).
@@ -705,14 +746,14 @@ Arquivos-chave:
 - `src/edge/protocol.ts`
 - `src/api/server.ts`
 - `src/chat/tooling-factory.ts`
-- `src/engine/tool-specs/edge.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/tool-specs/edge.ts`
+- `src/agents/pi-tools.ts`
 - `src/api/server.test.ts`
 - `docs/architecture/phases/phase-21.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/api/server.test.ts src/engine/pi-tools.test.ts src/engine/tool-specs/index.test.ts`
+- [x] `npm test -- src/api/server.test.ts src/agents/pi-tools.test.ts src/agents/tool-specs/index.test.ts`
 
 Pendencias:
 - Ainda nao existe capability de negocio dedicada para Youbora/NPAW; o baseline atual e generico.
@@ -1465,15 +1506,15 @@ Resumo:
 
 Arquivos-chave:
 - `src/tools/mcp/mcp-bridge-service.ts`
-- `src/engine/tool-specs/mcp.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/tool-specs/mcp.ts`
+- `src/agents/pi-tools.ts`
 - `src/chat/tooling-factory.ts`
 - `.kael/skills/mcporter/SKILL.md`
 - `docs/architecture/phases/phase-19.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/tools/mcp/mcp-bridge-service.test.ts src/engine/pi-tools.test.ts src/engine/tool-specs/index.test.ts src/config.test.ts`
+- [x] `npm test -- src/tools/mcp/mcp-bridge-service.test.ts src/agents/pi-tools.test.ts src/agents/tool-specs/index.test.ts src/config.test.ts`
 - [x] `npm test -- src/api/server.test.ts src/api/jobs.e2e.test.ts`
 
 Pendencias:
@@ -1683,12 +1724,12 @@ Resumo:
 - O teste valida composicao por capability e nomes esperados das tools retornadas.
 
 Arquivos-chave:
-- `src/engine/tool-specs/index.test.ts`
+- `src/agents/tool-specs/index.test.ts`
 - `docs/planning/PROJECT-STATUS.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/engine/tool-specs/index.test.ts src/engine/pi-tools.test.ts`
+- [x] `npx vitest run src/agents/tool-specs/index.test.ts src/agents/pi-tools.test.ts`
 
 Pendencias:
 - Expandir cobertura com cenarios de erro/budget por capability direto nas factories (opcional).
@@ -1699,26 +1740,26 @@ Proximo passo recomendado:
 ### 2026-03-07 - Registro central de tool-specs no PI
 
 Resumo:
-- Criado registro central `src/engine/tool-specs/index.ts` com:
+- Criado registro central `src/agents/tool-specs/index.ts` com:
   - exports dos factories por capability;
   - `createPiCapabilityTools(...)` para composicao unificada.
 - `pi-tools` passou a consumir o registro central, reduzindo wiring manual disperso.
 - Ordem e contratos das tools preservados.
 
 Arquivos-chave:
-- `src/engine/tool-specs/index.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/tool-specs/index.ts`
+- `src/agents/pi-tools.ts`
 - `docs/planning/PROJECT-STATUS.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+- [x] `npx vitest run src/agents/pi-tools.test.ts src/agents/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
 
 Pendencias:
 - Opcional: adicionar testes unitarios focados no registro `createPiCapabilityTools`.
 
 Proximo passo recomendado:
-- Criar `src/engine/tool-specs/index.test.ts` para validar composicao/ordem de retorno por capability.
+- Criar `src/agents/tool-specs/index.test.ts` para validar composicao/ordem de retorno por capability.
 
 ### 2026-03-07 - Extracao de tool-specs `system` e `image` no PI
 
@@ -1726,157 +1767,157 @@ Resumo:
 - `exec` e `process` foram extraidos de `pi-tools` para factory dedicada.
 - `image_generate` foi extraido para factory dedicada.
 - Novos modulos:
-  - `src/engine/tool-specs/system.ts`;
-  - `src/engine/tool-specs/image.ts`.
+  - `src/agents/tool-specs/system.ts`;
+  - `src/agents/tool-specs/image.ts`.
 - `pi-tools` manteve budgets/loop guard/logging e passou a compor essas tools por registro.
 
 Arquivos-chave:
-- `src/engine/tool-specs/system.ts`
-- `src/engine/tool-specs/image.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/tool-specs/system.ts`
+- `src/agents/tool-specs/image.ts`
+- `src/agents/pi-tools.ts`
 - `docs/planning/PROJECT-STATUS.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+- [x] `npx vitest run src/agents/pi-tools.test.ts src/agents/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
 
 Pendencias:
 - Padronizar/exportar indice de `tool-specs` para reduzir wiring manual em `pi-tools`.
 
 Proximo passo recomendado:
-- Criar `src/engine/tool-specs/index.ts` e usar registro central para composicao das tools.
+- Criar `src/agents/tool-specs/index.ts` e usar registro central para composicao das tools.
 
 ### 2026-03-07 - Extracao de tool-specs `plans` no PI
 
 Resumo:
 - Bloco completo `plan_*` foi extraido de `pi-tools` para factory dedicada.
-- Novo modulo `src/engine/tool-specs/plans.ts` introduzido com:
+- Novo modulo `src/agents/tool-specs/plans.ts` introduzido com:
   - `plan_create`, `plan_generate`, `plan_list`, `plan_get`,
   - `plan_update_step`, `plan_next`, `plan_execute_next`, `plan_reconcile`.
 - `pi-tools` passou a compor tools de plano via registro, mantendo contratos e respostas.
 
 Arquivos-chave:
-- `src/engine/tool-specs/plans.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/tool-specs/plans.ts`
+- `src/agents/pi-tools.ts`
 - `docs/planning/PROJECT-STATUS.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+- [x] `npx vitest run src/agents/pi-tools.test.ts src/agents/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
 
 Pendencias:
 - Extrair `exec/process` e `image_generate` para concluir modularizacao do `pi-tools`.
 
 Proximo passo recomendado:
-- Migrar `exec` + `process` para `src/engine/tool-specs/system.ts`.
+- Migrar `exec` + `process` para `src/agents/tool-specs/system.ts`.
 
 ### 2026-03-07 - Extracao de tool-specs `workspace` no PI
 
 Resumo:
 - `workspace_search` e `workspace_read` foram extraidos de `pi-tools` para factory dedicada.
-- Novo modulo `src/engine/tool-specs/workspace.ts` introduzido.
+- Novo modulo `src/agents/tool-specs/workspace.ts` introduzido.
 - `pi-tools` continua centralizando orquestracao e agora compoe tools de workspace via registro.
 
 Arquivos-chave:
-- `src/engine/tool-specs/workspace.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/tool-specs/workspace.ts`
+- `src/agents/pi-tools.ts`
 - `docs/planning/PROJECT-STATUS.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+- [x] `npx vitest run src/agents/pi-tools.test.ts src/agents/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
 
 Pendencias:
 - Extrair `plan_*` e `exec/process` para reduzir o hardcode restante no `pi-tools`.
 
 Proximo passo recomendado:
-- Migrar bloco `plan_*` para `src/engine/tool-specs/plans.ts`.
+- Migrar bloco `plan_*` para `src/agents/tool-specs/plans.ts`.
 
 ### 2026-03-07 - Extracao de tool-specs `memory` no PI
 
 Resumo:
 - `memory_search`, `memory_get` e `memory_write` foram extraidos de `pi-tools` para factory dedicada.
-- Novo modulo `src/engine/tool-specs/memory.ts` introduzido.
+- Novo modulo `src/agents/tool-specs/memory.ts` introduzido.
 - `pi-tools` manteve logs/telemetria e passou a compor tools de memoria via registro.
 
 Arquivos-chave:
-- `src/engine/tool-specs/memory.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/tool-specs/memory.ts`
+- `src/agents/pi-tools.ts`
 - `docs/planning/PROJECT-STATUS.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+- [x] `npx vitest run src/agents/pi-tools.test.ts src/agents/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
 
 Pendencias:
 - Extrair blocos restantes (`workspace`, `plan_*`, `exec/process`) para reduzir hardcode residual no `pi-tools`.
 
 Proximo passo recomendado:
-- Migrar `workspace_search/read` para `src/engine/tool-specs/workspace.ts`.
+- Migrar `workspace_search/read` para `src/agents/tool-specs/workspace.ts`.
 
 ### 2026-03-07 - Extracao de tool-specs `web` no PI
 
 Resumo:
 - `web_search`, `web_fetch` e `web_research` foram extraidos de `pi-tools` para factory dedicada.
-- Novo modulo `src/engine/tool-specs/web.ts` introduzido com schema/execute e sumarizacao de resultado.
+- Novo modulo `src/agents/tool-specs/web.ts` introduzido com schema/execute e sumarizacao de resultado.
 - `pi-tools` manteve controles centrais (budget, bloqueio, logs) e passou a compor tools web via registro.
 
 Arquivos-chave:
-- `src/engine/tool-specs/web.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/tool-specs/web.ts`
+- `src/agents/pi-tools.ts`
 - `docs/planning/PROJECT-STATUS.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+- [x] `npx vitest run src/agents/pi-tools.test.ts src/agents/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
 
 Pendencias:
 - Extrair blocos restantes (`memory`, `workspace`, `plan_*`, `exec/process`) para reduzir hardcode residual.
 
 Proximo passo recomendado:
-- Migrar `memory_search/get/write` para `src/engine/tool-specs/memory.ts`.
+- Migrar `memory_search/get/write` para `src/agents/tool-specs/memory.ts`.
 
 ### 2026-03-07 - Extracao de tool-specs `video` no PI
 
 Resumo:
 - `video_hls_inspect` e `video_probe` foram extraidos de `pi-tools` para factory dedicada.
-- Novo modulo `src/engine/tool-specs/video.ts` introduzido.
+- Novo modulo `src/agents/tool-specs/video.ts` introduzido.
 - `pi-tools` manteve budgets/log/ordem de tools e passou a compor a tool de video via registro.
 
 Arquivos-chave:
-- `src/engine/tool-specs/video.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/tool-specs/video.ts`
+- `src/agents/pi-tools.ts`
 - `docs/planning/PROJECT-STATUS.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+- [x] `npx vitest run src/agents/pi-tools.test.ts src/agents/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
 
 Pendencias:
 - Continuar migracao de tools restantes para `tool-specs/*` para reduzir hardcode de `pi-tools`.
 
 Proximo passo recomendado:
-- Extrair bloco `web_search/web_fetch/web_research` para `src/engine/tool-specs/web.ts`.
+- Extrair bloco `web_search/web_fetch/web_research` para `src/agents/tool-specs/web.ts`.
 
 ### 2026-03-07 - Extracao de tool-specs (`jobs`/`browser`) no PI
 
 Resumo:
 - `pi-tools` passou a consumir factories dedicadas para tools de `jobs` e `browser`.
 - Novos modulos:
-  - `src/engine/tool-specs/jobs.ts`;
-  - `src/engine/tool-specs/browser.ts`.
+  - `src/agents/tool-specs/jobs.ts`;
+  - `src/agents/tool-specs/browser.ts`.
 - Mantida a mesma superficie externa de tools, budgets e telemetria.
 - Reduzida duplicidade local em `pi-tools` para schema/execute dessas capacidades.
 
 Arquivos-chave:
-- `src/engine/pi-tools.ts`
-- `src/engine/tool-specs/jobs.ts`
-- `src/engine/tool-specs/browser.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/tool-specs/jobs.ts`
+- `src/agents/tool-specs/browser.ts`
 - `docs/planning/PROJECT-STATUS.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+- [x] `npx vitest run src/agents/pi-tools.test.ts src/agents/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
 
 Pendencias:
 - Expandir mesmo padrao de tool-spec para outras ferramentas ainda hardcoded no `pi-tools`.
@@ -1901,13 +1942,13 @@ Arquivos-chave:
 - `src/capabilities/browser/presentation.ts`
 - `src/capabilities/browser/presentation.test.ts`
 - `src/chat/tooling-factory.ts`
-- `src/engine/pi-tools.ts`
-- `src/engine/simple-engine.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/simple-engine.ts`
 - `docs/planning/PROJECT-STATUS.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/jobs/tooling.test.ts src/capabilities/browser/presentation.test.ts src/capabilities/browser/capability.test.ts src/capabilities/browser/service.test.ts src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+- [x] `npx vitest run src/jobs/tooling.test.ts src/capabilities/browser/presentation.test.ts src/capabilities/browser/capability.test.ts src/capabilities/browser/service.test.ts src/agents/pi-tools.test.ts src/agents/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
 
 Pendencias:
 - Seguir extraindo specs por capability para reduzir duplicidade restante em definicao de schemas/tools no `pi-tools`.
@@ -1929,14 +1970,14 @@ Arquivos-chave:
 - `src/capabilities/browser/capability.test.ts`
 - `src/app.ts`
 - `src/chat/tooling-factory.ts`
-- `src/engine/pi-tools.ts`
-- `src/engine/simple-engine.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/simple-engine.ts`
 - `docs/architecture/phases/phase-16.md`
 - `docs/planning/PROJECT-STATUS.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/capabilities/browser/capability.test.ts src/capabilities/browser/service.test.ts src/engine/pi-tools.test.ts src/engine/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
+- [x] `npx vitest run src/capabilities/browser/capability.test.ts src/capabilities/browser/service.test.ts src/agents/pi-tools.test.ts src/agents/simple-engine.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts`
 
 Pendencias:
 - Aplicar padrao análogo para `system` separando capability de alto nivel e runtime interno.
@@ -1960,14 +2001,14 @@ Arquivos-chave:
 - `src/app.ts`
 - `src/chat/service.ts`
 - `src/chat/tooling-factory.ts`
-- `src/engine/types.ts`
+- `src/agents/types.ts`
 - `docs/architecture/phases/phase-16.md`
 - `docs/architecture/diagrams/detailed-components.md`
 - `docs/planning/PROJECT-STATUS.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/capabilities/browser/service.test.ts src/engine/simple-engine.test.ts`
+- [x] `npx vitest run src/capabilities/browser/service.test.ts src/agents/simple-engine.test.ts`
 
 Pendencias:
 - Avaliar migracao de `system` separando capability (`exec/process`) de runtime interno de processos.
@@ -1989,8 +2030,8 @@ Arquivos-chave:
 - `src/planner/service.test.ts`
 - `src/chat/tooling-factory.ts`
 - `src/api/server.ts`
-- `src/engine/types.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/types.ts`
+- `src/agents/pi-tools.ts`
 - `docs/architecture/phases/phase-17.md`
 - `docs/planning/PROJECT-STATUS.md`
 - `docs/core/START-HERE.md`
@@ -2073,7 +2114,7 @@ Arquivos-chave:
 
 Checklist de validacao:
 - [x] `npm run test:smoke:browser`
-- [x] `npm test -- src/tools/browser/service.test.ts src/engine/simple-engine.test.ts`
+- [x] `npm test -- src/tools/browser/service.test.ts src/agents/simple-engine.test.ts`
 - [x] `npm run check`
 
 Pendencias:
@@ -2099,18 +2140,18 @@ Resumo:
 
 Arquivos-chave:
 - `src/tools/browser/service.ts`
-- `src/engine/pi-tools.ts`
-- `src/engine/pi-engine-adapter.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/pi-engine-adapter.ts`
 - `src/config.ts`
-- `src/engine/simple-engine.ts`
-- `src/engine/simple-engine.test.ts`
+- `src/agents/simple-engine.ts`
+- `src/agents/simple-engine.test.ts`
 - `docs/architecture/phases/phase-16.md`
 - `docs/browser-control.md`
 - `README.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/engine/simple-engine.test.ts src/chat/command-router.test.ts src/tools/browser/service.test.ts`
+- [x] `npm test -- src/agents/simple-engine.test.ts src/chat/command-router.test.ts src/tools/browser/service.test.ts`
 
 Pendencias:
 - Ainda faltam smoke tests e2e em browser real no pipeline automatizado.
@@ -2137,16 +2178,16 @@ Resumo:
 Arquivos-chave:
 - `docs/architecture/phases/phase-16.md`
 - `src/tools/browser/service.ts`
-- `src/engine/types.ts`
+- `src/agents/types.ts`
 - `src/chat/tooling-factory.ts`
 - `src/app.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/pi-tools.ts`
 - `src/api/server.ts`
 - `src/config.ts`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/tools/browser/service.test.ts src/api/server.test.ts src/engine/simple-engine.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts`
+- [x] `npm test -- src/tools/browser/service.test.ts src/api/server.test.ts src/agents/simple-engine.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts`
 
 Pendencias:
 - Acoes browser ainda nao implementadas (fase 16.1 em diante).
@@ -2171,13 +2212,13 @@ Resumo:
 Arquivos-chave:
 - `src/tools/browser/service.ts`
 - `src/tools/browser/service.test.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/pi-tools.ts`
 - `package.json`
 - `docs/architecture/phases/phase-16.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/tools/browser/service.test.ts src/engine/pi-tools.test.ts src/api/server.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/engine/simple-engine.test.ts src/config.test.ts`
+- [x] `npm test -- src/tools/browser/service.test.ts src/agents/pi-tools.test.ts src/api/server.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/agents/simple-engine.test.ts src/config.test.ts`
 
 Pendencias:
 - Acoes de interacao (`click|type|press|wait_for`) ainda nao implementadas.
@@ -2207,7 +2248,7 @@ Arquivos-chave:
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/tools/browser/service.test.ts src/engine/pi-tools.test.ts`
+- [x] `npm test -- src/tools/browser/service.test.ts src/agents/pi-tools.test.ts`
 
 Pendencias:
 - Ainda falta robustez de fluxo e2e real para formularios complexos (validacao por smoke manual recomendado).
@@ -2234,9 +2275,9 @@ Resumo:
 - `GmailPop3Provider` ja em modo `RETR` + parse MIME segue entregando anexos de entrada no mesmo contrato.
 
 Arquivos-chave:
-- `src/engine/types.ts`
-- `src/engine/pi-tools.ts`
-- `src/engine/pi-engine-adapter.ts`
+- `src/agents/types.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/pi-engine-adapter.ts`
 - `src/media/image-generator.ts`
 - `src/chat/tooling-factory.ts`
 - `src/app.ts`
@@ -2248,7 +2289,7 @@ Arquivos-chave:
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/email/gmail-pop3-provider.test.ts src/email/ingest-service.test.ts src/api/server.test.ts src/media/service.test.ts src/engine/pi-engine-adapter.test.ts`
+- [x] `npx vitest run src/email/gmail-pop3-provider.test.ts src/email/ingest-service.test.ts src/api/server.test.ts src/media/service.test.ts src/agents/pi-engine-adapter.test.ts`
 
 Pendencias:
 - Discord/web ainda nao usam artifacts de saida; apenas email reply envia anexo por enquanto.
@@ -2411,7 +2452,7 @@ Resumo:
 - Registrada arquitetura da Fase 15 em documento dedicado.
 
 Arquivos-chave:
-- `src/engine/types.ts`
+- `src/agents/types.ts`
 - `src/chat/service.ts`
 - `src/chat/turn-orchestrator.ts`
 - `src/api/server.ts`
@@ -2440,11 +2481,11 @@ Resumo:
 - Endpoint `GET /health` agora retorna `metrics.engineRuntime` com esses contadores.
 
 Arquivos-chave:
-- `src/engine/types.ts`
-- `src/engine/pi-engine-adapter.ts`
-- `src/engine/hybrid-engine.ts`
-- `src/engine/simple-engine.ts`
-- `src/engine/factory.ts`
+- `src/agents/types.ts`
+- `src/agents/pi-engine-adapter.ts`
+- `src/agents/hybrid-engine.ts`
+- `src/agents/simple-engine.ts`
+- `src/agents/factory.ts`
 - `src/chat/turn-orchestrator.ts`
 - `src/chat/service.ts`
 - `src/api/server.ts`
@@ -2453,7 +2494,7 @@ Arquivos-chave:
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm run test -- src/api/server.test.ts src/engine/pi-engine-adapter.test.ts`
+- [x] `npm run test -- src/api/server.test.ts src/agents/pi-engine-adapter.test.ts`
 
 Pendencias:
 - Metricas ainda sao in-memory por processo; nao ha agregacao cross-processo.
@@ -2470,15 +2511,15 @@ Resumo:
 - Cliente Discord (`discordApi`) agora aplica retry com backoff+jitter para `429`/`5xx` e falhas de rede transitórias, reduzindo falhas intermitentes de typing/envio.
 
 Arquivos-chave:
-- `src/engine/pi-engine-adapter.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/pi-engine-adapter.ts`
+- `src/agents/pi-tools.ts`
 - `src/chat/service.ts`
 - `src/integrations/discord/discord-bot.ts`
 - `docs/planning/PROJECT-STATUS.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm run test -- src/engine/pi-engine-adapter.test.ts src/engine/tool-loop-guard.test.ts src/chat/turn-orchestrator.test.ts`
+- [x] `npm run test -- src/agents/pi-engine-adapter.test.ts src/agents/tool-loop-guard.test.ts src/chat/turn-orchestrator.test.ts`
 
 Pendencias:
 - Fallback ainda depende das evidencias capturadas por tool summary; nao persiste pacote de evidencia por turno para reuso posterior.
@@ -2536,14 +2577,14 @@ Resumo:
 - Adicionado teste unitario para garantir injecao dessa disciplina de pesquisa no prompt.
 
 Arquivos-chave:
-- `src/engine/pi-engine-adapter.ts`
-- `src/engine/pi-tools.ts`
-- `src/engine/pi-engine-adapter.test.ts`
+- `src/agents/pi-engine-adapter.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/pi-engine-adapter.test.ts`
 - `docs/planning/PROJECT-STATUS.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm run test -- src/engine/pi-engine-adapter.test.ts src/engine/tool-loop-guard.test.ts`
+- [x] `npm run test -- src/agents/pi-engine-adapter.test.ts src/agents/tool-loop-guard.test.ts`
 
 Pendencias:
 - Adicionar fallback de resposta automatica no `ChatService` para timeout com evidencias parciais de pesquisa.
@@ -2560,15 +2601,15 @@ Resumo:
 - Adicionado teste unitario cobrindo bloqueio cedo de `web_fetch` repetido sem progresso.
 
 Arquivos-chave:
-- `src/engine/tool-loop-guard.ts`
-- `src/engine/tool-loop-guard.test.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/tool-loop-guard.ts`
+- `src/agents/tool-loop-guard.test.ts`
+- `src/agents/pi-tools.ts`
 - `docs/architecture/phases/phase-7.md`
 - `docs/planning/PROJECT-STATUS.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm run test -- src/engine/tool-loop-guard.test.ts src/engine/pi-engine-adapter.test.ts`
+- [x] `npm run test -- src/agents/tool-loop-guard.test.ts src/agents/pi-engine-adapter.test.ts`
 
 Pendencias:
 - Expor metricas agregadas de bloqueio por tipo (`exec/process/web`) no endpoint de observabilidade.
@@ -2585,15 +2626,15 @@ Resumo:
 - Adicionados testes unitarios para garantir que o prompt ativa fluxo de memoria com e sem contexto.
 
 Arquivos-chave:
-- `src/engine/pi-engine-adapter.ts`
-- `src/engine/pi-tools.ts`
-- `src/engine/pi-engine-adapter.test.ts`
+- `src/agents/pi-engine-adapter.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/pi-engine-adapter.test.ts`
 - `docs/architecture/phases/phase-8.md`
 - `docs/planning/PROJECT-STATUS.md`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm run test -- src/engine/pi-engine-adapter.test.ts`
+- [x] `npm run test -- src/agents/pi-engine-adapter.test.ts`
 
 Pendencias:
 - Cobrir mais gatilhos semanticos reais via telemetria de misses de recall em producao.
@@ -2723,7 +2764,7 @@ Arquivos-chave:
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/api/server.test.ts src/chat/command-router.test.ts src/chat/routing-telemetry.test.ts src/engine/simple-engine.test.ts`
+- [x] `npx vitest run src/api/server.test.ts src/chat/command-router.test.ts src/chat/routing-telemetry.test.ts src/agents/simple-engine.test.ts`
 - [x] `npx vitest run src/tools/system/shell-tool-service.test.ts`
 
 Pendencias:
@@ -2772,7 +2813,7 @@ Arquivos-chave:
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/chat/command-router.test.ts src/engine/simple-engine.test.ts`
+- [x] `npx vitest run src/chat/command-router.test.ts src/agents/simple-engine.test.ts`
 
 Pendencias:
 - Expor telemetria de fast-path vs turno LLM em eventos/logs.
@@ -2818,7 +2859,7 @@ Arquivos-chave:
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/engine/simple-engine.test.ts src/engine/pi-engine-adapter.test.ts`
+- [x] `npx vitest run src/agents/simple-engine.test.ts src/agents/pi-engine-adapter.test.ts`
 
 Pendencias:
 - Extrair roteador de comandos para modulo dedicado e cobrir com testes unitarios diretos.
@@ -2862,12 +2903,12 @@ Resumo:
 Arquivos-chave:
 - `src/tools/system/shell-tool-service.ts`
 - `src/config.ts`
-- `src/engine/pi-tools.ts`
-- `src/engine/types.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/types.ts`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/tools/system/shell-tool-service.test.ts src/engine/tool-loop-guard.test.ts src/api/server.test.ts`
+- [x] `npx vitest run src/tools/system/shell-tool-service.test.ts src/agents/tool-loop-guard.test.ts src/api/server.test.ts`
 
 Pendencias:
 - Unificar lifecycle em supervisor dedicado (estilo OpenClaw) para `exec/process`.
@@ -2885,12 +2926,12 @@ Resumo:
 
 Arquivos-chave:
 - `src/config.ts`
-- `src/engine/pi-engine-adapter.ts`
+- `src/agents/pi-engine-adapter.ts`
 - `src/chat/service.ts`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npx vitest run src/api/server.test.ts src/engine/pi-engine-adapter.test.ts`
+- [x] `npx vitest run src/api/server.test.ts src/agents/pi-engine-adapter.test.ts`
 
 Pendencias:
 - Generalizar fallback para outros slash/acoes (nao so `/playVLC`).
@@ -2908,9 +2949,9 @@ Arquivos-chave:
 - `src/api/server.ts`
 - `src/chat/service.ts`
 - `src/chat/turn-orchestrator.ts`
-- `src/engine/types.ts`
-- `src/engine/pi-engine-adapter.ts`
-- `src/engine/factory.ts`
+- `src/agents/types.ts`
+- `src/agents/pi-engine-adapter.ts`
+- `src/agents/factory.ts`
 
 Checklist de validacao:
 - [x] `npm run check`
@@ -2932,7 +2973,7 @@ Resumo:
 
 Arquivos-chave:
 - `src/research/service.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/pi-tools.ts`
 - `src/config.ts`
 - `src/research/service.test.ts`
 
@@ -2957,8 +2998,8 @@ Resumo:
 Arquivos-chave:
 - `src/research/service.ts`
 - `src/research/types.ts`
-- `src/engine/pi-tools.ts`
-- `src/engine/types.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/types.ts`
 
 Checklist de validacao:
 - [x] `npm run check`
@@ -3072,7 +3113,7 @@ Resumo:
 Arquivos-chave:
 - `src/research/service.ts`
 - `src/research/provider.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/pi-tools.ts`
 - `src/config.ts`
 
 Checklist de validacao:
@@ -3097,7 +3138,7 @@ Resumo:
 Arquivos-chave:
 - `src/planner/service.ts`
 - `src/planner/service.test.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/pi-tools.ts`
 - `src/api/server.ts`
 - `docs/architecture/phases/phase-8.1.md`
 
@@ -3122,8 +3163,8 @@ Resumo:
 Arquivos-chave:
 - `src/tools/system/shell-tool-service.ts`
 - `src/tools/system/shell-approvals.ts`
-- `src/engine/pi-tools.ts`
-- `src/engine/pi-engine-adapter.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/pi-engine-adapter.ts`
 - `src/config.ts`
 
 Checklist de validacao:
@@ -3194,10 +3235,10 @@ Resumo:
 - Cobertura inicial por testes unitarios validando: bloqueio por repeticao, nao bloqueio quando ha progresso e isolamento por sessao/tool.
 
 Arquivos-chave:
-- `src/engine/tool-loop-guard.ts`
-- `src/engine/tool-loop-guard.test.ts`
-- `src/engine/pi-tools.ts`
-- `src/engine/pi-engine-adapter.ts`
+- `src/agents/tool-loop-guard.ts`
+- `src/agents/tool-loop-guard.test.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/pi-engine-adapter.ts`
 - `docs/architecture/phases/phase-7.md`
 
 Checklist de validacao:
@@ -3221,7 +3262,7 @@ Resumo:
 Arquivos-chave:
 - `src/chat/turn-orchestrator.ts`
 - `src/chat/turn-orchestrator.test.ts`
-- `src/engine/types.ts`
+- `src/agents/types.ts`
 - `docs/architecture/phases/phase-7.md`
 
 Checklist de validacao:
@@ -3250,7 +3291,7 @@ Resumo:
 Arquivos-chave:
 - `src/memory/service.ts`
 - `src/memory/service.test.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/pi-tools.ts`
 - `src/chat/service.ts`
 - `src/app.ts`
 - `docs/architecture/phases/phase-8.md`
@@ -3539,7 +3580,7 @@ Resumo:
 - Documentacao atualizada com estrategia atual e nota para reintroducao futura se necessario.
 
 Arquivos-chave:
-- `src/engine/pi-engine-adapter.ts`
+- `src/agents/pi-engine-adapter.ts`
 - `src/config.ts`
 - `src/global-config.ts`
 - `README.md`
@@ -3566,8 +3607,8 @@ Resumo:
 Arquivos-chave:
 - `src/chat/turn-orchestrator.ts`
 - `src/chat/service.ts`
-- `src/engine/types.ts`
-- `src/engine/pi-engine-adapter.ts`
+- `src/agents/types.ts`
+- `src/agents/pi-engine-adapter.ts`
 - `src/config.ts`
 - `src/global-config.ts`
 
@@ -3594,8 +3635,8 @@ Arquivos-chave:
 - `src/session/store.ts`
 - `src/jobs/store.ts`
 - `src/tools/video/transcode-service.ts`
-- `src/engine/types.ts`
-- `src/engine/simple-engine.ts`
+- `src/agents/types.ts`
+- `src/agents/simple-engine.ts`
 
 Proximo passo recomendado:
 - Iniciar Fase 2 com `PiEngineAdapter` mantendo o contrato de `AgentEngine`.
@@ -3608,9 +3649,9 @@ Resumo:
 - Expostos novos endpoints de jobs e atualizado comando `/help` com novas actions.
 
 Arquivos-chave:
-- `src/engine/pi-engine-adapter.ts`
-- `src/engine/factory.ts`
-- `src/engine/hybrid-engine.ts`
+- `src/agents/pi-engine-adapter.ts`
+- `src/agents/factory.ts`
+- `src/agents/hybrid-engine.ts`
 - `src/tools/video/video-job-service.ts`
 - `src/api/server.ts`
 
@@ -3644,9 +3685,9 @@ Resumo:
 
 Arquivos-chave:
 - `src/infra/retry.ts`
-- `src/engine/pi-errors.ts`
-- `src/engine/pi-engine-adapter.ts`
-- `src/engine/factory.ts`
+- `src/agents/pi-errors.ts`
+- `src/agents/pi-engine-adapter.ts`
+- `src/agents/factory.ts`
 - `src/infra/idempotency-store.ts`
 - `src/api/server.ts`
 - `src/config.ts`
@@ -3709,7 +3750,7 @@ Resumo:
 
 Arquivos-chave:
 - `src/config.ts`
-- `src/engine/pi-engine-adapter.ts`
+- `src/agents/pi-engine-adapter.ts`
 - `README.md`
 - `docs/architecture/phases/phase-2.md`
 
@@ -3731,7 +3772,7 @@ Resumo:
 - Config estendida com `KAEL_PI_TRANSPORT`, `KAEL_PI_LOCAL_COMMAND` e `KAEL_PI_LOCAL_ARGS_JSON`.
 
 Arquivos-chave:
-- `src/engine/pi-engine-adapter.ts`
+- `src/agents/pi-engine-adapter.ts`
 - `src/config.ts`
 - `src/global-config.ts`
 - `README.md`
@@ -3755,7 +3796,7 @@ Resumo:
 - Bootstrap agora carrega `.env` automaticamente.
 
 Arquivos-chave:
-- `src/engine/pi-engine-adapter.ts`
+- `src/agents/pi-engine-adapter.ts`
 - `src/config.ts`
 - `src/global-config.ts`
 - `src/app.ts`
@@ -3829,8 +3870,8 @@ Resumo:
 Arquivos-chave:
 - `src/planner/service.ts`
 - `src/planner/service.test.ts`
-- `src/engine/pi-tools.ts`
-- `src/engine/types.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/types.ts`
 - `src/chat/service.ts`
 - `src/api/server.ts`
 - `src/api/server.test.ts`
@@ -3857,8 +3898,8 @@ Resumo:
 Arquivos-chave:
 - `src/planner/service.ts`
 - `src/planner/service.test.ts`
-- `src/engine/pi-tools.ts`
-- `src/engine/types.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/types.ts`
 - `src/chat/service.ts`
 - `src/api/server.ts`
 - `src/api/server.test.ts`
@@ -3888,7 +3929,7 @@ Arquivos-chave:
 - `src/config.ts`
 - `src/global-config.ts`
 - `src/api/server.ts`
-- `src/engine/pi-tools.ts`
+- `src/agents/pi-tools.ts`
 
 Checklist de validacao:
 - [x] `npm run check`
@@ -3986,13 +4027,13 @@ Resumo:
 - Mantido comportamento atual de bloqueio/log, incluindo `nextAction` nos tools web e telemetria `onToolEvent`.
 
 Arquivos-chave:
-- `src/engine/pi-tools.ts`
-- `src/engine/pi-tools.test.ts`
-- `src/engine/pi-engine-adapter.test.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/pi-tools.test.ts`
+- `src/agents/pi-engine-adapter.test.ts`
 
 Checklist de validacao:
 - [x] `npm run check`
-- [x] `npm test -- src/engine/pi-tools.test.ts src/engine/pi-engine-adapter.test.ts`
+- [x] `npm test -- src/agents/pi-tools.test.ts src/agents/pi-engine-adapter.test.ts`
 
 Pendencias:
 - Ainda ha repeticao de padroes de loop-guard entre tools; proximo passo e extrair helper dedicado para esse trecho.
