@@ -4870,8 +4870,8 @@
     {
       "id": "Y0GX82ie8YzNKEJNB8_n7",
       "type": "rectangle",
-      "x": -849.8681377454895,
-      "y": 2711.474342379013,
+      "x": -844.217096078823,
+      "y": 2548.212623629013,
       "width": 226.96986607142833,
       "height": 93.53794642857154,
       "angle": 0,
@@ -4889,8 +4889,8 @@
         "type": 3
       },
       "seed": 1317571482,
-      "version": 230,
-      "versionNonce": 337702554,
+      "version": 266,
+      "versionNonce": 1600480540,
       "isDeleted": false,
       "boundElements": [
         {
@@ -4898,15 +4898,15 @@
           "type": "text"
         }
       ],
-      "updated": 1772931987552,
+      "updated": 1777841705658,
       "link": null,
       "locked": false
     },
     {
       "id": "jbMhCkl5WXvVZFdll0xpM",
       "type": "text",
-      "x": -759.0531799905372,
-      "y": 2745.7433155932986,
+      "x": -753.4021383238706,
+      "y": 2582.4815968432986,
       "width": 45.33995056152344,
       "height": 25,
       "angle": 0,
@@ -4922,11 +4922,11 @@
       "index": "b1W",
       "roundness": null,
       "seed": 795347034,
-      "version": 142,
-      "versionNonce": 238774470,
+      "version": 178,
+      "versionNonce": 674390428,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1772931987552,
+      "updated": 1777841705658,
       "link": null,
       "locked": false,
       "text": "Jobs",
