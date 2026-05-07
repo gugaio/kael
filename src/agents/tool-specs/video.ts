@@ -1,5 +1,5 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineToolingNamespaces } from "../types.js";
+import type { EngineToolingInterface } from "../types.js";
 
 type TextBlock = {
   type: "text";
@@ -8,7 +8,7 @@ type TextBlock = {
 
 export function createVideoPiTools(params: {
   sessionKey: string;
-  tooling: EngineToolingNamespaces["video"];
+  tooling: EngineToolingInterface["video"];
   textResult: (text: string) => TextBlock[];
   reserveToolCall: (tool: string) => { blocked: { content: TextBlock[]; details: unknown } } | null;
   logToolStart: (tool: string, rawParams: unknown) => string;

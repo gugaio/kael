@@ -6,7 +6,7 @@ import { ChatService } from "./service.js";
 import { ProjectContextService } from "../projects/service.js";
 import { SessionStore } from "../session/store.js";
 import { SkillService } from "../skills/service.js";
-import type { EngineToolingNamespaces } from "../agents/types.js";
+import type { EngineToolingInterface } from "../agents/types.js";
 
 const roots: string[] = [];
 
@@ -20,7 +20,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0, roots.length).map((root) => fs.rm(root, { recursive: true, force: true })));
 });
 
-function createTooling(): EngineToolingNamespaces {
+function createTooling(): EngineToolingInterface {
   return {
     video: {
       startTranscode: async () => {
@@ -89,7 +89,7 @@ function createTooling(): EngineToolingNamespaces {
       planExecuteNext: async () => ({ ok: true, plan: { id: "p1", sessionKey: "s1", title: "plan", status: "active", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), steps: [] }, stepIndex: 0, message: "noop" }),
       planReconcile: async () => ({ ok: true, reconciled: 0, plans: [] }),
     },
-  } as unknown as EngineToolingNamespaces;
+  } as unknown as EngineToolingInterface;
 }
 
 describe("ChatService project retrieval", () => {

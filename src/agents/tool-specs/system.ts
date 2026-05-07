@@ -1,6 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { ToolLoopGuard } from "../tool-loop-guard.js";
-import type { EngineToolingNamespaces } from "../types.js";
+import type { EngineToolingInterface } from "../types.js";
 
 type TextBlock = {
   type: "text";
@@ -9,7 +9,7 @@ type TextBlock = {
 
 export function createSystemPiTools(params: {
   sessionKey: string;
-  tooling: EngineToolingNamespaces["system"];
+  tooling: EngineToolingInterface["system"];
   loopGuard?: ToolLoopGuard;
   textResult: (text: string) => TextBlock[];
   formatSession: (session: {

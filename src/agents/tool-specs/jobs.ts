@@ -1,6 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { formatJobDetailsText, formatJobLogText, formatJobsListText } from "../../jobs/tooling.js";
-import type { EngineToolingNamespaces } from "../types.js";
+import type { EngineToolingInterface } from "../types.js";
 
 type TextBlock = {
   type: "text";
@@ -8,7 +8,7 @@ type TextBlock = {
 };
 
 export function createJobsPiTools(params: {
-  tooling: EngineToolingNamespaces["jobs"];
+  tooling: EngineToolingInterface["jobs"];
   textResult: (text: string) => TextBlock[];
   reserveToolCall: (tool: string) => { blocked: { content: TextBlock[]; details: unknown } } | null;
   logToolStart: (tool: string, rawParams: unknown) => string;

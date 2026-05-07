@@ -1,5 +1,5 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineToolingNamespaces } from "../types.js";
+import type { EngineToolingInterface } from "../types.js";
 
 type TextBlock = {
   type: "text";
@@ -8,7 +8,7 @@ type TextBlock = {
 
 export function createPlanPiTools(params: {
   sessionKey: string;
-  tooling: EngineToolingNamespaces["plans"];
+  tooling: EngineToolingInterface["plans"];
   textResult: (text: string) => TextBlock[];
 }): AgentTool[] {
   const planCreateTool: AgentTool = {

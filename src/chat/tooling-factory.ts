@@ -1,4 +1,4 @@
-import type { EngineToolingNamespaces } from "../agents/types.js";
+import type { EngineToolingInterface } from "../agents/types.js";
 import type { JobManager } from "../jobs/manager.js";
 import { VIDEO_JOB_ACTIONS } from "../capabilities/video/index.js";
 import type { MemoryService } from "../memory/service.js";
@@ -42,7 +42,7 @@ type ChatToolingExecutors = {
   browserRuntime: BrowserRuntime;
 };
 
-export function createChatTooling(executors: ChatToolingExecutors): EngineToolingNamespaces {
+export function createChatTooling(executors: ChatToolingExecutors): EngineToolingInterface {
   return {
     video: {
       startTranscode: (params) => executors.jobManager.startAction(VIDEO_JOB_ACTIONS.transcode, params),
@@ -273,7 +273,7 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
   };
 }
 
-export function createChatOnlyTooling(tooling: EngineToolingNamespaces): EngineToolingNamespaces {
+export function createChatOnlyTooling(tooling: EngineToolingInterface): EngineToolingInterface {
   const namespaces = tooling;
   return {
     ...namespaces,

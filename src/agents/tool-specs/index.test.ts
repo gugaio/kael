@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createPiNamespaceTools } from "./index.js";
+import { buildPiTools } from "./index.js";
 
 describe("createPiNamespaceTools", () => {
   it("compoe tools por capability com nomes esperados", () => {
@@ -12,7 +12,7 @@ describe("createPiNamespaceTools", () => {
     });
     const reserveNone = () => null;
 
-    const registry = createPiNamespaceTools({
+    const registry = buildPiTools({
       system: {
         sessionKey: "s1",
         tooling: {} as never,

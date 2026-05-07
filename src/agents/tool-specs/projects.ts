@@ -1,5 +1,5 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineToolingNamespaces } from "../types.js";
+import type { EngineToolingInterface } from "../types.js";
 
 type TextBlock = {
   type: "text";
@@ -7,7 +7,7 @@ type TextBlock = {
 };
 
 export function createProjectsPiTools(params: {
-  tooling: EngineToolingNamespaces["projects"];
+  tooling: EngineToolingInterface["projects"];
   textResult: (text: string) => TextBlock[];
   logToolStart: (tool: string, rawParams: unknown) => string;
   logToolEnd: (
@@ -120,7 +120,7 @@ export function createProjectsPiTools(params: {
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
       const startedAtMs = Date.now();
-      const args = (rawParams ?? {}) as Parameters<EngineToolingNamespaces["projects"]["projectUpsertDocument"]>[0];
+      const args = (rawParams ?? {}) as Parameters<EngineToolingInterface["projects"]["projectUpsertDocument"]>[0];
       const intent = params.logToolStart("project_upsert_document", args);
       try {
         const result = await params.tooling.projectUpsertDocument(args);

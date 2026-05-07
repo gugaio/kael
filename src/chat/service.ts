@@ -1,4 +1,4 @@
-import type { EngineInboundAttachment, EngineOutputArtifact, EngineToolingNamespaces } from "../agents/types.js";
+import type { EngineInboundAttachment, EngineOutputArtifact, EngineToolingInterface } from "../agents/types.js";
 import { normalizePiError } from "../agents/pi-errors.js";
 import type { MemoryService } from "../memory/service.js";
 import type { SessionStore } from "../session/store.js";
@@ -83,8 +83,8 @@ type PreLlmDeterministicRouteResult =
   | { pipeline: PipelineState };
 
 export class ChatService {
-  private readonly tooling: EngineToolingNamespaces;
-  private readonly chatOnlyTooling: EngineToolingNamespaces;
+  private readonly tooling: EngineToolingInterface;
+  private readonly chatOnlyTooling: EngineToolingInterface;
   private readonly memoryOrchestrator: MemoryOrchestrator;
   private readonly commandRouter = new CommandRouter();
   private readonly routingTelemetry = new ChatRoutingTelemetry();
@@ -97,7 +97,7 @@ export class ChatService {
     private readonly orchestrator: TurnOrchestrator,
     private readonly media: MediaUnderstandingService,
     memory: MemoryService,
-    tooling: EngineToolingNamespaces,
+    tooling: EngineToolingInterface,
     projects: ProjectContextService,
     skills: SkillService,
   ) {
@@ -154,7 +154,7 @@ export class ChatService {
 
   private async handleMessageInternal(
     input: HandleMessageInput,
-    tooling: EngineToolingNamespaces,
+    tooling: EngineToolingInterface,
     opts: { allowOperationalShortcuts: boolean },
   ): Promise<ChatReplyEnvelope> {
     const userMessage = appendAttachmentSummaryToMessage(input.message, input.attachments);
@@ -180,7 +180,7 @@ export class ChatService {
   private async handleCompactCommand(input: {
     sessionKey: string;
     currentMessage: string;
-    tooling: EngineToolingNamespaces;
+    tooling: EngineToolingInterface;
     requestId?: string;
   }): Promise<{ reply: string }> {
     const { flush, promote, compaction } = await this.memoryOrchestrator.runManualCompact(input);
@@ -205,7 +205,7 @@ export class ChatService {
 
   private async tryHandlePreLlmDeterministicRoute(
     input: HandleMessageInput,
-    tooling: EngineToolingNamespaces,
+    tooling: EngineToolingInterface,
     opts: { allowOperationalShortcuts: boolean },
     user: SessionMessage,
   ): Promise<PreLlmDeterministicRouteResult> {
@@ -271,7 +271,7 @@ export class ChatService {
 
   private async tryCompactStage(
     input: HandleMessageInput,
-    tooling: EngineToolingNamespaces,
+    tooling: EngineToolingInterface,
     user: SessionMessage,
   ): Promise<ChatReplyEnvelope | null> {
     if (!this.memoryOrchestrator.isCompactCommand(input.message)) {
@@ -300,7 +300,7 @@ export class ChatService {
 
   private async tryOperationalFastPathStage(
     input: HandleMessageInput,
-    tooling: EngineToolingNamespaces,
+    tooling: EngineToolingInterface,
     opts: { allowOperationalShortcuts: boolean },
     user: SessionMessage,
     pipeline: PipelineState,
@@ -381,7 +381,7 @@ export class ChatService {
 
   private async runLlmTurnStage(
     input: HandleMessageInput,
-    tooling: EngineToolingNamespaces,
+    tooling: EngineToolingInterface,
     user: SessionMessage,
     llmMessage: string,
   ): Promise<ChatReplyEnvelope> {
@@ -417,7 +417,7 @@ export class ChatService {
 
   private async handlePipelineError(
     input: HandleMessageInput,
-    tooling: EngineToolingNamespaces,
+    tooling: EngineToolingInterface,
     storedUserMessage: string,
     user: SessionMessage,
     error: unknown,

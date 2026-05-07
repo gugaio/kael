@@ -10,7 +10,7 @@ import { createSystemPiTools } from "./system.js";
 import { createVideoPiTools } from "./video.js";
 import { createWebPiTools } from "./web.js";
 import { createWorkspacePiTools } from "./workspace.js";
-import type { EngineToolingNamespaces } from "../types.js";
+import type { EngineToolingInterface } from "../types.js";
 
 export {
   createBrowserPiTool,
@@ -27,7 +27,7 @@ export {
   createWorkspacePiTools,
 };
 
-export function createPiNamespaceTools(params: {
+export function buildPiTools(params: {
   system: Parameters<typeof createSystemPiTools>[0];
   video: Parameters<typeof createVideoPiTools>[0];
   jobs: Parameters<typeof createJobsPiTools>[0];
@@ -57,4 +57,4 @@ export function createPiNamespaceTools(params: {
   };
 }
 
-export type PiNamespaceTooling = EngineToolingNamespaces;
+export type PiNamespaceTooling = EngineToolingInterface;

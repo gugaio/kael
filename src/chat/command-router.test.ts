@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { CommandRouter } from "./command-router.js";
-import type { AgentEngine, EngineToolingNamespaces } from "../agents/types.js";
+import type { AgentEngine, EngineToolingInterface } from "../agents/types.js";
 
-function createTooling(): EngineToolingNamespaces {
+function createTooling(): EngineToolingInterface {
   return {
     video: {
       startTranscode: async () => ({ id: "j1" } as never),

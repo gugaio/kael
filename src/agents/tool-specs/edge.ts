@@ -1,5 +1,5 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineToolingNamespaces } from "../types.js";
+import type { EngineToolingInterface } from "../types.js";
 
 type TextBlock = {
   type: "text";
@@ -15,7 +15,7 @@ function stringifyCompact(value: unknown): string {
 }
 
 export function createEdgePiTools(params: {
-  tooling: EngineToolingNamespaces["edge"];
+  tooling: EngineToolingInterface["edge"];
   textResult: (text: string) => TextBlock[];
   makeBlockedResult: (params: {
     reason: string;

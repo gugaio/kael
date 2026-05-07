@@ -1,4 +1,4 @@
-import type { AgentEngine, EngineToolingNamespaces, EngineTurnInput, EngineTurnOutput } from "./types.js";
+import type { AgentEngine, EngineToolingInterface, EngineTurnInput, EngineTurnOutput } from "./types.js";
 import { BROWSER_ACTIONS, formatBrowserReplyText } from "../runtime/browser/index.js";
 
 type ParsedCommand = {
@@ -44,7 +44,7 @@ function helpReply(): EngineTurnOutput {
   };
 }
 
-function listJobsReply(tooling: EngineToolingNamespaces): EngineTurnOutput {
+function listJobsReply(tooling: EngineToolingInterface): EngineTurnOutput {
   const jobs = tooling.jobs.listJobs().slice(0, 8);
   if (jobs.length === 0) {
     return { reply: "Nenhum job encontrado." };
@@ -62,7 +62,7 @@ function listJobsReply(tooling: EngineToolingNamespaces): EngineTurnOutput {
 
 async function handleYouboraCommand(
   parsed: ParsedCommand,
-  tooling: EngineToolingNamespaces,
+  tooling: EngineToolingInterface,
 ): Promise<EngineTurnOutput> {
   const [firstArg, ...restArgs] = parsed.args;
   const mode = ["metrics", "rawdata", "events"].includes(firstArg ?? "") ? firstArg : "metrics";
@@ -148,7 +148,7 @@ async function handleYouboraCommand(
 async function handleVideoJobCommand(
   input: EngineTurnInput,
   parsed: ParsedCommand,
-  tooling: EngineToolingNamespaces,
+  tooling: EngineToolingInterface,
 ): Promise<EngineTurnOutput | null> {
   if (parsed.name === "/transcode") {
     if (parsed.args.length < 2) {
@@ -228,7 +228,7 @@ async function handleVideoJobCommand(
 async function handleBrowserCommand(
   input: EngineTurnInput,
   parsed: ParsedCommand,
-  tooling: EngineToolingNamespaces,
+  tooling: EngineToolingInterface,
 ): Promise<EngineTurnOutput | null> {
   if (parsed.name === "/browser-start") {
     const result = await tooling.browser.browserCommand({

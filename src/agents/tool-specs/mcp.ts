@@ -1,5 +1,5 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineToolingNamespaces } from "../types.js";
+import type { EngineToolingInterface } from "../types.js";
 import type { ToolLoopGuard } from "../tool-loop-guard.js";
 
 type TextBlock = {
@@ -17,7 +17,7 @@ function stringifyCompact(value: unknown): string {
 
 export function createMcpPiTools(params: {
   sessionKey: string;
-  tooling: EngineToolingNamespaces["mcp"];
+  tooling: EngineToolingInterface["mcp"];
   loopGuard?: ToolLoopGuard;
   textResult: (text: string) => TextBlock[];
   makeBlockedResult: (params: {

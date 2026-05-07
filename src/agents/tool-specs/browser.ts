@@ -5,7 +5,7 @@ import {
   formatBrowserToolText,
   isBrowserInteractionAction,
 } from "../../runtime/browser/index.js";
-import type { EngineToolingNamespaces } from "../types.js";
+import type { EngineToolingInterface } from "../types.js";
 
 type TextBlock = {
   type: "text";
@@ -14,7 +14,7 @@ type TextBlock = {
 
 export function createBrowserPiTool(params: {
   sessionKey: string;
-  tooling: EngineToolingNamespaces["browser"];
+  tooling: EngineToolingInterface["browser"];
   textResult: (text: string) => TextBlock[];
   reserveBrowserCall: (actionRaw: string) => { blocked: { content: TextBlock[]; details: unknown } } | null;
   logToolStart: (tool: string, rawParams: unknown) => string;

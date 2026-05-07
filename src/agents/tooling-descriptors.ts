@@ -1,9 +1,9 @@
-import type { EngineToolingNamespaces } from "./types.js";
+import type { EngineToolingInterface } from "./types.js";
 
 export type ToolingExecutionMode = "job" | "interactive" | "remote" | "service";
 
 export type EngineToolingNamespaceDescriptor = {
-  namespace: keyof EngineToolingNamespaces;
+  namespace: keyof EngineToolingInterface;
   executionMode: ToolingExecutionMode;
   executor: "jobManager" | "shellRuntime" | "mcpRuntime" | "edgeRuntime" | "browserRuntime" | "service";
   description: string;
@@ -79,7 +79,7 @@ export const ENGINE_TOOLING_NAMESPACE_DESCRIPTORS: EngineToolingNamespaceDescrip
 ];
 
 export function getEngineToolingNamespaceDescriptor(
-  namespace: keyof EngineToolingNamespaces,
+  namespace: keyof EngineToolingInterface,
 ): EngineToolingNamespaceDescriptor | undefined {
   return ENGINE_TOOLING_NAMESPACE_DESCRIPTORS.find((item) => item.namespace === namespace);
 }

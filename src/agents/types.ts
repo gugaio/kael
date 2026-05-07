@@ -653,7 +653,7 @@ export type EnginePlansTooling = {
   }>;
 };
 
-export type EngineToolingNamespaces = {
+export type EngineToolingInterface = {
   video: EngineVideoTooling;
   jobs: EngineJobsTooling;
   system: EngineSystemTooling;
@@ -678,7 +678,7 @@ export type EngineTurnInput = {
     content: string;
     createdAt: string;
   }>;
-  tooling: EngineToolingNamespaces;
+  tooling: EngineToolingInterface;
 };
 
 export type EngineInboundAttachment = {

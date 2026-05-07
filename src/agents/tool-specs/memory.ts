@@ -1,5 +1,5 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineToolingNamespaces } from "../types.js";
+import type { EngineToolingInterface } from "../types.js";
 
 type TextBlock = {
   type: "text";
@@ -7,7 +7,7 @@ type TextBlock = {
 };
 
 export function createMemoryPiTools(params: {
-  tooling: EngineToolingNamespaces["memory"];
+  tooling: EngineToolingInterface["memory"];
   textResult: (text: string) => TextBlock[];
   logToolStart: (tool: string, rawParams: unknown) => string;
   logToolEnd: (

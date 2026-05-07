@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { SimpleCommandEngine } from "./simple-engine.js";
-import type { EngineBrowserTooling, EngineSystemTooling, EngineTurnInput, EngineToolingNamespaces } from "./types.js";
+import type { EngineBrowserTooling, EngineSystemTooling, EngineTurnInput, EngineToolingInterface } from "./types.js";
 
 function createTooling(
   execImpl?: EngineSystemTooling["execCommand"],
   browserImpl?: EngineBrowserTooling["browserCommand"],
-): EngineToolingNamespaces {
+): EngineToolingInterface {
   return {
     video: {
       startTranscode: async () => ({ id: "j1" } as never),
@@ -197,7 +197,7 @@ function createTooling(
   };
 }
 
-function makeInput(message: string, tooling: EngineToolingNamespaces): EngineTurnInput {
+function makeInput(message: string, tooling: EngineToolingInterface): EngineTurnInput {
   return {
     sessionKey: "main",
     message,

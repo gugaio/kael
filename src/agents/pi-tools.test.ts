@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createPiShellTools } from "./pi-tools.js";
+import { createPiTools } from "./pi-tools.js";
 import type {
   EngineBrowserTooling,
   EngineEdgeTooling,
@@ -10,7 +10,7 @@ import type {
   EnginePlansTooling,
   EngineProjectsTooling,
   EngineSystemTooling,
-  EngineToolingNamespaces,
+  EngineToolingInterface,
   EngineVideoTooling,
   EngineWebTooling,
   EngineWorkspaceTooling,
@@ -31,7 +31,7 @@ type ToolingOverrides = {
   plans?: Partial<EnginePlansTooling>;
 };
 
-function createTooling(overrides: ToolingOverrides = {}): EngineToolingNamespaces {
+function createTooling(overrides: ToolingOverrides = {}): EngineToolingInterface {
   return {
     video: {
       startTranscode: async () => ({ id: "job-1" } as never),
@@ -217,9 +217,9 @@ function createTooling(overrides: ToolingOverrides = {}): EngineToolingNamespace
   };
 }
 
-describe("createPiShellTools image_generate", () => {
+describe("createPiTools image_generate", () => {
   it("returns failed result instead of throwing when generation errors", async () => {
-    const tools = createPiShellTools({
+    const tools = createPiTools({
       sessionKey: "s1",
       tooling: createTooling({
         image: {
@@ -246,7 +246,7 @@ describe("createPiShellTools image_generate", () => {
       mimeType: "image/png",
       fileName: "img.png",
     }));
-    const tools = createPiShellTools({
+    const tools = createPiTools({
       sessionKey: "s1",
       tooling: createTooling({
         image: {
@@ -270,9 +270,9 @@ describe("createPiShellTools image_generate", () => {
   });
 });
 
-describe("createPiShellTools playback_analyze", () => {
+describe("createPiTools playback_analyze", () => {
   it("exposes playback_analyze and supports raw log text", async () => {
-    const tools = createPiShellTools({
+    const tools = createPiTools({
       sessionKey: "s-playback",
       tooling: createTooling({
         video: {
@@ -317,7 +317,7 @@ describe("createPiShellTools playback_analyze", () => {
   });
 
   it("returns blocked result when playback tool is unavailable", async () => {
-    const tools = createPiShellTools({
+    const tools = createPiTools({
       sessionKey: "s-playback-missing",
       tooling: createTooling({}),
     });
@@ -334,9 +334,9 @@ describe("createPiShellTools playback_analyze", () => {
   });
 });
 
-describe("createPiShellTools video_manifest_diff", () => {
+describe("createPiTools video_manifest_diff", () => {
   it("exposes video_manifest_diff and reports added issues", async () => {
-    const tools = createPiShellTools({
+    const tools = createPiTools({
       sessionKey: "s-diff",
       tooling: createTooling({
         video: {
@@ -421,9 +421,9 @@ describe("createPiShellTools video_manifest_diff", () => {
   });
 });
 
-describe("createPiShellTools browser budget", () => {
+describe("createPiTools browser budget", () => {
   it("bloqueia segunda chamada de browser quando maxBrowserCalls=1", async () => {
-    const tools = createPiShellTools({
+    const tools = createPiTools({
       sessionKey: "s-browser",
       tooling: createTooling({
         browser: {
@@ -455,9 +455,9 @@ describe("createPiShellTools browser budget", () => {
   });
 });
 
-describe("createPiShellTools jobs/plans state tools", () => {
+describe("createPiTools jobs/plans state tools", () => {
   it("exposes jobs_list and jobs_get using tooling state methods", async () => {
-    const tools = createPiShellTools({
+    const tools = createPiTools({
       sessionKey: "s-jobs",
       tooling: createTooling({
         jobs: {
@@ -503,7 +503,7 @@ describe("createPiShellTools jobs/plans state tools", () => {
   });
 
   it("exposes plan_get and returns not found when plan is absent", async () => {
-    const tools = createPiShellTools({
+    const tools = createPiTools({
       sessionKey: "s-plan",
       tooling: createTooling({
         plans: {
@@ -520,9 +520,9 @@ describe("createPiShellTools jobs/plans state tools", () => {
   });
 });
 
-describe("createPiShellTools edge tools", () => {
+describe("createPiTools edge tools", () => {
   it("exposes edge_list and edge_call using tooling state methods", async () => {
-    const tools = createPiShellTools({
+    const tools = createPiTools({
       sessionKey: "s-edge",
       tooling: createTooling({
         edge: {
@@ -571,7 +571,7 @@ describe("createPiShellTools edge tools", () => {
   });
 
   it("blocks edge_call when edge turn budget is exhausted", async () => {
-    const tools = createPiShellTools({
+    const tools = createPiTools({
       sessionKey: "s-edge-budget",
       tooling: createTooling({
         edge: {
@@ -611,7 +611,7 @@ describe("createPiShellTools edge tools", () => {
       durationMs: 18,
       output: { rows: [{ metric: "views", value: 123 }] },
     }));
-    const tools = createPiShellTools({
+    const tools = createPiTools({
       sessionKey: "s-youbora",
       tooling: createTooling({
         edge: {
@@ -656,7 +656,7 @@ describe("createPiShellTools edge tools", () => {
       durationMs: 9,
       output: { rows: [] },
     }));
-    const tools = createPiShellTools({
+    const tools = createPiTools({
       sessionKey: "s-youbora-raw",
       tooling: createTooling({
         edge: {
@@ -695,7 +695,7 @@ describe("createPiShellTools edge tools", () => {
       durationMs: 9,
       output: { rows: [] },
     }));
-    const tools = createPiShellTools({
+    const tools = createPiTools({
       sessionKey: "s-youbora-events",
       tooling: createTooling({
         edge: {
@@ -725,9 +725,9 @@ describe("createPiShellTools edge tools", () => {
   });
 });
 
-describe("createPiShellTools mcp tools", () => {
+describe("createPiTools mcp tools", () => {
   it("exposes mcp_list and mcp_call using tooling state methods", async () => {
-    const tools = createPiShellTools({
+    const tools = createPiTools({
       sessionKey: "s-mcp",
       tooling: createTooling({
         mcp: {
@@ -768,7 +768,7 @@ describe("createPiShellTools mcp tools", () => {
   });
 
   it("blocks mcp calls when turn budget is exhausted", async () => {
-    const tools = createPiShellTools({
+    const tools = createPiTools({
       sessionKey: "s-mcp-budget",
       tooling: createTooling({
         mcp: {

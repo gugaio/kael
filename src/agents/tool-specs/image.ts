@@ -1,6 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { EngineOutputArtifact } from "../types.js";
-import type { EngineToolingNamespaces } from "../types.js";
+import type { EngineToolingInterface } from "../types.js";
 
 type TextBlock = {
   type: "text";
@@ -9,7 +9,7 @@ type TextBlock = {
 
 export function createImagePiTool(params: {
   sessionKey: string;
-  tooling: EngineToolingNamespaces["image"];
+  tooling: EngineToolingInterface["image"];
   textResult: (text: string) => TextBlock[];
   makeBlockedResult: (params: {
     reason: string;

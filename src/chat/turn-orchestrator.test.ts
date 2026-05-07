@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AgentEngine, EngineToolingNamespaces, EngineTurnInput, EngineTurnOutput } from "../agents/types.js";
+import type { AgentEngine, EngineToolingInterface, EngineTurnInput, EngineTurnOutput } from "../agents/types.js";
 import type { SessionMessage } from "../types.js";
 import { TurnOrchestrator } from "./turn-orchestrator.js";
 
@@ -13,7 +13,7 @@ function createMessage(role: SessionMessage["role"], content: string, idx: numbe
   };
 }
 
-function createToolingStub(): EngineToolingNamespaces {
+function createToolingStub(): EngineToolingInterface {
   return {
     video: {
       startTranscode: async () => {
