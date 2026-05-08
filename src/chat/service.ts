@@ -161,12 +161,12 @@ export class ChatService {
     let user = await this.sessions.appendMessage(input.sessionKey, "user", userMessage);
 
     try {
-      const preLlmRoute = await this.tryHandlePreLlmDeterministicRoute(input, tooling, opts, user);
-      if ("reply" in preLlmRoute) {
-        return preLlmRoute.reply;
+      const deterministicRoute = await this.tryDeterministicRoute(input, tooling, opts, user);
+      if ("reply" in deterministicRoute) {
+        return deterministicRoute.reply;
       }
 
-      const llmMessage = await this.prepareLlmMessageStage(input, preLlmRoute.pipeline);
+      const llmMessage = await this.prepareLlmMessageStage(input, deterministicRoute.pipeline);
       return this.runLlmTurnStage(input, tooling, user, llmMessage);
     } catch (error) {
       return this.handlePipelineError(input, tooling, userMessage, user, error);
@@ -203,7 +203,7 @@ export class ChatService {
     return { reply: lines.join("\n") };
   }
 
-  private async tryHandlePreLlmDeterministicRoute(
+  private async tryDeterministicRoute(
     input: HandleMessageInput,
     tooling: EngineToolingInterface,
     opts: { allowOperationalShortcuts: boolean },

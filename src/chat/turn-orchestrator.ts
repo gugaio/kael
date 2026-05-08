@@ -68,7 +68,7 @@ function isUserOrAssistant(
 export class TurnOrchestrator {
   constructor(
     private readonly sessions: SessionStore,
-    private readonly engine: AgentEngine,
+    private readonly agent: AgentEngine,
     private readonly cfg: TurnOrchestratorConfig,
   ) {}
 
@@ -82,7 +82,7 @@ export class TurnOrchestrator {
   async runConversationTurn(input: OrchestratedTurnInput): Promise<EngineTurnOutput> {
     const contextMessages = await this.buildContextMessages(input.sessionKey, input.message);
 
-    return this.engine.runTurn({
+    return this.agent.runTurn({
       sessionKey: input.sessionKey,
       message: input.message,
       attachments: input.attachments,
@@ -94,7 +94,7 @@ export class TurnOrchestrator {
 
   getEngineRuntimeTelemetrySnapshot() {
     return (
-      this.engine.getRuntimeTelemetrySnapshot?.() ?? {
+      this.agent.getRuntimeTelemetrySnapshot?.() ?? {
         timeouts: 0,
         toolCallsByName: {},
         blockedCallsByTool: {},
@@ -107,7 +107,7 @@ export class TurnOrchestrator {
       input.sessionKey,
       input.excludeCurrentMessage ?? "",
     );
-    return this.engine.runTurn({
+    return this.agent.runTurn({
       sessionKey: input.sessionKey,
       message: input.message,
       attachments: input.attachments,
