@@ -43,6 +43,10 @@ import type {
   HlsManifestAuditReport,
   HlsManifestDiffInput,
   HlsManifestDiffReport,
+  StreamerCloneInput,
+  StreamerCloneResult,
+  StreamerServeHandle,
+  StreamerServeOptions,
 } from "./capabilities/video/index.js";
 
 export type KaelApp = {
@@ -71,6 +75,10 @@ export type KaelApp = {
     listWatches(): StreamWatchStatus[];
     stopAll(): void;
   };
+  streamer: {
+    cloneHls(input: StreamerCloneInput): Promise<StreamerCloneResult>;
+    serveOrigin(originId: string, options?: StreamerServeOptions): Promise<StreamerServeHandle>;
+  };
   emailIngest?: {
     getRuntimeTelemetrySnapshot(): EmailIngestRuntimeTelemetry;
   };
@@ -91,7 +99,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   await sessions.init();
   await jobStore.init();
 
-  const { jobs, videoInspect, manifestAudit, manifestDiff, videoArtifacts, streamMonitor } =
+  const { jobs, videoInspect, manifestAudit, manifestDiff, videoArtifacts, streamMonitor, streamer } =
     await createVideoRuntime(config, jobStore);
   const shell = await createShellRuntime(config);
   const mcp = await createMcpRuntime(config);
@@ -265,6 +273,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     manifestAudit,
     manifestDiff,
     streamMonitor,
+    streamer,
     ...(emailIngest ? { emailIngest } : {}),
   };
 }

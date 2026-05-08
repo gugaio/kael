@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-05-05**
+Ultima atualizacao: **2026-05-08**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,30 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-05-08 - Fase 23: Streamer clone HLS local
+
+Resumo:
+- Criada a capability `streamer` dentro de video para clonar uma janela HLS localmente.
+- Adicionado comando `kael streamer clone <url>` com selecao de variant, corta-corrente por `cumulativeDuration >= duration`, rewrite de manifesto local e `--serve` com origin HTTP + CORS.
+- Adicionado `--all-variants`/`--all-variantes` para clonar a ladder HLS completa e gerar master local apontando para `variants/<n>/index.m3u8`.
+- Documentada a nova fase de arquitetura `phase-23`.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-service.ts`
+- `src/cli/index.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/streamer-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- POC ainda nao preserva tags avancados como `EXT-X-MAP`, `EXT-X-KEY`, byte ranges e renditions separadas.
+- Ainda nao ha modo live/sliding window.
+
+Proximo passo recomendado:
+- Testar `kael streamer clone <url> --duration 60 --all-variants --serve` com um manifesto HLS real e depois evoluir preservacao de tags essenciais.
 
 ### 2026-05-05 - Core: modulo `engine` renomeado para `agents`
 

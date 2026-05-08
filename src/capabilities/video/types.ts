@@ -275,3 +275,102 @@ export type StreamWatchStatus = {
   events: StreamWatchEvent[];
   running: boolean;
 };
+
+// ─── Streamer (Fase 23) ──────────────────────────────────────────────────────
+
+export type StreamerCloneInput = {
+  sessionKey: string;
+  url: string;
+  /** Duração alvo em segundos. O clone inclui segmentos até cumulative >= alvo. */
+  durationSeconds?: number;
+  /** Para master playlists: highest, lowest ou índice zero-based da variant. */
+  variant?: string;
+  /** Quando true, clona todas as variants da master playlist e gera uma master local. */
+  allVariants?: boolean;
+  /** Limite opcional de variants quando `allVariants` estiver ativo. */
+  maxVariants?: number;
+  timeoutMs?: number;
+  maxSegments?: number;
+  originId?: string;
+};
+
+export type StreamerClonedSegment = {
+  originalIndex: number;
+  sourceUri: string;
+  sourceUrl: string;
+  localUri: string;
+  duration?: number;
+  title?: string;
+  bytes: number;
+};
+
+export type StreamerClonedVariant = {
+  sourceUri: string;
+  sourceUrl: string;
+  finalUrl: string;
+  localUri: string;
+  manifestPath: string;
+  targetDuration: number;
+  segmentCount: number;
+  cumulativeDurationSeconds: number;
+  reachedTargetDuration: boolean;
+  bytes: number;
+  variant?: {
+    uri: string;
+    url: string;
+    bandwidth?: number;
+    averageBandwidth?: number;
+    resolution?: string;
+    frameRate?: number;
+    codecs?: string;
+    audioGroupId?: string;
+    subtitlesGroupId?: string;
+  };
+  segments: StreamerClonedSegment[];
+};
+
+export type StreamerCloneResult = {
+  id: string;
+  sessionKey: string;
+  sourceUrl: string;
+  selectedUrl: string;
+  finalUrl: string;
+  rootDir: string;
+  manifestPath: string;
+  playbackPath: string;
+  requestedDurationSeconds: number;
+  cumulativeDurationSeconds: number;
+  reachedTargetDuration: boolean;
+  targetDuration: number;
+  segmentCount: number;
+  variantCount: number;
+  bytes: number;
+  allVariants: boolean;
+  selectedVariant?: {
+    uri: string;
+    url: string;
+    bandwidth?: number;
+    averageBandwidth?: number;
+    resolution?: string;
+    frameRate?: number;
+    codecs?: string;
+    audioGroupId?: string;
+    subtitlesGroupId?: string;
+  };
+  createdAt: string;
+  variants: StreamerClonedVariant[];
+  segments: StreamerClonedSegment[];
+};
+
+export type StreamerServeOptions = {
+  host?: string;
+  port?: number;
+};
+
+export type StreamerServeHandle = {
+  originId: string;
+  rootDir: string;
+  baseUrl: string;
+  playbackUrl: string;
+  close(): Promise<void>;
+};

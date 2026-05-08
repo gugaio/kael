@@ -471,6 +471,14 @@ async function createJobsServer(params: {
       listWatches: () => [],
       stopAll: () => {},
     },
+    streamer: {
+      cloneHls: async () => {
+        throw new Error("streamer clone not implemented in fake app");
+      },
+      serveOrigin: async () => {
+        throw new Error("streamer serve not implemented in fake app");
+      },
+    },
   };
 
   return { server: createApiServer(app), jobs };

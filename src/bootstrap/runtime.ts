@@ -15,6 +15,7 @@ import {
   VideoManifestAuditService,
   VideoManifestDiffService,
   HlsStreamMonitorService,
+  StreamerService,
 } from "../capabilities/video/index.js";
 import { MemoryService } from "../memory/service.js";
 import { ProjectContextService } from "../projects/service.js";
@@ -42,6 +43,7 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
   manifestDiff: VideoManifestDiffService;
   videoArtifacts: VideoArtifactsService;
   streamMonitor: HlsStreamMonitorService;
+  streamer: StreamerService;
 }> {
   const runner = new LocalProcessRunner();
   const video = new VideoJobService(jobStore, runner, {
@@ -59,6 +61,8 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
   const videoArtifacts = new VideoArtifactsService(path.join(config.dataDir, "video", "artifacts"));
   await videoArtifacts.init();
   const streamMonitor = new HlsStreamMonitorService(videoInspect);
+  const streamer = new StreamerService(videoInspect, path.join(config.dataDir, "streamer", "origins"));
+  await streamer.init();
   return {
     jobs,
     videoInspect,
@@ -66,6 +70,7 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
     manifestDiff,
     videoArtifacts,
     streamMonitor,
+    streamer,
   };
 }
 

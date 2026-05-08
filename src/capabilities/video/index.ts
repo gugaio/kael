@@ -8,6 +8,7 @@ export { PlaybackTriageService } from "./playback-triage-service.js";
 export { VideoManifestAuditService } from "./manifest-audit-service.js";
 export { VideoManifestDiffService } from "./manifest-diff-service.js";
 export { HlsStreamMonitorService } from "./stream-monitor-service.js";
+export { StreamerService } from "./streamer-service.js";
 export { analyzeSnapshotTransition, toStreamSnapshot } from "./stream-snapshot-analyzer.js";
 export { deriveHlsJsIssues, parseHlsJsLogText } from "./playback-adapters/hlsjs.js";
 export type {
@@ -24,6 +25,12 @@ export type {
   PlaybackIssueSeverity,
   PlaybackSessionInput,
   StoredArtifactRecord,
+  StreamerCloneInput,
+  StreamerCloneResult,
+  StreamerClonedSegment,
+  StreamerClonedVariant,
+  StreamerServeHandle,
+  StreamerServeOptions,
   StreamSnapshot,
   StreamWatchEvent,
   StreamWatchParams,

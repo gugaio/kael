@@ -20,6 +20,20 @@ type ManifestAuditOptions = {
 
 type ManifestDiffOptions = ManifestAuditOptions;
 
+type StreamerCloneOptions = {
+  duration?: string;
+  variant?: string;
+  allVariants?: boolean;
+  allVariantes?: boolean;
+  maxVariants?: string;
+  timeoutMs?: string;
+  maxSegments?: string;
+  id?: string;
+  serve?: boolean;
+  host?: string;
+  port?: string;
+};
+
 type ApiErrorShape = {
   message?: string;
 };
@@ -42,6 +56,30 @@ function extractApiErrorMessage(data: unknown): string | null {
   }
 
   return null;
+}
+
+function highlight(text: string): string {
+  if (!process.stdout.isTTY) {
+    return text;
+  }
+  return `\x1b[38;5;226m${text}\x1b[0m`;
+}
+
+function optionalNumber(value: string | undefined, label: string): number | undefined {
+  if (!value?.trim()) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${label} deve ser numerico`);
+  }
+  return parsed;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
 }
 
 async function resolveUrl(explicit?: string): Promise<string> {
@@ -518,6 +556,74 @@ async function commandManifestDiff(
   console.log(lines.join("\n"));
 }
 
+async function commandStreamerClone(url: string, options: StreamerCloneOptions): Promise<void> {
+  const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
+  const durationSeconds = optionalNumber(options.duration, "--duration");
+  const timeoutMs = optionalNumber(options.timeoutMs, "--timeout-ms");
+  const maxSegments = optionalNumber(options.maxSegments, "--max-segments");
+  const maxVariants = optionalNumber(options.maxVariants, "--max-variants");
+  const port = optionalNumber(options.port, "--port");
+  const allVariants = Boolean(options.allVariants || options.allVariantes);
+
+  const result = await app.streamer.cloneHls({
+    sessionKey: "cli.streamer.clone",
+    url,
+    ...(Number.isFinite(durationSeconds) ? { durationSeconds } : {}),
+    ...(options.variant?.trim() ? { variant: options.variant.trim() } : {}),
+    ...(allVariants ? { allVariants: true } : {}),
+    ...(Number.isFinite(maxVariants) ? { maxVariants } : {}),
+    ...(Number.isFinite(timeoutMs) ? { timeoutMs } : {}),
+    ...(Number.isFinite(maxSegments) ? { maxSegments } : {}),
+    ...(options.id?.trim() ? { originId: options.id.trim() } : {}),
+  });
+
+  const variantText = result.allVariants
+    ? `all variants (${result.variantCount})`
+    : result.selectedVariant
+    ? `${result.selectedVariant.resolution ?? "unknown"} @ ${result.selectedVariant.bandwidth ?? "n/a"}bps`
+    : "media playlist direta";
+
+  console.log(
+    [
+      `${highlight("streamer origin cloned")}: ${result.id}`,
+      `source=${result.sourceUrl}`,
+      `selected=${result.selectedUrl}`,
+      `variant=${variantText}`,
+      `variants=${result.variantCount}`,
+      `segments=${result.segmentCount}`,
+      `duration=${result.cumulativeDurationSeconds.toFixed(3)}s requested=${result.requestedDurationSeconds}s reached=${result.reachedTargetDuration}`,
+      `bytes=${formatBytes(result.bytes)}`,
+      `manifest=${result.manifestPath}`,
+      `root=${result.rootDir}`,
+    ].join("\n"),
+  );
+
+  if (!options.serve) {
+    return;
+  }
+
+  const handle = await app.streamer.serveOrigin(result.id, {
+    host: options.host?.trim() || "127.0.0.1",
+    ...(Number.isFinite(port) ? { port } : {}),
+  });
+
+  console.log(`${highlight("origin serving")}: ${handle.playbackUrl}`);
+  console.log("Pressione Ctrl+C para parar.");
+
+  const stop = async () => {
+    await handle.close().catch(() => undefined);
+    process.exit(0);
+  };
+  process.on("SIGINT", () => {
+    void stop();
+  });
+  process.on("SIGTERM", () => {
+    void stop();
+  });
+
+  await new Promise<void>(() => undefined);
+}
+
 async function main(): Promise<void> {
   const program = new Command();
   program
@@ -585,6 +691,29 @@ async function main(): Promise<void> {
     .option("--max-variants <n>", "limite de variants auditadas quando --follow-variants estiver ativo")
     .action(async (leftUrl: string, rightUrl: string, options: ManifestDiffOptions) => {
       await commandManifestDiff(leftUrl, rightUrl, options);
+    });
+
+  const streamer = program
+    .command("streamer")
+    .description("Ferramentas locais de clone e origem de streams HLS");
+
+  streamer
+    .command("clone")
+    .description("Clona uma janela VOD HLS localmente e opcionalmente serve como origem HTTP")
+    .argument("<url>", "URL do manifesto HLS (.m3u8)")
+    .option("--duration <seconds>", "duracao alvo em segundos (baixa segmentos ate cumulative >= alvo)", "60")
+    .option("--variant <selector>", "highest, lowest ou indice zero-based da variant", "highest")
+    .option("--all-variants", "clona todas as variants da master playlist e gera uma master local", false)
+    .option("--all-variantes", "alias de --all-variants", false)
+    .option("--max-variants <n>", "limite opcional de variants quando --all-variants estiver ativo")
+    .option("--timeout-ms <ms>", "timeout de fetch para manifesto e segmentos")
+    .option("--max-segments <n>", "limite de segmentos lidos da media playlist")
+    .option("--id <id>", "id seguro para o origin local")
+    .option("--serve", "inicia servidor HTTP local com CORS apos clonar", false)
+    .option("--host <host>", "host do servidor quando --serve estiver ativo", "127.0.0.1")
+    .option("--port <port>", "porta do servidor quando --serve estiver ativo (0 = aleatoria)", "0")
+    .action(async (url: string, options: StreamerCloneOptions) => {
+      await commandStreamerClone(url, options);
     });
 
   program
