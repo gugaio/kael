@@ -4,6 +4,7 @@ import http from "node:http";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
 import type { VideoHlsInspectResult, VideoInspectToolService } from "./inspect-service.js";
+import { isBrowserSafeHlsVariant } from "./streamer-diagnostics.js";
 import type {
   StreamerCloneInput,
   StreamerCloneProgressEvent,
@@ -1028,13 +1029,23 @@ function selectVariant(root: VideoHlsInspectResult, selector: string | undefined
     throw new Error("master playlist has no variants to clone");
   }
 
-  const normalized = selector?.trim().toLowerCase() || "highest";
+  const normalized = selector?.trim().toLowerCase() || "aac-highest";
+  if (normalized === "aac-highest" || normalized === "browser" || normalized === "browser-compatible") {
+    const safeVariants = root.variants.filter(isBrowserSafeHlsVariant);
+    return selectHighestBandwidth(safeVariants.length > 0 ? safeVariants : root.variants);
+  }
+
+  if (normalized === "aac-lowest") {
+    const safeVariants = root.variants.filter(isBrowserSafeHlsVariant);
+    return selectLowestBandwidth(safeVariants.length > 0 ? safeVariants : root.variants);
+  }
+
   if (normalized === "lowest") {
-    return [...root.variants].sort((left, right) => (left.bandwidth ?? Infinity) - (right.bandwidth ?? Infinity))[0];
+    return selectLowestBandwidth(root.variants);
   }
 
   if (normalized === "highest") {
-    return [...root.variants].sort((left, right) => (right.bandwidth ?? 0) - (left.bandwidth ?? 0))[0];
+    return selectHighestBandwidth(root.variants);
   }
 
   const index = Number(normalized);
@@ -1042,7 +1053,17 @@ function selectVariant(root: VideoHlsInspectResult, selector: string | undefined
     return root.variants[index];
   }
 
-  throw new Error(`unknown variant selector "${selector}". Use highest, lowest, or a zero-based index.`);
+  throw new Error(
+    `unknown variant selector "${selector}". Use aac-highest, highest, lowest, or a zero-based index.`,
+  );
+}
+
+function selectHighestBandwidth<T extends { bandwidth?: number }>(variants: T[]): T {
+  return [...variants].sort((left, right) => (right.bandwidth ?? 0) - (left.bandwidth ?? 0))[0];
+}
+
+function selectLowestBandwidth<T extends { bandwidth?: number }>(variants: T[]): T {
+  return [...variants].sort((left, right) => (left.bandwidth ?? Infinity) - (right.bandwidth ?? Infinity))[0];
 }
 
 function selectAllVariants(root: VideoHlsInspectResult, maxVariants: number | undefined): VariantSource[] {

@@ -37,6 +37,34 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-05-09 - Fase 23: Streamer diagnostico e default AAC
+
+Resumo:
+- `streamer clone` passou a usar `--variant aac-highest` como default para preferir audio AAC/mp4a e evitar EC-3/AC-3 em browser.
+- Adicionado diagnostico pos-clone com compatibilidade basica de browser, codecs detectados, audio externo e contagem de arquivos locais.
+- Adicionado `streamer probe [originId|latest]` para validar origins clonados sem rede.
+- Teste de audio renditions passou a cobrir master com variant EC-3 de maior bitrate e confirmar selecao AAC por default.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-diagnostics.ts`
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/streamer-service.test.ts`
+- `src/cli/index.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/inspect-service.test.ts src/capabilities/video/streamer-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+- [x] `./bin/kael streamer clone --help`
+- [x] `./bin/kael streamer probe latest`
+
+Pendencias:
+- Diagnostico ainda e baseado em metadados HLS e existencia de arquivos; nao roda `ffprobe` amostrado.
+- Subtitles e I-frame playlists continuam fora do clone/live.
+
+Proximo passo recomendado:
+- Implementar `TYPE=SUBTITLES` no clone/live para cobrir captions do manifesto Globo.
+
 ### 2026-05-09 - Fase 23: Streamer audio renditions externas
 
 Resumo:

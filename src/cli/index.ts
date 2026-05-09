@@ -6,9 +6,12 @@ import { startApiServer } from "../api/server.js";
 import { loadConfig } from "../config.js";
 import { initKaelHome, resolveKaelHome } from "../global-config.js";
 import { DiscordChatOnlyBot } from "../integrations/discord/discord-bot.js";
-import type {
+import {
+  diagnoseStreamerClone,
+  type StreamerCloneDiagnostic,
   StreamerCloneProgressEvent,
   StreamerCloneResult,
+  StreamerClonedRendition,
   StreamerClonedVariant,
   StreamerOriginSummary,
 } from "../capabilities/video/index.js";
@@ -54,6 +57,16 @@ type StreamerLiveOptions = {
 
 type StreamerRemoveOptions = {
   yes?: boolean;
+};
+
+type StreamerFileProbe = {
+  manifestCount: number;
+  manifestsOk: number;
+  segmentCount: number;
+  segmentsOk: number;
+  mapCount: number;
+  mapsOk: number;
+  missing: string[];
 };
 
 type ApiErrorShape = {
@@ -657,6 +670,125 @@ function formatClonedVariantLabel(variant: StreamerClonedVariant): string {
   return parts.length > 0 ? parts.join(" | ") : variant.sourceUri;
 }
 
+function formatClonedRenditionLabel(rendition: StreamerClonedRendition): string {
+  return [
+    rendition.type.toUpperCase(),
+    rendition.groupId,
+    rendition.name,
+    rendition.channels ? `${rendition.channels}ch` : undefined,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+}
+
+function formatUnknownList(values: string[]): string {
+  return values.length > 0 ? values.join(",") : "unknown";
+}
+
+async function buildStreamerFileProbe(origin: StreamerCloneResult): Promise<StreamerFileProbe> {
+  const manifestPaths = new Set([
+    origin.manifestPath,
+    ...origin.variants.map((variant) => variant.manifestPath),
+    ...origin.renditions.map((rendition) => rendition.manifestPath),
+  ]);
+  const segmentPaths = [
+    ...origin.variants.flatMap((variant) =>
+      variant.segments.map((segment) => path.join(path.dirname(variant.manifestPath), segment.localUri)),
+    ),
+    ...origin.renditions.flatMap((rendition) =>
+      rendition.segments.map((segment) => path.join(path.dirname(rendition.manifestPath), segment.localUri)),
+    ),
+  ];
+  const mapPaths = [
+    ...origin.variants.flatMap((variant) =>
+      variant.maps.map((map) => path.join(path.dirname(variant.manifestPath), map.localUri)),
+    ),
+    ...origin.renditions.flatMap((rendition) =>
+      rendition.maps.map((map) => path.join(path.dirname(rendition.manifestPath), map.localUri)),
+    ),
+  ];
+
+  const manifests = await countExistingFiles([...manifestPaths]);
+  const segments = await countExistingFiles([...new Set(segmentPaths)]);
+  const maps = await countExistingFiles([...new Set(mapPaths)]);
+
+  return {
+    manifestCount: manifestPaths.size,
+    manifestsOk: manifests.ok,
+    segmentCount: new Set(segmentPaths).size,
+    segmentsOk: segments.ok,
+    mapCount: new Set(mapPaths).size,
+    mapsOk: maps.ok,
+    missing: [...manifests.missing, ...segments.missing, ...maps.missing],
+  };
+}
+
+async function countExistingFiles(filePaths: string[]): Promise<{ ok: number; missing: string[] }> {
+  let ok = 0;
+  const missing: string[] = [];
+
+  for (const filePath of filePaths) {
+    try {
+      await fs.access(filePath);
+      ok += 1;
+    } catch {
+      missing.push(filePath);
+    }
+  }
+
+  return { ok, missing };
+}
+
+function formatStreamerDiagnosticSummary(
+  diagnostic: StreamerCloneDiagnostic,
+  fileProbe: StreamerFileProbe,
+): string[] {
+  const missingCount = fileProbe.missing.length;
+  return [
+    `diagnostic.browserCompatible=${diagnostic.browserCompatibility}`,
+    `diagnostic.compatibleVariants=${diagnostic.browserCompatibleVariantCount}/${diagnostic.variantCount}`,
+    `diagnostic.videoCodecs=${formatUnknownList(diagnostic.videoCodecs)}`,
+    `diagnostic.audioCodecs=${formatUnknownList(diagnostic.audioCodecs)}`,
+    `diagnostic.externalAudio=${diagnostic.externalAudio ? "yes" : "no"}`,
+    `diagnostic.files=manifests ${fileProbe.manifestsOk}/${fileProbe.manifestCount}, segments ${fileProbe.segmentsOk}/${fileProbe.segmentCount}, maps ${fileProbe.mapsOk}/${fileProbe.mapCount}`,
+    `diagnostic.issues=${diagnostic.issues.length + missingCount}`,
+  ];
+}
+
+function formatStreamerProbeReport(
+  origin: StreamerCloneResult,
+  diagnostic: StreamerCloneDiagnostic,
+  fileProbe: StreamerFileProbe,
+): string[] {
+  return [
+    `${highlight("streamer probe")}: ${origin.id}`,
+    ...formatStreamerDiagnosticSummary(diagnostic, fileProbe),
+    "variants:",
+    ...diagnostic.variants.map(
+      (variant) =>
+        `- [${variant.index}] browser=${variant.browserStatus} | audio=${formatUnknownList(variant.audioCodecs)} | video=${formatUnknownList(variant.videoCodecs)} | group=${variant.audioGroupId ?? "none"} | ${variant.label}`,
+    ),
+    ...(origin.renditions.length > 0
+      ? [
+          "audioRenditions:",
+          ...origin.renditions.map((rendition, index) => `- [${index}] ${formatClonedRenditionLabel(rendition)}`),
+        ]
+      : []),
+    ...(diagnostic.issues.length > 0 || fileProbe.missing.length > 0
+      ? [
+          "issues:",
+          ...diagnostic.issues.map(
+            (issue) => `- [${issue.severity}] ${issue.code}: ${issue.summary} (${issue.evidence.join(" | ")})`,
+          ),
+          ...fileProbe.missing.map((filePath) => `- [error] missing_file: ${filePath}`),
+        ]
+      : []),
+    ...(diagnostic.recommendations.length > 0
+      ? ["recommendations:", ...diagnostic.recommendations.map((item) => `- ${item}`)]
+      : []),
+  ];
+}
+
 async function commandStreamerList(): Promise<void> {
   const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
   const origins = await app.streamer.listOrigins();
@@ -732,6 +864,16 @@ async function commandStreamerInspect(originId: string): Promise<void> {
   console.log(lines.join("\n"));
 }
 
+async function commandStreamerProbe(originId: string | undefined): Promise<void> {
+  const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
+  const resolvedOriginId = await resolveStreamerOriginId(app.streamer, originId);
+  const origin: StreamerCloneResult = await app.streamer.inspectOrigin(resolvedOriginId);
+  const diagnostic = diagnoseStreamerClone(origin);
+  const fileProbe = await buildStreamerFileProbe(origin);
+
+  console.log(formatStreamerProbeReport(origin, diagnostic, fileProbe).join("\n"));
+}
+
 async function commandStreamerRemove(originId: string, options: StreamerRemoveOptions): Promise<void> {
   if (!options.yes) {
     throw new Error("use --yes para confirmar a remocao do origin streamer");
@@ -777,6 +919,8 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
     : result.selectedVariant
     ? `${result.selectedVariant.resolution ?? "unknown"} @ ${result.selectedVariant.bandwidth ?? "n/a"}bps`
     : "media playlist direta";
+  const diagnostic = diagnoseStreamerClone(result);
+  const fileProbe = await buildStreamerFileProbe(result);
 
   console.log(
     [
@@ -790,6 +934,7 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
       `bytes=${formatBytes(result.bytes)}`,
       `manifest=${result.manifestPath}`,
       `root=${result.rootDir}`,
+      ...formatStreamerDiagnosticSummary(diagnostic, fileProbe),
     ].join("\n"),
   );
 
@@ -945,6 +1090,14 @@ async function main(): Promise<void> {
     });
 
   streamer
+    .command("probe")
+    .description("Valida arquivos locais e compatibilidade basica de playback de um origin")
+    .argument("[originId]", "id do origin criado por streamer clone ou latest", "latest")
+    .action(async (originId: string | undefined) => {
+      await commandStreamerProbe(originId);
+    });
+
+  streamer
     .command("remove")
     .description("Remove um origin HLS clonado do storage local")
     .argument("<originId>", "id do origin criado por streamer clone")
@@ -958,7 +1111,7 @@ async function main(): Promise<void> {
     .description("Clona uma janela VOD HLS localmente e opcionalmente serve como origem HTTP")
     .argument("<url>", "URL do manifesto HLS (.m3u8)")
     .option("--duration <seconds>", "duracao alvo em segundos (baixa segmentos ate cumulative >= alvo)", "60")
-    .option("--variant <selector>", "highest, lowest ou indice zero-based da variant", "highest")
+    .option("--variant <selector>", "aac-highest, highest, lowest ou indice zero-based da variant", "aac-highest")
     .option("--all-variants", "clona todas as variants da master playlist e gera uma master local", false)
     .option("--all-variantes", "alias de --all-variants", false)
     .option("--max-variants <n>", "limite opcional de variants quando --all-variants estiver ativo")

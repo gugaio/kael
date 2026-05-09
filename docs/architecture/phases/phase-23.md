@@ -11,13 +11,13 @@ O foco inicial e operacional:
 
 - CLI minimalista: `kael streamer clone <url>`;
 - parsing de master/media playlist HLS;
-- selecao de variant em master playlist;
+- selecao de variant em master playlist com default `aac-highest` para playback web;
 - clone opcional da ladder completa com `--all-variants`;
 - download sequencial de segmentos ate `cumulativeDuration >= duration`;
 - rewrite de media playlist local ou master local apontando para variants clonadas;
 - origin HTTP local com CORS para players web, Smart TVs, STBs e ferramentas de QA;
 - simulacao live com sliding window virtual sobre os segmentos clonados;
-- gestao local dos origins clonados via `list`, `inspect` e `remove`;
+- gestao local dos origins clonados via `list`, `inspect`, `probe` e `remove`;
 - clonagem de renditions separadas de audio referenciadas por `EXT-X-MEDIA`.
 
 ## Decisao arquitetural
@@ -42,6 +42,14 @@ O foco inicial e operacional:
   download de segmentos. Downloads de segmento usam timeout proprio, maior que o
   timeout de manifesto, com retry curto para reduzir falhas transientes em chunks
   grandes.
+- O seletor default de master playlist e `aac-highest`: ele prefere variants com
+  audio AAC/mp4a e evita EC-3/AC-3 para reduzir falhas em browser. `highest`,
+  `lowest`, `aac-lowest` e indice zero-based continuam disponiveis quando o teste
+  precisa de uma escolha explicita.
+- `streamer clone` imprime diagnostico pos-clone com compatibilidade basica de
+  browser, codecs detectados, audio externo e contagem de arquivos locais.
+- `streamer probe [originId|latest]` roda a mesma validacao sem rede sobre um
+  origin ja clonado, incluindo manifests, segmentos e init segments locais.
 - O "corta-corrente" usa segmentos inteiros: ele para quando a soma das duracoes
   clonadas atinge ou ultrapassa a duracao alvo. Corte frame-exato fica para uma
   etapa futura com FFmpeg.
@@ -61,6 +69,7 @@ O foco inicial e operacional:
 ```text
 src/capabilities/video/
   inspect-service.ts        # parsing HLS usado pelo streamer
+  streamer-diagnostics.ts   # diagnostico de codecs/browser para origins clonados
   streamer-service.ts       # clone HLS + origin HTTP local
   streamer-service.test.ts  # testes unitarios/integracao leve
   types.ts                  # contratos Streamer*
@@ -75,6 +84,8 @@ kael streamer clone <url> --duration 60 --all-variants
 kael streamer list
 kael streamer inspect <originId>
 kael streamer inspect latest
+kael streamer probe
+kael streamer probe <originId>
 kael streamer live
 kael streamer live <originId> --window-size 5
 kael streamer remove <originId> --yes
@@ -90,7 +101,7 @@ CLI
 StreamerService.cloneHls()
   |
   | inspectHls(root)
-  |-- master: seleciona variant highest/lowest/index ou todas com --all-variants
+  |-- master: seleciona variant aac-highest/highest/lowest/index ou todas com --all-variants
   |-- media: usa playlist diretamente
   |
   | baixa segmentos sequencialmente ate cumulativeDuration >= duration
@@ -142,6 +153,7 @@ StreamerService.serveLiveOrigin()
 - `StreamerClonedSegment`
 - `StreamerClonedVariant`
 - `StreamerClonedRendition`
+- `StreamerCloneDiagnostic`
 - `StreamerOriginSummary`
 - `StreamerRemoveResult`
 - `StreamerServeOptions`
@@ -159,6 +171,8 @@ StreamerService.serveLiveOrigin()
 - Sem clonagem local de chaves DRM/AES (`EXT-X-KEY`), byte ranges, subtitles ou
   I-frame playlists nesta primeira entrega.
 - Download ainda sequencial; retry de segmento e curto e sem backoff sofisticado.
+- Diagnostico de compatibilidade e baseado em CODECS/grupo de audio e existencia
+  de arquivos; validacao profunda com `ffprobe` fica para incremento futuro.
 
 ## Proximos incrementos
 
@@ -166,4 +180,5 @@ StreamerService.serveLiveOrigin()
 2. Adicionar suporte a subtitles no clone/live.
 3. Expor API quando houver fluxo de automacao/planner que precise controlar
    origins persistentes.
-4. Adicionar diagnostico pos-clone com `ffprobe` amostrado para validar segmentos.
+4. Adicionar validacao amostrada com `ffprobe` para checar integridade real dos
+   segmentos clonados.

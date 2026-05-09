@@ -283,7 +283,7 @@ export type StreamerCloneInput = {
   url: string;
   /** Duração alvo em segundos. O clone inclui segmentos até cumulative >= alvo. */
   durationSeconds?: number;
-  /** Para master playlists: highest, lowest ou índice zero-based da variant. */
+  /** Para master playlists: aac-highest (default), highest, lowest ou índice zero-based da variant. */
   variant?: string;
   /** Quando true, clona todas as variants da master playlist e gera uma master local. */
   allVariants?: boolean;

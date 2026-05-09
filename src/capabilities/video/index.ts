@@ -9,6 +9,17 @@ export { VideoManifestAuditService } from "./manifest-audit-service.js";
 export { VideoManifestDiffService } from "./manifest-diff-service.js";
 export { HlsStreamMonitorService } from "./stream-monitor-service.js";
 export { StreamerService } from "./streamer-service.js";
+export {
+  diagnoseStreamerClone,
+  inspectHlsVariantBrowserCompatibility,
+  isBrowserSafeHlsVariant,
+} from "./streamer-diagnostics.js";
+export type {
+  StreamerBrowserCompatibility,
+  StreamerCloneDiagnostic,
+  StreamerDiagnosticIssue,
+  StreamerVariantDiagnostic,
+} from "./streamer-diagnostics.js";
 export { analyzeSnapshotTransition, toStreamSnapshot } from "./stream-snapshot-analyzer.js";
 export { deriveHlsJsIssues, parseHlsJsLogText } from "./playback-adapters/hlsjs.js";
 export type {

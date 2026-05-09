@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { VideoHlsInspectResult } from "./inspect-service.js";
+import { diagnoseStreamerClone } from "./streamer-diagnostics.js";
 import { StreamerService } from "./streamer-service.js";
 
 const tempRoots: string[] = [];
@@ -323,6 +324,17 @@ describe("StreamerService", () => {
                   subtitlesGroupId: "textstream",
                   closedCaptions: "NONE",
                 },
+                {
+                  uri: "video-720-ec3.m3u8",
+                  url: "https://example.com/video-720-ec3.m3u8",
+                  bandwidth: 2_400_000,
+                  resolution: "1280x720",
+                  frameRate: 23.976,
+                  codecs: "ec-3,avc1.4D401F",
+                  audioGroupId: "audio-ec-3-448",
+                  subtitlesGroupId: "textstream",
+                  closedCaptions: "NONE",
+                },
               ],
               renditions: [
                 {
@@ -395,11 +407,15 @@ describe("StreamerService", () => {
       url: "https://example.com/master.m3u8",
       durationSeconds: 8,
       originId: "audio-renditions-origin",
-      variant: "0",
     });
 
     expect(result.variantCount).toBe(1);
+    expect(result.selectedVariant?.audioGroupId).toBe("audio-aacl-128");
+    expect(result.selectedVariant?.codecs).toBe("mp4a.40.2,avc1.4D401F");
     expect(result.renditionCount).toBe(2);
+    const diagnostic = diagnoseStreamerClone(result);
+    expect(diagnostic.browserCompatibility).toBe("yes");
+    expect(diagnostic.audioCodecs).toEqual(["mp4a.40.2"]);
     expect(result.renditions.map((rendition) => rendition.name)).toEqual([
       "Portuguese",
       "Portuguese (description)",
