@@ -94,7 +94,7 @@ describe("StreamerService", () => {
     });
 
     expect(result.id).toBe("fixture-origin");
-    expect(result.schemaVersion).toBe(1);
+    expect(result.schemaVersion).toBe(2);
     expect(result.allVariants).toBe(false);
     expect(result.variantCount).toBe(1);
     expect(result.selectedUrl).toBe("https://example.com/high.m3u8");
@@ -211,6 +211,249 @@ describe("StreamerService", () => {
     ).resolves.toBeTruthy();
   });
 
+  it("preserva EXT-X-MAP baixando init segment local para fMP4", async () => {
+    const root = await makeTempRoot();
+    const fetchedUrls: string[] = [];
+    const service = new StreamerService(
+      {
+        inspectHls: async ({ url }) =>
+          makeInspectResult({
+            url,
+            finalUrl: url,
+            playlistType: "media",
+            variants: [],
+            targetDuration: 4,
+            mediaSequence: 30,
+            map: {
+              uri: "init.mp4",
+              url: "https://cdn.example.com/init.mp4",
+            },
+            segments: [
+              {
+                uri: "seg-30.m4s",
+                url: "https://cdn.example.com/seg-30.m4s",
+                duration: 4,
+                map: {
+                  uri: "init.mp4",
+                  url: "https://cdn.example.com/init.mp4",
+                },
+              },
+              {
+                uri: "seg-31.m4s",
+                url: "https://cdn.example.com/seg-31.m4s",
+                duration: 4,
+                map: {
+                  uri: "init.mp4",
+                  url: "https://cdn.example.com/init.mp4",
+                },
+              },
+            ],
+          }),
+      },
+      root,
+      async (input) => {
+        fetchedUrls.push(String(input));
+        if (String(input).endsWith("/init.mp4")) {
+          return new Response(new Uint8Array([9, 9, 9, 9]));
+        }
+        return new Response(new Uint8Array([1, 2]));
+      },
+    );
+    await service.init();
+
+    const result = await service.cloneHls({
+      sessionKey: "test",
+      url: "https://example.com/media.m3u8",
+      durationSeconds: 8,
+      originId: "fmp4-origin",
+    });
+
+    expect(result.bytes).toBe(8);
+    expect(result.variants[0].maps).toHaveLength(1);
+    expect(result.variants[0].maps[0]).toMatchObject({
+      sourceUrl: "https://cdn.example.com/init.mp4",
+      localUri: "init/00000-init.mp4",
+      bytes: 4,
+    });
+    expect(fetchedUrls).toEqual([
+      "https://cdn.example.com/seg-30.m4s",
+      "https://cdn.example.com/init.mp4",
+      "https://cdn.example.com/seg-31.m4s",
+    ]);
+
+    const manifest = await fs.readFile(result.manifestPath, "utf-8");
+    expect(manifest).toContain('#EXT-X-MAP:URI="init/00000-init.mp4"');
+    expect(manifest.match(/#EXT-X-MAP/g)).toHaveLength(1);
+    expect(manifest).toContain("segments/00000-seg-30.m4s");
+    await expect(fs.stat(path.join(result.rootDir, "init", "00000-init.mp4"))).resolves.toBeTruthy();
+
+    const handle = await service.serveLiveOrigin(result.id, {
+      windowSize: 1,
+      initialMediaSequence: 70,
+    });
+    try {
+      const liveManifest = await fetch(handle.playbackUrl).then((response) => response.text());
+      expect(liveManifest).toContain('#EXT-X-MAP:URI="/live/0/init/00000-init.mp4"');
+      const initBytes = await fetch(`${handle.baseUrl}/live/0/init/00000-init.mp4`).then((response) =>
+        response.arrayBuffer(),
+      );
+      expect(new Uint8Array(initBytes)).toEqual(new Uint8Array([9, 9, 9, 9]));
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it("clona renditions de audio separadas referenciadas pela master playlist", async () => {
+    const root = await makeTempRoot();
+    const fetchedUrls: string[] = [];
+    const service = new StreamerService(
+      {
+        inspectHls: async ({ url }) => {
+          if (url === "https://example.com/master.m3u8") {
+            return makeInspectResult({
+              variants: [
+                {
+                  uri: "video-720.m3u8",
+                  url: "https://example.com/video-720.m3u8",
+                  bandwidth: 2_000_000,
+                  resolution: "1280x720",
+                  frameRate: 23.976,
+                  codecs: "mp4a.40.2,avc1.4D401F",
+                  audioGroupId: "audio-aacl-128",
+                  subtitlesGroupId: "textstream",
+                  closedCaptions: "NONE",
+                },
+              ],
+              renditions: [
+                {
+                  type: "AUDIO",
+                  groupId: "audio-aacl-128",
+                  language: "pt",
+                  name: "Portuguese",
+                  default: true,
+                  autoselect: true,
+                  channels: "2",
+                  uri: "audio-pt.m3u8",
+                  url: "https://example.com/audio-pt.m3u8",
+                },
+                {
+                  type: "AUDIO",
+                  groupId: "audio-aacl-128",
+                  language: "pt",
+                  name: "Portuguese (description)",
+                  autoselect: true,
+                  characteristics: "public.accessibility.describes-video",
+                  channels: "2",
+                  uri: "audio-desc.m3u8",
+                  url: "https://example.com/audio-desc.m3u8",
+                },
+                {
+                  type: "SUBTITLES",
+                  groupId: "textstream",
+                  language: "pt",
+                  name: "Portuguese (caption)",
+                  uri: "subs-pt.m3u8",
+                  url: "https://example.com/subs-pt.m3u8",
+                },
+              ],
+            });
+          }
+
+          const isAudio = url.includes("audio-");
+          return makeInspectResult({
+            url,
+            finalUrl: url,
+            playlistType: "media",
+            variants: [],
+            targetDuration: 4,
+            mediaSequence: isAudio ? 200 : 100,
+            segments: [
+              {
+                uri: isAudio ? "audio-0.aac" : "video-0.ts",
+                url: isAudio ? `${url}/audio-0.aac` : "https://cdn.example.com/video-0.ts",
+                duration: 4,
+              },
+              {
+                uri: isAudio ? "audio-1.aac" : "video-1.ts",
+                url: isAudio ? `${url}/audio-1.aac` : "https://cdn.example.com/video-1.ts",
+                duration: 4,
+              },
+            ],
+          });
+        },
+      },
+      root,
+      async (input) => {
+        fetchedUrls.push(String(input));
+        return new Response(new TextEncoder().encode(String(input)));
+      },
+    );
+    await service.init();
+
+    const result = await service.cloneHls({
+      sessionKey: "test",
+      url: "https://example.com/master.m3u8",
+      durationSeconds: 8,
+      originId: "audio-renditions-origin",
+      variant: "0",
+    });
+
+    expect(result.variantCount).toBe(1);
+    expect(result.renditionCount).toBe(2);
+    expect(result.renditions.map((rendition) => rendition.name)).toEqual([
+      "Portuguese",
+      "Portuguese (description)",
+    ]);
+    expect(result.renditions.every((rendition) => rendition.groupId === "audio-aacl-128")).toBe(true);
+    expect(fetchedUrls).toEqual([
+      "https://cdn.example.com/video-0.ts",
+      "https://cdn.example.com/video-1.ts",
+      "https://example.com/audio-pt.m3u8/audio-0.aac",
+      "https://example.com/audio-pt.m3u8/audio-1.aac",
+      "https://example.com/audio-desc.m3u8/audio-0.aac",
+      "https://example.com/audio-desc.m3u8/audio-1.aac",
+    ]);
+
+    const master = await fs.readFile(result.manifestPath, "utf-8");
+    expect(master).toContain('#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio-aacl-128",LANGUAGE="pt",NAME="Portuguese",DEFAULT=YES,AUTOSELECT=YES,CHANNELS="2",URI="audio/000-audio-aacl-128-Portuguese/index.m3u8"');
+    expect(master).toContain('CHARACTERISTICS="public.accessibility.describes-video"');
+    expect(master).toContain('AUDIO="audio-aacl-128"');
+    expect(master).toContain("CLOSED-CAPTIONS=NONE");
+    expect(master).not.toContain("SUBTITLES=");
+    expect(master).not.toContain("textstream");
+    expect(master).toContain("variants/000-1280x720/index.m3u8");
+
+    const audioManifest = await fs.readFile(
+      path.join(result.rootDir, "audio", "000-audio-aacl-128-Portuguese", "index.m3u8"),
+      "utf-8",
+    );
+    expect(audioManifest).toContain("#EXT-X-MEDIA-SEQUENCE:200");
+    expect(audioManifest).toContain("segments/00000-audio-0.aac");
+
+    const handle = await service.serveLiveOrigin(result.id, {
+      windowSize: 1,
+      initialMediaSequence: 80,
+    });
+    try {
+      const liveMaster = await fetch(handle.playbackUrl).then((response) => response.text());
+      expect(liveMaster).toContain('URI="/live/audio/0/index.m3u8"');
+      expect(liveMaster).toContain('AUDIO="audio-aacl-128"');
+
+      const liveAudio = await fetch(`${handle.baseUrl}/live/audio/0/index.m3u8`).then((response) =>
+        response.text(),
+      );
+      expect(liveAudio).toContain("#EXT-X-MEDIA-SEQUENCE:80");
+      const audioSegmentPath = liveAudio
+        .split("\n")
+        .find((line) => line.startsWith("/live/audio/0/segments/"));
+      expect(audioSegmentPath).toBeDefined();
+      const audioSegment = await fetch(`${handle.baseUrl}${audioSegmentPath}`).then((response) => response.text());
+      expect(audioSegment).toContain("https://example.com/audio-pt.m3u8/");
+    } finally {
+      await handle.close();
+    }
+  });
+
   it("faz retry de download de segmento antes de falhar o clone", async () => {
     const root = await makeTempRoot();
     let attempts = 0;
@@ -289,7 +532,7 @@ describe("StreamerService", () => {
     expect(origins).toHaveLength(1);
     expect(origins[0]).toMatchObject({
       id: "managed-origin",
-      schemaVersion: 1,
+      schemaVersion: 2,
       segmentCount: 2,
       variantCount: 1,
       bytes: 4,
@@ -428,73 +671,4 @@ describe("StreamerService", () => {
     }
   });
 
-  it("serve clone legado sem variants como live", async () => {
-    const root = await makeTempRoot();
-    const originDir = path.join(root, "legacy-origin");
-    await fs.mkdir(path.join(originDir, "segments"), { recursive: true });
-    await fs.writeFile(path.join(originDir, "segments", "00000-a.ts"), new Uint8Array([1, 2, 3]));
-    await fs.writeFile(path.join(originDir, "index.m3u8"), "#EXTM3U\n#EXT-X-ENDLIST\n", "utf-8");
-    await fs.writeFile(
-      path.join(originDir, "origin.json"),
-      `${JSON.stringify({
-        id: "legacy-origin",
-        sessionKey: "test",
-        sourceUrl: "https://example.com/master.m3u8",
-        selectedUrl: "https://example.com/media.m3u8",
-        finalUrl: "https://example.com/media.m3u8",
-        rootDir: originDir,
-        manifestPath: path.join(originDir, "index.m3u8"),
-        playbackPath: "/index.m3u8",
-        requestedDurationSeconds: 4,
-        cumulativeDurationSeconds: 4,
-        reachedTargetDuration: true,
-        targetDuration: 4,
-        segmentCount: 1,
-        bytes: 3,
-        selectedVariant: {
-          uri: "media.m3u8",
-          url: "https://example.com/media.m3u8",
-          bandwidth: 1000,
-        },
-        createdAt: new Date().toISOString(),
-        segments: [
-          {
-            originalIndex: 0,
-            sourceUri: "a.ts",
-            sourceUrl: "https://example.com/a.ts",
-            localUri: "segments/00000-a.ts",
-            duration: 4,
-            bytes: 3,
-          },
-        ],
-      })}\n`,
-      "utf-8",
-    );
-
-    const service = new StreamerService(
-      {
-        inspectHls: async () => makeInspectResult(),
-      },
-      root,
-      async () => new Response(new Uint8Array()),
-    );
-    await service.init();
-    const handle = await service.serveLiveOrigin("legacy-origin", {
-      windowSize: 1,
-      initialMediaSequence: 7,
-    });
-
-    try {
-      const media = await fetch(handle.playbackUrl).then((response) => response.text());
-      expect(media).toContain("#EXT-X-MEDIA-SEQUENCE:7");
-      const segmentPath = media
-        .split("\n")
-        .find((line) => line.startsWith("/live/0/segments/"));
-      expect(segmentPath).toBeDefined();
-      const segment = await fetch(`${handle.baseUrl}${segmentPath}`).then((response) => response.arrayBuffer());
-      expect(new Uint8Array(segment)).toEqual(new Uint8Array([1, 2, 3]));
-    } finally {
-      await handle.close();
-    }
-  });
 });

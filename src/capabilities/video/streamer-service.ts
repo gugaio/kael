@@ -8,6 +8,8 @@ import type {
   StreamerCloneInput,
   StreamerCloneProgressEvent,
   StreamerCloneResult,
+  StreamerClonedMap,
+  StreamerClonedRendition,
   StreamerClonedSegment,
   StreamerClonedVariant,
   StreamerLiveServeHandle,
@@ -28,6 +30,12 @@ type SelectedMediaPlaylist = {
 };
 
 type VariantSource = NonNullable<StreamerClonedVariant["variant"]>;
+type RenditionSource = VideoHlsInspectResult["renditions"][number];
+type ClonedMediaSource = {
+  localUri: string;
+  targetDuration: number;
+  segments: StreamerClonedSegment[];
+};
 type ProgressEmitter = (event: StreamerCloneProgressEvent) => void;
 
 const DEFAULT_DURATION_SECONDS = 60;
@@ -37,7 +45,7 @@ const DEFAULT_SEGMENT_RETRIES = 2;
 const DEFAULT_MAX_SEGMENTS = 200;
 const DEFAULT_LIVE_WINDOW_SIZE = 5;
 const DEFAULT_INITIAL_MEDIA_SEQUENCE = 100_000;
-const STREAMER_ORIGIN_SCHEMA_VERSION = 1;
+const STREAMER_ORIGIN_SCHEMA_VERSION = 2;
 
 export class StreamerService {
   constructor(
@@ -140,6 +148,7 @@ export class StreamerService {
     let selectedVariant: StreamerCloneResult["selectedVariant"];
     let allVariants = false;
     let clonedVariants: StreamerClonedVariant[] = [];
+    let clonedRenditions: StreamerClonedRendition[] = [];
 
     if (input.allVariants && root.playlistType === "master") {
       const variantsToClone = selectAllVariants(root, input.maxVariants);
@@ -167,6 +176,10 @@ export class StreamerService {
             timeoutMs,
             segmentTimeoutMs,
             segmentRetries,
+            playlistSource: {
+              uri: variant.uri,
+              url: variant.url,
+            },
             variant,
             variantIndex: index,
             variantCount: variantsToClone.length,
@@ -178,7 +191,18 @@ export class StreamerService {
       allVariants = true;
       finalUrl = root.finalUrl;
       selectedUrl = root.url;
-      const manifestText = buildLocalMasterPlaylist(clonedVariants);
+      clonedRenditions = await this.cloneAudioRenditions({
+        root,
+        variants: variantsToClone,
+        originDir,
+        durationSeconds,
+        timeoutMs,
+        maxSegments,
+        segmentTimeoutMs,
+        segmentRetries,
+        progress: emit,
+      });
+      const manifestText = buildLocalMasterPlaylist(clonedVariants, clonedRenditions);
       await fs.writeFile(path.join(originDir, "index.m3u8"), manifestText, "utf-8");
     } else {
       if (root.playlistType === "master") {
@@ -195,28 +219,59 @@ export class StreamerService {
       selectedUrl = selected.inspected.url;
       finalUrl = selected.inspected.finalUrl;
       selectedVariant = selected.selectedVariant;
+      const audioRenditions =
+        root.playlistType === "master" && selected.selectedVariant
+          ? selectAudioRenditions(root, [selected.selectedVariant])
+          : [];
+      const useLocalMaster = audioRenditions.length > 0;
       clonedVariants = [
         await this.cloneMediaPlaylist({
           inspected: selected.inspected,
           originDir,
-          localDir: ".",
+          localDir: useLocalMaster && selected.selectedVariant
+            ? `variants/${buildVariantDirName(0, selected.selectedVariant)}`
+            : ".",
           durationSeconds,
           timeoutMs,
           segmentTimeoutMs,
           segmentRetries,
+          playlistSource: selected.selectedVariant
+            ? {
+                uri: selected.selectedVariant.uri,
+                url: selected.selectedVariant.url,
+              }
+            : undefined,
           variant: selected.selectedVariant,
           variantIndex: 0,
           variantCount: 1,
           progress: emit,
         }),
       ];
+      if (useLocalMaster && selected.selectedVariant) {
+        clonedRenditions = await this.cloneAudioRenditions({
+          root,
+          variants: [selected.selectedVariant],
+          originDir,
+          durationSeconds,
+          timeoutMs,
+          maxSegments,
+          segmentTimeoutMs,
+          segmentRetries,
+          progress: emit,
+          renditions: audioRenditions,
+        });
+        const manifestText = buildLocalMasterPlaylist(clonedVariants, clonedRenditions);
+        await fs.writeFile(path.join(originDir, "index.m3u8"), manifestText, "utf-8");
+      }
     }
 
     const clonedSegments = clonedVariants.flatMap((variant) => variant.segments);
     const cumulativeDurationSeconds = minVariantDuration(clonedVariants);
     const targetDuration = Math.max(...clonedVariants.map((variant) => variant.targetDuration), 1);
     const manifestPath = path.join(originDir, "index.m3u8");
-    const totalBytes = clonedVariants.reduce((acc, variant) => acc + variant.bytes, 0);
+    const totalBytes =
+      clonedVariants.reduce((acc, variant) => acc + variant.bytes, 0) +
+      clonedRenditions.reduce((acc, rendition) => acc + rendition.bytes, 0);
 
     const metadataPath = path.join(originDir, "origin.json");
     const createdAt = new Date().toISOString();
@@ -236,11 +291,13 @@ export class StreamerService {
       targetDuration,
       segmentCount: clonedVariants.reduce((acc, variant) => acc + variant.segmentCount, 0),
       variantCount: clonedVariants.length,
+      renditionCount: clonedRenditions.length,
       bytes: totalBytes,
       allVariants,
       selectedVariant,
       createdAt,
       variants: clonedVariants,
+      renditions: clonedRenditions,
       segments: clonedSegments,
     };
 
@@ -389,6 +446,7 @@ export class StreamerService {
         codecs: variant.codecs,
         audioGroupId: variant.audioGroupId,
         subtitlesGroupId: variant.subtitlesGroupId,
+        closedCaptions: variant.closedCaptions,
       },
     };
   }
@@ -401,6 +459,11 @@ export class StreamerService {
     timeoutMs: number;
     segmentTimeoutMs: number;
     segmentRetries: number;
+    playlistSource?: {
+      uri: string;
+      url: string;
+    };
+    label?: string;
     variant?: VariantSource;
     variantIndex: number;
     variantCount: number;
@@ -419,7 +482,7 @@ export class StreamerService {
       throw new Error("streamer clone found no downloadable media segments");
     }
 
-    const variantLabel = params.variant ? formatVariantLabel(params.variant) : "media playlist direta";
+    const variantLabel = params.variant ? formatVariantLabel(params.variant) : params.label ?? "media playlist direta";
     params.progress({
       type: "variant_ready",
       variantIndex: params.variantIndex,
@@ -430,8 +493,44 @@ export class StreamerService {
     });
 
     const clonedSegments: StreamerClonedSegment[] = [];
+    const clonedMapsBySource = new Map<string, StreamerClonedMap>();
     let totalBytes = 0;
     let cumulativeDurationSeconds = 0;
+
+    const ensureClonedMap = async (
+      map: NonNullable<VideoHlsInspectResult["segments"][number]["map"]>,
+    ): Promise<StreamerClonedMap> => {
+      if (map.byteRange) {
+        throw new Error("streamer clone does not support EXT-X-MAP with BYTERANGE yet");
+      }
+      const existing = clonedMapsBySource.get(map.url);
+      if (existing) {
+        return existing;
+      }
+
+      const localUri = `init/${buildSegmentFileName(clonedMapsBySource.size, map.uri)}`;
+      await fs.mkdir(path.dirname(path.join(variantDir, localUri)), { recursive: true });
+      const bytes = await this.fetchBytesWithRetries({
+        url: map.url,
+        timeoutMs: params.segmentTimeoutMs,
+        retries: params.segmentRetries,
+        progress: () => undefined,
+        variantIndex: params.variantIndex,
+        variantCount: params.variantCount,
+        segmentIndex: 0,
+        segmentCount: 0,
+      });
+      await fs.writeFile(path.join(variantDir, localUri), bytes);
+      totalBytes += bytes.byteLength;
+      const clonedMap: StreamerClonedMap = {
+        sourceUri: map.uri,
+        sourceUrl: map.url,
+        localUri,
+        bytes: bytes.byteLength,
+      };
+      clonedMapsBySource.set(map.url, clonedMap);
+      return clonedMap;
+    };
 
     for (let index = 0; index < selectedSegments.length; index += 1) {
       const selectedSegment = selectedSegments[index];
@@ -456,6 +555,9 @@ export class StreamerService {
         segmentIndex: index,
         segmentCount: selectedSegments.length,
       });
+      const clonedMap = selectedSegment.segment.map
+        ? await ensureClonedMap(selectedSegment.segment.map)
+        : undefined;
       await fs.writeFile(localPath, bytes);
       totalBytes += bytes.byteLength;
       cumulativeDurationSeconds += selectedSegment.segment.duration ?? params.inspected.targetDuration ?? 0;
@@ -467,6 +569,7 @@ export class StreamerService {
         duration: selectedSegment.segment.duration,
         title: selectedSegment.segment.title,
         bytes: bytes.byteLength,
+        map: clonedMap,
       });
       params.progress({
         type: "segment_downloaded",
@@ -491,8 +594,8 @@ export class StreamerService {
     await fs.writeFile(manifestPath, manifestText, "utf-8");
 
     return {
-      sourceUri: params.variant?.uri ?? params.inspected.url,
-      sourceUrl: params.variant?.url ?? params.inspected.url,
+      sourceUri: params.playlistSource?.uri ?? params.variant?.uri ?? params.inspected.url,
+      sourceUrl: params.playlistSource?.url ?? params.variant?.url ?? params.inspected.url,
       finalUrl: params.inspected.finalUrl,
       localUri: params.localDir === "." ? "index.m3u8" : `${params.localDir}/index.m3u8`,
       manifestPath,
@@ -501,9 +604,91 @@ export class StreamerService {
       cumulativeDurationSeconds,
       reachedTargetDuration: cumulativeDurationSeconds >= params.durationSeconds,
       bytes: totalBytes,
+      maps: [...clonedMapsBySource.values()],
       variant: params.variant,
       segments: clonedSegments,
     };
+  }
+
+  private async cloneAudioRenditions(params: {
+    root: VideoHlsInspectResult;
+    variants: VariantSource[];
+    originDir: string;
+    durationSeconds: number;
+    timeoutMs: number;
+    maxSegments: number;
+    segmentTimeoutMs: number;
+    segmentRetries: number;
+    progress: ProgressEmitter;
+    renditions?: RenditionSource[];
+  }): Promise<StreamerClonedRendition[]> {
+    const renditions = params.renditions ?? selectAudioRenditions(params.root, params.variants);
+    const cloned: StreamerClonedRendition[] = [];
+
+    for (let index = 0; index < renditions.length; index += 1) {
+      const rendition = renditions[index];
+      if (!rendition.uri || !rendition.url) {
+        continue;
+      }
+
+      const label = formatRenditionLabel(rendition);
+      params.progress({
+        type: "variant_inspect",
+        variantIndex: index,
+        variantCount: renditions.length,
+        label,
+        url: rendition.url,
+      });
+      const inspected = await this.inspect.inspectHls({
+        url: rendition.url,
+        maxSegments: params.maxSegments,
+        timeoutMs: params.timeoutMs,
+      });
+      const localDir = `audio/${buildRenditionDirName(index, rendition)}`;
+      const media = await this.cloneMediaPlaylist({
+        inspected,
+        originDir: params.originDir,
+        localDir,
+        durationSeconds: params.durationSeconds,
+        timeoutMs: params.timeoutMs,
+        segmentTimeoutMs: params.segmentTimeoutMs,
+        segmentRetries: params.segmentRetries,
+        playlistSource: {
+          uri: rendition.uri,
+          url: rendition.url,
+        },
+        label,
+        variantIndex: index,
+        variantCount: renditions.length,
+        progress: params.progress,
+      });
+
+      cloned.push({
+        type: rendition.type,
+        groupId: rendition.groupId,
+        name: rendition.name,
+        language: rendition.language,
+        default: rendition.default,
+        autoselect: rendition.autoselect,
+        forced: rendition.forced,
+        channels: rendition.channels,
+        characteristics: rendition.characteristics,
+        sourceUri: media.sourceUri,
+        sourceUrl: media.sourceUrl,
+        finalUrl: media.finalUrl,
+        localUri: media.localUri,
+        manifestPath: media.manifestPath,
+        targetDuration: media.targetDuration,
+        segmentCount: media.segmentCount,
+        cumulativeDurationSeconds: media.cumulativeDurationSeconds,
+        reachedTargetDuration: media.reachedTargetDuration,
+        bytes: media.bytes,
+        maps: media.maps,
+        segments: media.segments,
+      });
+    }
+
+    return cloned;
   }
 
   private async fetchBytes(url: string, timeoutMs: number): Promise<Uint8Array> {
@@ -649,9 +834,9 @@ export class StreamerService {
 
       if (pathname === "/index.m3u8") {
         const body =
-          clone.variants.length > 1
-            ? buildLiveMasterPlaylist(clone.variants)
-            : buildLiveMediaPlaylist(clone.variants[0], 0, state, Date.now());
+          clone.variants.length > 1 || clone.renditions.length > 0
+            ? buildLiveMasterPlaylist(clone.variants, clone.renditions)
+            : buildLiveMediaPlaylist(clone.variants[0], "/live/0", state, Date.now());
         sendText(response, request.method, body, "application/vnd.apple.mpegurl");
         return;
       }
@@ -660,7 +845,16 @@ export class StreamerService {
       if (mediaMatch) {
         const variantIndex = parseVariantIndex(clone, mediaMatch[1]);
         const variant = clone.variants[variantIndex];
-        const body = buildLiveMediaPlaylist(variant, variantIndex, state, Date.now());
+        const body = buildLiveMediaPlaylist(variant, `/live/${variantIndex}`, state, Date.now());
+        sendText(response, request.method, body, "application/vnd.apple.mpegurl");
+        return;
+      }
+
+      const audioMediaMatch = pathname.match(/^\/live\/audio\/(\d+)\/index\.m3u8$/);
+      if (audioMediaMatch) {
+        const renditionIndex = parseRenditionIndex(clone, audioMediaMatch[1]);
+        const rendition = clone.renditions[renditionIndex];
+        const body = buildLiveMediaPlaylist(rendition, `/live/audio/${renditionIndex}`, state, Date.now());
         sendText(response, request.method, body, "application/vnd.apple.mpegurl");
         return;
       }
@@ -687,6 +881,72 @@ export class StreamerService {
         return;
       }
 
+      const audioSegmentMatch = pathname.match(/^\/live\/audio\/(\d+)\/segments\/(\d+)(?:\.[^/]*)?$/);
+      if (audioSegmentMatch) {
+        const renditionIndex = parseRenditionIndex(clone, audioSegmentMatch[1]);
+        const rendition = clone.renditions[renditionIndex];
+        const sequence = Number(audioSegmentMatch[2]);
+        if (!Number.isSafeInteger(sequence) || sequence < 0) {
+          throw new Error("invalid live audio segment sequence");
+        }
+        const segment = segmentForSequence(rendition, sequence);
+        const filePath = resolveClonedSegmentPath(clone.rootDir, rendition, segment);
+        const data = await fs.readFile(filePath);
+        response.statusCode = 200;
+        response.setHeader("content-type", contentTypeFor(filePath));
+        response.setHeader("cache-control", "no-store");
+        if (request.method === "HEAD") {
+          response.end();
+          return;
+        }
+        response.end(data);
+        return;
+      }
+
+      const mapMatch = pathname.match(/^\/live\/(\d+)\/init\/([^/]+)$/);
+      if (mapMatch) {
+        const variantIndex = parseVariantIndex(clone, mapMatch[1]);
+        const variant = clone.variants[variantIndex];
+        const localUri = `init/${decodeURIComponent(mapMatch[2] ?? "")}`;
+        const clonedMap = (variant.maps ?? []).find((candidate) => candidate.localUri === localUri);
+        if (!clonedMap) {
+          throw new Error("live init segment not found");
+        }
+        const filePath = resolveClonedMapPath(clone.rootDir, variant, clonedMap);
+        const data = await fs.readFile(filePath);
+        response.statusCode = 200;
+        response.setHeader("content-type", contentTypeFor(filePath));
+        response.setHeader("cache-control", "no-store");
+        if (request.method === "HEAD") {
+          response.end();
+          return;
+        }
+        response.end(data);
+        return;
+      }
+
+      const audioMapMatch = pathname.match(/^\/live\/audio\/(\d+)\/init\/([^/]+)$/);
+      if (audioMapMatch) {
+        const renditionIndex = parseRenditionIndex(clone, audioMapMatch[1]);
+        const rendition = clone.renditions[renditionIndex];
+        const localUri = `init/${decodeURIComponent(audioMapMatch[2] ?? "")}`;
+        const clonedMap = (rendition.maps ?? []).find((candidate) => candidate.localUri === localUri);
+        if (!clonedMap) {
+          throw new Error("live audio init segment not found");
+        }
+        const filePath = resolveClonedMapPath(clone.rootDir, rendition, clonedMap);
+        const data = await fs.readFile(filePath);
+        response.statusCode = 200;
+        response.setHeader("content-type", contentTypeFor(filePath));
+        response.setHeader("cache-control", "no-store");
+        if (request.method === "HEAD") {
+          response.end();
+          return;
+        }
+        response.end(data);
+        return;
+      }
+
       response.statusCode = 404;
       response.end("not found");
     } catch {
@@ -701,16 +961,16 @@ export class StreamerService {
     const raw = await fs.readFile(path.join(originDir, "origin.json"), "utf-8");
     const parsed = JSON.parse(raw) as Partial<StreamerCloneResult>;
     if (!Array.isArray(parsed.variants) || parsed.variants.length === 0) {
-      const migrated = migrateLegacyCloneResult(parsed, id, originDir);
-      if (migrated) {
-        return migrated;
-      }
       throw new Error(`streamer origin ${id} has no cloned variants`);
     }
+    if (!Array.isArray(parsed.renditions)) {
+      throw new Error(`streamer origin ${id} is not compatible with current schema`);
+    }
+    const clone = parsed as StreamerCloneResult;
     return {
-      ...(parsed as StreamerCloneResult),
+      ...clone,
       id,
-      schemaVersion: parsed.schemaVersion ?? STREAMER_ORIGIN_SCHEMA_VERSION,
+      schemaVersion: STREAMER_ORIGIN_SCHEMA_VERSION,
       rootDir: originDir,
     };
   }
@@ -798,6 +1058,35 @@ function selectAllVariants(root: VideoHlsInspectResult, maxVariants: number | un
   return root.variants.slice(0, normalizedMax).map(toVariantSource);
 }
 
+function selectAudioRenditions(root: VideoHlsInspectResult, variants: VariantSource[]): RenditionSource[] {
+  const audioGroupIds = new Set(
+    variants
+      .map((variant) => variant.audioGroupId)
+      .filter((value): value is string => Boolean(value)),
+  );
+  if (audioGroupIds.size === 0) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const out: RenditionSource[] = [];
+  for (const rendition of root.renditions) {
+    if (rendition.type.toUpperCase() !== "AUDIO" || !rendition.groupId || !rendition.uri || !rendition.url) {
+      continue;
+    }
+    if (!audioGroupIds.has(rendition.groupId)) {
+      continue;
+    }
+    const key = `${rendition.groupId}|${rendition.name ?? ""}|${rendition.url}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push(rendition);
+  }
+  return out;
+}
+
 function toVariantSource(variant: VideoHlsInspectResult["variants"][number]): VariantSource {
   return {
     uri: variant.uri,
@@ -809,6 +1098,7 @@ function toVariantSource(variant: VideoHlsInspectResult["variants"][number]): Va
     codecs: variant.codecs,
     audioGroupId: variant.audioGroupId,
     subtitlesGroupId: variant.subtitlesGroupId,
+    closedCaptions: variant.closedCaptions,
   };
 }
 
@@ -820,6 +1110,16 @@ function formatVariantLabel(variant: VariantSource): string {
   ].filter((value): value is string => Boolean(value));
 
   return parts.length > 0 ? parts.join(" | ") : variant.uri;
+}
+
+function formatRenditionLabel(rendition: RenditionSource): string {
+  const parts = [
+    rendition.type,
+    rendition.groupId,
+    rendition.name,
+    rendition.channels ? `${rendition.channels}ch` : undefined,
+  ].filter((value): value is string => Boolean(value));
+  return parts.length > 0 ? parts.join(" | ") : rendition.uri ?? "audio rendition";
 }
 
 function selectSegmentsForDuration(
@@ -848,71 +1148,6 @@ function minVariantDuration(variants: StreamerClonedVariant[]): number {
   return Math.min(...variants.map((variant) => variant.cumulativeDurationSeconds));
 }
 
-function migrateLegacyCloneResult(
-  parsed: Partial<StreamerCloneResult>,
-  originId: string,
-  originDir: string,
-): StreamerCloneResult | null {
-  if (!Array.isArray(parsed.segments) || parsed.segments.length === 0) {
-    return null;
-  }
-
-  const segments = parsed.segments;
-  const targetDuration =
-    typeof parsed.targetDuration === "number" && Number.isFinite(parsed.targetDuration)
-      ? parsed.targetDuration
-      : Math.max(
-          ...segments.map((segment) => segment.duration).filter((duration): duration is number => typeof duration === "number"),
-          1,
-        );
-  const cumulativeDurationSeconds =
-    typeof parsed.cumulativeDurationSeconds === "number"
-      ? parsed.cumulativeDurationSeconds
-      : segments.reduce((acc, segment) => acc + (segment.duration ?? targetDuration), 0);
-  const bytes =
-    typeof parsed.bytes === "number"
-      ? parsed.bytes
-      : segments.reduce((acc, segment) => acc + segment.bytes, 0);
-  const variant: StreamerClonedVariant = {
-    sourceUri: parsed.selectedVariant?.uri ?? parsed.selectedUrl ?? parsed.sourceUrl ?? "index.m3u8",
-    sourceUrl: parsed.selectedVariant?.url ?? parsed.selectedUrl ?? parsed.sourceUrl ?? "index.m3u8",
-    finalUrl: parsed.finalUrl ?? parsed.selectedUrl ?? parsed.sourceUrl ?? "index.m3u8",
-    localUri: "index.m3u8",
-    manifestPath: path.join(originDir, "index.m3u8"),
-    targetDuration,
-    segmentCount: segments.length,
-    cumulativeDurationSeconds,
-    reachedTargetDuration: parsed.reachedTargetDuration ?? true,
-    bytes,
-    variant: parsed.selectedVariant,
-    segments,
-  };
-
-  return {
-    id: originId,
-    schemaVersion: parsed.schemaVersion ?? STREAMER_ORIGIN_SCHEMA_VERSION,
-    sessionKey: parsed.sessionKey ?? "legacy.streamer.clone",
-    sourceUrl: parsed.sourceUrl ?? variant.sourceUrl,
-    selectedUrl: parsed.selectedUrl ?? variant.sourceUrl,
-    finalUrl: parsed.finalUrl ?? variant.finalUrl,
-    rootDir: originDir,
-    manifestPath: path.join(originDir, "index.m3u8"),
-    playbackPath: parsed.playbackPath ?? "/index.m3u8",
-    requestedDurationSeconds: parsed.requestedDurationSeconds ?? cumulativeDurationSeconds,
-    cumulativeDurationSeconds,
-    reachedTargetDuration: parsed.reachedTargetDuration ?? true,
-    targetDuration,
-    segmentCount: segments.length,
-    variantCount: 1,
-    bytes,
-    allVariants: false,
-    selectedVariant: parsed.selectedVariant,
-    createdAt: parsed.createdAt ?? new Date(0).toISOString(),
-    variants: [variant],
-    segments,
-  };
-}
-
 function toOriginSummary(result: StreamerCloneResult): StreamerOriginSummary {
   return {
     id: result.id,
@@ -928,6 +1163,7 @@ function toOriginSummary(result: StreamerCloneResult): StreamerOriginSummary {
     targetDuration: result.targetDuration,
     segmentCount: result.segmentCount,
     variantCount: result.variantCount,
+    renditionCount: result.renditionCount,
     bytes: result.bytes,
     allVariants: result.allVariants,
   };
@@ -958,6 +1194,21 @@ function buildVariantDirName(index: number, variant: VariantSource): string {
   return `${String(index).padStart(3, "0")}-${safeBase}`;
 }
 
+function buildRenditionDirName(index: number, rendition: RenditionSource): string {
+  let basename = "";
+  if (rendition.uri) {
+    try {
+      basename = path.basename(new URL(rendition.uri, "http://streamer.local").pathname);
+    } catch {
+      basename = path.basename(rendition.uri);
+    }
+  }
+
+  const readable = [rendition.groupId, rendition.name].filter(Boolean).join("-") || basename || `audio-${index}`;
+  const safeBase = readable.replace(/[^a-zA-Z0-9._-]/g, "-") || `audio-${index}`;
+  return `${String(index).padStart(3, "0")}-${safeBase}`;
+}
+
 function deriveTargetDuration(source: VideoHlsInspectResult, segments: StreamerClonedSegment[]): number {
   if (typeof source.targetDuration === "number" && Number.isFinite(source.targetDuration) && source.targetDuration > 0) {
     return Math.ceil(source.targetDuration);
@@ -970,18 +1221,30 @@ function deriveTargetDuration(source: VideoHlsInspectResult, segments: StreamerC
   return Math.ceil(maxDuration);
 }
 
-function buildLocalMasterPlaylist(variants: StreamerClonedVariant[]): string {
+function buildLocalMasterPlaylist(
+  variants: StreamerClonedVariant[],
+  renditions: StreamerClonedRendition[] = [],
+): string {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:3"];
+  const audioGroupIds = new Set(
+    renditions
+      .filter((rendition) => rendition.type.toUpperCase() === "AUDIO" && rendition.groupId)
+      .map((rendition) => rendition.groupId as string),
+  );
+
+  for (const rendition of renditions) {
+    lines.push(`#EXT-X-MEDIA:${formatRenditionAttrs(rendition, rendition.localUri)}`);
+  }
 
   for (const variant of variants) {
-    lines.push(`#EXT-X-STREAM-INF:${formatVariantAttrs(variant)}`);
+    lines.push(`#EXT-X-STREAM-INF:${formatVariantAttrs(variant, audioGroupIds)}`);
     lines.push(variant.localUri);
   }
 
   return `${lines.join("\n")}\n`;
 }
 
-function formatVariantAttrs(cloned: StreamerClonedVariant): string {
+function formatVariantAttrs(cloned: StreamerClonedVariant, availableAudioGroupIds = new Set<string>()): string {
   const attrs: string[] = [];
   const variant = cloned.variant;
 
@@ -998,8 +1261,34 @@ function formatVariantAttrs(cloned: StreamerClonedVariant): string {
   if (variant?.codecs) {
     attrs.push(`CODECS="${variant.codecs}"`);
   }
+  if (variant?.audioGroupId && availableAudioGroupIds.has(variant.audioGroupId)) {
+    attrs.push(`AUDIO="${variant.audioGroupId}"`);
+  }
+  if (variant?.closedCaptions) {
+    attrs.push(`CLOSED-CAPTIONS=${variant.closedCaptions}`);
+  }
 
   return attrs.join(",");
+}
+
+function formatRenditionAttrs(rendition: StreamerClonedRendition, uri: string): string {
+  const attrs = [
+    `TYPE=${rendition.type.toUpperCase()}`,
+    ...(rendition.groupId ? [`GROUP-ID=${quoteAttr(rendition.groupId)}`] : []),
+    ...(rendition.language ? [`LANGUAGE=${quoteAttr(rendition.language)}`] : []),
+    ...(rendition.name ? [`NAME=${quoteAttr(rendition.name)}`] : []),
+    ...(typeof rendition.default === "boolean" ? [`DEFAULT=${rendition.default ? "YES" : "NO"}`] : []),
+    ...(typeof rendition.autoselect === "boolean" ? [`AUTOSELECT=${rendition.autoselect ? "YES" : "NO"}`] : []),
+    ...(typeof rendition.forced === "boolean" ? [`FORCED=${rendition.forced ? "YES" : "NO"}`] : []),
+    ...(rendition.characteristics ? [`CHARACTERISTICS=${quoteAttr(rendition.characteristics)}`] : []),
+    ...(rendition.channels ? [`CHANNELS=${quoteAttr(rendition.channels)}`] : []),
+    `URI=${quoteAttr(uri)}`,
+  ];
+  return attrs.join(",");
+}
+
+function quoteAttr(value: string): string {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
 function estimateBandwidth(cloned: StreamerClonedVariant): number {
@@ -1015,9 +1304,10 @@ function buildLocalMediaPlaylist(params: {
   targetDuration: number;
 }): string {
   const mediaSequence = params.source.mediaSequence ?? 0;
+  const version = params.segments.some((segment) => segment.map) ? 7 : 3;
   const lines = [
     "#EXTM3U",
-    "#EXT-X-VERSION:3",
+    `#EXT-X-VERSION:${version}`,
     `#EXT-X-TARGETDURATION:${params.targetDuration}`,
     `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`,
     ...(typeof params.source.discontinuitySequence === "number"
@@ -1025,9 +1315,15 @@ function buildLocalMediaPlaylist(params: {
       : []),
   ];
 
+  let activeMapUri: string | null = null;
   for (const segment of params.segments) {
     if (params.source.discontinuityMarkers.includes(segment.originalIndex)) {
       lines.push("#EXT-X-DISCONTINUITY");
+      activeMapUri = null;
+    }
+    if (segment.map && segment.map.localUri !== activeMapUri) {
+      lines.push(`#EXT-X-MAP:URI="${segment.map.localUri}"`);
+      activeMapUri = segment.map.localUri;
     }
     const duration = segment.duration ?? params.source.targetDuration ?? params.targetDuration;
     lines.push(`#EXTINF:${duration.toFixed(3)},${segment.title ?? ""}`);
@@ -1065,11 +1361,23 @@ function sendText(
   response.end(body);
 }
 
-function buildLiveMasterPlaylist(variants: StreamerClonedVariant[]): string {
+function buildLiveMasterPlaylist(
+  variants: StreamerClonedVariant[],
+  renditions: StreamerClonedRendition[] = [],
+): string {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:3"];
+  const audioGroupIds = new Set(
+    renditions
+      .filter((rendition) => rendition.type.toUpperCase() === "AUDIO" && rendition.groupId)
+      .map((rendition) => rendition.groupId as string),
+  );
+
+  for (let index = 0; index < renditions.length; index += 1) {
+    lines.push(`#EXT-X-MEDIA:${formatRenditionAttrs(renditions[index], `/live/audio/${index}/index.m3u8`)}`);
+  }
 
   for (let index = 0; index < variants.length; index += 1) {
-    lines.push(`#EXT-X-STREAM-INF:${formatVariantAttrs(variants[index])}`);
+    lines.push(`#EXT-X-STREAM-INF:${formatVariantAttrs(variants[index], audioGroupIds)}`);
     lines.push(`/live/${index}/index.m3u8`);
   }
 
@@ -1077,8 +1385,8 @@ function buildLiveMasterPlaylist(variants: StreamerClonedVariant[]): string {
 }
 
 function buildLiveMediaPlaylist(
-  variant: StreamerClonedVariant,
-  variantIndex: number,
+  media: ClonedMediaSource,
+  pathPrefix: string,
   state: {
     startedAtMs: number;
     windowSize: number;
@@ -1086,27 +1394,29 @@ function buildLiveMediaPlaylist(
   },
   nowMs: number,
 ): string {
-  const currentSequence = currentLiveSequence(variant, state, nowMs);
+  const currentSequence = currentLiveSequence(media, state, nowMs);
+  const version = media.segments.some((segment) => segment.map) ? 7 : 3;
   const mediaSequence = Math.max(
     state.initialMediaSequence,
     currentSequence - state.windowSize + 1,
   );
   const discontinuitySequence = Math.floor(
-    Math.max(0, mediaSequence - state.initialMediaSequence) / variant.segments.length,
+    Math.max(0, mediaSequence - state.initialMediaSequence) / media.segments.length,
   );
   const lines = [
     "#EXTM3U",
-    "#EXT-X-VERSION:3",
-    `#EXT-X-TARGETDURATION:${variant.targetDuration}`,
+    `#EXT-X-VERSION:${version}`,
+    `#EXT-X-TARGETDURATION:${media.targetDuration}`,
     `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`,
     `#EXT-X-DISCONTINUITY-SEQUENCE:${discontinuitySequence}`,
   ];
 
+  let activeMapUri: string | null = null;
   for (let sequence = mediaSequence; sequence <= currentSequence; sequence += 1) {
-    const segment = segmentForSequence(variant, sequence);
+    const segment = segmentForSequence(media, sequence);
     const previousSegment =
       sequence > mediaSequence || mediaSequence > state.initialMediaSequence
-        ? segmentForSequence(variant, sequence - 1)
+        ? segmentForSequence(media, sequence - 1)
         : null;
     if (
       segment.originalIndex === 0 &&
@@ -1114,17 +1424,22 @@ function buildLiveMediaPlaylist(
       previousSegment.originalIndex !== 0
     ) {
       lines.push("#EXT-X-DISCONTINUITY");
+      activeMapUri = null;
     }
-    const duration = segment.duration ?? variant.targetDuration;
+    if (segment.map && segment.map.localUri !== activeMapUri) {
+      lines.push(`#EXT-X-MAP:URI="${pathPrefix}/${segment.map.localUri}"`);
+      activeMapUri = segment.map.localUri;
+    }
+    const duration = segment.duration ?? media.targetDuration;
     lines.push(`#EXTINF:${duration.toFixed(3)},${segment.title ?? ""}`);
-    lines.push(`/live/${variantIndex}/segments/${sequence}${extensionForSegment(segment)}`);
+    lines.push(`${pathPrefix}/segments/${sequence}${extensionForSegment(segment)}`);
   }
 
   return `${lines.join("\n")}\n`;
 }
 
 function currentLiveSequence(
-  variant: StreamerClonedVariant,
+  media: ClonedMediaSource,
   state: {
     startedAtMs: number;
     windowSize: number;
@@ -1132,7 +1447,7 @@ function currentLiveSequence(
   },
   nowMs: number,
 ): number {
-  const targetMs = Math.max(1, variant.targetDuration * 1000);
+  const targetMs = Math.max(1, media.targetDuration * 1000);
   const elapsedSegments = Math.max(0, Math.floor((nowMs - state.startedAtMs) / targetMs));
   return state.initialMediaSequence + state.windowSize - 1 + elapsedSegments;
 }
@@ -1145,24 +1460,41 @@ function parseVariantIndex(clone: StreamerCloneResult, raw: string | undefined):
   return index;
 }
 
+function parseRenditionIndex(clone: StreamerCloneResult, raw: string | undefined): number {
+  const index = Number(raw);
+  if (!Number.isInteger(index) || index < 0 || index >= clone.renditions.length) {
+    throw new Error("invalid live audio rendition index");
+  }
+  return index;
+}
+
 function segmentForSequence(
-  variant: StreamerClonedVariant,
+  media: ClonedMediaSource,
   sequence: number,
 ): StreamerClonedSegment {
-  if (variant.segments.length === 0) {
+  if (media.segments.length === 0) {
     throw new Error("variant has no segments");
   }
-  const index = sequence % variant.segments.length;
-  return variant.segments[index];
+  const index = sequence % media.segments.length;
+  return media.segments[index];
 }
 
 function resolveClonedSegmentPath(
   rootDir: string,
-  variant: StreamerClonedVariant,
+  media: ClonedMediaSource,
   segment: StreamerClonedSegment,
 ): string {
-  const variantDir = path.dirname(variant.localUri);
-  return path.join(rootDir, variantDir === "." ? "" : variantDir, segment.localUri);
+  const mediaDir = path.dirname(media.localUri);
+  return path.join(rootDir, mediaDir === "." ? "" : mediaDir, segment.localUri);
+}
+
+function resolveClonedMapPath(
+  rootDir: string,
+  media: ClonedMediaSource,
+  clonedMap: StreamerClonedMap,
+): string {
+  const mediaDir = path.dirname(media.localUri);
+  return path.join(rootDir, mediaDir === "." ? "" : mediaDir, clonedMap.localUri);
 }
 
 function extensionForSegment(segment: StreamerClonedSegment): string {

@@ -638,6 +638,7 @@ function formatStreamerOriginSummary(origin: StreamerOriginSummary): string {
     `created=${origin.createdAt}`,
     `schema=${origin.schemaVersion}`,
     `variants=${origin.variantCount}`,
+    `renditions=${origin.renditionCount}`,
     `segments=${origin.segmentCount}`,
     `duration=${formatSeconds(origin.cumulativeDurationSeconds)}/${origin.requestedDurationSeconds}s`,
     `bytes=${formatBytes(origin.bytes)}`,
@@ -704,6 +705,7 @@ async function commandStreamerInspect(originId: string): Promise<void> {
     `variant=${selectedVariant}`,
     `allVariants=${origin.allVariants}`,
     `variants=${origin.variantCount}`,
+    `renditions=${origin.renditionCount}`,
     `segments=${origin.segmentCount}`,
     `duration=${formatSeconds(origin.cumulativeDurationSeconds)} requested=${origin.requestedDurationSeconds}s reached=${origin.reachedTargetDuration}`,
     `targetDuration=${origin.targetDuration}s`,
@@ -714,8 +716,17 @@ async function commandStreamerInspect(originId: string): Promise<void> {
     "variantsDetail:",
     ...origin.variants.map(
       (variant, index) =>
-        `- [${index}] ${formatClonedVariantLabel(variant)} | local=${variant.localUri} | segments=${variant.segmentCount} | duration=${formatSeconds(variant.cumulativeDurationSeconds)} | bytes=${formatBytes(variant.bytes)}`,
+        `- [${index}] ${formatClonedVariantLabel(variant)} | local=${variant.localUri} | segments=${variant.segmentCount} | maps=${variant.maps.length} | duration=${formatSeconds(variant.cumulativeDurationSeconds)} | bytes=${formatBytes(variant.bytes)}`,
     ),
+    ...(origin.renditions.length > 0
+      ? [
+          "audioRenditions:",
+          ...origin.renditions.map(
+            (rendition, index) =>
+              `- [${index}] ${rendition.groupId ?? "unknown"} | ${rendition.name ?? "unnamed"} | local=${rendition.localUri} | segments=${rendition.segmentCount} | maps=${rendition.maps.length} | duration=${formatSeconds(rendition.cumulativeDurationSeconds)} | bytes=${formatBytes(rendition.bytes)}`,
+          ),
+        ]
+      : []),
   ];
 
   console.log(lines.join("\n"));

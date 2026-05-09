@@ -16,8 +16,9 @@ O foco inicial e operacional:
 - download sequencial de segmentos ate `cumulativeDuration >= duration`;
 - rewrite de media playlist local ou master local apontando para variants clonadas;
 - origin HTTP local com CORS para players web, Smart TVs, STBs e ferramentas de QA;
-- simulacao live com sliding window virtual sobre os segmentos clonados.
-- gestao local dos origins clonados via `list`, `inspect` e `remove`.
+- simulacao live com sliding window virtual sobre os segmentos clonados;
+- gestao local dos origins clonados via `list`, `inspect` e `remove`;
+- clonagem de renditions separadas de audio referenciadas por `EXT-X-MEDIA`.
 
 ## Decisao arquitetural
 
@@ -44,15 +45,22 @@ O foco inicial e operacional:
 - O "corta-corrente" usa segmentos inteiros: ele para quando a soma das duracoes
   clonadas atinge ou ultrapassa a duracao alvo. Corte frame-exato fica para uma
   etapa futura com FFmpeg.
-- `origin.json` tem `schemaVersion` explicito. Clones legados sem essa chave sao
-  carregados como schema 1 em memoria para preservar compatibilidade.
+- `origin.json` tem `schemaVersion` explicito. A fase atual usa apenas o schema
+  mais recente; origins antigos podem ser removidos e recriados.
 - `kael streamer live` sem `originId` resolve para o origin mais recente
   listado pelo storage local. `remove` permanece explicito e exige `--yes`.
+- Media playlists fMP4/CMAF sem DRM e sem byte range preservam `EXT-X-MAP`:
+  o init segment e baixado para `init/*` e o manifesto local/live aponta para
+  esse arquivo local.
+- Master playlists com `EXT-X-MEDIA TYPE=AUDIO` clonam apenas os grupos de audio
+  usados pelos variants selecionados. Subtitles e I-frame playlists ainda sao
+  ignoradas nesta fase.
 
 ## Estrutura de arquivos
 
 ```text
 src/capabilities/video/
+  inspect-service.ts        # parsing HLS usado pelo streamer
   streamer-service.ts       # clone HLS + origin HTTP local
   streamer-service.test.ts  # testes unitarios/integracao leve
   types.ts                  # contratos Streamer*
@@ -86,7 +94,9 @@ StreamerService.cloneHls()
   |-- media: usa playlist diretamente
   |
   | baixa segmentos sequencialmente ate cumulativeDuration >= duration
+  | baixa renditions de audio referenciadas por AUDIO="<group>"
   | escreve segments/* ou variants/<n>/segments/*
+  | escreve audio/<n>/segments/* quando houver audio externo
   | escreve index.m3u8 local (media ou master)
   | escreve origin.json
   v
@@ -108,7 +118,7 @@ StreamerService.serveLiveOrigin()
   |
   | GET /index.m3u8
   |-- single variant: media playlist live
-  |-- multi variant: master apontando para /live/<variant>/index.m3u8
+  |-- multi variant/audio externo: master apontando para /live/<variant>/index.m3u8 e /live/audio/<n>/index.m3u8
   |
   | GET /live/<variant>/index.m3u8
   |-- calcula janela por tempo atual
@@ -117,6 +127,12 @@ StreamerService.serveLiveOrigin()
   |
   | GET /live/<variant>/segments/<sequence>.ts
   |-- mapeia sequence % segmentosClonados.length para arquivo local
+  |
+  | GET /live/audio/<n>/index.m3u8
+  |-- media playlist live para a rendition de audio
+  |
+  | GET /live/audio/<n>/segments/<sequence>.<ext>
+  |-- mapeia sequence % segmentosAudioClonados.length para arquivo local
 ```
 
 ## Contratos iniciais
@@ -125,6 +141,7 @@ StreamerService.serveLiveOrigin()
 - `StreamerCloneResult`
 - `StreamerClonedSegment`
 - `StreamerClonedVariant`
+- `StreamerClonedRendition`
 - `StreamerOriginSummary`
 - `StreamerRemoveResult`
 - `StreamerServeOptions`
@@ -136,18 +153,17 @@ StreamerService.serveLiveOrigin()
 
 - Live atual e um loop infinito de segmentos clonados; nao tenta reproduzir
   wallclock/PTS real da origem.
-- Reescrita de manifesto gera uma media playlist local simples em vez de preservar
-  todos os tags do manifesto original. Em `--all-variants`, gera tambem uma
-  master local simples com `EXT-X-STREAM-INF`.
-- Sem clonagem local de chaves DRM/AES, `EXT-X-MAP`, subtitles ou audio
-  renditions separadas nesta primeira entrega.
+- Reescrita de manifesto preserva apenas o basico necessario para playback local,
+  `EXT-X-MAP` simples e audio groups externos. Em `--all-variants`, gera tambem
+  uma master local simples com `EXT-X-STREAM-INF`/`EXT-X-MEDIA`.
+- Sem clonagem local de chaves DRM/AES (`EXT-X-KEY`), byte ranges, subtitles ou
+  I-frame playlists nesta primeira entrega.
 - Download ainda sequencial; retry de segmento e curto e sem backoff sofisticado.
 
 ## Proximos incrementos
 
-1. Preservar tags essenciais adicionais (`EXT-X-MAP`, `EXT-X-KEY`, byte ranges)
-   quando o manifesto exigir.
-2. Adicionar suporte a renditions separadas de audio/subtitle no clone/live.
+1. Adicionar suporte a `EXT-X-KEY`/DRM ou byte ranges quando houver demanda real.
+2. Adicionar suporte a subtitles no clone/live.
 3. Expor API quando houver fluxo de automacao/planner que precise controlar
    origins persistentes.
 4. Adicionar diagnostico pos-clone com `ffprobe` amostrado para validar segmentos.

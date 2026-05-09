@@ -11,6 +11,7 @@ type HlsVariant = {
   codecs?: string;
   audioGroupId?: string;
   subtitlesGroupId?: string;
+  closedCaptions?: string;
 };
 
 type HlsRendition = {
@@ -21,8 +22,16 @@ type HlsRendition = {
   default?: boolean;
   autoselect?: boolean;
   forced?: boolean;
+  channels?: string;
+  characteristics?: string;
   uri?: string;
   url?: string;
+};
+
+type HlsMap = {
+  uri: string;
+  url: string;
+  byteRange?: string;
 };
 
 type HlsSegment = {
@@ -30,6 +39,7 @@ type HlsSegment = {
   url: string;
   duration?: number;
   title?: string;
+  map?: HlsMap;
 };
 
 export type VideoHlsInspectResult = {
@@ -40,6 +50,7 @@ export type VideoHlsInspectResult = {
   variants: HlsVariant[];
   renditions: HlsRendition[];
   segments: HlsSegment[];
+  map?: HlsMap;
   targetDuration?: number;
   mediaSequence?: number;
   /** Valor declarado em #EXT-X-DISCONTINUITY-SEQUENCE (se presente). */
@@ -163,6 +174,7 @@ export class VideoInspectToolService {
     let targetDuration: number | undefined;
     let mediaSequence: number | undefined;
     let discontinuitySequence: number | undefined;
+    let currentMap: HlsMap | undefined;
     const discontinuityMarkers: number[] = [];
     let nextSegmentHasDiscontinuity = false;
     let pendingVariantAttrs: Record<string, string> | null = null;
@@ -188,6 +200,8 @@ export class VideoInspectToolService {
           default: attrs.DEFAULT?.toUpperCase() === "YES",
           autoselect: attrs.AUTOSELECT?.toUpperCase() === "YES",
           forced: attrs.FORCED?.toUpperCase() === "YES",
+          channels: attrs.CHANNELS,
+          characteristics: attrs.CHARACTERISTICS,
           uri,
           url: uri ? resolveUrl(fetched.finalUrl, uri) : undefined,
         });
@@ -212,6 +226,18 @@ export class VideoInspectToolService {
       if (line.startsWith("#EXT-X-MEDIA-SEQUENCE:")) {
         const num = Number.parseInt(line.slice("#EXT-X-MEDIA-SEQUENCE:".length), 10);
         mediaSequence = Number.isFinite(num) ? num : undefined;
+        continue;
+      }
+      if (line.startsWith("#EXT-X-MAP:")) {
+        playlistType = playlistType === "unknown" ? "media" : playlistType;
+        const attrs = parseAttrList(line.slice("#EXT-X-MAP:".length));
+        if (attrs.URI) {
+          currentMap = {
+            uri: attrs.URI,
+            url: resolveUrl(fetched.finalUrl, attrs.URI),
+            byteRange: attrs.BYTERANGE,
+          };
+        }
         continue;
       }
       if (line.startsWith("#EXT-X-DISCONTINUITY-SEQUENCE:")) {
@@ -240,6 +266,7 @@ export class VideoInspectToolService {
           codecs: pendingVariantAttrs.CODECS,
           audioGroupId: pendingVariantAttrs.AUDIO,
           subtitlesGroupId: pendingVariantAttrs.SUBTITLES,
+          closedCaptions: pendingVariantAttrs["CLOSED-CAPTIONS"],
         });
         pendingVariantAttrs = null;
         continue;
@@ -254,6 +281,7 @@ export class VideoInspectToolService {
           url: resolveUrl(fetched.finalUrl, line),
           duration: pendingSegment?.duration,
           title: pendingSegment?.title,
+          map: currentMap,
         });
       }
       nextSegmentHasDiscontinuity = false;
@@ -272,6 +300,7 @@ export class VideoInspectToolService {
       variants,
       renditions,
       segments,
+      map: segments.find((segment) => segment.map)?.map,
       targetDuration,
       mediaSequence,
       discontinuitySequence,

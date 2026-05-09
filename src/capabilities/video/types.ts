@@ -380,6 +380,14 @@ export type StreamerClonedSegment = {
   duration?: number;
   title?: string;
   bytes: number;
+  map?: StreamerClonedMap;
+};
+
+export type StreamerClonedMap = {
+  sourceUri: string;
+  sourceUrl: string;
+  localUri: string;
+  bytes: number;
 };
 
 export type StreamerClonedVariant = {
@@ -393,6 +401,7 @@ export type StreamerClonedVariant = {
   cumulativeDurationSeconds: number;
   reachedTargetDuration: boolean;
   bytes: number;
+  maps: StreamerClonedMap[];
   variant?: {
     uri: string;
     url: string;
@@ -403,7 +412,32 @@ export type StreamerClonedVariant = {
     codecs?: string;
     audioGroupId?: string;
     subtitlesGroupId?: string;
+    closedCaptions?: string;
   };
+  segments: StreamerClonedSegment[];
+};
+
+export type StreamerClonedRendition = {
+  type: string;
+  groupId?: string;
+  name?: string;
+  language?: string;
+  default?: boolean;
+  autoselect?: boolean;
+  forced?: boolean;
+  channels?: string;
+  characteristics?: string;
+  sourceUri: string;
+  sourceUrl: string;
+  finalUrl: string;
+  localUri: string;
+  manifestPath: string;
+  targetDuration: number;
+  segmentCount: number;
+  cumulativeDurationSeconds: number;
+  reachedTargetDuration: boolean;
+  bytes: number;
+  maps: StreamerClonedMap[];
   segments: StreamerClonedSegment[];
 };
 
@@ -423,6 +457,7 @@ export type StreamerCloneResult = {
   targetDuration: number;
   segmentCount: number;
   variantCount: number;
+  renditionCount: number;
   bytes: number;
   allVariants: boolean;
   selectedVariant?: {
@@ -435,9 +470,11 @@ export type StreamerCloneResult = {
     codecs?: string;
     audioGroupId?: string;
     subtitlesGroupId?: string;
+    closedCaptions?: string;
   };
   createdAt: string;
   variants: StreamerClonedVariant[];
+  renditions: StreamerClonedRendition[];
   segments: StreamerClonedSegment[];
 };
 
@@ -455,6 +492,7 @@ export type StreamerOriginSummary = {
   targetDuration: number;
   segmentCount: number;
   variantCount: number;
+  renditionCount: number;
   bytes: number;
   allVariants: boolean;
 };

@@ -37,6 +37,58 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-05-09 - Fase 23: Streamer audio renditions externas
+
+Resumo:
+- `inspectHls` passou a capturar atributos relevantes de audio em `EXT-X-MEDIA` (`CHANNELS`, `CHARACTERISTICS`) e `CLOSED-CAPTIONS` em variants.
+- `streamer clone` agora clona renditions `TYPE=AUDIO` referenciadas pelos variants selecionados via `AUDIO="<group>"`.
+- Master local preserva `EXT-X-MEDIA TYPE=AUDIO` e `AUDIO="<group>"`; subtitles/I-frame playlists continuam fora do escopo.
+- Live origin serve playlists e segmentos de audio em `/live/audio/<index>/...`.
+- Contrato de origin simplificado para o schema atual (`schemaVersion=2`); origins antigos devem ser removidos/recriados.
+
+Arquivos-chave:
+- `src/capabilities/video/inspect-service.ts`
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/types.ts`
+- `src/capabilities/video/inspect-service.test.ts`
+- `src/capabilities/video/streamer-service.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/inspect-service.test.ts src/capabilities/video/streamer-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- `TYPE=SUBTITLES` e `EXT-X-I-FRAME-STREAM-INF` ainda sao ignorados.
+- `EXT-X-KEY`/DRM e byte ranges permanecem fora desta fase.
+
+Proximo passo recomendado:
+- Testar com uma master real no formato Globo VOD com `AUDIO="audio-aacl-128"` e validar playback com audio em VOD/live.
+
+### 2026-05-09 - Fase 23: Streamer preserva EXT-X-MAP
+
+Resumo:
+- `inspectHls` passou a capturar `EXT-X-MAP` e associar o init segment aos segmentos da media playlist.
+- `streamer clone` baixa o init segment para `init/*`, reescreve `EXT-X-MAP` para caminho local e contabiliza esses bytes no origin.
+- `streamer live` tambem emite `EXT-X-MAP` e serve o init segment em `/live/<variant>/init/*`.
+
+Arquivos-chave:
+- `src/capabilities/video/inspect-service.ts`
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/types.ts`
+- `src/capabilities/video/inspect-service.test.ts`
+- `src/capabilities/video/streamer-service.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/inspect-service.test.ts src/capabilities/video/streamer-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- `EXT-X-MAP` com `BYTERANGE` ainda nao e suportado.
+- `EXT-X-KEY`/DRM permanece fora desta fase.
+
+Proximo passo recomendado:
+- Testar com um HLS CMAF/fMP4 real sem DRM e validar VOD/live no player.
+
 ### 2026-05-09 - CLI: launcher curto para desenvolvimento
 
 Resumo:
@@ -66,7 +118,7 @@ Proximo passo recomendado:
 Resumo:
 - Adicionados comandos `kael streamer list`, `kael streamer inspect <originId>` e `kael streamer remove <originId> --yes`.
 - `kael streamer live` sem `originId` agora usa o origin mais recente; `inspect latest` tambem resolve o mais recente.
-- `origin.json` passou a registrar `schemaVersion`, mantendo leitura compativel com clones legados.
+- `origin.json` passou a registrar `schemaVersion`; a fase atual assume o schema mais recente.
 - `StreamerService` ganhou metodos operacionais para listar, inspecionar e remover origins locais.
 
 Arquivos-chave:

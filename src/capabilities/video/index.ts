@@ -28,6 +28,8 @@ export type {
   StreamerCloneInput,
   StreamerCloneProgressEvent,
   StreamerCloneResult,
+  StreamerClonedMap,
+  StreamerClonedRendition,
   StreamerClonedSegment,
   StreamerClonedVariant,
   StreamerLiveServeHandle,
