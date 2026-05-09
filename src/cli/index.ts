@@ -6,6 +6,7 @@ import { startApiServer } from "../api/server.js";
 import { loadConfig } from "../config.js";
 import { initKaelHome, resolveKaelHome } from "../global-config.js";
 import { DiscordChatOnlyBot } from "../integrations/discord/discord-bot.js";
+import type { StreamerCloneProgressEvent } from "../capabilities/video/index.js";
 
 type UrlOption = {
   url?: string;
@@ -26,10 +27,22 @@ type StreamerCloneOptions = {
   allVariants?: boolean;
   allVariantes?: boolean;
   maxVariants?: string;
+  live?: boolean;
+  windowSize?: string;
+  initialMediaSequence?: string;
   timeoutMs?: string;
+  segmentTimeoutMs?: string;
+  segmentRetries?: string;
   maxSegments?: string;
   id?: string;
   serve?: boolean;
+  host?: string;
+  port?: string;
+};
+
+type StreamerLiveOptions = {
+  windowSize?: string;
+  initialMediaSequence?: string;
   host?: string;
   port?: string;
 };
@@ -80,6 +93,56 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
+}
+
+function createStreamerProgressLogger(): (event: StreamerCloneProgressEvent) => void {
+  return (event) => {
+    switch (event.type) {
+      case "start":
+        console.error(
+          `[streamer] criando origin ${event.originId} | duration=${event.durationSeconds}s | allVariants=${event.allVariants}`,
+        );
+        return;
+      case "manifest_fetch":
+        console.error(`[streamer] inspecionando manifest: ${event.url}`);
+        return;
+      case "manifest_ready":
+        console.error(
+          `[streamer] manifest ${event.playlistType} pronto | variants=${event.variantCount} | segments=${event.segmentCount}`,
+        );
+        return;
+      case "variant_inspect":
+        console.error(
+          `[streamer] inspecionando variant ${event.variantIndex + 1}/${event.variantCount}: ${event.label}`,
+        );
+        return;
+      case "variant_ready":
+        console.error(
+          `[streamer] variant ${event.variantIndex + 1}/${event.variantCount} pronta: ${event.label} | segments=${event.segmentCount} | target=${event.targetDuration}s`,
+        );
+        return;
+      case "segment_download_start":
+        console.error(
+          `[streamer] baixando segmento ${event.segmentIndex + 1}/${event.segmentCount} da variant ${event.variantIndex + 1}/${event.variantCount}${event.duration ? ` | ${event.duration.toFixed(3)}s` : ""}`,
+        );
+        return;
+      case "segment_download_retry":
+        console.error(
+          `[streamer] retry segmento ${event.segmentIndex + 1}/${event.segmentCount} da variant ${event.variantIndex + 1}/${event.variantCount} | tentativa ${event.attempt}/${event.maxAttempts} | ${event.error}`,
+        );
+        return;
+      case "segment_downloaded":
+        console.error(
+          `[streamer] ok segmento ${event.segmentIndex + 1}/${event.segmentCount} | ${formatBytes(event.bytes)} | total=${formatBytes(event.cumulativeBytes)} | duration=${event.cumulativeDurationSeconds.toFixed(3)}s`,
+        );
+        return;
+      case "complete":
+        console.error(
+          `[streamer] clone completo ${event.originId} | variants=${event.variantCount} | segments=${event.segmentCount} | bytes=${formatBytes(event.bytes)} | duration=${event.cumulativeDurationSeconds.toFixed(3)}s`,
+        );
+        return;
+    }
+  };
 }
 
 async function resolveUrl(explicit?: string): Promise<string> {
@@ -560,10 +623,15 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
   const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
   const durationSeconds = optionalNumber(options.duration, "--duration");
   const timeoutMs = optionalNumber(options.timeoutMs, "--timeout-ms");
+  const segmentTimeoutMs = optionalNumber(options.segmentTimeoutMs, "--segment-timeout-ms");
+  const segmentRetries = optionalNumber(options.segmentRetries, "--segment-retries");
   const maxSegments = optionalNumber(options.maxSegments, "--max-segments");
   const maxVariants = optionalNumber(options.maxVariants, "--max-variants");
+  const windowSize = optionalNumber(options.windowSize, "--window-size");
+  const initialMediaSequence = optionalNumber(options.initialMediaSequence, "--initial-media-sequence");
   const port = optionalNumber(options.port, "--port");
   const allVariants = Boolean(options.allVariants || options.allVariantes);
+  const logProgress = createStreamerProgressLogger();
 
   const result = await app.streamer.cloneHls({
     sessionKey: "cli.streamer.clone",
@@ -573,8 +641,11 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
     ...(allVariants ? { allVariants: true } : {}),
     ...(Number.isFinite(maxVariants) ? { maxVariants } : {}),
     ...(Number.isFinite(timeoutMs) ? { timeoutMs } : {}),
+    ...(Number.isFinite(segmentTimeoutMs) ? { segmentTimeoutMs } : {}),
+    ...(Number.isFinite(segmentRetries) ? { segmentRetries } : {}),
     ...(Number.isFinite(maxSegments) ? { maxSegments } : {}),
     ...(options.id?.trim() ? { originId: options.id.trim() } : {}),
+    onProgress: logProgress,
   });
 
   const variantText = result.allVariants
@@ -599,6 +670,22 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
   );
 
   if (!options.serve) {
+    if (!options.live) {
+      return;
+    }
+  }
+
+  if (options.live) {
+    const handle = await app.streamer.serveLiveOrigin(result.id, {
+      host: options.host?.trim() || "127.0.0.1",
+      ...(Number.isFinite(port) ? { port } : {}),
+      ...(Number.isFinite(windowSize) ? { windowSize } : {}),
+      ...(Number.isFinite(initialMediaSequence) ? { initialMediaSequence } : {}),
+    });
+
+    console.log(`${highlight("live origin serving")}: ${handle.playbackUrl}`);
+    console.log(`windowSize=${handle.windowSize} initialMediaSequence=${handle.initialMediaSequence}`);
+    await waitForStreamerStop(handle.close);
     return;
   }
 
@@ -608,10 +695,30 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
   });
 
   console.log(`${highlight("origin serving")}: ${handle.playbackUrl}`);
-  console.log("Pressione Ctrl+C para parar.");
+  await waitForStreamerStop(handle.close);
+}
 
+async function commandStreamerLive(originId: string, options: StreamerLiveOptions): Promise<void> {
+  const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
+  const port = optionalNumber(options.port, "--port");
+  const windowSize = optionalNumber(options.windowSize, "--window-size");
+  const initialMediaSequence = optionalNumber(options.initialMediaSequence, "--initial-media-sequence");
+  const handle = await app.streamer.serveLiveOrigin(originId, {
+    host: options.host?.trim() || "127.0.0.1",
+    ...(Number.isFinite(port) ? { port } : {}),
+    ...(Number.isFinite(windowSize) ? { windowSize } : {}),
+    ...(Number.isFinite(initialMediaSequence) ? { initialMediaSequence } : {}),
+  });
+
+  console.log(`${highlight("live origin serving")}: ${handle.playbackUrl}`);
+  console.log(`origin=${handle.originId} windowSize=${handle.windowSize} initialMediaSequence=${handle.initialMediaSequence}`);
+  await waitForStreamerStop(handle.close);
+}
+
+async function waitForStreamerStop(close: () => Promise<void>): Promise<void> {
+  console.log("Pressione Ctrl+C para parar.");
   const stop = async () => {
-    await handle.close().catch(() => undefined);
+    await close().catch(() => undefined);
     process.exit(0);
   };
   process.on("SIGINT", () => {
@@ -706,7 +813,12 @@ async function main(): Promise<void> {
     .option("--all-variants", "clona todas as variants da master playlist e gera uma master local", false)
     .option("--all-variantes", "alias de --all-variants", false)
     .option("--max-variants <n>", "limite opcional de variants quando --all-variants estiver ativo")
-    .option("--timeout-ms <ms>", "timeout de fetch para manifesto e segmentos")
+    .option("--live", "serve o clone como live sliding window apos clonar (implica --serve)", false)
+    .option("--window-size <n>", "quantidade de segmentos na janela live quando --live estiver ativo")
+    .option("--initial-media-sequence <n>", "media sequence inicial virtual quando --live estiver ativo")
+    .option("--timeout-ms <ms>", "timeout de fetch para manifestos/playlists")
+    .option("--segment-timeout-ms <ms>", "timeout de download por segmento (padrao: 60000)")
+    .option("--segment-retries <n>", "retries por segmento apos a primeira tentativa (padrao: 2)")
     .option("--max-segments <n>", "limite de segmentos lidos da media playlist")
     .option("--id <id>", "id seguro para o origin local")
     .option("--serve", "inicia servidor HTTP local com CORS apos clonar", false)
@@ -714,6 +826,18 @@ async function main(): Promise<void> {
     .option("--port <port>", "porta do servidor quando --serve estiver ativo (0 = aleatoria)", "0")
     .action(async (url: string, options: StreamerCloneOptions) => {
       await commandStreamerClone(url, options);
+    });
+
+  streamer
+    .command("live")
+    .description("Serve um origin clonado como live HLS com sliding window virtual")
+    .argument("<originId>", "id do origin criado por streamer clone")
+    .option("--window-size <n>", "quantidade de segmentos na janela live", "5")
+    .option("--initial-media-sequence <n>", "media sequence inicial virtual", "100000")
+    .option("--host <host>", "host do servidor live", "127.0.0.1")
+    .option("--port <port>", "porta do servidor live (0 = aleatoria)", "0")
+    .action(async (originId: string, options: StreamerLiveOptions) => {
+      await commandStreamerLive(originId, options);
     });
 
   program

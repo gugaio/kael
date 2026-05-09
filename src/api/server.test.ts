@@ -785,6 +785,9 @@ function makeFakeApp(): KaelApp {
       serveOrigin: async () => {
         throw new Error("streamer serve not implemented in fake app");
       },
+      serveLiveOrigin: async () => {
+        throw new Error("streamer live not implemented in fake app");
+      },
     },
   };
 }

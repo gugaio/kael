@@ -36,6 +36,7 @@ describe("StreamerService", () => {
   it("seleciona a variant de maior bandwidth e baixa segmentos ate cumulative >= alvo", async () => {
     const root = await makeTempRoot();
     const fetchedUrls: string[] = [];
+    const progressTypes: string[] = [];
     const service = new StreamerService(
       {
         inspectHls: async ({ url }) => {
@@ -87,6 +88,9 @@ describe("StreamerService", () => {
       url: "https://example.com/master.m3u8",
       durationSeconds: 10,
       originId: "fixture-origin",
+      onProgress: (event) => {
+        progressTypes.push(event.type);
+      },
     });
 
     expect(result.id).toBe("fixture-origin");
@@ -102,6 +106,11 @@ describe("StreamerService", () => {
       "https://cdn.example.com/seg-11.ts",
       "https://cdn.example.com/seg-12.ts",
     ]);
+    expect(progressTypes).toContain("start");
+    expect(progressTypes).toContain("manifest_fetch");
+    expect(progressTypes).toContain("variant_ready");
+    expect(progressTypes.filter((type) => type === "segment_downloaded")).toHaveLength(3);
+    expect(progressTypes.at(-1)).toBe("complete");
 
     const manifest = await fs.readFile(result.manifestPath, "utf-8");
     expect(manifest).toContain("#EXT-X-MEDIA-SEQUENCE:10");
@@ -201,6 +210,52 @@ describe("StreamerService", () => {
     ).resolves.toBeTruthy();
   });
 
+  it("faz retry de download de segmento antes de falhar o clone", async () => {
+    const root = await makeTempRoot();
+    let attempts = 0;
+    const progressTypes: string[] = [];
+    const service = new StreamerService(
+      {
+        inspectHls: async ({ url }) =>
+          makeInspectResult({
+            url,
+            finalUrl: url,
+            playlistType: "media",
+            targetDuration: 4,
+            segments: [
+              { uri: "seg.ts", url: "https://cdn.example.com/seg.ts", duration: 4 },
+            ],
+          }),
+      },
+      root,
+      async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error("This operation was aborted");
+        }
+        return new Response(new Uint8Array([1, 2, 3]));
+      },
+    );
+    await service.init();
+
+    const result = await service.cloneHls({
+      sessionKey: "test",
+      url: "https://example.com/media.m3u8",
+      durationSeconds: 4,
+      originId: "retry-origin",
+      segmentRetries: 1,
+      segmentTimeoutMs: 1000,
+      onProgress: (event) => {
+        progressTypes.push(event.type);
+      },
+    });
+
+    expect(attempts).toBe(2);
+    expect(result.segmentCount).toBe(1);
+    expect(progressTypes).toContain("segment_download_retry");
+    expect(progressTypes).toContain("segment_downloaded");
+  });
+
   it("serve o origin local com CORS", async () => {
     const root = await makeTempRoot();
     const service = new StreamerService(
@@ -233,6 +288,155 @@ describe("StreamerService", () => {
       const body = await response.text();
       expect(response.headers.get("access-control-allow-origin")).toBe("*");
       expect(body).toContain("segments/00000-seg.ts");
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it("serve um clone all-variants como live sliding window", async () => {
+    const root = await makeTempRoot();
+    const service = new StreamerService(
+      {
+        inspectHls: async ({ url }) => {
+          if (url === "https://example.com/master.m3u8") {
+            return makeInspectResult({
+              variants: [
+                {
+                  uri: "low.m3u8",
+                  url: "https://example.com/low.m3u8",
+                  bandwidth: 600_000,
+                  resolution: "640x360",
+                },
+                {
+                  uri: "high.m3u8",
+                  url: "https://example.com/high.m3u8",
+                  bandwidth: 1_800_000,
+                  resolution: "1280x720",
+                },
+              ],
+            });
+          }
+
+          const lane = url.includes("high") ? "high" : "low";
+          return makeInspectResult({
+            url,
+            finalUrl: url,
+            playlistType: "media",
+            targetDuration: 4,
+            segments: [
+              { uri: "seg-0.ts", url: `https://cdn.example.com/${lane}/seg-0.ts`, duration: 4 },
+              { uri: "seg-1.ts", url: `https://cdn.example.com/${lane}/seg-1.ts`, duration: 4 },
+              { uri: "seg-2.ts", url: `https://cdn.example.com/${lane}/seg-2.ts`, duration: 4 },
+            ],
+          });
+        },
+      },
+      root,
+      async (input) => new Response(new TextEncoder().encode(String(input))),
+    );
+    await service.init();
+    const result = await service.cloneHls({
+      sessionKey: "test",
+      url: "https://example.com/master.m3u8",
+      durationSeconds: 10,
+      originId: "live-origin",
+      allVariants: true,
+    });
+    const handle = await service.serveLiveOrigin(result.id, {
+      windowSize: 3,
+      initialMediaSequence: 50,
+    });
+
+    try {
+      const master = await fetch(handle.playbackUrl).then((response) => response.text());
+      expect(master).toContain("/live/0/index.m3u8");
+      expect(master).toContain("/live/1/index.m3u8");
+
+      const mediaResponse = await fetch(`${handle.baseUrl}/live/0/index.m3u8`);
+      const media = await mediaResponse.text();
+      expect(mediaResponse.headers.get("access-control-allow-origin")).toBe("*");
+      expect(media).toContain("#EXT-X-MEDIA-SEQUENCE:50");
+      expect(media).not.toContain("#EXT-X-ENDLIST");
+      expect(media.match(/#EXTINF:/g)).toHaveLength(3);
+
+      const segmentPath = media
+        .split("\n")
+        .find((line) => line.startsWith("/live/0/segments/"));
+      expect(segmentPath).toBeDefined();
+      const segmentResponse = await fetch(`${handle.baseUrl}${segmentPath}`);
+      const segmentBody = await segmentResponse.text();
+      expect(segmentResponse.headers.get("content-type")).toContain("video/mp2t");
+      expect(segmentBody).toContain("https://cdn.example.com/low/");
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it("serve clone legado sem variants como live", async () => {
+    const root = await makeTempRoot();
+    const originDir = path.join(root, "legacy-origin");
+    await fs.mkdir(path.join(originDir, "segments"), { recursive: true });
+    await fs.writeFile(path.join(originDir, "segments", "00000-a.ts"), new Uint8Array([1, 2, 3]));
+    await fs.writeFile(path.join(originDir, "index.m3u8"), "#EXTM3U\n#EXT-X-ENDLIST\n", "utf-8");
+    await fs.writeFile(
+      path.join(originDir, "origin.json"),
+      `${JSON.stringify({
+        id: "legacy-origin",
+        sessionKey: "test",
+        sourceUrl: "https://example.com/master.m3u8",
+        selectedUrl: "https://example.com/media.m3u8",
+        finalUrl: "https://example.com/media.m3u8",
+        rootDir: originDir,
+        manifestPath: path.join(originDir, "index.m3u8"),
+        playbackPath: "/index.m3u8",
+        requestedDurationSeconds: 4,
+        cumulativeDurationSeconds: 4,
+        reachedTargetDuration: true,
+        targetDuration: 4,
+        segmentCount: 1,
+        bytes: 3,
+        selectedVariant: {
+          uri: "media.m3u8",
+          url: "https://example.com/media.m3u8",
+          bandwidth: 1000,
+        },
+        createdAt: new Date().toISOString(),
+        segments: [
+          {
+            originalIndex: 0,
+            sourceUri: "a.ts",
+            sourceUrl: "https://example.com/a.ts",
+            localUri: "segments/00000-a.ts",
+            duration: 4,
+            bytes: 3,
+          },
+        ],
+      })}\n`,
+      "utf-8",
+    );
+
+    const service = new StreamerService(
+      {
+        inspectHls: async () => makeInspectResult(),
+      },
+      root,
+      async () => new Response(new Uint8Array()),
+    );
+    await service.init();
+    const handle = await service.serveLiveOrigin("legacy-origin", {
+      windowSize: 1,
+      initialMediaSequence: 7,
+    });
+
+    try {
+      const media = await fetch(handle.playbackUrl).then((response) => response.text());
+      expect(media).toContain("#EXT-X-MEDIA-SEQUENCE:7");
+      const segmentPath = media
+        .split("\n")
+        .find((line) => line.startsWith("/live/0/segments/"));
+      expect(segmentPath).toBeDefined();
+      const segment = await fetch(`${handle.baseUrl}${segmentPath}`).then((response) => response.arrayBuffer());
+      expect(new Uint8Array(segment)).toEqual(new Uint8Array([1, 2, 3]));
     } finally {
       await handle.close();
     }

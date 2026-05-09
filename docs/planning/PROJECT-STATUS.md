@@ -37,6 +37,34 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-05-08 - Fase 23: Streamer live origin
+
+Resumo:
+- Adicionado `kael streamer live <originId>` para servir um clone existente como live HLS com sliding window virtual.
+- Adicionado `kael streamer clone <url> --live` como atalho para clonar e subir um live origin no mesmo processo.
+- O live server gera playlists on-demand, incrementa `EXT-X-MEDIA-SEQUENCE`, omite `EXT-X-ENDLIST` e mapeia segmentos virtuais por modulo para chunks clonados.
+- CLI de clone agora emite progresso incremental durante inspect/download para evitar aparencia de travamento em assets grandes.
+- Live origin ganhou compatibilidade com clones legados que ainda nao possuem `variants` no `origin.json`.
+- Download de segmentos agora usa timeout proprio maior (`--segment-timeout-ms`, default 60000) e retries (`--segment-retries`, default 2) para reduzir aborts em chunks grandes.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-service.ts`
+- `src/cli/index.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/streamer-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+- [x] `npx tsx src/cli/index.ts streamer live --help`
+- [x] `npx tsx src/cli/index.ts streamer clone --help`
+
+Pendencias:
+- Live atual e loop de segmentos clonados; ainda nao trata renditions separadas de audio/legenda.
+- Ainda nao ha API para controlar origins live persistentes.
+
+Proximo passo recomendado:
+- Testar `kael streamer clone <url> --duration 60 --all-variants --live` em player real e validar ABR/liveness.
+
 ### 2026-05-08 - Fase 23: Streamer clone HLS local
 
 Resumo:

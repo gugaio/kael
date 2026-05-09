@@ -45,6 +45,8 @@ import type {
   HlsManifestDiffReport,
   StreamerCloneInput,
   StreamerCloneResult,
+  StreamerLiveServeHandle,
+  StreamerLiveServeOptions,
   StreamerServeHandle,
   StreamerServeOptions,
 } from "./capabilities/video/index.js";
@@ -78,6 +80,7 @@ export type KaelApp = {
   streamer: {
     cloneHls(input: StreamerCloneInput): Promise<StreamerCloneResult>;
     serveOrigin(originId: string, options?: StreamerServeOptions): Promise<StreamerServeHandle>;
+    serveLiveOrigin(originId: string, options?: StreamerLiveServeOptions): Promise<StreamerLiveServeHandle>;
   };
   emailIngest?: {
     getRuntimeTelemetrySnapshot(): EmailIngestRuntimeTelemetry;

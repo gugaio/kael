@@ -15,7 +15,8 @@ O foco inicial e operacional:
 - clone opcional da ladder completa com `--all-variants`;
 - download sequencial de segmentos ate `cumulativeDuration >= duration`;
 - rewrite de media playlist local ou master local apontando para variants clonadas;
-- origin HTTP local com CORS para players web, Smart TVs, STBs e ferramentas de QA.
+- origin HTTP local com CORS para players web, Smart TVs, STBs e ferramentas de QA;
+- simulacao live com sliding window virtual sobre os segmentos clonados.
 
 ## Decisao arquitetural
 
@@ -31,6 +32,14 @@ O foco inicial e operacional:
 - `--all-variants` clona todas as variants da master playlist e gera uma
   master local em `index.m3u8`; `--max-variants` permite limitar o peso quando
   a ladder for grande.
+- `kael streamer live <originId>` serve um clone existente como live. O live e
+  calculado on-demand pela hora atual, sem worker de background: `MEDIA-SEQUENCE`
+  avanca virtualmente e cada segmento virtual mapeia por modulo para um chunk
+  ja clonado.
+- A CLI de clone emite progresso incremental no terminal durante inspecao e
+  download de segmentos. Downloads de segmento usam timeout proprio, maior que o
+  timeout de manifesto, com retry curto para reduzir falhas transientes em chunks
+  grandes.
 - O "corta-corrente" usa segmentos inteiros: ele para quando a soma das duracoes
   clonadas atinge ou ultrapassa a duracao alvo. Corte frame-exato fica para uma
   etapa futura com FFmpeg.
@@ -71,6 +80,28 @@ StreamerService.serveOrigin()
 playbackUrl: http://127.0.0.1:<port>/index.m3u8
 ```
 
+## Fluxo live
+
+```text
+CLI
+  |
+  | kael streamer live <originId> --window-size 5
+  v
+StreamerService.serveLiveOrigin()
+  |
+  | GET /index.m3u8
+  |-- single variant: media playlist live
+  |-- multi variant: master apontando para /live/<variant>/index.m3u8
+  |
+  | GET /live/<variant>/index.m3u8
+  |-- calcula janela por tempo atual
+  |-- incrementa EXT-X-MEDIA-SEQUENCE
+  |-- omite EXT-X-ENDLIST
+  |
+  | GET /live/<variant>/segments/<sequence>.ts
+  |-- mapeia sequence % segmentosClonados.length para arquivo local
+```
+
 ## Contratos iniciais
 
 - `StreamerCloneInput`
@@ -79,10 +110,13 @@ playbackUrl: http://127.0.0.1:<port>/index.m3u8
 - `StreamerClonedVariant`
 - `StreamerServeOptions`
 - `StreamerServeHandle`
+- `StreamerLiveServeOptions`
+- `StreamerLiveServeHandle`
 
 ## Limitacoes assumidas na POC
 
-- HLS VOD/media playlist simples; live loop fica para incremento posterior.
+- Live atual e um loop infinito de segmentos clonados; nao tenta reproduzir
+  wallclock/PTS real da origem.
 - Reescrita de manifesto gera uma media playlist local simples em vez de preservar
   todos os tags do manifesto original. Em `--all-variants`, gera tambem uma
   master local simples com `EXT-X-STREAM-INF`.
@@ -94,7 +128,7 @@ playbackUrl: http://127.0.0.1:<port>/index.m3u8
 
 1. Preservar tags essenciais adicionais (`EXT-X-MAP`, `EXT-X-KEY`, byte ranges)
    quando o manifesto exigir.
-2. Adicionar modo live/sliding window com incremento de `MEDIA-SEQUENCE`.
+2. Adicionar suporte a renditions separadas de audio/subtitle no clone/live.
 3. Expor API quando houver fluxo de automacao/planner que precise controlar
    origins persistentes.
 4. Adicionar diagnostico pos-clone com `ffprobe` amostrado para validar segmentos.

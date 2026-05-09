@@ -290,9 +290,87 @@ export type StreamerCloneInput = {
   /** Limite opcional de variants quando `allVariants` estiver ativo. */
   maxVariants?: number;
   timeoutMs?: number;
+  /** Timeout por segmento em ms. Padrao maior que o timeout de manifesto porque chunks 4K podem ser pesados. */
+  segmentTimeoutMs?: number;
+  /** Quantidade de retries por segmento apos a primeira tentativa. */
+  segmentRetries?: number;
   maxSegments?: number;
   originId?: string;
+  onProgress?: (event: StreamerCloneProgressEvent) => void;
 };
+
+export type StreamerCloneProgressEvent =
+  | {
+      type: "start";
+      originId: string;
+      url: string;
+      durationSeconds: number;
+      allVariants: boolean;
+    }
+  | {
+      type: "manifest_fetch";
+      url: string;
+    }
+  | {
+      type: "manifest_ready";
+      url: string;
+      playlistType: "master" | "media" | "unknown";
+      variantCount: number;
+      segmentCount: number;
+    }
+  | {
+      type: "variant_inspect";
+      variantIndex: number;
+      variantCount: number;
+      label: string;
+      url: string;
+    }
+  | {
+      type: "variant_ready";
+      variantIndex: number;
+      variantCount: number;
+      label: string;
+      segmentCount: number;
+      targetDuration: number;
+    }
+  | {
+      type: "segment_download_start";
+      variantIndex: number;
+      variantCount: number;
+      segmentIndex: number;
+      segmentCount: number;
+      url: string;
+      duration?: number;
+    }
+  | {
+      type: "segment_download_retry";
+      variantIndex: number;
+      variantCount: number;
+      segmentIndex: number;
+      segmentCount: number;
+      attempt: number;
+      maxAttempts: number;
+      error: string;
+    }
+  | {
+      type: "segment_downloaded";
+      variantIndex: number;
+      variantCount: number;
+      segmentIndex: number;
+      segmentCount: number;
+      localUri: string;
+      bytes: number;
+      cumulativeBytes: number;
+      cumulativeDurationSeconds: number;
+    }
+  | {
+      type: "complete";
+      originId: string;
+      segmentCount: number;
+      variantCount: number;
+      bytes: number;
+      cumulativeDurationSeconds: number;
+    };
 
 export type StreamerClonedSegment = {
   originalIndex: number;
@@ -373,4 +451,16 @@ export type StreamerServeHandle = {
   baseUrl: string;
   playbackUrl: string;
   close(): Promise<void>;
+};
+
+export type StreamerLiveServeOptions = StreamerServeOptions & {
+  /** Quantidade de segmentos expostos na janela live. Padrao: 5. */
+  windowSize?: number;
+  /** Sequencia inicial virtual para evitar edge cases com players que tratam zero de forma especial. */
+  initialMediaSequence?: number;
+};
+
+export type StreamerLiveServeHandle = StreamerServeHandle & {
+  windowSize: number;
+  initialMediaSequence: number;
 };
