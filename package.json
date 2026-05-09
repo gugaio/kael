@@ -8,13 +8,15 @@
     ".": "./dist/cli/index.js"
   },
   "bin": {
-    "kael": "./dist/cli/index.js"
+    "kael": "./bin/kael"
   },
   "files": [
+    "bin",
     "dist"
   ],
   "description": "Kael - super agente de video e automacao",
   "scripts": {
+    "kael": "tsx src/cli/index.ts",
     "dev": "tsx src/cli/index.ts server",
     "ui:install": "npm --prefix ui install",
     "ui:dev": "npm --prefix ui run dev",

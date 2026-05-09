@@ -32,6 +32,8 @@ export type {
   StreamerClonedVariant,
   StreamerLiveServeHandle,
   StreamerLiveServeOptions,
+  StreamerOriginSummary,
+  StreamerRemoveResult,
   StreamerServeHandle,
   StreamerServeOptions,
   StreamSnapshot,

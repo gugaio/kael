@@ -409,6 +409,7 @@ export type StreamerClonedVariant = {
 
 export type StreamerCloneResult = {
   id: string;
+  schemaVersion: number;
   sessionKey: string;
   sourceUrl: string;
   selectedUrl: string;
@@ -438,6 +439,30 @@ export type StreamerCloneResult = {
   createdAt: string;
   variants: StreamerClonedVariant[];
   segments: StreamerClonedSegment[];
+};
+
+export type StreamerOriginSummary = {
+  id: string;
+  schemaVersion: number;
+  createdAt: string;
+  sourceUrl: string;
+  selectedUrl: string;
+  rootDir: string;
+  playbackPath: string;
+  requestedDurationSeconds: number;
+  cumulativeDurationSeconds: number;
+  reachedTargetDuration: boolean;
+  targetDuration: number;
+  segmentCount: number;
+  variantCount: number;
+  bytes: number;
+  allVariants: boolean;
+};
+
+export type StreamerRemoveResult = {
+  id: string;
+  rootDir: string;
+  removed: boolean;
 };
 
 export type StreamerServeOptions = {

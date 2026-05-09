@@ -94,6 +94,7 @@ describe("StreamerService", () => {
     });
 
     expect(result.id).toBe("fixture-origin");
+    expect(result.schemaVersion).toBe(1);
     expect(result.allVariants).toBe(false);
     expect(result.variantCount).toBe(1);
     expect(result.selectedUrl).toBe("https://example.com/high.m3u8");
@@ -254,6 +255,61 @@ describe("StreamerService", () => {
     expect(result.segmentCount).toBe(1);
     expect(progressTypes).toContain("segment_download_retry");
     expect(progressTypes).toContain("segment_downloaded");
+  });
+
+  it("lista, inspeciona e remove origins clonados", async () => {
+    const root = await makeTempRoot();
+    const service = new StreamerService(
+      {
+        inspectHls: async ({ url }) =>
+          makeInspectResult({
+            url,
+            finalUrl: url,
+            playlistType: "media",
+            targetDuration: 4,
+            segments: [
+              { uri: "seg-0.ts", url: "https://cdn.example.com/seg-0.ts", duration: 4 },
+              { uri: "seg-1.ts", url: "https://cdn.example.com/seg-1.ts", duration: 4 },
+            ],
+          }),
+      },
+      root,
+      async () => new Response(new Uint8Array([1, 2])),
+    );
+    await service.init();
+
+    const result = await service.cloneHls({
+      sessionKey: "test",
+      url: "https://example.com/media.m3u8",
+      durationSeconds: 8,
+      originId: "managed-origin",
+    });
+
+    const origins = await service.listOrigins();
+    expect(origins).toHaveLength(1);
+    expect(origins[0]).toMatchObject({
+      id: "managed-origin",
+      schemaVersion: 1,
+      segmentCount: 2,
+      variantCount: 1,
+      bytes: 4,
+      allVariants: false,
+    });
+
+    const inspected = await service.inspectOrigin("managed-origin");
+    expect(inspected.id).toBe("managed-origin");
+    expect(inspected.rootDir).toBe(result.rootDir);
+    expect(inspected.variants).toHaveLength(1);
+    expect(inspected.variants[0].segments).toHaveLength(2);
+
+    const removed = await service.removeOrigin("managed-origin");
+    expect(removed).toEqual({
+      id: "managed-origin",
+      rootDir: result.rootDir,
+      removed: true,
+    });
+    await expect(fs.stat(result.rootDir)).rejects.toThrow();
+    await expect(service.listOrigins()).resolves.toEqual([]);
   });
 
   it("serve o origin local com CORS", async () => {

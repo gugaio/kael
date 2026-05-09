@@ -6,7 +6,12 @@ import { startApiServer } from "../api/server.js";
 import { loadConfig } from "../config.js";
 import { initKaelHome, resolveKaelHome } from "../global-config.js";
 import { DiscordChatOnlyBot } from "../integrations/discord/discord-bot.js";
-import type { StreamerCloneProgressEvent } from "../capabilities/video/index.js";
+import type {
+  StreamerCloneProgressEvent,
+  StreamerCloneResult,
+  StreamerClonedVariant,
+  StreamerOriginSummary,
+} from "../capabilities/video/index.js";
 
 type UrlOption = {
   url?: string;
@@ -45,6 +50,10 @@ type StreamerLiveOptions = {
   initialMediaSequence?: string;
   host?: string;
   port?: string;
+};
+
+type StreamerRemoveOptions = {
+  yes?: boolean;
 };
 
 type ApiErrorShape = {
@@ -93,6 +102,10 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
+}
+
+function formatSeconds(seconds: number): string {
+  return `${seconds.toFixed(3)}s`;
 }
 
 function createStreamerProgressLogger(): (event: StreamerCloneProgressEvent) => void {
@@ -619,6 +632,106 @@ async function commandManifestDiff(
   console.log(lines.join("\n"));
 }
 
+function formatStreamerOriginSummary(origin: StreamerOriginSummary): string {
+  return [
+    origin.id,
+    `created=${origin.createdAt}`,
+    `schema=${origin.schemaVersion}`,
+    `variants=${origin.variantCount}`,
+    `segments=${origin.segmentCount}`,
+    `duration=${formatSeconds(origin.cumulativeDurationSeconds)}/${origin.requestedDurationSeconds}s`,
+    `bytes=${formatBytes(origin.bytes)}`,
+    `allVariants=${origin.allVariants}`,
+    `source=${origin.sourceUrl}`,
+  ].join(" | ");
+}
+
+function formatClonedVariantLabel(variant: StreamerClonedVariant): string {
+  const parts = [
+    variant.variant?.resolution,
+    typeof variant.variant?.bandwidth === "number" ? `${variant.variant.bandwidth}bps` : undefined,
+    variant.variant?.codecs,
+  ].filter((value): value is string => Boolean(value));
+
+  return parts.length > 0 ? parts.join(" | ") : variant.sourceUri;
+}
+
+async function commandStreamerList(): Promise<void> {
+  const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
+  const origins = await app.streamer.listOrigins();
+
+  if (origins.length === 0) {
+    console.log("Nenhum origin streamer encontrado.");
+    return;
+  }
+
+  for (const origin of origins) {
+    console.log(formatStreamerOriginSummary(origin));
+  }
+}
+
+async function resolveStreamerOriginId(
+  streamer: { listOrigins(): Promise<StreamerOriginSummary[]> },
+  requestedOriginId: string | undefined,
+): Promise<string> {
+  const requested = requestedOriginId?.trim() || "latest";
+  if (requested !== "latest") {
+    return requested;
+  }
+
+  const origins = await streamer.listOrigins();
+  const latest = origins[0];
+  if (!latest) {
+    throw new Error("nenhum origin streamer encontrado para usar como latest");
+  }
+  return latest.id;
+}
+
+async function commandStreamerInspect(originId: string): Promise<void> {
+  const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
+  const resolvedOriginId = await resolveStreamerOriginId(app.streamer, originId);
+  const origin: StreamerCloneResult = await app.streamer.inspectOrigin(resolvedOriginId);
+  const selectedVariant = origin.selectedVariant
+    ? `${origin.selectedVariant.resolution ?? "unknown"} @ ${origin.selectedVariant.bandwidth ?? "n/a"}bps`
+    : "media playlist direta ou ladder completa";
+  const lines = [
+    `${highlight("streamer origin")}: ${origin.id}`,
+    `schemaVersion=${origin.schemaVersion}`,
+    `created=${origin.createdAt}`,
+    `source=${origin.sourceUrl}`,
+    `selected=${origin.selectedUrl}`,
+    `final=${origin.finalUrl}`,
+    `variant=${selectedVariant}`,
+    `allVariants=${origin.allVariants}`,
+    `variants=${origin.variantCount}`,
+    `segments=${origin.segmentCount}`,
+    `duration=${formatSeconds(origin.cumulativeDurationSeconds)} requested=${origin.requestedDurationSeconds}s reached=${origin.reachedTargetDuration}`,
+    `targetDuration=${origin.targetDuration}s`,
+    `bytes=${formatBytes(origin.bytes)}`,
+    `manifest=${origin.manifestPath}`,
+    `root=${origin.rootDir}`,
+    `playbackPath=${origin.playbackPath}`,
+    "variantsDetail:",
+    ...origin.variants.map(
+      (variant, index) =>
+        `- [${index}] ${formatClonedVariantLabel(variant)} | local=${variant.localUri} | segments=${variant.segmentCount} | duration=${formatSeconds(variant.cumulativeDurationSeconds)} | bytes=${formatBytes(variant.bytes)}`,
+    ),
+  ];
+
+  console.log(lines.join("\n"));
+}
+
+async function commandStreamerRemove(originId: string, options: StreamerRemoveOptions): Promise<void> {
+  if (!options.yes) {
+    throw new Error("use --yes para confirmar a remocao do origin streamer");
+  }
+
+  const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
+  const result = await app.streamer.removeOrigin(originId);
+  console.log(`${highlight("streamer origin removed")}: ${result.id}`);
+  console.log(`root=${result.rootDir}`);
+}
+
 async function commandStreamerClone(url: string, options: StreamerCloneOptions): Promise<void> {
   const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
   const durationSeconds = optionalNumber(options.duration, "--duration");
@@ -698,12 +811,13 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
   await waitForStreamerStop(handle.close);
 }
 
-async function commandStreamerLive(originId: string, options: StreamerLiveOptions): Promise<void> {
+async function commandStreamerLive(originId: string | undefined, options: StreamerLiveOptions): Promise<void> {
   const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
+  const resolvedOriginId = await resolveStreamerOriginId(app.streamer, originId);
   const port = optionalNumber(options.port, "--port");
   const windowSize = optionalNumber(options.windowSize, "--window-size");
   const initialMediaSequence = optionalNumber(options.initialMediaSequence, "--initial-media-sequence");
-  const handle = await app.streamer.serveLiveOrigin(originId, {
+  const handle = await app.streamer.serveLiveOrigin(resolvedOriginId, {
     host: options.host?.trim() || "127.0.0.1",
     ...(Number.isFinite(port) ? { port } : {}),
     ...(Number.isFinite(windowSize) ? { windowSize } : {}),
@@ -805,6 +919,30 @@ async function main(): Promise<void> {
     .description("Ferramentas locais de clone e origem de streams HLS");
 
   streamer
+    .command("list")
+    .description("Lista origins HLS clonados localmente")
+    .action(async () => {
+      await commandStreamerList();
+    });
+
+  streamer
+    .command("inspect")
+    .description("Mostra metadados de um origin HLS clonado")
+    .argument("<originId>", "id do origin criado por streamer clone ou latest")
+    .action(async (originId: string) => {
+      await commandStreamerInspect(originId);
+    });
+
+  streamer
+    .command("remove")
+    .description("Remove um origin HLS clonado do storage local")
+    .argument("<originId>", "id do origin criado por streamer clone")
+    .option("--yes", "confirma a remocao do diretorio do origin", false)
+    .action(async (originId: string, options: StreamerRemoveOptions) => {
+      await commandStreamerRemove(originId, options);
+    });
+
+  streamer
     .command("clone")
     .description("Clona uma janela VOD HLS localmente e opcionalmente serve como origem HTTP")
     .argument("<url>", "URL do manifesto HLS (.m3u8)")
@@ -831,12 +969,12 @@ async function main(): Promise<void> {
   streamer
     .command("live")
     .description("Serve um origin clonado como live HLS com sliding window virtual")
-    .argument("<originId>", "id do origin criado por streamer clone")
+    .argument("[originId]", "id do origin criado por streamer clone ou latest", "latest")
     .option("--window-size <n>", "quantidade de segmentos na janela live", "5")
     .option("--initial-media-sequence <n>", "media sequence inicial virtual", "100000")
     .option("--host <host>", "host do servidor live", "127.0.0.1")
     .option("--port <port>", "porta do servidor live (0 = aleatoria)", "0")
-    .action(async (originId: string, options: StreamerLiveOptions) => {
+    .action(async (originId: string | undefined, options: StreamerLiveOptions) => {
       await commandStreamerLive(originId, options);
     });
 

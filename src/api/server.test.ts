@@ -779,6 +779,13 @@ function makeFakeApp(): KaelApp {
       stopAll: () => {},
     },
     streamer: {
+      listOrigins: async () => [],
+      inspectOrigin: async () => {
+        throw new Error("streamer inspect not implemented in fake app");
+      },
+      removeOrigin: async () => {
+        throw new Error("streamer remove not implemented in fake app");
+      },
       cloneHls: async () => {
         throw new Error("streamer clone not implemented in fake app");
       },

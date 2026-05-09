@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-05-08**
+Ultima atualizacao: **2026-05-09**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,57 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-05-09 - CLI: launcher curto para desenvolvimento
+
+Resumo:
+- Adicionado wrapper `./bin/kael` para rodar a CLI TypeScript via `tsx` sem digitar `npx tsx src/cli/index.ts`.
+- `package.json` agora registra o bin local em `bin/kael` e o script `npm run kael -- ...`.
+- README e comandos rapidos passaram a usar `./bin/kael`.
+
+Arquivos-chave:
+- `bin/kael`
+- `package.json`
+- `README.md`
+- `docs/core/START-HERE.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `./bin/kael streamer --help`
+- [x] `npm run kael -- streamer --help`
+
+Pendencias:
+- Para usar apenas `kael` no terminal, ainda e necessario rodar `npm link` uma vez na raiz do repo.
+
+Proximo passo recomendado:
+- Usar `./bin/kael streamer ...` no fluxo diario e, se ficar estavel, promover o build/bin de distribuicao depois.
+
+### 2026-05-09 - Fase 23: Streamer gestao de origins
+
+Resumo:
+- Adicionados comandos `kael streamer list`, `kael streamer inspect <originId>` e `kael streamer remove <originId> --yes`.
+- `kael streamer live` sem `originId` agora usa o origin mais recente; `inspect latest` tambem resolve o mais recente.
+- `origin.json` passou a registrar `schemaVersion`, mantendo leitura compativel com clones legados.
+- `StreamerService` ganhou metodos operacionais para listar, inspecionar e remover origins locais.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/types.ts`
+- `src/cli/index.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/streamer-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+- [x] `npx tsx src/cli/index.ts streamer --help`
+- [x] `npx tsx src/cli/index.ts streamer live --help`
+
+Pendencias:
+- Gestao de origins ainda e CLI-only; nenhuma API HTTP nova foi criada.
+- `remove` e irreversivel e por isso exige `--yes`.
+
+Proximo passo recomendado:
+- Testar o fluxo completo com origin real: `clone`, `list`, `inspect`, `live` e `remove`.
 
 ### 2026-05-08 - Fase 23: Streamer live origin
 

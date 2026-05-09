@@ -17,6 +17,7 @@ O foco inicial e operacional:
 - rewrite de media playlist local ou master local apontando para variants clonadas;
 - origin HTTP local com CORS para players web, Smart TVs, STBs e ferramentas de QA;
 - simulacao live com sliding window virtual sobre os segmentos clonados.
+- gestao local dos origins clonados via `list`, `inspect` e `remove`.
 
 ## Decisao arquitetural
 
@@ -43,6 +44,10 @@ O foco inicial e operacional:
 - O "corta-corrente" usa segmentos inteiros: ele para quando a soma das duracoes
   clonadas atinge ou ultrapassa a duracao alvo. Corte frame-exato fica para uma
   etapa futura com FFmpeg.
+- `origin.json` tem `schemaVersion` explicito. Clones legados sem essa chave sao
+  carregados como schema 1 em memoria para preservar compatibilidade.
+- `kael streamer live` sem `originId` resolve para o origin mais recente
+  listado pelo storage local. `remove` permanece explicito e exige `--yes`.
 
 ## Estrutura de arquivos
 
@@ -53,6 +58,18 @@ src/capabilities/video/
   types.ts                  # contratos Streamer*
 
 src/cli/index.ts            # namespace kael streamer
+```
+
+## Comandos operacionais
+
+```bash
+kael streamer clone <url> --duration 60 --all-variants
+kael streamer list
+kael streamer inspect <originId>
+kael streamer inspect latest
+kael streamer live
+kael streamer live <originId> --window-size 5
+kael streamer remove <originId> --yes
 ```
 
 ## Fluxo inicial
@@ -108,6 +125,8 @@ StreamerService.serveLiveOrigin()
 - `StreamerCloneResult`
 - `StreamerClonedSegment`
 - `StreamerClonedVariant`
+- `StreamerOriginSummary`
+- `StreamerRemoveResult`
 - `StreamerServeOptions`
 - `StreamerServeHandle`
 - `StreamerLiveServeOptions`
@@ -122,7 +141,7 @@ StreamerService.serveLiveOrigin()
   master local simples com `EXT-X-STREAM-INF`.
 - Sem clonagem local de chaves DRM/AES, `EXT-X-MAP`, subtitles ou audio
   renditions separadas nesta primeira entrega.
-- Download sequencial, sem retry/backoff dedicado.
+- Download ainda sequencial; retry de segmento e curto e sem backoff sofisticado.
 
 ## Proximos incrementos
 

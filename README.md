@@ -36,7 +36,7 @@ npm run check
 ### 3) Inicializar ambiente global
 
 ```bash
-npx tsx src/cli/index.ts init
+./bin/kael init
 ```
 
 ### 4) Subir API local
@@ -129,27 +129,30 @@ Persistencia:
 
 ## Comandos CLI Mais Usados
 
+Use `./bin/kael` durante desenvolvimento. Se quiser o comando global `kael`,
+rode `npm link` uma vez na raiz do repo.
+
 ```bash
 # iniciar API
-npx tsx src/cli/index.ts server
+./bin/kael server
 
 # chat
-npx tsx src/cli/index.ts chat --message "/help"
+./bin/kael chat --message "/help"
 
 # jobs
-npx tsx src/cli/index.ts jobs
-npx tsx src/cli/index.ts job-cancel --id <jobId>
+./bin/kael jobs
+./bin/kael job-cancel --id <jobId>
 
 # schedules
-npx tsx src/cli/index.ts schedules
-npx tsx src/cli/index.ts schedule-upsert --id heartbeat.main --type heartbeat --interval-ms 30000
-npx tsx src/cli/index.ts schedule-pause --id heartbeat.main
-npx tsx src/cli/index.ts schedule-resume --id heartbeat.main
+./bin/kael schedules
+./bin/kael schedule-upsert --id heartbeat.main --type heartbeat --interval-ms 30000
+./bin/kael schedule-pause --id heartbeat.main
+./bin/kael schedule-resume --id heartbeat.main
 
 # approvals de exec
-npx tsx src/cli/index.ts approvals --status open
-npx tsx src/cli/index.ts approval-approve --id <approvalId>
-npx tsx src/cli/index.ts approval-deny --id <approvalId>
+./bin/kael approvals --status open
+./bin/kael approval-approve --id <approvalId>
+./bin/kael approval-deny --id <approvalId>
 
 # smoke browser runtime (playwright real)
 npm run test:smoke:browser

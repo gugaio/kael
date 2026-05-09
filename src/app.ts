@@ -47,6 +47,8 @@ import type {
   StreamerCloneResult,
   StreamerLiveServeHandle,
   StreamerLiveServeOptions,
+  StreamerOriginSummary,
+  StreamerRemoveResult,
   StreamerServeHandle,
   StreamerServeOptions,
 } from "./capabilities/video/index.js";
@@ -78,6 +80,9 @@ export type KaelApp = {
     stopAll(): void;
   };
   streamer: {
+    listOrigins(): Promise<StreamerOriginSummary[]>;
+    inspectOrigin(originId: string): Promise<StreamerCloneResult>;
+    removeOrigin(originId: string): Promise<StreamerRemoveResult>;
     cloneHls(input: StreamerCloneInput): Promise<StreamerCloneResult>;
     serveOrigin(originId: string, options?: StreamerServeOptions): Promise<StreamerServeHandle>;
     serveLiveOrigin(originId: string, options?: StreamerLiveServeOptions): Promise<StreamerLiveServeHandle>;

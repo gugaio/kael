@@ -12,6 +12,8 @@ import type {
   StreamerClonedVariant,
   StreamerLiveServeHandle,
   StreamerLiveServeOptions,
+  StreamerOriginSummary,
+  StreamerRemoveResult,
   StreamerServeHandle,
   StreamerServeOptions,
 } from "./types.js";
@@ -35,6 +37,7 @@ const DEFAULT_SEGMENT_RETRIES = 2;
 const DEFAULT_MAX_SEGMENTS = 200;
 const DEFAULT_LIVE_WINDOW_SIZE = 5;
 const DEFAULT_INITIAL_MEDIA_SEQUENCE = 100_000;
+const STREAMER_ORIGIN_SCHEMA_VERSION = 1;
 
 export class StreamerService {
   constructor(
@@ -45,6 +48,46 @@ export class StreamerService {
 
   async init(): Promise<void> {
     await fs.mkdir(this.rootDir, { recursive: true });
+  }
+
+  async listOrigins(): Promise<StreamerOriginSummary[]> {
+    const entries = await fs.readdir(this.rootDir, { withFileTypes: true }).catch((error: unknown) => {
+      if (isNodeError(error) && error.code === "ENOENT") {
+        return [];
+      }
+      throw error;
+    });
+    const origins: StreamerOriginSummary[] = [];
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+
+      try {
+        const clone = await this.loadCloneResult(entry.name);
+        origins.push(toOriginSummary(clone));
+      } catch {
+        // Keep list resilient if a partially-written/corrupt origin exists.
+      }
+    }
+
+    return origins.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  }
+
+  async inspectOrigin(originId: string): Promise<StreamerCloneResult> {
+    return this.loadCloneResult(originId);
+  }
+
+  async removeOrigin(originId: string): Promise<StreamerRemoveResult> {
+    const id = sanitizeOriginId(originId);
+    const originDir = path.join(this.rootDir, id);
+    await fs.rm(originDir, { recursive: true, force: false });
+    return {
+      id,
+      rootDir: originDir,
+      removed: true,
+    };
   }
 
   async cloneHls(input: StreamerCloneInput): Promise<StreamerCloneResult> {
@@ -179,6 +222,7 @@ export class StreamerService {
     const createdAt = new Date().toISOString();
     const result: StreamerCloneResult = {
       id,
+      schemaVersion: STREAMER_ORIGIN_SCHEMA_VERSION,
       sessionKey: input.sessionKey,
       sourceUrl: root.url,
       selectedUrl,
@@ -652,17 +696,23 @@ export class StreamerService {
   }
 
   private async loadCloneResult(originId: string): Promise<StreamerCloneResult> {
-    const originDir = path.join(this.rootDir, sanitizeOriginId(originId));
+    const id = sanitizeOriginId(originId);
+    const originDir = path.join(this.rootDir, id);
     const raw = await fs.readFile(path.join(originDir, "origin.json"), "utf-8");
     const parsed = JSON.parse(raw) as Partial<StreamerCloneResult>;
     if (!Array.isArray(parsed.variants) || parsed.variants.length === 0) {
-      const migrated = migrateLegacyCloneResult(parsed, originId, originDir);
+      const migrated = migrateLegacyCloneResult(parsed, id, originDir);
       if (migrated) {
         return migrated;
       }
-      throw new Error(`streamer origin ${originId} has no cloned variants`);
+      throw new Error(`streamer origin ${id} has no cloned variants`);
     }
-    return { ...(parsed as StreamerCloneResult), id: originId, rootDir: originDir };
+    return {
+      ...(parsed as StreamerCloneResult),
+      id,
+      schemaVersion: parsed.schemaVersion ?? STREAMER_ORIGIN_SCHEMA_VERSION,
+      rootDir: originDir,
+    };
   }
 }
 
@@ -699,6 +749,10 @@ function isAbortError(error: unknown): boolean {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }
 
 function sanitizeOriginId(raw: string): string {
@@ -836,6 +890,7 @@ function migrateLegacyCloneResult(
 
   return {
     id: originId,
+    schemaVersion: parsed.schemaVersion ?? STREAMER_ORIGIN_SCHEMA_VERSION,
     sessionKey: parsed.sessionKey ?? "legacy.streamer.clone",
     sourceUrl: parsed.sourceUrl ?? variant.sourceUrl,
     selectedUrl: parsed.selectedUrl ?? variant.sourceUrl,
@@ -855,6 +910,26 @@ function migrateLegacyCloneResult(
     createdAt: parsed.createdAt ?? new Date(0).toISOString(),
     variants: [variant],
     segments,
+  };
+}
+
+function toOriginSummary(result: StreamerCloneResult): StreamerOriginSummary {
+  return {
+    id: result.id,
+    schemaVersion: result.schemaVersion,
+    createdAt: result.createdAt,
+    sourceUrl: result.sourceUrl,
+    selectedUrl: result.selectedUrl,
+    rootDir: result.rootDir,
+    playbackPath: result.playbackPath,
+    requestedDurationSeconds: result.requestedDurationSeconds,
+    cumulativeDurationSeconds: result.cumulativeDurationSeconds,
+    reachedTargetDuration: result.reachedTargetDuration,
+    targetDuration: result.targetDuration,
+    segmentCount: result.segmentCount,
+    variantCount: result.variantCount,
+    bytes: result.bytes,
+    allVariants: result.allVariants,
   };
 }
 
