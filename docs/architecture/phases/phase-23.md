@@ -18,7 +18,8 @@ O foco inicial e operacional:
 - origin HTTP local com CORS para players web, Smart TVs, STBs e ferramentas de QA;
 - simulacao live com sliding window virtual sobre os segmentos clonados;
 - gestao local dos origins clonados via `list`, `inspect`, `probe` e `remove`;
-- clonagem de renditions separadas de audio referenciadas por `EXT-X-MEDIA`.
+- analise profunda de segmentos locais amostrados via `analyze`;
+- clonagem de renditions separadas de audio e subtitles referenciadas por `EXT-X-MEDIA`.
 
 ## Decisao arquitetural
 
@@ -47,9 +48,17 @@ O foco inicial e operacional:
   `lowest`, `aac-lowest` e indice zero-based continuam disponiveis quando o teste
   precisa de uma escolha explicita.
 - `streamer clone` imprime diagnostico pos-clone com compatibilidade basica de
-  browser, codecs detectados, audio externo e contagem de arquivos locais.
+  browser, codecs detectados, audio externo, contagem de arquivos locais e um
+  resumo de `ffprobe` amostrado.
 - `streamer probe [originId|latest]` roda a mesma validacao sem rede sobre um
-  origin ja clonado, incluindo manifests, segmentos e init segments locais.
+  origin ja clonado, incluindo manifests, segmentos, init segments locais e
+  `ffprobe` amostrado sobre playlists locais reescritas.
+- `streamer analyze [originId|latest]` roda `ffprobe` diretamente em chunks
+  locais amostrados para extrair duracao real, PTS e sinal basico de keyframes
+  sem contaminar o fluxo do `probe`, que continua leve.
+- Renditions externas usam indexacao por tipo nas rotas live (`/live/audio/0`,
+  `/live/subtitles/0`) para manter semantica estavel e evitar acoplamento ao
+  indice global interno do `origin.json`.
 - O "corta-corrente" usa segmentos inteiros: ele para quando a soma das duracoes
   clonadas atinge ou ultrapassa a duracao alvo. Corte frame-exato fica para uma
   etapa futura com FFmpeg.
@@ -60,9 +69,9 @@ O foco inicial e operacional:
 - Media playlists fMP4/CMAF sem DRM e sem byte range preservam `EXT-X-MAP`:
   o init segment e baixado para `init/*` e o manifesto local/live aponta para
   esse arquivo local.
-- Master playlists com `EXT-X-MEDIA TYPE=AUDIO` clonam apenas os grupos de audio
-  usados pelos variants selecionados. Subtitles e I-frame playlists ainda sao
-  ignoradas nesta fase.
+- Master playlists com `EXT-X-MEDIA TYPE=AUDIO` e `TYPE=SUBTITLES` clonam apenas
+  os grupos usados pelos variants selecionados via `AUDIO="<group>"` e
+  `SUBTITLES="<group>"`. I-frame playlists ainda sao ignoradas nesta fase.
 
 ## Estrutura de arquivos
 
@@ -86,6 +95,8 @@ kael streamer inspect <originId>
 kael streamer inspect latest
 kael streamer probe
 kael streamer probe <originId>
+kael streamer analyze
+kael streamer analyze <originId>
 kael streamer live
 kael streamer live <originId> --window-size 5
 kael streamer remove <originId> --yes
@@ -105,9 +116,10 @@ StreamerService.cloneHls()
   |-- media: usa playlist diretamente
   |
   | baixa segmentos sequencialmente ate cumulativeDuration >= duration
-  | baixa renditions de audio referenciadas por AUDIO="<group>"
+  | baixa renditions de audio/subtitles referenciadas por AUDIO/SUBTITLES
   | escreve segments/* ou variants/<n>/segments/*
   | escreve audio/<n>/segments/* quando houver audio externo
+  | escreve subtitles/<n>/segments/* quando houver subtitles externos
   | escreve index.m3u8 local (media ou master)
   | escreve origin.json
   v
@@ -129,7 +141,7 @@ StreamerService.serveLiveOrigin()
   |
   | GET /index.m3u8
   |-- single variant: media playlist live
-  |-- multi variant/audio externo: master apontando para /live/<variant>/index.m3u8 e /live/audio/<n>/index.m3u8
+  |-- multi variant/renditions externas: master apontando para /live/<variant>/index.m3u8, /live/audio/<n>/index.m3u8 e /live/subtitles/<n>/index.m3u8
   |
   | GET /live/<variant>/index.m3u8
   |-- calcula janela por tempo atual
@@ -144,6 +156,12 @@ StreamerService.serveLiveOrigin()
   |
   | GET /live/audio/<n>/segments/<sequence>.<ext>
   |-- mapeia sequence % segmentosAudioClonados.length para arquivo local
+  |
+  | GET /live/subtitles/<n>/index.m3u8
+  |-- media playlist live para a rendition de subtitles
+  |
+  | GET /live/subtitles/<n>/segments/<sequence>.vtt
+  |-- mapeia sequence % segmentosSubtitleClonados.length para arquivo local
 ```
 
 ## Contratos iniciais
@@ -168,17 +186,20 @@ StreamerService.serveLiveOrigin()
 - Reescrita de manifesto preserva apenas o basico necessario para playback local,
   `EXT-X-MAP` simples e audio groups externos. Em `--all-variants`, gera tambem
   uma master local simples com `EXT-X-STREAM-INF`/`EXT-X-MEDIA`.
-- Sem clonagem local de chaves DRM/AES (`EXT-X-KEY`), byte ranges, subtitles ou
-  I-frame playlists nesta primeira entrega.
+- Sem clonagem local de chaves DRM/AES (`EXT-X-KEY`), byte ranges ou I-frame
+  playlists nesta primeira entrega.
 - Download ainda sequencial; retry de segmento e curto e sem backoff sofisticado.
 - Diagnostico de compatibilidade e baseado em CODECS/grupo de audio e existencia
-  de arquivos; validacao profunda com `ffprobe` fica para incremento futuro.
+  de arquivos, com complemento de `ffprobe` amostrado e limitado por quantidade
+  maxima de playlists locais por probe.
+- `analyze` aprofunda o diagnostico em chunks locais amostrados, mas continua
+  propositalmente limitado para manter custo e complexidade sob controle.
 
 ## Proximos incrementos
 
 1. Adicionar suporte a `EXT-X-KEY`/DRM ou byte ranges quando houver demanda real.
-2. Adicionar suporte a subtitles no clone/live.
-3. Expor API quando houver fluxo de automacao/planner que precise controlar
+2. Expor API quando houver fluxo de automacao/planner que precise controlar
    origins persistentes.
-4. Adicionar validacao amostrada com `ffprobe` para checar integridade real dos
-   segmentos clonados.
+3. Avaliar `EXT-X-I-FRAME-STREAM-INF` quando houver caso real de trickplay/seek.
+4. Suportar byte range ou DRM somente quando surgir caso real que justifique o
+   aumento de complexidade.

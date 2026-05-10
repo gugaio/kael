@@ -71,6 +71,16 @@ export type VideoProbeResult = {
     count: number;
     timestamps: number[];
   };
+  timeline?: {
+    streamSelector: string;
+    sampleKind: "frames" | "packets";
+    sampleCount: number;
+    firstPtsTime?: number;
+    lastPtsTime?: number;
+    keyframeCount?: number;
+    startsWithKeyframe?: boolean;
+    maxKeyframeGapSeconds?: number;
+  };
   errors: string[];
 };
 
@@ -110,6 +120,13 @@ function parseAttrList(attrText: string): Record<string, string> {
     out[key.trim().toUpperCase()] = value.trim();
   }
   return out;
+}
+
+function parseYesNoAttr(value: string | undefined): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return value.toUpperCase() === "YES";
 }
 
 function resolveUrl(base: string, candidate: string): string {
@@ -197,9 +214,9 @@ export class VideoInspectToolService {
           groupId: attrs["GROUP-ID"],
           name: attrs.NAME,
           language: attrs.LANGUAGE,
-          default: attrs.DEFAULT?.toUpperCase() === "YES",
-          autoselect: attrs.AUTOSELECT?.toUpperCase() === "YES",
-          forced: attrs.FORCED?.toUpperCase() === "YES",
+          default: parseYesNoAttr(attrs.DEFAULT),
+          autoselect: parseYesNoAttr(attrs.AUTOSELECT),
+          forced: parseYesNoAttr(attrs.FORCED),
           channels: attrs.CHANNELS,
           characteristics: attrs.CHARACTERISTICS,
           uri,
@@ -313,6 +330,7 @@ export class VideoInspectToolService {
     input: string;
     timeoutMs?: number;
     keyframes?: boolean;
+    timeline?: boolean;
     maxKeyframes?: number;
     streamSelector?: string;
   }): Promise<VideoProbeResult> {
@@ -352,8 +370,8 @@ export class VideoInspectToolService {
     }
 
     let keyframePayload: VideoProbeResult["keyframes"];
+    const streamSelector = (params.streamSelector || "v:0").trim() || "v:0";
     if (params.keyframes) {
-      const streamSelector = (params.streamSelector || "v:0").trim() || "v:0";
       const maxKeyframes = Math.max(1, Math.min(this.cfg.maxKeyframes, Math.floor(params.maxKeyframes ?? 50)));
       const frames = spawnSync(
         "ffprobe",
@@ -411,6 +429,101 @@ export class VideoInspectToolService {
       }
     }
 
+    let timelinePayload: VideoProbeResult["timeline"];
+    if (params.timeline) {
+      const useFrames = streamSelector.startsWith("v:");
+      const timeline = spawnSync(
+        "ffprobe",
+        useFrames
+          ? [
+              "-v",
+              "error",
+              "-select_streams",
+              streamSelector,
+              "-show_frames",
+              "-show_entries",
+              "frame=best_effort_timestamp_time,pkt_dts_time,pkt_pts_time,key_frame,pict_type",
+              "-of",
+              "json",
+              params.input,
+            ]
+          : [
+              "-v",
+              "error",
+              "-select_streams",
+              streamSelector,
+              "-show_packets",
+              "-show_entries",
+              "packet=pts_time,dts_time,duration_time,flags",
+              "-of",
+              "json",
+              params.input,
+            ],
+        {
+          encoding: "utf-8",
+          timeout: timeoutMs,
+          maxBuffer: 32 * 1024 * 1024,
+        },
+      );
+      if (timeline.error) {
+        throw timeline.error;
+      }
+      if (timeline.status !== 0) {
+        errors.push(timeline.stderr?.trim() || `ffprobe timeline exited with ${String(timeline.status)}`);
+      } else {
+        try {
+          const payload = JSON.parse(timeline.stdout || "{}") as {
+            frames?: Array<Record<string, unknown>>;
+            packets?: Array<Record<string, unknown>>;
+          };
+          const items = useFrames ? (payload.frames ?? []) : (payload.packets ?? []);
+          const timestamps = items
+            .map((item) => {
+              const raw = item.best_effort_timestamp_time ?? item.pts_time ?? item.pkt_pts_time ?? item.dts_time ?? item.pkt_dts_time;
+              const value = typeof raw === "string" || typeof raw === "number" ? Number(raw) : Number.NaN;
+              return Number.isFinite(value) ? value : null;
+            })
+            .filter((value): value is number => value !== null);
+          const keyframeTimestamps = useFrames
+            ? (payload.frames ?? [])
+              .map((frame) => {
+                const key = frame.key_frame;
+                if (!(key === 1 || key === "1")) return null;
+                const raw = frame.best_effort_timestamp_time ?? frame.pkt_pts_time ?? frame.pkt_dts_time;
+                const value = typeof raw === "string" || typeof raw === "number" ? Number(raw) : Number.NaN;
+                return Number.isFinite(value) ? value : null;
+              })
+              .filter((value): value is number => value !== null)
+            : [];
+          const firstFrame = useFrames ? (payload.frames ?? [])[0] : undefined;
+          let maxKeyframeGapSeconds: number | undefined;
+          if (keyframeTimestamps.length >= 2) {
+            maxKeyframeGapSeconds = 0;
+            for (let index = 1; index < keyframeTimestamps.length; index += 1) {
+              maxKeyframeGapSeconds = Math.max(
+                maxKeyframeGapSeconds,
+                keyframeTimestamps[index] - keyframeTimestamps[index - 1],
+              );
+            }
+          }
+          timelinePayload = {
+            streamSelector,
+            sampleKind: useFrames ? "frames" : "packets",
+            sampleCount: items.length,
+            firstPtsTime: timestamps[0],
+            lastPtsTime: timestamps.at(-1),
+            keyframeCount: useFrames ? keyframeTimestamps.length : undefined,
+            startsWithKeyframe: useFrames
+              ? firstFrame?.key_frame === 1 || firstFrame?.key_frame === "1"
+              : undefined,
+            maxKeyframeGapSeconds,
+          };
+        } catch {
+          errors.push("failed to parse ffprobe timeline JSON output");
+        }
+      }
+    }
+
     return {
       ok: errors.length === 0,
       input: params.input,
@@ -418,6 +531,7 @@ export class VideoInspectToolService {
       format: parsedBase.format,
       streams: parsedBase.streams,
       keyframes: keyframePayload,
+      timeline: timelinePayload,
       errors,
     };
   }

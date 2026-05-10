@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-05-09**
+Ultima atualizacao: **2026-05-10**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,111 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-05-10 - Fase 23: Streamer analyze profundo
+
+Resumo:
+- Adicionado `kael streamer analyze [originId|latest]` como camada separada do `probe`, focada em analise profunda de segmentos locais amostrados.
+- A analise usa `ffprobe` nos chunks clonados para levantar duracao real, PTS inicial/final e, para video, keyframes e maior gap entre keyframes.
+- O `probe` permanece leve e operacional; a inspecao mais pesada ficou isolada para nao misturar responsabilidades de clone/serve com diagnostico profundo.
+
+Arquivos-chave:
+- `src/capabilities/video/inspect-service.ts`
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/types.ts`
+- `src/capabilities/video/streamer-service.test.ts`
+- `src/cli/index.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/inspect-service.test.ts src/capabilities/video/streamer-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- A analise continua amostral por playlist e por segmentos; ainda nao percorre 100% da ladder.
+- Subtitles podem nao entregar sinal tecnico tao rico quanto video/audio dependendo do container e do suporte do `ffprobe`.
+
+Proximo passo recomendado:
+- Se o comando se mostrar util no uso diario, ampliar o relatorio com gaps/overlaps entre segmentos e diferenca entre `EXTINF` e duracao real.
+
+### 2026-05-10 - Fase 23: Streamer ffprobe amostrado
+
+Resumo:
+- `streamer clone` e `streamer probe` agora rodam `ffprobe` amostrado sobre playlists locais reescritas do origin para detectar clones quebrados mais cedo.
+- A validacao usa um teto de playlists amostradas para manter o custo baixo e compatível com a proposta simples da capability.
+- O resumo pos-clone e o relatório de `probe` passaram a expor contagem de amostras validadas, sucessos e falhas do `ffprobe`.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/types.ts`
+- `src/cli/index.ts`
+- `src/capabilities/video/streamer-service.test.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/inspect-service.test.ts src/capabilities/video/streamer-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- A validacao continua amostrada; nao percorre toda a ladder quando houver muitas playlists locais.
+- Ainda nao ha teste manual com manifesto real nesta iteracao, por escolha do fluxo atual.
+
+Proximo passo recomendado:
+- Se o signal do `ffprobe` ficar estavel, o proximo ganho real e decidir entre ampliar isso com detalhes de stream/codec ou voltar para novos casos HLS como I-frame e byte range.
+
+### 2026-05-09 - Fase 23: Streamer simplificacao de renditions
+
+Resumo:
+- Refatorada a fronteira de renditions externas para usar uma tabela unica de tipos (`AUDIO`/`SUBTITLES`) em vez de regras espalhadas.
+- Rotas live de renditions passaram a usar indice por tipo (`/live/audio/0`, `/live/subtitles/0`) em vez do indice global interno.
+- `streamer inspect` agora imprime o `type` da rendition, reduzindo ambiguidade operacional.
+- `inspectHls` passou a preservar booleanos opcionais de `EXT-X-MEDIA` como `undefined` quando a tag nao declara o atributo.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/inspect-service.ts`
+- `src/cli/index.ts`
+- `src/capabilities/video/streamer-service.test.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/inspect-service.test.ts src/capabilities/video/streamer-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- O live handler ainda tem repeticao pequena entre variant e rendition ao servir arquivos/manifestos.
+- Ainda nao houve revalidacao manual em manifesto real apos o refactor, por escolha desta iteracao.
+
+Proximo passo recomendado:
+- Se quiser continuar simplificando, extrair um helper unico de resolucao/serve de media no live handler antes de entrar em DRM ou byte range.
+
+### 2026-05-09 - Fase 23: Streamer subtitles externos
+
+Resumo:
+- `streamer clone` agora clona `EXT-X-MEDIA TYPE=SUBTITLES` referenciado por `SUBTITLES="<group>"`.
+- Master local e live preservam `SUBTITLES="<group>"` nas variants e publicam playlists de subtitles em `subtitles/...` e `/live/subtitles/<index>/...`.
+- `streamer probe` passou a reportar audio/subtitles externos separadamente no diagnostico.
+- Testes cobrem clone VOD/live com audio AAC externo e subtitle WebVTT externo no mesmo master.
+
+Arquivos-chave:
+- `src/capabilities/video/inspect-service.ts`
+- `src/capabilities/video/inspect-service.test.ts`
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/streamer-service.test.ts`
+- `src/capabilities/video/streamer-diagnostics.ts`
+- `src/cli/index.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/inspect-service.test.ts src/capabilities/video/streamer-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- `EXT-X-I-FRAME-STREAM-INF`, `EXT-X-KEY`/DRM e byte ranges continuam fora desta fase.
+- Ainda nao ha validacao profunda com `ffprobe` dos segmentos clonados.
+
+Proximo passo recomendado:
+- Rodar clone real Globo com `--serve`, validar audio/caption no player e depois decidir entre API de origins ou `ffprobe` amostrado.
 
 ### 2026-05-09 - Fase 23: Streamer diagnostico e default AAC
 

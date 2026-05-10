@@ -476,6 +476,12 @@ async function createJobsServer(params: {
       inspectOrigin: async () => {
         throw new Error("streamer inspect not implemented in fake app");
       },
+      probeOrigin: async () => {
+        throw new Error("streamer probe not implemented in fake app");
+      },
+      analyzeOrigin: async () => {
+        throw new Error("streamer analyze not implemented in fake app");
+      },
       removeOrigin: async () => {
         throw new Error("streamer remove not implemented in fake app");
       },

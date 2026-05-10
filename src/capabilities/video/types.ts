@@ -478,6 +478,74 @@ export type StreamerCloneResult = {
   segments: StreamerClonedSegment[];
 };
 
+export type StreamerProbeOptions = {
+  /** Timeout de ffprobe por playlist amostrada. */
+  timeoutMs?: number;
+  /** Quantidade maxima de playlists de media amostradas (variants + renditions). */
+  maxMediaPlaylists?: number;
+};
+
+export type StreamerMediaProbeEntry = {
+  kind: "variant" | "rendition";
+  index: number;
+  type: "AUDIO" | "SUBTITLES" | "VIDEO";
+  label: string;
+  manifestPath: string;
+  ok: boolean;
+  streamCount: number;
+  errors: string[];
+};
+
+export type StreamerOriginProbeReport = {
+  originId: string;
+  ok: boolean;
+  sampledMediaPlaylists: number;
+  totalMediaPlaylists: number;
+  okCount: number;
+  failedCount: number;
+  entries: StreamerMediaProbeEntry[];
+};
+
+export type StreamerAnalyzeOptions = {
+  /** Timeout de ffprobe por segmento amostrado. */
+  timeoutMs?: number;
+  /** Quantidade maxima de playlists de media consideradas (variants + renditions). */
+  maxMediaPlaylists?: number;
+  /** Quantidade maxima de segmentos amostrados por playlist (first/middle/last). */
+  maxSegmentsPerPlaylist?: number;
+};
+
+export type StreamerSegmentAnalysisEntry = {
+  kind: "variant" | "rendition";
+  mediaIndex: number;
+  segmentIndex: number;
+  type: "AUDIO" | "SUBTITLES" | "VIDEO";
+  label: string;
+  localPath: string;
+  declaredDurationSeconds?: number;
+  actualDurationSeconds?: number;
+  streamCount: number;
+  packetCount?: number;
+  firstPtsTime?: number;
+  lastPtsTime?: number;
+  keyframeCount?: number;
+  startsWithKeyframe?: boolean;
+  maxKeyframeGapSeconds?: number;
+  ok: boolean;
+  errors: string[];
+};
+
+export type StreamerOriginAnalysisReport = {
+  originId: string;
+  ok: boolean;
+  sampledMediaPlaylists: number;
+  totalMediaPlaylists: number;
+  sampledSegments: number;
+  okSegments: number;
+  failedSegments: number;
+  entries: StreamerSegmentAnalysisEntry[];
+};
+
 export type StreamerOriginSummary = {
   id: string;
   schemaVersion: number;

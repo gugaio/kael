@@ -45,9 +45,13 @@ import type {
   HlsManifestDiffReport,
   StreamerCloneInput,
   StreamerCloneResult,
+  StreamerAnalyzeOptions,
   StreamerLiveServeHandle,
   StreamerLiveServeOptions,
+  StreamerOriginAnalysisReport,
+  StreamerOriginProbeReport,
   StreamerOriginSummary,
+  StreamerProbeOptions,
   StreamerRemoveResult,
   StreamerServeHandle,
   StreamerServeOptions,
@@ -82,6 +86,8 @@ export type KaelApp = {
   streamer: {
     listOrigins(): Promise<StreamerOriginSummary[]>;
     inspectOrigin(originId: string): Promise<StreamerCloneResult>;
+    probeOrigin(originId: string, options?: StreamerProbeOptions): Promise<StreamerOriginProbeReport>;
+    analyzeOrigin(originId: string, options?: StreamerAnalyzeOptions): Promise<StreamerOriginAnalysisReport>;
     removeOrigin(originId: string): Promise<StreamerRemoveResult>;
     cloneHls(input: StreamerCloneInput): Promise<StreamerCloneResult>;
     serveOrigin(originId: string, options?: StreamerServeOptions): Promise<StreamerServeHandle>;

@@ -304,7 +304,7 @@ describe("StreamerService", () => {
     }
   });
 
-  it("clona renditions de audio separadas referenciadas pela master playlist", async () => {
+  it("clona renditions externas de audio e subtitles referenciadas pela master playlist", async () => {
     const root = await makeTempRoot();
     const fetchedUrls: string[] = [];
     const service = new StreamerService(
@@ -372,22 +372,31 @@ describe("StreamerService", () => {
           }
 
           const isAudio = url.includes("audio-");
+          const isSubtitle = url.includes("subs-");
           return makeInspectResult({
             url,
             finalUrl: url,
             playlistType: "media",
             variants: [],
             targetDuration: 4,
-            mediaSequence: isAudio ? 200 : 100,
+            mediaSequence: isAudio ? 200 : isSubtitle ? 300 : 100,
             segments: [
               {
-                uri: isAudio ? "audio-0.aac" : "video-0.ts",
-                url: isAudio ? `${url}/audio-0.aac` : "https://cdn.example.com/video-0.ts",
+                uri: isAudio ? "audio-0.aac" : isSubtitle ? "subs-0.vtt" : "video-0.ts",
+                url: isAudio
+                  ? `${url}/audio-0.aac`
+                  : isSubtitle
+                  ? `${url}/subs-0.vtt`
+                  : "https://cdn.example.com/video-0.ts",
                 duration: 4,
               },
               {
-                uri: isAudio ? "audio-1.aac" : "video-1.ts",
-                url: isAudio ? `${url}/audio-1.aac` : "https://cdn.example.com/video-1.ts",
+                uri: isAudio ? "audio-1.aac" : isSubtitle ? "subs-1.vtt" : "video-1.ts",
+                url: isAudio
+                  ? `${url}/audio-1.aac`
+                  : isSubtitle
+                  ? `${url}/subs-1.vtt`
+                  : "https://cdn.example.com/video-1.ts",
                 duration: 4,
               },
             ],
@@ -412,15 +421,21 @@ describe("StreamerService", () => {
     expect(result.variantCount).toBe(1);
     expect(result.selectedVariant?.audioGroupId).toBe("audio-aacl-128");
     expect(result.selectedVariant?.codecs).toBe("mp4a.40.2,avc1.4D401F");
-    expect(result.renditionCount).toBe(2);
+    expect(result.selectedVariant?.subtitlesGroupId).toBe("textstream");
+    expect(result.renditionCount).toBe(3);
     const diagnostic = diagnoseStreamerClone(result);
     expect(diagnostic.browserCompatibility).toBe("yes");
     expect(diagnostic.audioCodecs).toEqual(["mp4a.40.2"]);
+    expect(diagnostic.externalAudio).toBe(true);
+    expect(diagnostic.externalSubtitles).toBe(true);
+    expect(diagnostic.audioRenditionCount).toBe(2);
+    expect(diagnostic.subtitleRenditionCount).toBe(1);
     expect(result.renditions.map((rendition) => rendition.name)).toEqual([
       "Portuguese",
       "Portuguese (description)",
+      "Portuguese (caption)",
     ]);
-    expect(result.renditions.every((rendition) => rendition.groupId === "audio-aacl-128")).toBe(true);
+    expect(result.renditions.map((rendition) => rendition.type)).toEqual(["AUDIO", "AUDIO", "SUBTITLES"]);
     expect(fetchedUrls).toEqual([
       "https://cdn.example.com/video-0.ts",
       "https://cdn.example.com/video-1.ts",
@@ -428,15 +443,17 @@ describe("StreamerService", () => {
       "https://example.com/audio-pt.m3u8/audio-1.aac",
       "https://example.com/audio-desc.m3u8/audio-0.aac",
       "https://example.com/audio-desc.m3u8/audio-1.aac",
+      "https://example.com/subs-pt.m3u8/subs-0.vtt",
+      "https://example.com/subs-pt.m3u8/subs-1.vtt",
     ]);
 
     const master = await fs.readFile(result.manifestPath, "utf-8");
     expect(master).toContain('#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio-aacl-128",LANGUAGE="pt",NAME="Portuguese",DEFAULT=YES,AUTOSELECT=YES,CHANNELS="2",URI="audio/000-audio-aacl-128-Portuguese/index.m3u8"');
     expect(master).toContain('CHARACTERISTICS="public.accessibility.describes-video"');
+    expect(master).toContain('#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="textstream",LANGUAGE="pt",NAME="Portuguese (caption)",URI="subtitles/000-textstream-Portuguese--caption-/index.m3u8"');
     expect(master).toContain('AUDIO="audio-aacl-128"');
+    expect(master).toContain('SUBTITLES="textstream"');
     expect(master).toContain("CLOSED-CAPTIONS=NONE");
-    expect(master).not.toContain("SUBTITLES=");
-    expect(master).not.toContain("textstream");
     expect(master).toContain("variants/000-1280x720/index.m3u8");
 
     const audioManifest = await fs.readFile(
@@ -445,6 +462,12 @@ describe("StreamerService", () => {
     );
     expect(audioManifest).toContain("#EXT-X-MEDIA-SEQUENCE:200");
     expect(audioManifest).toContain("segments/00000-audio-0.aac");
+    const subtitleManifest = await fs.readFile(
+      path.join(result.rootDir, "subtitles", "000-textstream-Portuguese--caption-", "index.m3u8"),
+      "utf-8",
+    );
+    expect(subtitleManifest).toContain("#EXT-X-MEDIA-SEQUENCE:300");
+    expect(subtitleManifest).toContain("segments/00000-subs-0.vtt");
 
     const handle = await service.serveLiveOrigin(result.id, {
       windowSize: 1,
@@ -453,7 +476,9 @@ describe("StreamerService", () => {
     try {
       const liveMaster = await fetch(handle.playbackUrl).then((response) => response.text());
       expect(liveMaster).toContain('URI="/live/audio/0/index.m3u8"');
+      expect(liveMaster).toContain('URI="/live/subtitles/0/index.m3u8"');
       expect(liveMaster).toContain('AUDIO="audio-aacl-128"');
+      expect(liveMaster).toContain('SUBTITLES="textstream"');
 
       const liveAudio = await fetch(`${handle.baseUrl}/live/audio/0/index.m3u8`).then((response) =>
         response.text(),
@@ -465,6 +490,19 @@ describe("StreamerService", () => {
       expect(audioSegmentPath).toBeDefined();
       const audioSegment = await fetch(`${handle.baseUrl}${audioSegmentPath}`).then((response) => response.text());
       expect(audioSegment).toContain("https://example.com/audio-pt.m3u8/");
+
+      const liveSubtitle = await fetch(`${handle.baseUrl}/live/subtitles/0/index.m3u8`).then((response) =>
+        response.text(),
+      );
+      expect(liveSubtitle).toContain("#EXT-X-MEDIA-SEQUENCE:80");
+      const subtitleSegmentPath = liveSubtitle
+        .split("\n")
+        .find((line) => line.startsWith("/live/subtitles/0/segments/"));
+      expect(subtitleSegmentPath).toBeDefined();
+      const subtitleSegmentResponse = await fetch(`${handle.baseUrl}${subtitleSegmentPath}`);
+      expect(subtitleSegmentResponse.headers.get("content-type")).toContain("text/vtt");
+      const subtitleSegment = await subtitleSegmentResponse.text();
+      expect(subtitleSegment).toContain("https://example.com/subs-pt.m3u8/");
     } finally {
       await handle.close();
     }
@@ -569,6 +607,286 @@ describe("StreamerService", () => {
     });
     await expect(fs.stat(result.rootDir)).rejects.toThrow();
     await expect(service.listOrigins()).resolves.toEqual([]);
+  });
+
+  it("agrega ffprobe amostrado sobre playlists locais de video e renditions", async () => {
+    const root = await makeTempRoot();
+    const probedInputs: string[] = [];
+    const service = new StreamerService(
+      {
+        inspectHls: async ({ url }) => {
+          if (url === "https://example.com/master.m3u8") {
+            return makeInspectResult({
+              variants: [
+                {
+                  uri: "video-720.m3u8",
+                  url: "https://example.com/video-720.m3u8",
+                  bandwidth: 2_000_000,
+                  resolution: "1280x720",
+                  codecs: "mp4a.40.2,avc1.4D401F",
+                  audioGroupId: "audio-aacl-128",
+                  subtitlesGroupId: "textstream",
+                },
+              ],
+              renditions: [
+                {
+                  type: "AUDIO",
+                  groupId: "audio-aacl-128",
+                  language: "pt",
+                  name: "Portuguese",
+                  uri: "audio-pt.m3u8",
+                  url: "https://example.com/audio-pt.m3u8",
+                },
+                {
+                  type: "SUBTITLES",
+                  groupId: "textstream",
+                  language: "pt",
+                  name: "Portuguese (caption)",
+                  uri: "subs-pt.m3u8",
+                  url: "https://example.com/subs-pt.m3u8",
+                },
+              ],
+            });
+          }
+
+          const isAudio = url.includes("audio-");
+          const isSubtitle = url.includes("subs-");
+          return makeInspectResult({
+            url,
+            finalUrl: url,
+            playlistType: "media",
+            variants: [],
+            targetDuration: 4,
+            segments: [
+              {
+                uri: isAudio ? "audio-0.aac" : isSubtitle ? "subs-0.vtt" : "video-0.ts",
+                url: `https://cdn.example.com/${isAudio ? "audio" : isSubtitle ? "subs" : "video"}-0.bin`,
+                duration: 4,
+              },
+              {
+                uri: isAudio ? "audio-1.aac" : isSubtitle ? "subs-1.vtt" : "video-1.ts",
+                url: `https://cdn.example.com/${isAudio ? "audio" : isSubtitle ? "subs" : "video"}-1.bin`,
+                duration: 4,
+              },
+            ],
+          });
+        },
+        probe: async ({ input }) => {
+          probedInputs.push(input);
+          return {
+            ok: !input.includes("/subtitles/"),
+            input,
+            timeoutMs: 5000,
+            streams: input.includes("/audio/")
+              ? [{ codec_type: "audio" }]
+              : input.includes("/subtitles/")
+              ? []
+              : [{ codec_type: "video" }, { codec_type: "audio" }],
+            errors: input.includes("/subtitles/") ? ["subtitle playlist probe unsupported"] : [],
+          };
+        },
+      },
+      root,
+      async () => new Response(new Uint8Array([1, 2, 3])),
+    );
+    await service.init();
+
+    const result = await service.cloneHls({
+      sessionKey: "test",
+      url: "https://example.com/master.m3u8",
+      durationSeconds: 8,
+      originId: "probe-origin",
+    });
+
+    const report = await service.probeOrigin(result.id, { maxMediaPlaylists: 8, timeoutMs: 5000 });
+
+    expect(report.originId).toBe("probe-origin");
+    expect(report.sampledMediaPlaylists).toBe(3);
+    expect(report.totalMediaPlaylists).toBe(3);
+    expect(report.ok).toBe(false);
+    expect(report.okCount).toBe(2);
+    expect(report.failedCount).toBe(1);
+    expect(report.entries).toEqual([
+      expect.objectContaining({
+        kind: "variant",
+        index: 0,
+        type: "VIDEO",
+        ok: true,
+        streamCount: 2,
+      }),
+      expect.objectContaining({
+        kind: "rendition",
+        index: 0,
+        type: "AUDIO",
+        ok: true,
+        streamCount: 1,
+      }),
+      expect.objectContaining({
+        kind: "rendition",
+        index: 1,
+        type: "SUBTITLES",
+        ok: false,
+        streamCount: 0,
+        errors: ["subtitle playlist probe unsupported"],
+      }),
+    ]);
+    expect(probedInputs).toEqual(
+      expect.arrayContaining([
+        path.join(result.rootDir, "variants", "000-1280x720", "index.m3u8"),
+        path.join(result.rootDir, "audio", "000-audio-aacl-128-Portuguese", "index.m3u8"),
+        path.join(result.rootDir, "subtitles", "000-textstream-Portuguese--caption-", "index.m3u8"),
+      ]),
+    );
+  });
+
+  it("analisa segmentos amostrados para duracao, pts e keyframes", async () => {
+    const root = await makeTempRoot();
+    const analyzedInputs: string[] = [];
+    const service = new StreamerService(
+      {
+        inspectHls: async ({ url }) => {
+          if (url === "https://example.com/master.m3u8") {
+            return makeInspectResult({
+              variants: [
+                {
+                  uri: "video-720.m3u8",
+                  url: "https://example.com/video-720.m3u8",
+                  bandwidth: 2_000_000,
+                  resolution: "1280x720",
+                  codecs: "mp4a.40.2,avc1.4D401F",
+                  audioGroupId: "audio-aacl-128",
+                },
+              ],
+              renditions: [
+                {
+                  type: "AUDIO",
+                  groupId: "audio-aacl-128",
+                  language: "pt",
+                  name: "Portuguese",
+                  uri: "audio-pt.m3u8",
+                  url: "https://example.com/audio-pt.m3u8",
+                },
+              ],
+            });
+          }
+
+          const isAudio = url.includes("audio-");
+          return makeInspectResult({
+            url,
+            finalUrl: url,
+            playlistType: "media",
+            variants: [],
+            targetDuration: 4,
+            segments: [
+              {
+                uri: isAudio ? "audio-0.aac" : "video-0.ts",
+                url: `https://cdn.example.com/${isAudio ? "audio" : "video"}-0.bin`,
+                duration: 4,
+              },
+              {
+                uri: isAudio ? "audio-1.aac" : "video-1.ts",
+                url: `https://cdn.example.com/${isAudio ? "audio" : "video"}-1.bin`,
+                duration: 4,
+              },
+              {
+                uri: isAudio ? "audio-2.aac" : "video-2.ts",
+                url: `https://cdn.example.com/${isAudio ? "audio" : "video"}-2.bin`,
+                duration: 4,
+              },
+            ],
+          });
+        },
+        probe: async ({ input, streamSelector, timeline }) => {
+          analyzedInputs.push(`${streamSelector}:${input}:${timeline ? "timeline" : "plain"}`);
+          const isAudio = input.includes("/audio/");
+          return {
+            ok: true,
+            input,
+            timeoutMs: 5000,
+            format: {
+              duration: isAudio ? "4.011" : "4.004",
+            },
+            streams: isAudio ? [{ codec_type: "audio" }] : [{ codec_type: "video" }, { codec_type: "audio" }],
+            timeline: isAudio
+              ? {
+                  streamSelector: "a:0",
+                  sampleKind: "packets",
+                  sampleCount: 180,
+                  firstPtsTime: 12.032,
+                  lastPtsTime: 16.021,
+                }
+              : {
+                  streamSelector: "v:0",
+                  sampleKind: "frames",
+                  sampleCount: 96,
+                  firstPtsTime: 10.000,
+                  lastPtsTime: 13.962,
+                  keyframeCount: 2,
+                  startsWithKeyframe: true,
+                  maxKeyframeGapSeconds: 2.000,
+                },
+            errors: [],
+          };
+        },
+      },
+      root,
+      async () => new Response(new Uint8Array([1, 2, 3])),
+    );
+    await service.init();
+
+    const result = await service.cloneHls({
+      sessionKey: "test",
+      url: "https://example.com/master.m3u8",
+      durationSeconds: 12,
+      originId: "analyze-origin",
+    });
+
+    const report = await service.analyzeOrigin(result.id, {
+      maxMediaPlaylists: 4,
+      maxSegmentsPerPlaylist: 3,
+      timeoutMs: 5000,
+    });
+
+    expect(report.originId).toBe("analyze-origin");
+    expect(report.sampledMediaPlaylists).toBe(2);
+    expect(report.totalMediaPlaylists).toBe(2);
+    expect(report.sampledSegments).toBe(6);
+    expect(report.okSegments).toBe(6);
+    expect(report.failedSegments).toBe(0);
+    expect(report.entries[0]).toMatchObject({
+      kind: "variant",
+      mediaIndex: 0,
+      segmentIndex: 0,
+      type: "VIDEO",
+      declaredDurationSeconds: 4,
+      actualDurationSeconds: 4.004,
+      streamCount: 2,
+      packetCount: 96,
+      firstPtsTime: 10,
+      lastPtsTime: 13.962,
+      keyframeCount: 2,
+      startsWithKeyframe: true,
+      maxKeyframeGapSeconds: 2,
+      ok: true,
+    });
+    expect(report.entries[3]).toMatchObject({
+      kind: "rendition",
+      mediaIndex: 0,
+      segmentIndex: 0,
+      type: "AUDIO",
+      actualDurationSeconds: 4.011,
+      streamCount: 1,
+      packetCount: 180,
+      firstPtsTime: 12.032,
+      lastPtsTime: 16.021,
+      ok: true,
+    });
+    expect(analyzedInputs).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("v:0:"),
+        expect.stringContaining("a:0:"),
+      ]),
+    );
   });
 
   it("serve o origin local com CORS", async () => {

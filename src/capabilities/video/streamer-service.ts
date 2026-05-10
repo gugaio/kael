@@ -6,6 +6,7 @@ import type { AddressInfo } from "node:net";
 import type { VideoHlsInspectResult, VideoInspectToolService } from "./inspect-service.js";
 import { isBrowserSafeHlsVariant } from "./streamer-diagnostics.js";
 import type {
+  StreamerAnalyzeOptions,
   StreamerCloneInput,
   StreamerCloneProgressEvent,
   StreamerCloneResult,
@@ -15,13 +16,17 @@ import type {
   StreamerClonedVariant,
   StreamerLiveServeHandle,
   StreamerLiveServeOptions,
+  StreamerOriginAnalysisReport,
+  StreamerOriginProbeReport,
   StreamerOriginSummary,
+  StreamerProbeOptions,
   StreamerRemoveResult,
   StreamerServeHandle,
   StreamerServeOptions,
 } from "./types.js";
 
-type HlsInspectLike = Pick<VideoInspectToolService, "inspectHls">;
+type HlsInspectLike = Pick<VideoInspectToolService, "inspectHls"> &
+  Partial<Pick<VideoInspectToolService, "probe">>;
 
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
@@ -32,6 +37,24 @@ type SelectedMediaPlaylist = {
 
 type VariantSource = NonNullable<StreamerClonedVariant["variant"]>;
 type RenditionSource = VideoHlsInspectResult["renditions"][number];
+type RenditionKind = "AUDIO" | "SUBTITLES";
+type RenditionRef = {
+  kind: RenditionKind;
+  routeIndex: number;
+  globalIndex: number;
+  rendition: StreamerClonedRendition;
+};
+type StreamerProbeCandidate = {
+  kind: "variant" | "rendition";
+  index: number;
+  type: "VIDEO" | RenditionKind;
+  label: string;
+  manifestPath: string;
+};
+type StreamerAnalyzeCandidate = StreamerProbeCandidate & {
+  rootPath: string;
+  segments: StreamerClonedSegment[];
+};
 type ClonedMediaSource = {
   localUri: string;
   targetDuration: number;
@@ -39,11 +62,25 @@ type ClonedMediaSource = {
 };
 type ProgressEmitter = (event: StreamerCloneProgressEvent) => void;
 
+const RENDITION_KIND_CONFIG: Record<RenditionKind, { dir: "audio" | "subtitles"; route: "audio" | "subtitles" }> = {
+  AUDIO: {
+    dir: "audio",
+    route: "audio",
+  },
+  SUBTITLES: {
+    dir: "subtitles",
+    route: "subtitles",
+  },
+};
+
 const DEFAULT_DURATION_SECONDS = 60;
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_SEGMENT_TIMEOUT_MS = 60_000;
 const DEFAULT_SEGMENT_RETRIES = 2;
 const DEFAULT_MAX_SEGMENTS = 200;
+const DEFAULT_PROBE_TIMEOUT_MS = 10_000;
+const DEFAULT_MAX_PROBE_MEDIA_PLAYLISTS = 4;
+const DEFAULT_MAX_ANALYZE_SEGMENTS_PER_PLAYLIST = 3;
 const DEFAULT_LIVE_WINDOW_SIZE = 5;
 const DEFAULT_INITIAL_MEDIA_SEQUENCE = 100_000;
 const STREAMER_ORIGIN_SCHEMA_VERSION = 2;
@@ -86,6 +123,125 @@ export class StreamerService {
 
   async inspectOrigin(originId: string): Promise<StreamerCloneResult> {
     return this.loadCloneResult(originId);
+  }
+
+  async probeOrigin(originId: string, options: StreamerProbeOptions = {}): Promise<StreamerOriginProbeReport> {
+    if (!this.inspect.probe) {
+      throw new Error("streamer probe requires ffprobe support in VideoInspectToolService");
+    }
+
+    const clone = await this.loadCloneResult(originId);
+    const timeoutMs = normalizePositiveNumber(options.timeoutMs, DEFAULT_PROBE_TIMEOUT_MS, 1_000, 120_000);
+    const maxMediaPlaylists = Math.floor(
+      normalizePositiveNumber(
+        options.maxMediaPlaylists,
+        DEFAULT_MAX_PROBE_MEDIA_PLAYLISTS,
+        1,
+        32,
+      ),
+    );
+    const candidates = buildProbeCandidates(clone).slice(0, maxMediaPlaylists);
+    const entries: StreamerOriginProbeReport["entries"] = [];
+
+    for (const candidate of candidates) {
+      const result = await this.inspect.probe({
+        input: candidate.manifestPath,
+        timeoutMs,
+      });
+      entries.push({
+        kind: candidate.kind,
+        index: candidate.index,
+        type: candidate.type,
+        label: candidate.label,
+        manifestPath: candidate.manifestPath,
+        ok: result.ok,
+        streamCount: Array.isArray(result.streams) ? result.streams.length : 0,
+        errors: result.errors,
+      });
+    }
+
+    const okCount = entries.filter((entry) => entry.ok).length;
+    return {
+      originId: clone.id,
+      ok: entries.every((entry) => entry.ok),
+      sampledMediaPlaylists: entries.length,
+      totalMediaPlaylists: clone.variantCount + clone.renditionCount,
+      okCount,
+      failedCount: entries.length - okCount,
+      entries,
+    };
+  }
+
+  async analyzeOrigin(originId: string, options: StreamerAnalyzeOptions = {}): Promise<StreamerOriginAnalysisReport> {
+    if (!this.inspect.probe) {
+      throw new Error("streamer analyze requires ffprobe support in VideoInspectToolService");
+    }
+
+    const clone = await this.loadCloneResult(originId);
+    const timeoutMs = normalizePositiveNumber(options.timeoutMs, DEFAULT_PROBE_TIMEOUT_MS, 1_000, 120_000);
+    const maxMediaPlaylists = Math.floor(
+      normalizePositiveNumber(
+        options.maxMediaPlaylists,
+        DEFAULT_MAX_PROBE_MEDIA_PLAYLISTS,
+        1,
+        32,
+      ),
+    );
+    const maxSegmentsPerPlaylist = Math.floor(
+      normalizePositiveNumber(
+        options.maxSegmentsPerPlaylist,
+        DEFAULT_MAX_ANALYZE_SEGMENTS_PER_PLAYLIST,
+        1,
+        8,
+      ),
+    );
+    const candidates = buildAnalyzeCandidates(clone).slice(0, maxMediaPlaylists);
+    const entries: StreamerOriginAnalysisReport["entries"] = [];
+
+    for (const candidate of candidates) {
+      for (const segmentIndex of sampleSegmentIndices(candidate.segments.length, maxSegmentsPerPlaylist)) {
+        const segment = candidate.segments[segmentIndex];
+        const localPath = path.join(candidate.rootPath, segment.localUri);
+        const streamSelector = probeStreamSelectorFor(candidate.type);
+        const result = await this.inspect.probe({
+          input: localPath,
+          timeoutMs,
+          timeline: true,
+          streamSelector,
+        });
+        entries.push({
+          kind: candidate.kind,
+          mediaIndex: candidate.index,
+          segmentIndex,
+          type: candidate.type,
+          label: candidate.label,
+          localPath,
+          declaredDurationSeconds: segment.duration,
+          actualDurationSeconds: extractProbeDurationSeconds(result.format),
+          streamCount: Array.isArray(result.streams) ? result.streams.length : 0,
+          packetCount: result.timeline?.sampleCount,
+          firstPtsTime: result.timeline?.firstPtsTime,
+          lastPtsTime: result.timeline?.lastPtsTime,
+          keyframeCount: result.timeline?.keyframeCount,
+          startsWithKeyframe: result.timeline?.startsWithKeyframe,
+          maxKeyframeGapSeconds: result.timeline?.maxKeyframeGapSeconds,
+          ok: result.ok,
+          errors: result.errors,
+        });
+      }
+    }
+
+    const okSegments = entries.filter((entry) => entry.ok).length;
+    return {
+      originId: clone.id,
+      ok: entries.every((entry) => entry.ok),
+      sampledMediaPlaylists: candidates.length,
+      totalMediaPlaylists: clone.variantCount + clone.renditionCount,
+      sampledSegments: entries.length,
+      okSegments,
+      failedSegments: entries.length - okSegments,
+      entries,
+    };
   }
 
   async removeOrigin(originId: string): Promise<StreamerRemoveResult> {
@@ -192,7 +348,7 @@ export class StreamerService {
       allVariants = true;
       finalUrl = root.finalUrl;
       selectedUrl = root.url;
-      clonedRenditions = await this.cloneAudioRenditions({
+      clonedRenditions = await this.cloneLinkedRenditions({
         root,
         variants: variantsToClone,
         originDir,
@@ -220,11 +376,11 @@ export class StreamerService {
       selectedUrl = selected.inspected.url;
       finalUrl = selected.inspected.finalUrl;
       selectedVariant = selected.selectedVariant;
-      const audioRenditions =
+      const linkedRenditions =
         root.playlistType === "master" && selected.selectedVariant
-          ? selectAudioRenditions(root, [selected.selectedVariant])
+          ? selectLinkedRenditions(root, [selected.selectedVariant])
           : [];
-      const useLocalMaster = audioRenditions.length > 0;
+      const useLocalMaster = linkedRenditions.length > 0;
       clonedVariants = [
         await this.cloneMediaPlaylist({
           inspected: selected.inspected,
@@ -249,7 +405,7 @@ export class StreamerService {
         }),
       ];
       if (useLocalMaster && selected.selectedVariant) {
-        clonedRenditions = await this.cloneAudioRenditions({
+        clonedRenditions = await this.cloneLinkedRenditions({
           root,
           variants: [selected.selectedVariant],
           originDir,
@@ -259,7 +415,7 @@ export class StreamerService {
           segmentTimeoutMs,
           segmentRetries,
           progress: emit,
-          renditions: audioRenditions,
+          renditions: linkedRenditions,
         });
         const manifestText = buildLocalMasterPlaylist(clonedVariants, clonedRenditions);
         await fs.writeFile(path.join(originDir, "index.m3u8"), manifestText, "utf-8");
@@ -611,7 +767,7 @@ export class StreamerService {
     };
   }
 
-  private async cloneAudioRenditions(params: {
+  private async cloneLinkedRenditions(params: {
     root: VideoHlsInspectResult;
     variants: VariantSource[];
     originDir: string;
@@ -623,14 +779,21 @@ export class StreamerService {
     progress: ProgressEmitter;
     renditions?: RenditionSource[];
   }): Promise<StreamerClonedRendition[]> {
-    const renditions = params.renditions ?? selectAudioRenditions(params.root, params.variants);
+    const renditions = params.renditions ?? selectLinkedRenditions(params.root, params.variants);
     const cloned: StreamerClonedRendition[] = [];
+    const nextIndexByKind: Record<RenditionKind, number> = {
+      AUDIO: 0,
+      SUBTITLES: 0,
+    };
 
     for (let index = 0; index < renditions.length; index += 1) {
       const rendition = renditions[index];
       if (!rendition.uri || !rendition.url) {
         continue;
       }
+      const kind = requireRenditionKind(rendition.type);
+      const kindIndex = nextIndexByKind[kind];
+      nextIndexByKind[kind] += 1;
 
       const label = formatRenditionLabel(rendition);
       params.progress({
@@ -645,7 +808,7 @@ export class StreamerService {
         maxSegments: params.maxSegments,
         timeoutMs: params.timeoutMs,
       });
-      const localDir = `audio/${buildRenditionDirName(index, rendition)}`;
+      const localDir = `${renditionDirectory(rendition)}/${buildRenditionDirName(kindIndex, rendition)}`;
       const media = await this.cloneMediaPlaylist({
         inspected,
         originDir: params.originDir,
@@ -851,11 +1014,12 @@ export class StreamerService {
         return;
       }
 
-      const audioMediaMatch = pathname.match(/^\/live\/audio\/(\d+)\/index\.m3u8$/);
-      if (audioMediaMatch) {
-        const renditionIndex = parseRenditionIndex(clone, audioMediaMatch[1]);
-        const rendition = clone.renditions[renditionIndex];
-        const body = buildLiveMediaPlaylist(rendition, `/live/audio/${renditionIndex}`, state, Date.now());
+      const renditionMediaMatch = pathname.match(/^\/live\/(audio|subtitles)\/(\d+)\/index\.m3u8$/);
+      if (renditionMediaMatch) {
+        const renditionKind = renditionKindFromRoute(renditionMediaMatch[1]);
+        const renditionIndex = parseRenditionIndex(renditionMediaMatch[2]);
+        const ref = findRenditionRef(clone.renditions, renditionKind, renditionIndex);
+        const body = buildLiveMediaPlaylist(ref.rendition, liveRenditionPath(ref), state, Date.now());
         sendText(response, request.method, body, "application/vnd.apple.mpegurl");
         return;
       }
@@ -882,13 +1046,15 @@ export class StreamerService {
         return;
       }
 
-      const audioSegmentMatch = pathname.match(/^\/live\/audio\/(\d+)\/segments\/(\d+)(?:\.[^/]*)?$/);
-      if (audioSegmentMatch) {
-        const renditionIndex = parseRenditionIndex(clone, audioSegmentMatch[1]);
-        const rendition = clone.renditions[renditionIndex];
-        const sequence = Number(audioSegmentMatch[2]);
+      const renditionSegmentMatch = pathname.match(/^\/live\/(audio|subtitles)\/(\d+)\/segments\/(\d+)(?:\.[^/]*)?$/);
+      if (renditionSegmentMatch) {
+        const renditionKind = renditionKindFromRoute(renditionSegmentMatch[1]);
+        const renditionIndex = parseRenditionIndex(renditionSegmentMatch[2]);
+        const ref = findRenditionRef(clone.renditions, renditionKind, renditionIndex);
+        const rendition = ref.rendition;
+        const sequence = Number(renditionSegmentMatch[3]);
         if (!Number.isSafeInteger(sequence) || sequence < 0) {
-          throw new Error("invalid live audio segment sequence");
+          throw new Error("invalid live rendition segment sequence");
         }
         const segment = segmentForSequence(rendition, sequence);
         const filePath = resolveClonedSegmentPath(clone.rootDir, rendition, segment);
@@ -926,14 +1092,16 @@ export class StreamerService {
         return;
       }
 
-      const audioMapMatch = pathname.match(/^\/live\/audio\/(\d+)\/init\/([^/]+)$/);
-      if (audioMapMatch) {
-        const renditionIndex = parseRenditionIndex(clone, audioMapMatch[1]);
-        const rendition = clone.renditions[renditionIndex];
-        const localUri = `init/${decodeURIComponent(audioMapMatch[2] ?? "")}`;
+      const renditionMapMatch = pathname.match(/^\/live\/(audio|subtitles)\/(\d+)\/init\/([^/]+)$/);
+      if (renditionMapMatch) {
+        const renditionKind = renditionKindFromRoute(renditionMapMatch[1]);
+        const renditionIndex = parseRenditionIndex(renditionMapMatch[2]);
+        const ref = findRenditionRef(clone.renditions, renditionKind, renditionIndex);
+        const rendition = ref.rendition;
+        const localUri = `init/${decodeURIComponent(renditionMapMatch[3] ?? "")}`;
         const clonedMap = (rendition.maps ?? []).find((candidate) => candidate.localUri === localUri);
         if (!clonedMap) {
-          throw new Error("live audio init segment not found");
+          throw new Error("live rendition init segment not found");
         }
         const filePath = resolveClonedMapPath(clone.rootDir, rendition, clonedMap);
         const data = await fs.readFile(filePath);
@@ -1079,26 +1247,45 @@ function selectAllVariants(root: VideoHlsInspectResult, maxVariants: number | un
   return root.variants.slice(0, normalizedMax).map(toVariantSource);
 }
 
-function selectAudioRenditions(root: VideoHlsInspectResult, variants: VariantSource[]): RenditionSource[] {
-  const audioGroupIds = new Set(
-    variants
-      .map((variant) => variant.audioGroupId)
-      .filter((value): value is string => Boolean(value)),
-  );
-  if (audioGroupIds.size === 0) {
+function selectLinkedRenditions(root: VideoHlsInspectResult, variants: VariantSource[]): RenditionSource[] {
+  return [
+    ...selectRenditionsByGroups(
+      root,
+      "AUDIO",
+      variants
+        .map((variant) => variant.audioGroupId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+    ...selectRenditionsByGroups(
+      root,
+      "SUBTITLES",
+      variants
+        .map((variant) => variant.subtitlesGroupId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ];
+}
+
+function selectRenditionsByGroups(
+  root: VideoHlsInspectResult,
+  type: RenditionKind,
+  groupIds: string[],
+): RenditionSource[] {
+  const selectedGroupIds = new Set(groupIds);
+  if (selectedGroupIds.size === 0) {
     return [];
   }
 
   const seen = new Set<string>();
   const out: RenditionSource[] = [];
   for (const rendition of root.renditions) {
-    if (rendition.type.toUpperCase() !== "AUDIO" || !rendition.groupId || !rendition.uri || !rendition.url) {
+    if (rendition.type.toUpperCase() !== type || !rendition.groupId || !rendition.uri || !rendition.url) {
       continue;
     }
-    if (!audioGroupIds.has(rendition.groupId)) {
+    if (!selectedGroupIds.has(rendition.groupId)) {
       continue;
     }
-    const key = `${rendition.groupId}|${rendition.name ?? ""}|${rendition.url}`;
+    const key = `${rendition.type}|${rendition.groupId}|${rendition.name ?? ""}|${rendition.url}`;
     if (seen.has(key)) {
       continue;
     }
@@ -1106,6 +1293,76 @@ function selectAudioRenditions(root: VideoHlsInspectResult, variants: VariantSou
     out.push(rendition);
   }
   return out;
+}
+
+function renditionGroupIdsFor(renditions: StreamerClonedRendition[], kind: RenditionKind): Set<string> {
+  return new Set(
+    renditions
+      .filter((rendition) => normalizeRenditionKind(rendition.type) === kind && rendition.groupId)
+      .map((rendition) => rendition.groupId as string),
+  );
+}
+
+function normalizeRenditionKind(type: string): RenditionKind | null {
+  const normalized = type.trim().toUpperCase();
+  if (normalized === "AUDIO" || normalized === "SUBTITLES") {
+    return normalized;
+  }
+  return null;
+}
+
+function requireRenditionKind(type: string): RenditionKind {
+  const kind = normalizeRenditionKind(type);
+  if (!kind) {
+    throw new Error(`unsupported rendition type "${type}"`);
+  }
+  return kind;
+}
+
+function renditionDirectory(rendition: RenditionSource | StreamerClonedRendition): "audio" | "subtitles" {
+  return RENDITION_KIND_CONFIG[requireRenditionKind(rendition.type)].dir;
+}
+
+function liveRenditionPath(ref: RenditionRef): string {
+  return `/live/${RENDITION_KIND_CONFIG[ref.kind].route}/${ref.routeIndex}`;
+}
+
+function renditionKindFromRoute(raw: string | undefined): RenditionKind {
+  return raw === "subtitles" ? "SUBTITLES" : "AUDIO";
+}
+
+function buildRenditionRefs(renditions: StreamerClonedRendition[]): RenditionRef[] {
+  const nextIndexByKind: Record<RenditionKind, number> = {
+    AUDIO: 0,
+    SUBTITLES: 0,
+  };
+  const refs: RenditionRef[] = [];
+
+  for (let globalIndex = 0; globalIndex < renditions.length; globalIndex += 1) {
+    const rendition = renditions[globalIndex];
+    const kind = requireRenditionKind(rendition.type);
+    refs.push({
+      kind,
+      routeIndex: nextIndexByKind[kind],
+      globalIndex,
+      rendition,
+    });
+    nextIndexByKind[kind] += 1;
+  }
+
+  return refs;
+}
+
+function findRenditionRef(
+  renditions: StreamerClonedRendition[],
+  kind: RenditionKind,
+  routeIndex: number,
+): RenditionRef {
+  const ref = buildRenditionRefs(renditions).find((candidate) => candidate.kind === kind && candidate.routeIndex === routeIndex);
+  if (!ref) {
+    throw new Error("invalid live rendition index");
+  }
+  return ref;
 }
 
 function toVariantSource(variant: VideoHlsInspectResult["variants"][number]): VariantSource {
@@ -1140,7 +1397,7 @@ function formatRenditionLabel(rendition: RenditionSource): string {
     rendition.name,
     rendition.channels ? `${rendition.channels}ch` : undefined,
   ].filter((value): value is string => Boolean(value));
-  return parts.length > 0 ? parts.join(" | ") : rendition.uri ?? "audio rendition";
+  return parts.length > 0 ? parts.join(" | ") : rendition.uri ?? "rendition";
 }
 
 function selectSegmentsForDuration(
@@ -1190,6 +1447,105 @@ function toOriginSummary(result: StreamerCloneResult): StreamerOriginSummary {
   };
 }
 
+function buildProbeCandidates(clone: StreamerCloneResult): StreamerProbeCandidate[] {
+  return [
+    ...clone.variants.map((variant, index) => ({
+      kind: "variant" as const,
+      index,
+      type: "VIDEO" as const,
+      label: formatVariantProbeLabel(variant),
+      manifestPath: variant.manifestPath,
+    })),
+    ...clone.renditions.map((rendition, index) => ({
+      kind: "rendition" as const,
+      index,
+      type: requireRenditionKind(rendition.type),
+      label: formatRenditionProbeLabel(rendition),
+      manifestPath: rendition.manifestPath,
+    })),
+  ];
+}
+
+function buildAnalyzeCandidates(clone: StreamerCloneResult): StreamerAnalyzeCandidate[] {
+  return [
+    ...clone.variants.map((variant, index) => ({
+      kind: "variant" as const,
+      index,
+      type: "VIDEO" as const,
+      label: formatVariantProbeLabel(variant),
+      manifestPath: variant.manifestPath,
+      rootPath: path.dirname(variant.manifestPath),
+      segments: variant.segments,
+    })),
+    ...clone.renditions.map((rendition, index) => ({
+      kind: "rendition" as const,
+      index,
+      type: requireRenditionKind(rendition.type),
+      label: formatRenditionProbeLabel(rendition),
+      manifestPath: rendition.manifestPath,
+      rootPath: path.dirname(rendition.manifestPath),
+      segments: rendition.segments,
+    })),
+  ];
+}
+
+function sampleSegmentIndices(segmentCount: number, maxSegments: number): number[] {
+  if (segmentCount <= 0 || maxSegments <= 0) {
+    return [];
+  }
+  if (segmentCount <= maxSegments) {
+    return Array.from({ length: segmentCount }, (_, index) => index);
+  }
+
+  const samples = new Set<number>([0, Math.floor((segmentCount - 1) / 2), segmentCount - 1]);
+  if (maxSegments >= 4) {
+    samples.add(Math.floor(segmentCount / 3));
+  }
+  if (maxSegments >= 5) {
+    samples.add(Math.floor((2 * segmentCount) / 3));
+  }
+
+  return [...samples].sort((left, right) => left - right).slice(0, maxSegments);
+}
+
+function probeStreamSelectorFor(type: "VIDEO" | RenditionKind): string {
+  switch (type) {
+    case "VIDEO":
+      return "v:0";
+    case "AUDIO":
+      return "a:0";
+    case "SUBTITLES":
+      return "s:0";
+  }
+}
+
+function extractProbeDurationSeconds(format: unknown): number | undefined {
+  if (!format || typeof format !== "object") {
+    return undefined;
+  }
+  const duration = (format as { duration?: unknown }).duration;
+  if (typeof duration !== "string" && typeof duration !== "number") {
+    return undefined;
+  }
+  const value = Number(duration);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function formatVariantProbeLabel(variant: StreamerClonedVariant): string {
+  return formatVariantLabel(variant.variant ?? { uri: variant.sourceUri, url: variant.sourceUrl });
+}
+
+function formatRenditionProbeLabel(rendition: StreamerClonedRendition): string {
+  return [
+    rendition.type.toUpperCase(),
+    rendition.groupId,
+    rendition.name,
+    rendition.channels ? `${rendition.channels}ch` : undefined,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(" | ") || rendition.sourceUri;
+}
+
 function buildSegmentFileName(index: number, uri: string): string {
   let basename = "";
   try {
@@ -1225,8 +1581,9 @@ function buildRenditionDirName(index: number, rendition: RenditionSource): strin
     }
   }
 
-  const readable = [rendition.groupId, rendition.name].filter(Boolean).join("-") || basename || `audio-${index}`;
-  const safeBase = readable.replace(/[^a-zA-Z0-9._-]/g, "-") || `audio-${index}`;
+  const fallback = `${renditionDirectory(rendition)}-${index}`;
+  const readable = [rendition.groupId, rendition.name].filter(Boolean).join("-") || basename || fallback;
+  const safeBase = readable.replace(/[^a-zA-Z0-9._-]/g, "-") || fallback;
   return `${String(index).padStart(3, "0")}-${safeBase}`;
 }
 
@@ -1247,25 +1604,26 @@ function buildLocalMasterPlaylist(
   renditions: StreamerClonedRendition[] = [],
 ): string {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:3"];
-  const audioGroupIds = new Set(
-    renditions
-      .filter((rendition) => rendition.type.toUpperCase() === "AUDIO" && rendition.groupId)
-      .map((rendition) => rendition.groupId as string),
-  );
+  const audioGroupIds = renditionGroupIdsFor(renditions, "AUDIO");
+  const subtitleGroupIds = renditionGroupIdsFor(renditions, "SUBTITLES");
 
   for (const rendition of renditions) {
     lines.push(`#EXT-X-MEDIA:${formatRenditionAttrs(rendition, rendition.localUri)}`);
   }
 
   for (const variant of variants) {
-    lines.push(`#EXT-X-STREAM-INF:${formatVariantAttrs(variant, audioGroupIds)}`);
+    lines.push(`#EXT-X-STREAM-INF:${formatVariantAttrs(variant, audioGroupIds, subtitleGroupIds)}`);
     lines.push(variant.localUri);
   }
 
   return `${lines.join("\n")}\n`;
 }
 
-function formatVariantAttrs(cloned: StreamerClonedVariant, availableAudioGroupIds = new Set<string>()): string {
+function formatVariantAttrs(
+  cloned: StreamerClonedVariant,
+  availableAudioGroupIds = new Set<string>(),
+  availableSubtitleGroupIds = new Set<string>(),
+): string {
   const attrs: string[] = [];
   const variant = cloned.variant;
 
@@ -1284,6 +1642,9 @@ function formatVariantAttrs(cloned: StreamerClonedVariant, availableAudioGroupId
   }
   if (variant?.audioGroupId && availableAudioGroupIds.has(variant.audioGroupId)) {
     attrs.push(`AUDIO="${variant.audioGroupId}"`);
+  }
+  if (variant?.subtitlesGroupId && availableSubtitleGroupIds.has(variant.subtitlesGroupId)) {
+    attrs.push(`SUBTITLES="${variant.subtitlesGroupId}"`);
   }
   if (variant?.closedCaptions) {
     attrs.push(`CLOSED-CAPTIONS=${variant.closedCaptions}`);
@@ -1362,6 +1723,7 @@ function contentTypeFor(filePath: string): string {
   if (ext === ".m4s") return "video/iso.segment";
   if (ext === ".mp4") return "video/mp4";
   if (ext === ".aac") return "audio/aac";
+  if (ext === ".webvtt") return "text/vtt";
   if (ext === ".vtt") return "text/vtt";
   return "application/octet-stream";
 }
@@ -1387,18 +1749,16 @@ function buildLiveMasterPlaylist(
   renditions: StreamerClonedRendition[] = [],
 ): string {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:3"];
-  const audioGroupIds = new Set(
-    renditions
-      .filter((rendition) => rendition.type.toUpperCase() === "AUDIO" && rendition.groupId)
-      .map((rendition) => rendition.groupId as string),
-  );
+  const audioGroupIds = renditionGroupIdsFor(renditions, "AUDIO");
+  const subtitleGroupIds = renditionGroupIdsFor(renditions, "SUBTITLES");
+  const renditionRefs = buildRenditionRefs(renditions);
 
-  for (let index = 0; index < renditions.length; index += 1) {
-    lines.push(`#EXT-X-MEDIA:${formatRenditionAttrs(renditions[index], `/live/audio/${index}/index.m3u8`)}`);
+  for (const ref of renditionRefs) {
+    lines.push(`#EXT-X-MEDIA:${formatRenditionAttrs(ref.rendition, `${liveRenditionPath(ref)}/index.m3u8`)}`);
   }
 
   for (let index = 0; index < variants.length; index += 1) {
-    lines.push(`#EXT-X-STREAM-INF:${formatVariantAttrs(variants[index], audioGroupIds)}`);
+    lines.push(`#EXT-X-STREAM-INF:${formatVariantAttrs(variants[index], audioGroupIds, subtitleGroupIds)}`);
     lines.push(`/live/${index}/index.m3u8`);
   }
 
@@ -1481,10 +1841,10 @@ function parseVariantIndex(clone: StreamerCloneResult, raw: string | undefined):
   return index;
 }
 
-function parseRenditionIndex(clone: StreamerCloneResult, raw: string | undefined): number {
+function parseRenditionIndex(raw: string | undefined): number {
   const index = Number(raw);
-  if (!Number.isInteger(index) || index < 0 || index >= clone.renditions.length) {
-    throw new Error("invalid live audio rendition index");
+  if (!Number.isInteger(index) || index < 0) {
+    throw new Error("invalid live rendition index");
   }
   return index;
 }

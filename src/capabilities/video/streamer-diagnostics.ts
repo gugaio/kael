@@ -34,6 +34,9 @@ export type StreamerCloneDiagnostic = {
   browserCompatibleVariantCount: number;
   variantCount: number;
   externalAudio: boolean;
+  externalSubtitles: boolean;
+  audioRenditionCount: number;
+  subtitleRenditionCount: number;
   videoCodecs: string[];
   audioCodecs: string[];
   variants: StreamerVariantDiagnostic[];
@@ -102,6 +105,10 @@ export function diagnoseStreamerClone(origin: StreamerCloneResult): StreamerClon
   const browserCompatibility = deriveBrowserCompatibility(origin.variantCount, compatibleCount, unknownCount);
   const videoCodecs = uniqueStrings(variants.flatMap((variant) => variant.videoCodecs));
   const audioCodecs = uniqueStrings(variants.flatMap((variant) => variant.audioCodecs));
+  const audioRenditionCount = origin.renditions.filter((rendition) => rendition.type.toUpperCase() === "AUDIO").length;
+  const subtitleRenditionCount = origin.renditions.filter(
+    (rendition) => rendition.type.toUpperCase() === "SUBTITLES",
+  ).length;
   const issues = buildDiagnosticIssues(variants, browserCompatibility);
   const recommendations = buildDiagnosticRecommendations(browserCompatibility, origin.allVariants);
 
@@ -109,7 +116,10 @@ export function diagnoseStreamerClone(origin: StreamerCloneResult): StreamerClon
     browserCompatibility,
     browserCompatibleVariantCount: compatibleCount,
     variantCount: origin.variantCount,
-    externalAudio: origin.renditionCount > 0,
+    externalAudio: audioRenditionCount > 0,
+    externalSubtitles: subtitleRenditionCount > 0,
+    audioRenditionCount,
+    subtitleRenditionCount,
     videoCodecs,
     audioCodecs,
     variants,

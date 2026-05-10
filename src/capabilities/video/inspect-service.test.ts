@@ -6,7 +6,7 @@ afterEach(() => {
 });
 
 describe("VideoInspectToolService", () => {
-  it("captura atributos de EXT-X-MEDIA audio e vinculo AUDIO em variants", async () => {
+  it("captura atributos de EXT-X-MEDIA audio/subtitles e vinculos em variants", async () => {
     vi.stubGlobal(
       "fetch",
       async () =>
@@ -14,6 +14,7 @@ describe("VideoInspectToolService", () => {
           [
             "#EXTM3U",
             '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio-aacl-128",LANGUAGE="pt",NAME="Portuguese",DEFAULT=YES,AUTOSELECT=YES,CHANNELS="2",URI="audio-pt.m3u8"',
+            '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="textstream",LANGUAGE="pt",NAME="Portuguese (caption)",AUTOSELECT=YES,CHARACTERISTICS="public.accessibility.transcribes-spoken-dialog",URI="subs-pt.m3u8"',
             '#EXT-X-STREAM-INF:BANDWIDTH=793000,CODECS="mp4a.40.2,avc1.4D401E",RESOLUTION=640x360,FRAME-RATE=23.976,AUDIO="audio-aacl-128",SUBTITLES="textstream",CLOSED-CAPTIONS=NONE',
             "video-360.m3u8",
           ].join("\n"),
@@ -34,6 +35,16 @@ describe("VideoInspectToolService", () => {
       channels: "2",
       uri: "audio-pt.m3u8",
       url: "https://example.com/audio-pt.m3u8",
+    });
+    expect(result.renditions[1]).toMatchObject({
+      type: "SUBTITLES",
+      groupId: "textstream",
+      language: "pt",
+      name: "Portuguese (caption)",
+      autoselect: true,
+      characteristics: "public.accessibility.transcribes-spoken-dialog",
+      uri: "subs-pt.m3u8",
+      url: "https://example.com/subs-pt.m3u8",
     });
     expect(result.variants[0]).toMatchObject({
       audioGroupId: "audio-aacl-128",

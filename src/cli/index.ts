@@ -9,6 +9,8 @@ import { DiscordChatOnlyBot } from "../integrations/discord/discord-bot.js";
 import {
   diagnoseStreamerClone,
   type StreamerCloneDiagnostic,
+  type StreamerOriginAnalysisReport,
+  type StreamerOriginProbeReport,
   StreamerCloneProgressEvent,
   StreamerCloneResult,
   StreamerClonedRendition,
@@ -59,6 +61,12 @@ type StreamerRemoveOptions = {
   yes?: boolean;
 };
 
+type StreamerAnalyzeOptions = {
+  timeoutMs?: string;
+  maxMediaPlaylists?: string;
+  maxSegmentsPerPlaylist?: string;
+};
+
 type StreamerFileProbe = {
   manifestCount: number;
   manifestsOk: number;
@@ -67,6 +75,13 @@ type StreamerFileProbe = {
   mapCount: number;
   mapsOk: number;
   missing: string[];
+};
+
+type StreamerProbeSummary = {
+  sampled: number;
+  total: number;
+  ok: number;
+  failed: number;
 };
 
 type ApiErrorShape = {
@@ -742,6 +757,7 @@ async function countExistingFiles(filePaths: string[]): Promise<{ ok: number; mi
 function formatStreamerDiagnosticSummary(
   diagnostic: StreamerCloneDiagnostic,
   fileProbe: StreamerFileProbe,
+  ffprobeSummary?: StreamerProbeSummary,
 ): string[] {
   const missingCount = fileProbe.missing.length;
   return [
@@ -750,7 +766,12 @@ function formatStreamerDiagnosticSummary(
     `diagnostic.videoCodecs=${formatUnknownList(diagnostic.videoCodecs)}`,
     `diagnostic.audioCodecs=${formatUnknownList(diagnostic.audioCodecs)}`,
     `diagnostic.externalAudio=${diagnostic.externalAudio ? "yes" : "no"}`,
+    `diagnostic.externalSubtitles=${diagnostic.externalSubtitles ? "yes" : "no"}`,
+    `diagnostic.renditions=audio ${diagnostic.audioRenditionCount}, subtitles ${diagnostic.subtitleRenditionCount}`,
     `diagnostic.files=manifests ${fileProbe.manifestsOk}/${fileProbe.manifestCount}, segments ${fileProbe.segmentsOk}/${fileProbe.segmentCount}, maps ${fileProbe.mapsOk}/${fileProbe.mapCount}`,
+    ...(ffprobeSummary
+      ? [`diagnostic.ffprobe=ok ${ffprobeSummary.ok}/${ffprobeSummary.sampled} sampled=${ffprobeSummary.sampled}/${ffprobeSummary.total} failed=${ffprobeSummary.failed}`]
+      : []),
     `diagnostic.issues=${diagnostic.issues.length + missingCount}`,
   ];
 }
@@ -759,10 +780,11 @@ function formatStreamerProbeReport(
   origin: StreamerCloneResult,
   diagnostic: StreamerCloneDiagnostic,
   fileProbe: StreamerFileProbe,
+  ffprobeReport: StreamerOriginProbeReport,
 ): string[] {
   return [
     `${highlight("streamer probe")}: ${origin.id}`,
-    ...formatStreamerDiagnosticSummary(diagnostic, fileProbe),
+    ...formatStreamerDiagnosticSummary(diagnostic, fileProbe, toStreamerProbeSummary(ffprobeReport)),
     "variants:",
     ...diagnostic.variants.map(
       (variant) =>
@@ -770,7 +792,7 @@ function formatStreamerProbeReport(
     ),
     ...(origin.renditions.length > 0
       ? [
-          "audioRenditions:",
+          "renditions:",
           ...origin.renditions.map((rendition, index) => `- [${index}] ${formatClonedRenditionLabel(rendition)}`),
         ]
       : []),
@@ -783,9 +805,48 @@ function formatStreamerProbeReport(
           ...fileProbe.missing.map((filePath) => `- [error] missing_file: ${filePath}`),
         ]
       : []),
+    ...(ffprobeReport.entries.length > 0
+      ? [
+          "ffprobe:",
+          ...ffprobeReport.entries.map(
+            (entry) =>
+              `- [${entry.ok ? "ok" : "error"}] ${entry.kind}[${entry.index}] ${entry.type} | streams=${entry.streamCount} | ${entry.label}${entry.errors.length > 0 ? ` | errors=${entry.errors.join(" ; ")}` : ""}`,
+          ),
+        ]
+      : []),
     ...(diagnostic.recommendations.length > 0
       ? ["recommendations:", ...diagnostic.recommendations.map((item) => `- ${item}`)]
       : []),
+  ];
+}
+
+function toStreamerProbeSummary(report: StreamerOriginProbeReport): StreamerProbeSummary {
+  return {
+    sampled: report.sampledMediaPlaylists,
+    total: report.totalMediaPlaylists,
+    ok: report.okCount,
+    failed: report.failedCount,
+  };
+}
+
+function formatStreamerAnalyzeReport(report: StreamerOriginAnalysisReport): string[] {
+  return [
+    `${highlight("streamer analyze")}: ${report.originId}`,
+    `segments=${report.okSegments}/${report.sampledSegments} sampled playlists=${report.sampledMediaPlaylists}/${report.totalMediaPlaylists} failed=${report.failedSegments}`,
+    ...report.entries.map((entry) => [
+      `- [${entry.ok ? "ok" : "error"}] ${entry.kind}[${entry.mediaIndex}] seg[${entry.segmentIndex}] ${entry.type}`,
+      `declared=${entry.declaredDurationSeconds?.toFixed(3) ?? "n/a"}s`,
+      `actual=${entry.actualDurationSeconds?.toFixed(3) ?? "n/a"}s`,
+      `pts=${entry.firstPtsTime?.toFixed(3) ?? "n/a"} -> ${entry.lastPtsTime?.toFixed(3) ?? "n/a"}`,
+      `samples=${entry.packetCount ?? 0}`,
+      ...(typeof entry.keyframeCount === "number" ? [`keyframes=${entry.keyframeCount}`] : []),
+      ...(typeof entry.startsWithKeyframe === "boolean" ? [`startsWithKeyframe=${entry.startsWithKeyframe ? "yes" : "no"}`] : []),
+      ...(typeof entry.maxKeyframeGapSeconds === "number"
+        ? [`maxKeyframeGap=${entry.maxKeyframeGapSeconds.toFixed(3)}s`]
+        : []),
+      entry.label,
+      ...(entry.errors.length > 0 ? [`errors=${entry.errors.join(" ; ")}`] : []),
+    ].join(" | ")),
   ];
 }
 
@@ -852,10 +913,10 @@ async function commandStreamerInspect(originId: string): Promise<void> {
     ),
     ...(origin.renditions.length > 0
       ? [
-          "audioRenditions:",
+          "renditions:",
           ...origin.renditions.map(
             (rendition, index) =>
-              `- [${index}] ${rendition.groupId ?? "unknown"} | ${rendition.name ?? "unnamed"} | local=${rendition.localUri} | segments=${rendition.segmentCount} | maps=${rendition.maps.length} | duration=${formatSeconds(rendition.cumulativeDurationSeconds)} | bytes=${formatBytes(rendition.bytes)}`,
+              `- [${index}] ${rendition.type.toUpperCase()} | ${rendition.groupId ?? "unknown"} | ${rendition.name ?? "unnamed"} | local=${rendition.localUri} | segments=${rendition.segmentCount} | maps=${rendition.maps.length} | duration=${formatSeconds(rendition.cumulativeDurationSeconds)} | bytes=${formatBytes(rendition.bytes)}`,
           ),
         ]
       : []),
@@ -870,8 +931,24 @@ async function commandStreamerProbe(originId: string | undefined): Promise<void>
   const origin: StreamerCloneResult = await app.streamer.inspectOrigin(resolvedOriginId);
   const diagnostic = diagnoseStreamerClone(origin);
   const fileProbe = await buildStreamerFileProbe(origin);
+  const ffprobeReport = await app.streamer.probeOrigin(resolvedOriginId);
 
-  console.log(formatStreamerProbeReport(origin, diagnostic, fileProbe).join("\n"));
+  console.log(formatStreamerProbeReport(origin, diagnostic, fileProbe, ffprobeReport).join("\n"));
+}
+
+async function commandStreamerAnalyze(originId: string | undefined, options: StreamerAnalyzeOptions): Promise<void> {
+  const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
+  const resolvedOriginId = await resolveStreamerOriginId(app.streamer, originId);
+  const timeoutMs = optionalNumber(options.timeoutMs, "--timeout-ms");
+  const maxMediaPlaylists = optionalNumber(options.maxMediaPlaylists, "--max-media-playlists");
+  const maxSegmentsPerPlaylist = optionalNumber(options.maxSegmentsPerPlaylist, "--max-segments-per-playlist");
+  const report = await app.streamer.analyzeOrigin(resolvedOriginId, {
+    ...(Number.isFinite(timeoutMs) ? { timeoutMs } : {}),
+    ...(Number.isFinite(maxMediaPlaylists) ? { maxMediaPlaylists } : {}),
+    ...(Number.isFinite(maxSegmentsPerPlaylist) ? { maxSegmentsPerPlaylist } : {}),
+  });
+
+  console.log(formatStreamerAnalyzeReport(report).join("\n"));
 }
 
 async function commandStreamerRemove(originId: string, options: StreamerRemoveOptions): Promise<void> {
@@ -921,6 +998,7 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
     : "media playlist direta";
   const diagnostic = diagnoseStreamerClone(result);
   const fileProbe = await buildStreamerFileProbe(result);
+  const ffprobeReport = await app.streamer.probeOrigin(result.id);
 
   console.log(
     [
@@ -934,7 +1012,7 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
       `bytes=${formatBytes(result.bytes)}`,
       `manifest=${result.manifestPath}`,
       `root=${result.rootDir}`,
-      ...formatStreamerDiagnosticSummary(diagnostic, fileProbe),
+      ...formatStreamerDiagnosticSummary(diagnostic, fileProbe, toStreamerProbeSummary(ffprobeReport)),
     ].join("\n"),
   );
 
@@ -1095,6 +1173,17 @@ async function main(): Promise<void> {
     .argument("[originId]", "id do origin criado por streamer clone ou latest", "latest")
     .action(async (originId: string | undefined) => {
       await commandStreamerProbe(originId);
+    });
+
+  streamer
+    .command("analyze")
+    .description("Analisa segmentos locais amostrados com ffprobe para PTS, duracao e keyframes")
+    .argument("[originId]", "id do origin criado por streamer clone ou latest", "latest")
+    .option("--timeout-ms <ms>", "timeout de ffprobe por segmento")
+    .option("--max-media-playlists <n>", "quantidade maxima de playlists consideradas")
+    .option("--max-segments-per-playlist <n>", "quantidade maxima de segmentos amostrados por playlist", "3")
+    .action(async (originId: string | undefined, options: StreamerAnalyzeOptions) => {
+      await commandStreamerAnalyze(originId, options);
     });
 
   streamer
