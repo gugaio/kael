@@ -65,6 +65,7 @@ type StreamerAnalyzeOptions = {
   timeoutMs?: string;
   maxMediaPlaylists?: string;
   maxSegmentsPerPlaylist?: string;
+  json?: boolean;
 };
 
 type StreamerFileProbe = {
@@ -834,6 +835,16 @@ function formatStreamerAnalyzeReport(report: StreamerOriginAnalysisReport): stri
     `${highlight("streamer analyze")}: ${report.originId}`,
     `segments=${report.okSegments}/${report.sampledSegments} sampled playlists=${report.sampledMediaPlaylists}/${report.totalMediaPlaylists} failed=${report.failedSegments}`,
     `audioVideoAlignment=${report.avAlignment.status} compared=${report.avAlignment.comparedPairs} durationDeltaMax=${formatOptionalSeconds(report.avAlignment.maxDurationDeltaSeconds)} ptsStartDeltaMax=${formatOptionalSeconds(report.avAlignment.maxStartPtsDeltaSeconds)}${report.avAlignment.notes.length > 0 ? ` notes=${report.avAlignment.notes.join(" ; ")}` : ""}`,
+    `issues=${report.issues.length}`,
+    ...(report.issues.length > 0
+      ? [
+          "issues:",
+          ...report.issues.map(
+            (issue) =>
+              `- [${issue.severity}] ${issue.code}: ${issue.summary}${issue.evidence.length > 0 ? ` (${issue.evidence.join(" | ")})` : ""}`,
+          ),
+        ]
+      : []),
     "media:",
     ...report.media.map((media) => [
       `- [${media.boundaryStatus}] ${media.kind}[${media.mediaIndex}] ${media.type}`,
@@ -975,6 +986,11 @@ async function commandStreamerAnalyze(originId: string | undefined, options: Str
     ...(Number.isFinite(maxMediaPlaylists) ? { maxMediaPlaylists } : {}),
     ...(Number.isFinite(maxSegmentsPerPlaylist) ? { maxSegmentsPerPlaylist } : {}),
   });
+
+  if (options.json) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
 
   console.log(formatStreamerAnalyzeReport(report).join("\n"));
 }
@@ -1210,6 +1226,7 @@ async function main(): Promise<void> {
     .option("--timeout-ms <ms>", "timeout de ffprobe por segmento")
     .option("--max-media-playlists <n>", "quantidade maxima de playlists consideradas")
     .option("--max-segments-per-playlist <n>", "quantidade maxima de segmentos amostrados por playlist", "3")
+    .option("--json", "imprime o relatorio completo em JSON", false)
     .action(async (originId: string | undefined, options: StreamerAnalyzeOptions) => {
       await commandStreamerAnalyze(originId, options);
     });

@@ -37,6 +37,30 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-05-10 - Fase 23: Streamer analyze issues e JSON
+
+Resumo:
+- `streamer analyze` agora emite `issues` estruturadas com severidade (`info`/`warning`/`error`), codigo, resumo e evidencias.
+- Cobertos sinais como `duration_delta_high`, `segment_boundary_gap`, `segment_boundary_overlap`, `segment_not_keyframe_aligned`, `gop_unstable` e `av_duration_drift`.
+- Adicionada flag `--json` para imprimir o relatorio completo do analyze em formato consumivel por automacao/CI.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/types.ts`
+- `src/capabilities/video/streamer-service.test.ts`
+- `src/cli/index.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/inspect-service.test.ts src/capabilities/video/streamer-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- Thresholds iniciais ainda precisam ser calibrados com mais origins reais.
+
+Proximo passo recomendado:
+- Rodar `./bin/kael streamer analyze latest --json` em origins reais e decidir se warnings devem afetar exit code em modo CI.
+
 ### 2026-05-10 - Fase 23: Streamer analyze com resumo de saude
 
 Resumo:

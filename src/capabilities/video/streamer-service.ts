@@ -244,9 +244,10 @@ export class StreamerService {
     const okSegments = entries.filter((entry) => entry.ok).length;
     const media = buildMediaAnalysisSummaries(entries);
     const avAlignment = buildAvAlignmentSummary(entries);
+    const issues = buildAnalysisIssues(entries, media, avAlignment);
     return {
       originId: clone.id,
-      ok: entries.every((entry) => entry.ok),
+      ok: entries.every((entry) => entry.ok) && !issues.some((issue) => issue.severity === "error"),
       sampledMediaPlaylists: candidates.length,
       totalMediaPlaylists: clone.variantCount + clone.renditionCount,
       sampledSegments: entries.length,
@@ -254,6 +255,7 @@ export class StreamerService {
       failedSegments: entries.length - okSegments,
       media,
       avAlignment,
+      issues,
       entries,
     };
   }
@@ -1645,6 +1647,94 @@ function buildAvAlignmentSummary(entries: StreamerOriginAnalysisReport["entries"
     maxStartPtsDeltaSeconds,
     notes: [...notes],
   };
+}
+
+function buildAnalysisIssues(
+  entries: StreamerOriginAnalysisReport["entries"],
+  media: StreamerMediaAnalysisSummary[],
+  avAlignment: StreamerAvAlignmentSummary,
+): StreamerOriginAnalysisReport["issues"] {
+  const issues: StreamerOriginAnalysisReport["issues"] = [];
+
+  for (const entry of entries) {
+    if (!entry.ok) {
+      issues.push({
+        severity: "error",
+        code: "segment_probe_failed",
+        summary: `ffprobe failed for ${entry.kind}[${entry.mediaIndex}] seg[${entry.segmentIndex}]`,
+        evidence: entry.errors.length > 0 ? entry.errors : [entry.localPath],
+      });
+    }
+    if (
+      typeof entry.durationDeltaSeconds === "number" &&
+      Math.abs(entry.durationDeltaSeconds) > DURATION_DELTA_WARN_SECONDS
+    ) {
+      issues.push({
+        severity: "warning",
+        code: "duration_delta_high",
+        summary: `segment duration differs from EXTINF by ${entry.durationDeltaSeconds.toFixed(3)}s`,
+        evidence: [
+          `${entry.kind}[${entry.mediaIndex}] seg[${entry.segmentIndex}]`,
+          `declared=${entry.declaredDurationSeconds?.toFixed(3) ?? "n/a"}s`,
+          `actual=${entry.actualDurationSeconds?.toFixed(3) ?? "n/a"}s`,
+        ],
+      });
+    }
+    if (
+      entry.boundaryStatus === "warn" &&
+      typeof entry.boundaryDeltaSeconds === "number"
+    ) {
+      issues.push({
+        severity: "warning",
+        code: entry.boundaryDeltaSeconds > 0 ? "segment_boundary_gap" : "segment_boundary_overlap",
+        summary: `segment boundary delta is ${entry.boundaryDeltaSeconds.toFixed(3)}s`,
+        evidence: [
+          `${entry.kind}[${entry.mediaIndex}] seg[${entry.segmentIndex}]`,
+          `boundaryDelta=${entry.boundaryDeltaSeconds.toFixed(3)}s`,
+        ],
+      });
+    }
+    if (entry.type === "VIDEO" && entry.startsWithKeyframe === false) {
+      issues.push({
+        severity: "warning",
+        code: "segment_not_keyframe_aligned",
+        summary: `video segment does not start with a keyframe`,
+        evidence: [`${entry.kind}[${entry.mediaIndex}] seg[${entry.segmentIndex}]`],
+      });
+    }
+  }
+
+  for (const item of media) {
+    if (item.gopStatus === "warn") {
+      issues.push({
+        severity: "warning",
+        code: "gop_unstable",
+        summary: `video GOP looks unstable for ${item.kind}[${item.mediaIndex}]`,
+        evidence: [
+          `maxKeyframeGap=${item.maxKeyframeGapSeconds?.toFixed(3) ?? "n/a"}s`,
+          `startsWithKeyframeFailures=${item.startsWithKeyframeFailures ?? 0}`,
+          item.label,
+        ],
+      });
+    }
+  }
+
+  if (
+    avAlignment.status === "warn" &&
+    typeof avAlignment.maxDurationDeltaSeconds === "number"
+  ) {
+    issues.push({
+      severity: "warning",
+      code: "av_duration_drift",
+      summary: `audio/video sampled segment duration delta reached ${avAlignment.maxDurationDeltaSeconds.toFixed(3)}s`,
+      evidence: [
+        `comparedPairs=${avAlignment.comparedPairs}`,
+        `maxDurationDelta=${avAlignment.maxDurationDeltaSeconds.toFixed(3)}s`,
+      ],
+    });
+  }
+
+  return issues;
 }
 
 function summarizeBoundaryStatus(entries: StreamerOriginAnalysisReport["entries"]): "ok" | "warn" | "reset" | "unknown" {

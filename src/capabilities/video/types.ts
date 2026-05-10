@@ -561,6 +561,13 @@ export type StreamerAvAlignmentSummary = {
   notes: string[];
 };
 
+export type StreamerAnalysisIssue = {
+  severity: PlaybackIssueSeverity;
+  code: string;
+  summary: string;
+  evidence: string[];
+};
+
 export type StreamerOriginAnalysisReport = {
   originId: string;
   ok: boolean;
@@ -571,6 +578,7 @@ export type StreamerOriginAnalysisReport = {
   failedSegments: number;
   media: StreamerMediaAnalysisSummary[];
   avAlignment: StreamerAvAlignmentSummary;
+  issues: StreamerAnalysisIssue[];
   entries: StreamerSegmentAnalysisEntry[];
 };
 

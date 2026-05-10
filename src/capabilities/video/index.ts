@@ -44,6 +44,7 @@ export type {
   StreamerClonedSegment,
   StreamerClonedVariant,
   StreamerAnalyzeOptions,
+  StreamerAnalysisIssue,
   StreamerAvAlignmentSummary,
   StreamerMediaProbeEntry,
   StreamerMediaAnalysisSummary,

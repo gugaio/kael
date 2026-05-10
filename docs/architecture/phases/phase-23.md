@@ -59,6 +59,8 @@ O foco inicial e operacional:
 - O relatorio do `analyze` tambem calcula delta entre `EXTINF` e duracao real,
   continuidade aproximada entre chunks da mesma playlist e alinhamento basico
   audio/video por duracao dos segmentos amostrados.
+- O `analyze` emite `issues` estruturadas com severidade e suporta `--json`
+  para automacao/CI sem depender do formato humano da CLI.
 - Renditions externas usam indexacao por tipo nas rotas live (`/live/audio/0`,
   `/live/subtitles/0`) para manter semantica estavel e evitar acoplamento ao
   indice global interno do `origin.json`.
@@ -100,6 +102,7 @@ kael streamer probe
 kael streamer probe <originId>
 kael streamer analyze
 kael streamer analyze <originId>
+kael streamer analyze <originId> --json
 kael streamer live
 kael streamer live <originId> --window-size 5
 kael streamer remove <originId> --yes

@@ -854,6 +854,8 @@ describe("StreamerService", () => {
     expect(report.sampledSegments).toBe(6);
     expect(report.okSegments).toBe(6);
     expect(report.failedSegments).toBe(0);
+    expect(report.ok).toBe(true);
+    expect(report.issues).toEqual([]);
     expect(report.avAlignment).toMatchObject({
       status: "ok",
       comparedPairs: 3,
@@ -930,6 +932,125 @@ describe("StreamerService", () => {
         expect.stringContaining("a:0:"),
       ]),
     );
+  });
+
+  it("gera issues acionaveis quando analyze detecta anomalias", async () => {
+    const root = await makeTempRoot();
+    const service = new StreamerService(
+      {
+        inspectHls: async ({ url }) => {
+          if (url === "https://example.com/master.m3u8") {
+            return makeInspectResult({
+              variants: [
+                {
+                  uri: "video-720.m3u8",
+                  url: "https://example.com/video-720.m3u8",
+                  bandwidth: 2_000_000,
+                  resolution: "1280x720",
+                  codecs: "mp4a.40.2,avc1.4D401F",
+                  audioGroupId: "audio-aacl-128",
+                },
+              ],
+              renditions: [
+                {
+                  type: "AUDIO",
+                  groupId: "audio-aacl-128",
+                  name: "Portuguese",
+                  uri: "audio-pt.m3u8",
+                  url: "https://example.com/audio-pt.m3u8",
+                },
+              ],
+            });
+          }
+
+          const isAudio = url.includes("audio-");
+          return makeInspectResult({
+            url,
+            finalUrl: url,
+            playlistType: "media",
+            targetDuration: 4,
+            segments: [
+              {
+                uri: isAudio ? "audio-0.aac" : "video-0.ts",
+                url: `https://cdn.example.com/${isAudio ? "audio" : "video"}-0.bin`,
+                duration: 4,
+              },
+              {
+                uri: isAudio ? "audio-1.aac" : "video-1.ts",
+                url: `https://cdn.example.com/${isAudio ? "audio" : "video"}-1.bin`,
+                duration: 4,
+              },
+            ],
+          });
+        },
+        probe: async ({ input }) => {
+          const isAudio = input.includes("/audio/");
+          const isSecondSegment = input.includes("-1.");
+          return {
+            ok: true,
+            input,
+            timeoutMs: 5000,
+            format: {
+              duration: isAudio ? "4.800" : isSecondSegment ? "4.001" : "4.000",
+            },
+            streams: isAudio ? [{ codec_type: "audio" }] : [{ codec_type: "video" }],
+            timeline: isAudio
+              ? {
+                  streamSelector: "a:0",
+                  sampleKind: "packets",
+                  sampleCount: 180,
+                  firstPtsTime: isSecondSegment ? 4.000 : 0.000,
+                  lastPtsTime: isSecondSegment ? 8.000 : 4.000,
+                }
+              : {
+                  streamSelector: "v:0",
+                  sampleKind: "frames",
+                  sampleCount: 96,
+                  firstPtsTime: isSecondSegment ? 14.500 : 10.000,
+                  lastPtsTime: isSecondSegment ? 18.400 : 13.900,
+                  keyframeCount: 1,
+                  startsWithKeyframe: !isSecondSegment,
+                  maxKeyframeGapSeconds: isSecondSegment ? 4.500 : 1.000,
+                },
+            errors: [],
+          };
+        },
+      },
+      root,
+      async () => new Response(new Uint8Array([1, 2, 3])),
+    );
+    await service.init();
+
+    const result = await service.cloneHls({
+      sessionKey: "test",
+      url: "https://example.com/master.m3u8",
+      durationSeconds: 8,
+      originId: "analyze-issues-origin",
+    });
+
+    const report = await service.analyzeOrigin(result.id, {
+      maxMediaPlaylists: 4,
+      maxSegmentsPerPlaylist: 2,
+      timeoutMs: 5000,
+    });
+
+    expect(report.ok).toBe(true);
+    expect(report.avAlignment.status).toBe("warn");
+    expect(report.media.find((item) => item.type === "VIDEO")).toMatchObject({
+      boundaryStatus: "warn",
+      gopStatus: "warn",
+      startsWithKeyframeFailures: 1,
+    });
+    expect(report.issues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining([
+        "duration_delta_high",
+        "segment_boundary_gap",
+        "segment_not_keyframe_aligned",
+        "gop_unstable",
+        "av_duration_drift",
+      ]),
+    );
+    expect(report.issues.every((issue) => ["info", "warning", "error"].includes(issue.severity))).toBe(true);
   });
 
   it("serve o origin local com CORS", async () => {
