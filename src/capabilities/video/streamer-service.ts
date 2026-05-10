@@ -16,6 +16,8 @@ import type {
   StreamerClonedVariant,
   StreamerLiveServeHandle,
   StreamerLiveServeOptions,
+  StreamerAvAlignmentSummary,
+  StreamerMediaAnalysisSummary,
   StreamerOriginAnalysisReport,
   StreamerOriginProbeReport,
   StreamerOriginSummary,
@@ -81,6 +83,9 @@ const DEFAULT_MAX_SEGMENTS = 200;
 const DEFAULT_PROBE_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_PROBE_MEDIA_PLAYLISTS = 4;
 const DEFAULT_MAX_ANALYZE_SEGMENTS_PER_PLAYLIST = 3;
+const DURATION_DELTA_WARN_SECONDS = 0.150;
+const BOUNDARY_DELTA_WARN_SECONDS = 0.250;
+const GOP_GAP_WARN_SECONDS = 3.000;
 const DEFAULT_LIVE_WINDOW_SIZE = 5;
 const DEFAULT_INITIAL_MEDIA_SEQUENCE = 100_000;
 const STREAMER_ORIGIN_SCHEMA_VERSION = 2;
@@ -199,6 +204,7 @@ export class StreamerService {
     const entries: StreamerOriginAnalysisReport["entries"] = [];
 
     for (const candidate of candidates) {
+      const candidateEntries: StreamerOriginAnalysisReport["entries"] = [];
       for (const segmentIndex of sampleSegmentIndices(candidate.segments.length, maxSegmentsPerPlaylist)) {
         const segment = candidate.segments[segmentIndex];
         const localPath = path.join(candidate.rootPath, segment.localUri);
@@ -209,7 +215,8 @@ export class StreamerService {
           timeline: true,
           streamSelector,
         });
-        entries.push({
+        const actualDurationSeconds = extractProbeDurationSeconds(result.format);
+        candidateEntries.push({
           kind: candidate.kind,
           mediaIndex: candidate.index,
           segmentIndex,
@@ -217,7 +224,8 @@ export class StreamerService {
           label: candidate.label,
           localPath,
           declaredDurationSeconds: segment.duration,
-          actualDurationSeconds: extractProbeDurationSeconds(result.format),
+          actualDurationSeconds,
+          durationDeltaSeconds: calculateDurationDelta(segment.duration, actualDurationSeconds),
           streamCount: Array.isArray(result.streams) ? result.streams.length : 0,
           packetCount: result.timeline?.sampleCount,
           firstPtsTime: result.timeline?.firstPtsTime,
@@ -229,9 +237,13 @@ export class StreamerService {
           errors: result.errors,
         });
       }
+      applyBoundaryAnalysis(candidate, candidateEntries);
+      entries.push(...candidateEntries);
     }
 
     const okSegments = entries.filter((entry) => entry.ok).length;
+    const media = buildMediaAnalysisSummaries(entries);
+    const avAlignment = buildAvAlignmentSummary(entries);
     return {
       originId: clone.id,
       ok: entries.every((entry) => entry.ok),
@@ -240,6 +252,8 @@ export class StreamerService {
       sampledSegments: entries.length,
       okSegments,
       failedSegments: entries.length - okSegments,
+      media,
+      avAlignment,
       entries,
     };
   }
@@ -1506,6 +1520,170 @@ function sampleSegmentIndices(segmentCount: number, maxSegments: number): number
   }
 
   return [...samples].sort((left, right) => left - right).slice(0, maxSegments);
+}
+
+function applyBoundaryAnalysis(candidate: StreamerAnalyzeCandidate, entries: StreamerOriginAnalysisReport["entries"]): void {
+  const sorted = [...entries].sort((left, right) => left.segmentIndex - right.segmentIndex);
+  for (let index = 0; index < sorted.length; index += 1) {
+    const current = sorted[index];
+    const previous = sorted[index - 1];
+    if (!previous) {
+      current.boundaryStatus = "unknown";
+      continue;
+    }
+    if (typeof current.firstPtsTime !== "number" || typeof previous.firstPtsTime !== "number") {
+      current.boundaryStatus = "unknown";
+      continue;
+    }
+    if (current.firstPtsTime <= previous.firstPtsTime) {
+      current.boundaryStatus = "reset";
+      continue;
+    }
+
+    const expectedStart = previous.firstPtsTime + sumDeclaredDurations(
+      candidate.segments,
+      previous.segmentIndex,
+      current.segmentIndex,
+    );
+    const boundaryDeltaSeconds = current.firstPtsTime - expectedStart;
+    current.boundaryDeltaSeconds = boundaryDeltaSeconds;
+    current.boundaryStatus = Math.abs(boundaryDeltaSeconds) <= BOUNDARY_DELTA_WARN_SECONDS ? "ok" : "warn";
+  }
+}
+
+function sumDeclaredDurations(segments: StreamerClonedSegment[], fromIndex: number, toIndex: number): number {
+  let sum = 0;
+  for (let index = fromIndex; index < toIndex; index += 1) {
+    sum += segments[index]?.duration ?? 0;
+  }
+  return sum;
+}
+
+function calculateDurationDelta(declared?: number, actual?: number): number | undefined {
+  if (typeof declared !== "number" || typeof actual !== "number") {
+    return undefined;
+  }
+  return actual - declared;
+}
+
+function buildMediaAnalysisSummaries(entries: StreamerOriginAnalysisReport["entries"]): StreamerMediaAnalysisSummary[] {
+  const groups = new Map<string, StreamerOriginAnalysisReport["entries"]>();
+  for (const entry of entries) {
+    const key = `${entry.kind}:${entry.mediaIndex}`;
+    groups.set(key, [...(groups.get(key) ?? []), entry]);
+  }
+
+  return [...groups.values()].map((group) => {
+    const first = group[0];
+    const durationDeltas = group
+      .map((entry) => entry.durationDeltaSeconds)
+      .filter((value): value is number => typeof value === "number");
+    const boundaryDeltas = group
+      .map((entry) => entry.boundaryDeltaSeconds)
+      .filter((value): value is number => typeof value === "number");
+    const maxKeyframeGapSeconds = maxOptional(group.map((entry) => entry.maxKeyframeGapSeconds));
+    const startsWithKeyframeFailures = group.filter((entry) => entry.startsWithKeyframe === false).length;
+
+    return {
+      kind: first.kind,
+      mediaIndex: first.mediaIndex,
+      type: first.type,
+      label: first.label,
+      sampledSegments: group.length,
+      durationDeltaMaxSeconds: maxAbsOptional(durationDeltas),
+      durationDeltaAverageSeconds: averageAbsOptional(durationDeltas),
+      boundaryStatus: summarizeBoundaryStatus(group),
+      boundaryDeltaMaxSeconds: maxAbsOptional(boundaryDeltas),
+      gopStatus: summarizeGopStatus(first.type, maxKeyframeGapSeconds, startsWithKeyframeFailures),
+      maxKeyframeGapSeconds,
+      startsWithKeyframeFailures: first.type === "VIDEO" ? startsWithKeyframeFailures : undefined,
+    };
+  });
+}
+
+function buildAvAlignmentSummary(entries: StreamerOriginAnalysisReport["entries"]): StreamerAvAlignmentSummary {
+  const videoEntries = entries.filter((entry) => entry.type === "VIDEO" && entry.kind === "variant");
+  const audioEntries = entries.filter((entry) => entry.type === "AUDIO");
+  const durationDeltas: number[] = [];
+  const startPtsDeltas: number[] = [];
+  const notes = new Set<string>();
+
+  for (const video of videoEntries) {
+    for (const audio of audioEntries.filter((entry) => entry.segmentIndex === video.segmentIndex)) {
+      if (typeof video.actualDurationSeconds === "number" && typeof audio.actualDurationSeconds === "number") {
+        durationDeltas.push(Math.abs(video.actualDurationSeconds - audio.actualDurationSeconds));
+      }
+      if (typeof video.firstPtsTime === "number" && typeof audio.firstPtsTime === "number") {
+        const delta = Math.abs(video.firstPtsTime - audio.firstPtsTime);
+        if (delta <= 2) {
+          startPtsDeltas.push(delta);
+        } else {
+          notes.add("audio/video PTS clocks look different or reset per segment");
+        }
+      }
+    }
+  }
+
+  const maxDurationDeltaSeconds = maxOptional(durationDeltas);
+  const maxStartPtsDeltaSeconds = maxOptional(startPtsDeltas);
+  const comparedPairs = durationDeltas.length;
+  if (comparedPairs === 0) {
+    notes.add("no matching audio/video sampled segments");
+  }
+  if (startPtsDeltas.length === 0) {
+    notes.add("PTS start alignment unavailable");
+  }
+
+  return {
+    status: comparedPairs === 0
+      ? "unknown"
+      : maxDurationDeltaSeconds !== undefined && maxDurationDeltaSeconds > DURATION_DELTA_WARN_SECONDS
+      ? "warn"
+      : "ok",
+    comparedPairs,
+    maxDurationDeltaSeconds,
+    maxStartPtsDeltaSeconds,
+    notes: [...notes],
+  };
+}
+
+function summarizeBoundaryStatus(entries: StreamerOriginAnalysisReport["entries"]): "ok" | "warn" | "reset" | "unknown" {
+  const statuses = entries.map((entry) => entry.boundaryStatus).filter((value): value is NonNullable<typeof value> => Boolean(value));
+  if (statuses.includes("warn")) return "warn";
+  if (statuses.includes("reset")) return "reset";
+  if (statuses.includes("ok")) return "ok";
+  return "unknown";
+}
+
+function summarizeGopStatus(
+  type: "AUDIO" | "SUBTITLES" | "VIDEO",
+  maxKeyframeGapSeconds: number | undefined,
+  startsWithKeyframeFailures: number,
+): "ok" | "warn" | "unknown" | undefined {
+  if (type !== "VIDEO") {
+    return undefined;
+  }
+  if (startsWithKeyframeFailures > 0 || (maxKeyframeGapSeconds !== undefined && maxKeyframeGapSeconds > GOP_GAP_WARN_SECONDS)) {
+    return "warn";
+  }
+  return maxKeyframeGapSeconds === undefined ? "unknown" : "ok";
+}
+
+function maxOptional(values: Array<number | undefined>): number | undefined {
+  const filtered = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  return filtered.length > 0 ? Math.max(...filtered) : undefined;
+}
+
+function maxAbsOptional(values: Array<number | undefined>): number | undefined {
+  return maxOptional(values.map((value) => (typeof value === "number" ? Math.abs(value) : undefined)));
+}
+
+function averageAbsOptional(values: Array<number | undefined>): number | undefined {
+  const filtered = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (filtered.length === 0) {
+    return undefined;
+  }
+  return filtered.reduce((sum, value) => sum + Math.abs(value), 0) / filtered.length;
 }
 
 function probeStreamSelectorFor(type: "VIDEO" | RenditionKind): string {

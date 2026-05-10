@@ -833,11 +833,28 @@ function formatStreamerAnalyzeReport(report: StreamerOriginAnalysisReport): stri
   return [
     `${highlight("streamer analyze")}: ${report.originId}`,
     `segments=${report.okSegments}/${report.sampledSegments} sampled playlists=${report.sampledMediaPlaylists}/${report.totalMediaPlaylists} failed=${report.failedSegments}`,
+    `audioVideoAlignment=${report.avAlignment.status} compared=${report.avAlignment.comparedPairs} durationDeltaMax=${formatOptionalSeconds(report.avAlignment.maxDurationDeltaSeconds)} ptsStartDeltaMax=${formatOptionalSeconds(report.avAlignment.maxStartPtsDeltaSeconds)}${report.avAlignment.notes.length > 0 ? ` notes=${report.avAlignment.notes.join(" ; ")}` : ""}`,
+    "media:",
+    ...report.media.map((media) => [
+      `- [${media.boundaryStatus}] ${media.kind}[${media.mediaIndex}] ${media.type}`,
+      `segments=${media.sampledSegments}`,
+      `durationDeltaMax=${formatOptionalSeconds(media.durationDeltaMaxSeconds)}`,
+      `durationDeltaAvg=${formatOptionalSeconds(media.durationDeltaAverageSeconds)}`,
+      `boundaryDeltaMax=${formatOptionalSeconds(media.boundaryDeltaMaxSeconds)}`,
+      ...(media.gopStatus ? [`gop=${media.gopStatus}`] : []),
+      ...(typeof media.maxKeyframeGapSeconds === "number" ? [`maxKeyframeGap=${media.maxKeyframeGapSeconds.toFixed(3)}s`] : []),
+      ...(typeof media.startsWithKeyframeFailures === "number" ? [`startsWithKeyframeFailures=${media.startsWithKeyframeFailures}`] : []),
+      media.label,
+    ].join(" | ")),
+    "segments:",
     ...report.entries.map((entry) => [
       `- [${entry.ok ? "ok" : "error"}] ${entry.kind}[${entry.mediaIndex}] seg[${entry.segmentIndex}] ${entry.type}`,
       `declared=${entry.declaredDurationSeconds?.toFixed(3) ?? "n/a"}s`,
       `actual=${entry.actualDurationSeconds?.toFixed(3) ?? "n/a"}s`,
+      `durationDelta=${formatOptionalSignedSeconds(entry.durationDeltaSeconds)}`,
       `pts=${entry.firstPtsTime?.toFixed(3) ?? "n/a"} -> ${entry.lastPtsTime?.toFixed(3) ?? "n/a"}`,
+      `boundary=${entry.boundaryStatus ?? "unknown"}`,
+      ...(typeof entry.boundaryDeltaSeconds === "number" ? [`boundaryDelta=${formatOptionalSignedSeconds(entry.boundaryDeltaSeconds)}`] : []),
       `samples=${entry.packetCount ?? 0}`,
       ...(typeof entry.keyframeCount === "number" ? [`keyframes=${entry.keyframeCount}`] : []),
       ...(typeof entry.startsWithKeyframe === "boolean" ? [`startsWithKeyframe=${entry.startsWithKeyframe ? "yes" : "no"}`] : []),
@@ -848,6 +865,17 @@ function formatStreamerAnalyzeReport(report: StreamerOriginAnalysisReport): stri
       ...(entry.errors.length > 0 ? [`errors=${entry.errors.join(" ; ")}`] : []),
     ].join(" | ")),
   ];
+}
+
+function formatOptionalSeconds(value: number | undefined): string {
+  return typeof value === "number" ? `${value.toFixed(3)}s` : "n/a";
+}
+
+function formatOptionalSignedSeconds(value: number | undefined): string {
+  if (typeof value !== "number") {
+    return "n/a";
+  }
+  return `${value >= 0 ? "+" : ""}${value.toFixed(3)}s`;
 }
 
 async function commandStreamerList(): Promise<void> {

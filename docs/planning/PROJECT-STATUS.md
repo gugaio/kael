@@ -37,6 +37,31 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-05-10 - Fase 23: Streamer analyze com resumo de saude
+
+Resumo:
+- `streamer analyze` passou a destacar delta entre `EXTINF` e duracao real (`durationDelta`) por segmento.
+- O relatorio agora resume continuidade entre chunks por playlist (`boundaryStatus`/`boundaryDelta`) e sinal de GOP para video.
+- Adicionado resumo simples de alinhamento audio/video por segmentos amostrados, baseado em diferenca de duracao real e PTS quando os relogios sao comparaveis.
+- A saida da CLI ficou organizada em resumo geral, `media:` e `segments:` para leitura operacional mais rapida.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/types.ts`
+- `src/capabilities/video/streamer-service.test.ts`
+- `src/cli/index.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/inspect-service.test.ts src/capabilities/video/streamer-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- O alinhamento A/V ainda e amostral e conservador; quando os PTS de audio resetam por segmento, o relatorio evita marcar isso como erro.
+
+Proximo passo recomendado:
+- Validar o `streamer analyze latest` em origin real e ajustar os thresholds de `durationDelta`/`boundaryDelta` com base em amostras reais.
+
 ### 2026-05-10 - Fase 23: Streamer analyze profundo
 
 Resumo:

@@ -799,6 +799,7 @@ describe("StreamerService", () => {
         probe: async ({ input, streamSelector, timeline }) => {
           analyzedInputs.push(`${streamSelector}:${input}:${timeline ? "timeline" : "plain"}`);
           const isAudio = input.includes("/audio/");
+          const segmentOffset = input.includes("-1.") ? 4 : input.includes("-2.") ? 8 : 0;
           return {
             ok: true,
             input,
@@ -819,8 +820,8 @@ describe("StreamerService", () => {
                   streamSelector: "v:0",
                   sampleKind: "frames",
                   sampleCount: 96,
-                  firstPtsTime: 10.000,
-                  lastPtsTime: 13.962,
+                  firstPtsTime: 10.000 + segmentOffset,
+                  lastPtsTime: 13.962 + segmentOffset,
                   keyframeCount: 2,
                   startsWithKeyframe: true,
                   maxKeyframeGapSeconds: 2.000,
@@ -853,6 +854,33 @@ describe("StreamerService", () => {
     expect(report.sampledSegments).toBe(6);
     expect(report.okSegments).toBe(6);
     expect(report.failedSegments).toBe(0);
+    expect(report.avAlignment).toMatchObject({
+      status: "ok",
+      comparedPairs: 3,
+      maxDurationDeltaSeconds: expect.closeTo(0.007, 3),
+    });
+    expect(report.media).toEqual([
+      expect.objectContaining({
+        kind: "variant",
+        mediaIndex: 0,
+        type: "VIDEO",
+        sampledSegments: 3,
+        durationDeltaMaxSeconds: expect.closeTo(0.004, 3),
+        boundaryStatus: "ok",
+        boundaryDeltaMaxSeconds: expect.closeTo(0, 3),
+        gopStatus: "ok",
+        maxKeyframeGapSeconds: 2,
+        startsWithKeyframeFailures: 0,
+      }),
+      expect.objectContaining({
+        kind: "rendition",
+        mediaIndex: 0,
+        type: "AUDIO",
+        sampledSegments: 3,
+        durationDeltaMaxSeconds: expect.closeTo(0.011, 3),
+        boundaryStatus: "reset",
+      }),
+    ]);
     expect(report.entries[0]).toMatchObject({
       kind: "variant",
       mediaIndex: 0,
@@ -860,14 +888,22 @@ describe("StreamerService", () => {
       type: "VIDEO",
       declaredDurationSeconds: 4,
       actualDurationSeconds: 4.004,
+      durationDeltaSeconds: expect.closeTo(0.004, 3),
       streamCount: 2,
       packetCount: 96,
       firstPtsTime: 10,
       lastPtsTime: 13.962,
+      boundaryStatus: "unknown",
       keyframeCount: 2,
       startsWithKeyframe: true,
       maxKeyframeGapSeconds: 2,
       ok: true,
+    });
+    expect(report.entries[1]).toMatchObject({
+      kind: "variant",
+      segmentIndex: 1,
+      boundaryStatus: "ok",
+      boundaryDeltaSeconds: expect.closeTo(0, 3),
     });
     expect(report.entries[3]).toMatchObject({
       kind: "rendition",
@@ -875,11 +911,18 @@ describe("StreamerService", () => {
       segmentIndex: 0,
       type: "AUDIO",
       actualDurationSeconds: 4.011,
+      durationDeltaSeconds: expect.closeTo(0.011, 3),
       streamCount: 1,
       packetCount: 180,
       firstPtsTime: 12.032,
       lastPtsTime: 16.021,
+      boundaryStatus: "unknown",
       ok: true,
+    });
+    expect(report.entries[4]).toMatchObject({
+      kind: "rendition",
+      segmentIndex: 1,
+      boundaryStatus: "reset",
     });
     expect(analyzedInputs).toEqual(
       expect.arrayContaining([

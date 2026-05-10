@@ -524,15 +524,41 @@ export type StreamerSegmentAnalysisEntry = {
   localPath: string;
   declaredDurationSeconds?: number;
   actualDurationSeconds?: number;
+  durationDeltaSeconds?: number;
   streamCount: number;
   packetCount?: number;
   firstPtsTime?: number;
   lastPtsTime?: number;
+  boundaryDeltaSeconds?: number;
+  boundaryStatus?: "ok" | "warn" | "reset" | "unknown";
   keyframeCount?: number;
   startsWithKeyframe?: boolean;
   maxKeyframeGapSeconds?: number;
   ok: boolean;
   errors: string[];
+};
+
+export type StreamerMediaAnalysisSummary = {
+  kind: "variant" | "rendition";
+  mediaIndex: number;
+  type: "AUDIO" | "SUBTITLES" | "VIDEO";
+  label: string;
+  sampledSegments: number;
+  durationDeltaMaxSeconds?: number;
+  durationDeltaAverageSeconds?: number;
+  boundaryStatus: "ok" | "warn" | "reset" | "unknown";
+  boundaryDeltaMaxSeconds?: number;
+  gopStatus?: "ok" | "warn" | "unknown";
+  maxKeyframeGapSeconds?: number;
+  startsWithKeyframeFailures?: number;
+};
+
+export type StreamerAvAlignmentSummary = {
+  status: "ok" | "warn" | "unknown";
+  comparedPairs: number;
+  maxDurationDeltaSeconds?: number;
+  maxStartPtsDeltaSeconds?: number;
+  notes: string[];
 };
 
 export type StreamerOriginAnalysisReport = {
@@ -543,6 +569,8 @@ export type StreamerOriginAnalysisReport = {
   sampledSegments: number;
   okSegments: number;
   failedSegments: number;
+  media: StreamerMediaAnalysisSummary[];
+  avAlignment: StreamerAvAlignmentSummary;
   entries: StreamerSegmentAnalysisEntry[];
 };
 

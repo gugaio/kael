@@ -56,6 +56,9 @@ O foco inicial e operacional:
 - `streamer analyze [originId|latest]` roda `ffprobe` diretamente em chunks
   locais amostrados para extrair duracao real, PTS e sinal basico de keyframes
   sem contaminar o fluxo do `probe`, que continua leve.
+- O relatorio do `analyze` tambem calcula delta entre `EXTINF` e duracao real,
+  continuidade aproximada entre chunks da mesma playlist e alinhamento basico
+  audio/video por duracao dos segmentos amostrados.
 - Renditions externas usam indexacao por tipo nas rotas live (`/live/audio/0`,
   `/live/subtitles/0`) para manter semantica estavel e evitar acoplamento ao
   indice global interno do `origin.json`.
@@ -194,6 +197,9 @@ StreamerService.serveLiveOrigin()
   maxima de playlists locais por probe.
 - `analyze` aprofunda o diagnostico em chunks locais amostrados, mas continua
   propositalmente limitado para manter custo e complexidade sob controle.
+- Quando PTS de audio e video usam relogios diferentes ou reiniciam por
+  segmento, o `analyze` reporta esse alinhamento como indisponivel em vez de
+  tratar como erro automaticamente.
 
 ## Proximos incrementos
 
