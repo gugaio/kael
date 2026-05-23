@@ -19,6 +19,8 @@ O foco inicial e operacional:
 - simulacao live com sliding window virtual sobre os segmentos clonados;
 - gestao local dos origins clonados via `list`, `inspect`, `probe` e `remove`;
 - analise profunda de segmentos locais amostrados via `analyze`;
+- relatorio HTML de analise detalhada com foco em timeline de audio;
+- fault injection via origins derivados com `mutate`;
 - clonagem de renditions separadas de audio e subtitles referenciadas por `EXT-X-MEDIA`.
 
 ## Decisao arquitetural
@@ -61,6 +63,21 @@ O foco inicial e operacional:
   audio/video por duracao dos segmentos amostrados.
 - O `analyze` emite `issues` estruturadas com severidade e suporta `--json`
   para automacao/CI sem depender do formato humano da CLI.
+- `streamer analyze --full` percorre todos os segmentos das playlists
+  consideradas e calcula continuidade de timestamps de audio entre chunks
+  consecutivos, emitindo `audio_timestamp_discontinuity` para gaps/overlaps.
+- `streamer analyze --html` gera um relatorio estatico em
+  `analysis.html`, com resumo, issues, discontinuities de audio, media summary
+  e tabela por chunk. O HTML e derivado do mesmo JSON do `analyze`.
+- `streamer mutate` cria um novo origin derivado e registra `derivedFrom`/`faults`
+  no `origin.json`; a primeira fault suportada e `discontinuity`, injetada no
+  manifesto local antes de um segmento escolhido.
+- `segment-swap` troca o arquivo local de um segmento alvo por um segmento donor
+  vindo de outro origin, com `--with-discontinuity` opcional para comparar
+  comportamento de player com e sem a tag HLS.
+- `segment-swap` tambem aceita `--ffmpeg-profile hevc` para transcodar o donor
+  antes da troca e injetar um chunk mais agressivo, util para reproduzir falhas
+  reais de compatibilidade/decoder.
 - Renditions externas usam indexacao por tipo nas rotas live (`/live/audio/0`,
   `/live/subtitles/0`) para manter semantica estavel e evitar acoplamento ao
   indice global interno do `origin.json`.
@@ -84,6 +101,7 @@ O foco inicial e operacional:
 src/capabilities/video/
   inspect-service.ts        # parsing HLS usado pelo streamer
   streamer-diagnostics.ts   # diagnostico de codecs/browser para origins clonados
+  streamer-report-html.ts   # render HTML estatico do analyze
   streamer-service.ts       # clone HLS + origin HTTP local
   streamer-service.test.ts  # testes unitarios/integracao leve
   types.ts                  # contratos Streamer*
@@ -103,6 +121,12 @@ kael streamer probe <originId>
 kael streamer analyze
 kael streamer analyze <originId>
 kael streamer analyze <originId> --json
+kael streamer analyze <originId> --full --html
+kael streamer analyze <originId> --full --html --output /tmp/kael-stream-report.html
+kael streamer mutate <originId> --fault discontinuity --at-segment 5
+kael streamer mutate <originId> --fault segment-swap --at-segment 5 --with-origin <donorOrigin> --with-segment 1
+kael streamer mutate <originId> --fault segment-swap --at-segment 5 --with-origin <donorOrigin> --with-segment 1 --ffmpeg-profile hevc
+kael streamer serve <originId>
 kael streamer live
 kael streamer live <originId> --window-size 5
 kael streamer remove <originId> --yes
@@ -199,10 +223,17 @@ StreamerService.serveLiveOrigin()
   de arquivos, com complemento de `ffprobe` amostrado e limitado por quantidade
   maxima de playlists locais por probe.
 - `analyze` aprofunda o diagnostico em chunks locais amostrados, mas continua
-  propositalmente limitado para manter custo e complexidade sob controle.
+  propositalmente limitado para manter custo e complexidade sob controle; use
+  `--full` quando a investigacao for de gaps/overlaps reais de audio.
 - Quando PTS de audio e video usam relogios diferentes ou reiniciam por
   segmento, o `analyze` reporta esse alinhamento como indisponivel em vez de
   tratar como erro automaticamente.
+- A deteccao de `audio_timestamp_discontinuity` compara timestamps de audio
+  entre segmentos consecutivos de uma mesma playlist/rendition. Ela nao tenta
+  ainda corrigir PTS, remuxar chunks ou correlacionar eventos reais de player.
+- Fault injection agora cobre alteracoes de manifesto e um primeiro caso com
+  FFmpeg (`segment-swap --ffmpeg-profile hevc`), mas ainda nao cobre mudancas
+  mais finas de PTS/PCR/GOP por segmento.
 
 ## Proximos incrementos
 

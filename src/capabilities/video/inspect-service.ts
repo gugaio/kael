@@ -77,6 +77,7 @@ export type VideoProbeResult = {
     sampleCount: number;
     firstPtsTime?: number;
     lastPtsTime?: number;
+    lastSampleDurationTime?: number;
     keyframeCount?: number;
     startsWithKeyframe?: boolean;
     maxKeyframeGapSeconds?: number;
@@ -484,6 +485,13 @@ export class VideoInspectToolService {
               return Number.isFinite(value) ? value : null;
             })
             .filter((value): value is number => value !== null);
+          const durations = items
+            .map((item) => {
+              const raw = item.duration_time;
+              const value = typeof raw === "string" || typeof raw === "number" ? Number(raw) : Number.NaN;
+              return Number.isFinite(value) ? value : null;
+            })
+            .filter((value): value is number => value !== null);
           const keyframeTimestamps = useFrames
             ? (payload.frames ?? [])
               .map((frame) => {
@@ -512,6 +520,7 @@ export class VideoInspectToolService {
             sampleCount: items.length,
             firstPtsTime: timestamps[0],
             lastPtsTime: timestamps.at(-1),
+            lastSampleDurationTime: durations.at(-1),
             keyframeCount: useFrames ? keyframeTimestamps.length : undefined,
             startsWithKeyframe: useFrames
               ? firstFrame?.key_frame === 1 || firstFrame?.key_frame === "1"

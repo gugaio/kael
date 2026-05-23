@@ -48,6 +48,8 @@ import type {
   StreamerAnalyzeOptions,
   StreamerLiveServeHandle,
   StreamerLiveServeOptions,
+  StreamerMutateInput,
+  StreamerMutateResult,
   StreamerOriginAnalysisReport,
   StreamerOriginProbeReport,
   StreamerOriginSummary,
@@ -88,6 +90,7 @@ export type KaelApp = {
     inspectOrigin(originId: string): Promise<StreamerCloneResult>;
     probeOrigin(originId: string, options?: StreamerProbeOptions): Promise<StreamerOriginProbeReport>;
     analyzeOrigin(originId: string, options?: StreamerAnalyzeOptions): Promise<StreamerOriginAnalysisReport>;
+    mutateOrigin(input: StreamerMutateInput): Promise<StreamerMutateResult>;
     removeOrigin(originId: string): Promise<StreamerRemoveResult>;
     cloneHls(input: StreamerCloneInput): Promise<StreamerCloneResult>;
     serveOrigin(originId: string, options?: StreamerServeOptions): Promise<StreamerServeHandle>;

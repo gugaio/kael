@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { VideoHlsInspectResult } from "./inspect-service.js";
 import { diagnoseStreamerClone } from "./streamer-diagnostics.js";
+import { renderStreamerAnalysisHtml } from "./streamer-report-html.js";
 import { StreamerService } from "./streamer-service.js";
 
 const tempRoots: string[] = [];
@@ -609,6 +610,165 @@ describe("StreamerService", () => {
     await expect(service.listOrigins()).resolves.toEqual([]);
   });
 
+  it("cria origin derivado com fault de discontinuity sem alterar o original", async () => {
+    const root = await makeTempRoot();
+    const service = new StreamerService(
+      {
+        inspectHls: async ({ url }) =>
+          makeInspectResult({
+            url,
+            finalUrl: url,
+            playlistType: "media",
+            targetDuration: 4,
+            segments: [
+              { uri: "seg-0.ts", url: "https://cdn.example.com/seg-0.ts", duration: 4 },
+              { uri: "seg-1.ts", url: "https://cdn.example.com/seg-1.ts", duration: 4 },
+              { uri: "seg-2.ts", url: "https://cdn.example.com/seg-2.ts", duration: 4 },
+            ],
+          }),
+      },
+      root,
+      async () => new Response(new Uint8Array([1, 2, 3])),
+    );
+    await service.init();
+
+    const original = await service.cloneHls({
+      sessionKey: "test",
+      url: "https://example.com/media.m3u8",
+      durationSeconds: 12,
+      originId: "source-origin",
+    });
+    const mutated = await service.mutateOrigin({
+      originId: original.id,
+      fault: "discontinuity",
+      targetKind: "variant",
+      targetIndex: 0,
+      segmentIndex: 1,
+      newOriginId: "fault-origin",
+    });
+
+    expect(mutated.sourceOriginId).toBe("source-origin");
+    expect(mutated.origin.id).toBe("fault-origin");
+    expect(mutated.origin.derivedFrom).toBe("source-origin");
+    expect(mutated.origin.faults).toEqual([
+      expect.objectContaining({
+        type: "discontinuity",
+        targetKind: "variant",
+        targetIndex: 0,
+        segmentIndex: 1,
+      }),
+    ]);
+    expect(mutated.origin.rootDir).toBe(path.join(root, "fault-origin"));
+    expect(mutated.origin.variants[0].manifestPath).toBe(path.join(root, "fault-origin", "index.m3u8"));
+
+    const originalManifest = await fs.readFile(original.manifestPath, "utf-8");
+    const mutatedManifest = await fs.readFile(mutated.origin.variants[0].manifestPath, "utf-8");
+    expect(originalManifest).not.toContain("#EXT-X-DISCONTINUITY");
+    expect(mutatedManifest).toContain("#EXT-X-DISCONTINUITY\n#EXTINF:4.000,\nsegments/00001-seg-1.ts");
+
+    const origins = await service.listOrigins();
+    const faultSummary = origins.find((origin) => origin.id === "fault-origin");
+    expect(faultSummary).toMatchObject({
+      derivedFrom: "source-origin",
+      faults: [
+        expect.objectContaining({
+          type: "discontinuity",
+          segmentIndex: 1,
+        }),
+      ],
+    });
+  });
+
+  it("cria origin derivado com fault de segment-swap usando donor origin", async () => {
+    const root = await makeTempRoot();
+    const service = new StreamerService(
+      {
+        inspectHls: async ({ url }) =>
+          makeInspectResult({
+            url,
+            finalUrl: url,
+            playlistType: "media",
+            targetDuration: url.includes("donor") ? 6 : 4,
+            segments: url.includes("donor")
+              ? [
+                  { uri: "donor-0.ts", url: "https://cdn.example.com/donor-0.ts", duration: 6 },
+                  { uri: "donor-1.ts", url: "https://cdn.example.com/donor-1.ts", duration: 5.5 },
+                ]
+              : [
+                  { uri: "base-0.ts", url: "https://cdn.example.com/base-0.ts", duration: 4 },
+                  { uri: "base-1.ts", url: "https://cdn.example.com/base-1.ts", duration: 4 },
+                  { uri: "base-2.ts", url: "https://cdn.example.com/base-2.ts", duration: 4 },
+                ],
+          }),
+      },
+      root,
+      async (input) => {
+        const url = String(input);
+        if (url.includes("donor-1")) {
+          return new Response(new TextEncoder().encode("DONOR-SEGMENT-1"));
+        }
+        if (url.includes("donor-0")) {
+          return new Response(new TextEncoder().encode("DONOR-SEGMENT-0"));
+        }
+        return new Response(new TextEncoder().encode(`BASE:${url}`));
+      },
+    );
+    await service.init();
+
+    const base = await service.cloneHls({
+      sessionKey: "test",
+      url: "https://example.com/base.m3u8",
+      durationSeconds: 12,
+      originId: "base-origin",
+    });
+    const donor = await service.cloneHls({
+      sessionKey: "test",
+      url: "https://example.com/donor.m3u8",
+      durationSeconds: 12,
+      originId: "donor-origin",
+    });
+
+    const mutated = await service.mutateOrigin({
+      originId: base.id,
+      fault: "segment-swap",
+      targetKind: "variant",
+      targetIndex: 0,
+      segmentIndex: 1,
+      donorOriginId: donor.id,
+      donorTargetKind: "variant",
+      donorTargetIndex: 0,
+      donorSegmentIndex: 1,
+      withDiscontinuity: true,
+      newOriginId: "swap-origin",
+    });
+
+    expect(mutated.origin.id).toBe("swap-origin");
+    expect(mutated.origin.derivedFrom).toBe("base-origin");
+    expect(mutated.fault).toMatchObject({
+      type: "segment-swap",
+      donorOriginId: "donor-origin",
+      donorTargetKind: "variant",
+      donorTargetIndex: 0,
+      donorSegmentIndex: 1,
+      withDiscontinuity: true,
+    });
+    expect((mutated.origin.faults ?? []).at(-1)).toMatchObject({
+      type: "segment-swap",
+      donorOriginId: "donor-origin",
+    });
+
+    const swappedSegmentPath = path.join(mutated.origin.rootDir, "segments", "00001-base-1.ts");
+    await expect(fs.readFile(swappedSegmentPath, "utf-8")).resolves.toBe("DONOR-SEGMENT-1");
+
+    const mutatedManifest = await fs.readFile(mutated.origin.manifestPath, "utf-8");
+    expect(mutatedManifest).toContain("#EXT-X-DISCONTINUITY\n#EXTINF:5.500,\nsegments/00001-base-1.ts");
+    expect(mutated.origin.variants[0].segments[1]).toMatchObject({
+      sourceUri: "donor-1.ts",
+      duration: 5.5,
+    });
+    expect(mutated.origin.targetDuration).toBe(6);
+  });
+
   it("agrega ffprobe amostrado sobre playlists locais de video e renditions", async () => {
     const root = await makeTempRoot();
     const probedInputs: string[] = [];
@@ -1051,6 +1211,132 @@ describe("StreamerService", () => {
       ]),
     );
     expect(report.issues.every((issue) => ["info", "warning", "error"].includes(issue.severity))).toBe(true);
+  });
+
+  it("detecta audio timestamp discontinuity em modo full e renderiza no HTML", async () => {
+    const root = await makeTempRoot();
+    const service = new StreamerService(
+      {
+        inspectHls: async ({ url }) => {
+          if (url === "https://example.com/master.m3u8") {
+            return makeInspectResult({
+              variants: [
+                {
+                  uri: "video.m3u8",
+                  url: "https://example.com/video.m3u8",
+                  bandwidth: 1_000_000,
+                  codecs: "mp4a.40.2,avc1.4D401F",
+                  audioGroupId: "audio",
+                },
+              ],
+              renditions: [
+                {
+                  type: "AUDIO",
+                  groupId: "audio",
+                  name: "main",
+                  uri: "audio.m3u8",
+                  url: "https://example.com/audio.m3u8",
+                },
+              ],
+            });
+          }
+
+          const isAudio = url.includes("audio");
+          return makeInspectResult({
+            url,
+            finalUrl: url,
+            playlistType: "media",
+            targetDuration: 1,
+            segments: [0, 1, 2, 3].map((index) => ({
+              uri: `${isAudio ? "audio" : "video"}-${index}.${isAudio ? "aac" : "ts"}`,
+              url: `https://cdn.example.com/${isAudio ? "audio" : "video"}-${index}.bin`,
+              duration: 0.5,
+            })),
+          });
+        },
+        probe: async ({ input }) => {
+          const isAudio = input.includes("/audio/");
+          const match = input.match(/0000(\d)-/);
+          const segmentIndex = match ? Number(match[1]) : 0;
+          const audioFirstPtsBySegment = [
+            1_005_427.321322,
+            1_005_427.821322,
+            1_005_428.321322,
+            1_005_429.221322,
+          ];
+          const firstPtsTime = isAudio ? audioFirstPtsBySegment[segmentIndex] : segmentIndex * 0.5;
+          return {
+            ok: true,
+            input,
+            timeoutMs: 5000,
+            format: {
+              duration: "0.500",
+            },
+            streams: isAudio
+              ? [{ codec_type: "audio", codec_name: "aac", sample_rate: "48000", channels: 2 }]
+              : [{ codec_type: "video", codec_name: "h264" }],
+            timeline: {
+              streamSelector: isAudio ? "a:0" : "v:0",
+              sampleKind: isAudio ? "packets" : "frames",
+              sampleCount: isAudio ? 24 : 15,
+              firstPtsTime,
+              lastPtsTime: firstPtsTime + 0.49,
+              keyframeCount: isAudio ? undefined : 1,
+              startsWithKeyframe: isAudio ? undefined : true,
+              maxKeyframeGapSeconds: isAudio ? undefined : 0.5,
+            },
+            errors: [],
+          };
+        },
+      },
+      root,
+      async () => new Response(new Uint8Array([1, 2, 3])),
+    );
+    await service.init();
+
+    const result = await service.cloneHls({
+      sessionKey: "test",
+      url: "https://example.com/master.m3u8",
+      durationSeconds: 2,
+      originId: "audio-gap-origin",
+    });
+
+    const report = await service.analyzeOrigin(result.id, {
+      full: true,
+      maxMediaPlaylists: 4,
+      timeoutMs: 5000,
+    });
+
+    const audioEntries = report.entries.filter((entry) => entry.type === "AUDIO");
+    expect(audioEntries).toHaveLength(4);
+    expect(audioEntries[3]).toMatchObject({
+      continuityStatus: "gap",
+      nextExpectedPtsUs: 1005428821322,
+      nextActualPtsUs: 1005429221322,
+      nextDeltaUs: 400000,
+      codecName: "aac",
+      sampleRate: 48000,
+      channels: 2,
+    });
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "audio_timestamp_discontinuity",
+          summary: "audio timestamp gap is 400.000ms",
+          evidence: expect.arrayContaining([
+            "expected=1005428821322us",
+            "actual=1005429221322us",
+            "delta=400.000ms",
+          ]),
+        }),
+      ]),
+    );
+
+    const html = renderStreamerAnalysisHtml(report);
+    expect(html).toContain("Audio Timestamp Discontinuities");
+    expect(html).toContain("audio_timestamp_discontinuity");
+    expect(html).toContain("400.000ms");
+    expect(html).toContain("1005429221322us");
   });
 
   it("serve o origin local com CORS", async () => {

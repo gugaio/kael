@@ -789,6 +789,9 @@ function makeFakeApp(): KaelApp {
       analyzeOrigin: async () => {
         throw new Error("streamer analyze not implemented in fake app");
       },
+      mutateOrigin: async () => {
+        throw new Error("streamer mutate not implemented in fake app");
+      },
       removeOrigin: async () => {
         throw new Error("streamer remove not implemented in fake app");
       },

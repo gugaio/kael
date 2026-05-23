@@ -8,6 +8,7 @@ import { initKaelHome, resolveKaelHome } from "../global-config.js";
 import { DiscordChatOnlyBot } from "../integrations/discord/discord-bot.js";
 import {
   diagnoseStreamerClone,
+  renderStreamerAnalysisHtml,
   type StreamerCloneDiagnostic,
   type StreamerOriginAnalysisReport,
   type StreamerOriginProbeReport,
@@ -15,6 +16,7 @@ import {
   StreamerCloneResult,
   StreamerClonedRendition,
   StreamerClonedVariant,
+  type StreamerFaultTargetKind,
   StreamerOriginSummary,
 } from "../capabilities/video/index.js";
 
@@ -57,6 +59,11 @@ type StreamerLiveOptions = {
   port?: string;
 };
 
+type StreamerServeOptions = {
+  host?: string;
+  port?: string;
+};
+
 type StreamerRemoveOptions = {
   yes?: boolean;
 };
@@ -65,7 +72,24 @@ type StreamerAnalyzeOptions = {
   timeoutMs?: string;
   maxMediaPlaylists?: string;
   maxSegmentsPerPlaylist?: string;
+  full?: boolean;
+  html?: boolean;
+  output?: string;
   json?: boolean;
+};
+
+type StreamerMutateOptions = {
+  fault?: string;
+  atSegment?: string;
+  target?: string;
+  targetIndex?: string;
+  withOrigin?: string;
+  withTarget?: string;
+  withTargetIndex?: string;
+  withSegment?: string;
+  withDiscontinuity?: boolean;
+  ffmpegProfile?: string;
+  id?: string;
 };
 
 type StreamerFileProbe = {
@@ -672,6 +696,14 @@ function formatStreamerOriginSummary(origin: StreamerOriginSummary): string {
     `duration=${formatSeconds(origin.cumulativeDurationSeconds)}/${origin.requestedDurationSeconds}s`,
     `bytes=${formatBytes(origin.bytes)}`,
     `allVariants=${origin.allVariants}`,
+    ...(origin.faults.length > 0
+      ? [
+          `fault=${origin.faults
+            .map((fault) => `${fault.type}:${fault.targetKind}[${fault.targetIndex}]:seg${fault.segmentIndex}`)
+            .join(",")}`,
+        ]
+      : []),
+    ...(origin.derivedFrom ? [`derivedFrom=${origin.derivedFrom}`] : []),
     `source=${origin.sourceUrl}`,
   ].join(" | ");
 }
@@ -866,6 +898,11 @@ function formatStreamerAnalyzeReport(report: StreamerOriginAnalysisReport): stri
       `pts=${entry.firstPtsTime?.toFixed(3) ?? "n/a"} -> ${entry.lastPtsTime?.toFixed(3) ?? "n/a"}`,
       `boundary=${entry.boundaryStatus ?? "unknown"}`,
       ...(typeof entry.boundaryDeltaSeconds === "number" ? [`boundaryDelta=${formatOptionalSignedSeconds(entry.boundaryDeltaSeconds)}`] : []),
+      ...(entry.type === "AUDIO" ? [`audioContinuity=${entry.continuityStatus ?? "unknown"}`] : []),
+      ...(typeof entry.nextDeltaUs === "number" ? [`audioDelta=${formatMicroseconds(entry.nextDeltaUs)}`] : []),
+      ...(typeof entry.nextExpectedPtsUs === "number" && typeof entry.nextActualPtsUs === "number"
+        ? [`expected=${entry.nextExpectedPtsUs}us actual=${entry.nextActualPtsUs}us`]
+        : []),
       `samples=${entry.packetCount ?? 0}`,
       ...(typeof entry.keyframeCount === "number" ? [`keyframes=${entry.keyframeCount}`] : []),
       ...(typeof entry.startsWithKeyframe === "boolean" ? [`startsWithKeyframe=${entry.startsWithKeyframe ? "yes" : "no"}`] : []),
@@ -887,6 +924,10 @@ function formatOptionalSignedSeconds(value: number | undefined): string {
     return "n/a";
   }
   return `${value >= 0 ? "+" : ""}${value.toFixed(3)}s`;
+}
+
+function formatMicroseconds(value: number): string {
+  return `${(value / 1_000).toFixed(3)}ms`;
 }
 
 async function commandStreamerList(): Promise<void> {
@@ -931,6 +972,16 @@ async function commandStreamerInspect(originId: string): Promise<void> {
     `${highlight("streamer origin")}: ${origin.id}`,
     `schemaVersion=${origin.schemaVersion}`,
     `created=${origin.createdAt}`,
+    ...(origin.derivedFrom ? [`derivedFrom=${origin.derivedFrom}`] : []),
+    ...(origin.faults && origin.faults.length > 0
+      ? [
+          "faults:",
+          ...origin.faults.map(
+            (fault, index) =>
+              `- [${index}] ${fault.type} | target=${fault.targetKind}[${fault.targetIndex}] | segment=${fault.segmentIndex} | ${fault.description}`,
+          ),
+        ]
+      : []),
     `source=${origin.sourceUrl}`,
     `selected=${origin.selectedUrl}`,
     `final=${origin.finalUrl}`,
@@ -985,6 +1036,7 @@ async function commandStreamerAnalyze(originId: string | undefined, options: Str
     ...(Number.isFinite(timeoutMs) ? { timeoutMs } : {}),
     ...(Number.isFinite(maxMediaPlaylists) ? { maxMediaPlaylists } : {}),
     ...(Number.isFinite(maxSegmentsPerPlaylist) ? { maxSegmentsPerPlaylist } : {}),
+    ...(options.full ? { full: true } : {}),
   });
 
   if (options.json) {
@@ -993,6 +1045,76 @@ async function commandStreamerAnalyze(originId: string | undefined, options: Str
   }
 
   console.log(formatStreamerAnalyzeReport(report).join("\n"));
+  if (options.html) {
+    const origin = await app.streamer.inspectOrigin(resolvedOriginId);
+    const outputPath = options.output?.trim()
+      ? path.resolve(options.output.trim())
+      : path.join(origin.rootDir, "analysis.html");
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+    await fs.writeFile(outputPath, renderStreamerAnalysisHtml(report), "utf-8");
+    console.log(`html=${outputPath}`);
+  }
+}
+
+async function commandStreamerMutate(originId: string | undefined, options: StreamerMutateOptions): Promise<void> {
+  const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
+  const resolvedOriginId = await resolveStreamerOriginId(app.streamer, originId);
+  const fault = (options.fault?.trim() || "discontinuity").toLowerCase();
+  if (fault !== "discontinuity" && fault !== "segment-swap") {
+    throw new Error("faults suportadas nesta fase: discontinuity, segment-swap");
+  }
+  const ffmpegProfile = options.ffmpegProfile?.trim().toLowerCase();
+  if (ffmpegProfile && ffmpegProfile !== "hevc") {
+    throw new Error("--ffmpeg-profile suporta apenas hevc nesta fase");
+  }
+  if (ffmpegProfile && fault !== "segment-swap") {
+    throw new Error("--ffmpeg-profile so pode ser usado com --fault segment-swap");
+  }
+  const segmentIndex = optionalNumber(options.atSegment, "--at-segment");
+  if (!Number.isFinite(segmentIndex)) {
+    throw new Error("use --at-segment <n> para escolher o segmento alvo");
+  }
+  const target = (options.target?.trim() || "variant").toLowerCase();
+  if (target !== "variant" && target !== "rendition") {
+    throw new Error("--target deve ser variant ou rendition");
+  }
+  const targetIndex = optionalNumber(options.targetIndex, "--target-index");
+  const donorTarget = (options.withTarget?.trim() || target).toLowerCase();
+  if (donorTarget !== "variant" && donorTarget !== "rendition") {
+    throw new Error("--with-target deve ser variant ou rendition");
+  }
+  const donorTargetIndex = optionalNumber(options.withTargetIndex, "--with-target-index");
+  const donorSegmentIndex = optionalNumber(options.withSegment, "--with-segment");
+  const result = await app.streamer.mutateOrigin({
+    originId: resolvedOriginId,
+    fault: fault as "discontinuity" | "segment-swap",
+    targetKind: target as StreamerFaultTargetKind,
+    targetIndex: Number.isFinite(targetIndex) ? targetIndex : 0,
+    segmentIndex: segmentIndex as number,
+    ...(options.withOrigin?.trim() ? { donorOriginId: options.withOrigin.trim() } : {}),
+    ...(Number.isFinite(donorTargetIndex) ? { donorTargetIndex } : {}),
+    ...(Number.isFinite(donorSegmentIndex) ? { donorSegmentIndex } : {}),
+    ...(options.withOrigin?.trim() ? { donorTargetKind: donorTarget as StreamerFaultTargetKind } : {}),
+    ...(options.withDiscontinuity ? { withDiscontinuity: true } : {}),
+    ...(ffmpegProfile ? { ffmpegProfile: ffmpegProfile as "hevc" } : {}),
+    ...(options.id?.trim() ? { newOriginId: options.id.trim() } : {}),
+  });
+
+  console.log(`${highlight("streamer origin mutated")}: ${result.origin.id}`);
+  console.log(`source=${result.sourceOriginId}`);
+  console.log(`fault=${result.fault.type} target=${result.fault.targetKind}[${result.fault.targetIndex}] segment=${result.fault.segmentIndex}`);
+  if (result.fault.donorOriginId) {
+    console.log(`donor=${result.fault.donorOriginId} ${result.fault.donorTargetKind}[${result.fault.donorTargetIndex}] segment=${result.fault.donorSegmentIndex}`);
+  }
+  if (result.fault.withDiscontinuity) {
+    console.log("withDiscontinuity=yes");
+  }
+  if (ffmpegProfile) {
+    console.log(`ffmpegProfile=${ffmpegProfile}`);
+  }
+  console.log(`description=${result.fault.description}`);
+  console.log(`manifest=${result.origin.manifestPath}`);
+  console.log(`root=${result.origin.rootDir}`);
 }
 
 async function commandStreamerRemove(originId: string, options: StreamerRemoveOptions): Promise<void> {
@@ -1104,6 +1226,20 @@ async function commandStreamerLive(originId: string | undefined, options: Stream
 
   console.log(`${highlight("live origin serving")}: ${handle.playbackUrl}`);
   console.log(`origin=${handle.originId} windowSize=${handle.windowSize} initialMediaSequence=${handle.initialMediaSequence}`);
+  await waitForStreamerStop(handle.close);
+}
+
+async function commandStreamerServe(originId: string | undefined, options: StreamerServeOptions): Promise<void> {
+  const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
+  const resolvedOriginId = await resolveStreamerOriginId(app.streamer, originId);
+  const port = optionalNumber(options.port, "--port");
+  const handle = await app.streamer.serveOrigin(resolvedOriginId, {
+    host: options.host?.trim() || "127.0.0.1",
+    ...(Number.isFinite(port) ? { port } : {}),
+  });
+
+  console.log(`${highlight("origin serving")}: ${handle.playbackUrl}`);
+  console.log(`origin=${handle.originId}`);
   await waitForStreamerStop(handle.close);
 }
 
@@ -1226,9 +1362,31 @@ async function main(): Promise<void> {
     .option("--timeout-ms <ms>", "timeout de ffprobe por segmento")
     .option("--max-media-playlists <n>", "quantidade maxima de playlists consideradas")
     .option("--max-segments-per-playlist <n>", "quantidade maxima de segmentos amostrados por playlist", "3")
+    .option("--full", "analisa todos os segmentos das playlists consideradas", false)
+    .option("--html", "gera um relatorio HTML estatico", false)
+    .option("--output <path>", "caminho do relatorio HTML")
     .option("--json", "imprime o relatorio completo em JSON", false)
     .action(async (originId: string | undefined, options: StreamerAnalyzeOptions) => {
       await commandStreamerAnalyze(originId, options);
+    });
+
+  streamer
+    .command("mutate")
+    .description("Cria um novo origin derivado com uma fault injetada para teste de players")
+    .argument("[originId]", "id do origin base criado por streamer clone ou latest", "latest")
+    .option("--fault <type>", "tipo de fault a injetar (discontinuity, segment-swap)", "discontinuity")
+    .option("--at-segment <n>", "indice zero-based do segmento alvo")
+    .option("--target <kind>", "playlist alvo: variant ou rendition", "variant")
+    .option("--target-index <n>", "indice zero-based da variant/rendition alvo", "0")
+    .option("--with-origin <originId>", "origin donor usado por faults como segment-swap")
+    .option("--with-target <kind>", "playlist donor: variant ou rendition")
+    .option("--with-target-index <n>", "indice zero-based da variant/rendition donor")
+    .option("--with-segment <n>", "indice zero-based do segmento donor")
+    .option("--with-discontinuity", "insere EXT-X-DISCONTINUITY apos aplicar a fault", false)
+    .option("--ffmpeg-profile <profile>", "transcode do donor antes do swap (hevc)")
+    .option("--id <id>", "id seguro para o novo origin derivado")
+    .action(async (originId: string | undefined, options: StreamerMutateOptions) => {
+      await commandStreamerMutate(originId, options);
     });
 
   streamer
@@ -1274,6 +1432,16 @@ async function main(): Promise<void> {
     .option("--port <port>", "porta do servidor live (0 = aleatoria)", "0")
     .action(async (originId: string | undefined, options: StreamerLiveOptions) => {
       await commandStreamerLive(originId, options);
+    });
+
+  streamer
+    .command("serve")
+    .description("Serve um origin clonado existente como VOD HLS local")
+    .argument("[originId]", "id do origin criado por streamer clone/mutate ou latest", "latest")
+    .option("--host <host>", "host do servidor VOD", "127.0.0.1")
+    .option("--port <port>", "porta do servidor VOD (0 = aleatoria)", "0")
+    .action(async (originId: string | undefined, options: StreamerServeOptions) => {
+      await commandStreamerServe(originId, options);
     });
 
   program

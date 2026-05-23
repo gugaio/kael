@@ -444,6 +444,8 @@ export type StreamerClonedRendition = {
 export type StreamerCloneResult = {
   id: string;
   schemaVersion: number;
+  derivedFrom?: string;
+  faults?: StreamerOriginFault[];
   sessionKey: string;
   sourceUrl: string;
   selectedUrl: string;
@@ -476,6 +478,45 @@ export type StreamerCloneResult = {
   variants: StreamerClonedVariant[];
   renditions: StreamerClonedRendition[];
   segments: StreamerClonedSegment[];
+};
+
+export type StreamerFaultTargetKind = "variant" | "rendition";
+
+export type StreamerFaultType = "discontinuity" | "segment-swap";
+
+export type StreamerOriginFault = {
+  type: StreamerFaultType;
+  targetKind: StreamerFaultTargetKind;
+  targetIndex: number;
+  segmentIndex: number;
+  description: string;
+  createdAt: string;
+  donorOriginId?: string;
+  donorTargetKind?: StreamerFaultTargetKind;
+  donorTargetIndex?: number;
+  donorSegmentIndex?: number;
+  withDiscontinuity?: boolean;
+};
+
+export type StreamerMutateInput = {
+  originId: string;
+  fault: StreamerFaultType;
+  targetKind?: StreamerFaultTargetKind;
+  targetIndex?: number;
+  segmentIndex: number;
+  donorOriginId?: string;
+  donorTargetKind?: StreamerFaultTargetKind;
+  donorTargetIndex?: number;
+  donorSegmentIndex?: number;
+  withDiscontinuity?: boolean;
+  ffmpegProfile?: "hevc";
+  newOriginId?: string;
+};
+
+export type StreamerMutateResult = {
+  sourceOriginId: string;
+  origin: StreamerCloneResult;
+  fault: StreamerOriginFault;
 };
 
 export type StreamerProbeOptions = {
@@ -513,7 +554,11 @@ export type StreamerAnalyzeOptions = {
   maxMediaPlaylists?: number;
   /** Quantidade maxima de segmentos amostrados por playlist (first/middle/last). */
   maxSegmentsPerPlaylist?: number;
+  /** Analisa todos os segmentos das playlists consideradas. */
+  full?: boolean;
 };
+
+export type StreamerTimelineContinuityStatus = "ok" | "gap" | "overlap" | "reset" | "unknown";
 
 export type StreamerSegmentAnalysisEntry = {
   kind: "variant" | "rendition";
@@ -526,9 +571,20 @@ export type StreamerSegmentAnalysisEntry = {
   actualDurationSeconds?: number;
   durationDeltaSeconds?: number;
   streamCount: number;
+  codecName?: string;
+  sampleRate?: number;
+  channels?: number;
   packetCount?: number;
   firstPtsTime?: number;
   lastPtsTime?: number;
+  lastSampleDurationSeconds?: number;
+  firstPtsUs?: number;
+  lastPtsUs?: number;
+  lastSampleDurationUs?: number;
+  nextExpectedPtsUs?: number;
+  nextActualPtsUs?: number;
+  nextDeltaUs?: number;
+  continuityStatus?: StreamerTimelineContinuityStatus;
   boundaryDeltaSeconds?: number;
   boundaryStatus?: "ok" | "warn" | "reset" | "unknown";
   keyframeCount?: number;
@@ -585,6 +641,8 @@ export type StreamerOriginAnalysisReport = {
 export type StreamerOriginSummary = {
   id: string;
   schemaVersion: number;
+  derivedFrom?: string;
+  faults: StreamerOriginFault[];
   createdAt: string;
   sourceUrl: string;
   selectedUrl: string;

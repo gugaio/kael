@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-05-10**
+Ultima atualizacao: **2026-05-23**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,109 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-05-23 - Fase 23: Analyze full com audio timestamp discontinuity e HTML
+
+Resumo:
+- `streamer analyze --full` agora analisa todos os segmentos das playlists consideradas.
+- O analyze detecta `audio_timestamp_discontinuity` em gaps/overlaps de timestamp de audio entre chunks consecutivos.
+- `streamer analyze --html` gera um relatorio estatico com resumo, issues, discontinuities de audio, media summary e detalhe por chunk.
+
+Arquivos-chave:
+- `src/capabilities/video/inspect-service.ts`
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/streamer-report-html.ts`
+- `src/capabilities/video/types.ts`
+- `src/cli/index.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/streamer-service.test.ts`
+
+Pendencias:
+- Calibrar thresholds com midias reais de producao e comparar com logs reais de player.
+- Ainda nao ha fault especifica para simular `audio-gap`/`audio-delay`.
+
+Proximo passo recomendado:
+- Rodar `./bin/kael streamer analyze latest --full --html` em uma midia que gera `Unexpected audio track timestamp discontinuity` e comparar o delta reportado com o log do player.
+
+### 2026-05-10 - Fase 23: Streamer fault injection agressiva com FFmpeg
+
+Resumo:
+- `streamer mutate --fault segment-swap` agora suporta `--ffmpeg-profile hevc` para transcodar o segmento donor antes da troca.
+- A troca agressiva permite injetar um chunk HEVC dentro de uma playlist H.264 existente, aumentando a chance de falha visivel no player.
+- A metadata da fault registra o donor e a descricao do origin derivado explicita quando houve transcode com FFmpeg.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/types.ts`
+- `src/cli/index.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/streamer-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+- [x] `./bin/kael streamer mutate --help`
+
+Pendencias:
+- Ainda falta um teste manual com player real para calibrar se HEVC-in-TS ja e agressivo o bastante em todos os targets.
+- O fluxo atual nao suporta donor segment com `EXT-X-MAP`.
+
+Proximo passo recomendado:
+- Rodar `segment-swap` com `--ffmpeg-profile hevc` e comparar playback/analyze com e sem `--with-discontinuity`.
+
+### 2026-05-10 - Fase 23: Streamer fault injection segment-swap
+
+Resumo:
+- `streamer mutate` agora suporta `segment-swap`, trocando um segmento alvo por um segmento donor vindo de outro origin.
+- A fault registra donor origin/playlist/segment e pode opcionalmente inserir `#EXT-X-DISCONTINUITY` com `--with-discontinuity`.
+- O manifesto local preserva sua estrutura original, ajustando apenas o `EXTINF` do segmento trocado.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/types.ts`
+- `src/capabilities/video/streamer-service.test.ts`
+- `src/cli/index.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/inspect-service.test.ts src/capabilities/video/streamer-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+- [x] `./bin/kael streamer mutate --help`
+
+Pendencias:
+- O `segment-swap` ainda nao suporta donor segment com `EXT-X-MAP`.
+- Ainda falta calibrar em manifests reais como players reagem com e sem `#EXT-X-DISCONTINUITY`.
+
+Proximo passo recomendado:
+- Rodar `segment-swap` com Bunny como donor e validar playback/analyze em um origin real antes de partir para `missing-segment` ou faults com FFmpeg.
+
+### 2026-05-10 - Fase 23: Streamer fault injection discontinuity
+
+Resumo:
+- Adicionado `streamer mutate` para criar origins derivados com fault injetada sem alterar o clone original.
+- Primeira fault suportada: `discontinuity`, que injeta `#EXT-X-DISCONTINUITY` antes de um segmento escolhido em uma variant/rendition local.
+- `streamer list` e `streamer inspect` agora expõem `derivedFrom` e resumo das faults do origin.
+- Adicionado `streamer serve [originId]` para servir um origin VOD existente, incluindo origins derivados por `mutate`.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/types.ts`
+- `src/capabilities/video/streamer-service.test.ts`
+- `src/cli/index.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/inspect-service.test.ts src/capabilities/video/streamer-service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- Faults com FFmpeg ainda nao foram implementadas.
+- A primeira fault altera o manifesto VOD local; suporte especifico para manifest live derivado pode ser avaliado apos teste real.
+
+Proximo passo recomendado:
+- Testar `./bin/kael streamer mutate latest --fault discontinuity --at-segment 1`, servir o origin gerado com `streamer serve <id>` e depois implementar `missing-segment` ou `duration-drift`.
 
 ### 2026-05-10 - Fase 23: Streamer analyze issues e JSON
 

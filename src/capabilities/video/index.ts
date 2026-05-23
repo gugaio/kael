@@ -9,6 +9,7 @@ export { VideoManifestAuditService } from "./manifest-audit-service.js";
 export { VideoManifestDiffService } from "./manifest-diff-service.js";
 export { HlsStreamMonitorService } from "./stream-monitor-service.js";
 export { StreamerService } from "./streamer-service.js";
+export { renderStreamerAnalysisHtml } from "./streamer-report-html.js";
 export {
   diagnoseStreamerClone,
   inspectHlsVariantBrowserCompatibility,
@@ -43,6 +44,8 @@ export type {
   StreamerClonedRendition,
   StreamerClonedSegment,
   StreamerClonedVariant,
+  StreamerFaultTargetKind,
+  StreamerFaultType,
   StreamerAnalyzeOptions,
   StreamerAnalysisIssue,
   StreamerAvAlignmentSummary,
@@ -52,10 +55,14 @@ export type {
   StreamerLiveServeHandle,
   StreamerLiveServeOptions,
   StreamerOriginProbeReport,
+  StreamerOriginFault,
   StreamerOriginSummary,
   StreamerProbeOptions,
   StreamerRemoveResult,
   StreamerSegmentAnalysisEntry,
+  StreamerTimelineContinuityStatus,
+  StreamerMutateInput,
+  StreamerMutateResult,
   StreamerServeHandle,
   StreamerServeOptions,
   StreamSnapshot,
