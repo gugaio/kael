@@ -37,6 +37,50 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-05-23 - Fase 23: PTS humano no report HTML
+
+Resumo:
+- O `analysis.html` agora mostra `First PTS`, `Last PTS`, `Expected` e `Actual Next` em formato legivel.
+- O valor bruto em microsegundos continua visivel no mesmo campo e no tooltip para comparacao direta com logs de player.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-report-html.ts`
+- `src/capabilities/video/streamer-service.test.ts`
+
+Checklist de validacao:
+- [x] `npm test -- src/capabilities/video/streamer-service.test.ts`
+- [x] `npm run check`
+
+Pendencias:
+- Avaliar se a CLI textual tambem deve formatar PTS humano ou manter apenas valores brutos.
+
+Proximo passo recomendado:
+- Re-renderizar reports existentes a partir do JSON embutido quando a analise nao precisar ser recalculada.
+
+### 2026-05-23 - Fase 23: A/V timeline drift no analyze
+
+Resumo:
+- `streamer analyze` agora calcula janelas de drift entre video e audio externo usando timeline do manifesto e duracao real por segmento.
+- O report emite issue `av_timeline_window_drift` quando audio/video divergem acima do threshold.
+- O HTML ganhou a secao `A/V Timeline Drift`, com tempo humano, duracao de video/audio e deltas de inicio/fim/duracao.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/streamer-report-html.ts`
+- `src/capabilities/video/types.ts`
+- `src/capabilities/video/streamer-service.test.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm test -- src/capabilities/video/streamer-service.test.ts`
+- [x] `npm run check`
+
+Pendencias:
+- Calibrar o threshold de `250ms` com mais midias reais e correlacionar com travamentos em Tizen.
+
+Proximo passo recomendado:
+- Regerar o `analysis.html` do origin problemático e verificar se o segmento `166/167` aparece no topo de `A/V Timeline Drift`.
+
 ### 2026-05-23 - Fase 23: Report HTML com tempo humano
 
 Resumo:

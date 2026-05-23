@@ -70,6 +70,10 @@ O foco inicial e operacional:
 - `streamer analyze --html` gera um relatorio estatico em
   `analysis.html`, com resumo, issues, discontinuities de audio, media summary
   e tabela por chunk. O HTML e derivado do mesmo JSON do `analyze`.
+- O report HTML tambem exibe tempos de asset em formato humano (`mm:ss` ou
+  `h:mm:ss`) e uma secao `A/V Timeline Drift`, que compara as janelas de
+  manifesto de video e audio externo por indice de segmento para destacar
+  mudancas de cadencia como video curto contra audio normal.
 - `streamer mutate` cria um novo origin derivado e registra `derivedFrom`/`faults`
   no `origin.json`; a primeira fault suportada e `discontinuity`, injetada no
   manifesto local antes de um segmento escolhido.
@@ -237,6 +241,11 @@ StreamerService.serveLiveOrigin()
 - A deteccao de `audio_timestamp_discontinuity` compara timestamps de audio
   entre segmentos consecutivos de uma mesma playlist/rendition. Ela nao tenta
   ainda corrigir PTS, remuxar chunks ou correlacionar eventos reais de player.
+- A deteccao de `av_timeline_window_drift` e um sinal operacional, nao uma
+  prova isolada de stream invalido: ela compara boundaries/duracoes declaradas
+  e duracao real por segmento de video contra a rendition de audio de mesmo
+  indice para encontrar janelas onde a cadencia entre playlists externas pode
+  sensibilizar players como Tizen.
 - Fault injection agora cobre alteracoes de manifesto e um primeiro caso com
   FFmpeg (`segment-swap --ffmpeg-profile hevc`), mas ainda nao cobre mudancas
   mais finas de PTS/PCR/GOP por segmento.

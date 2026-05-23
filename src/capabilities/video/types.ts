@@ -622,7 +622,25 @@ export type StreamerAvAlignmentSummary = {
   comparedPairs: number;
   maxDurationDeltaSeconds?: number;
   maxStartPtsDeltaSeconds?: number;
+  comparedTimelineWindows?: number;
+  maxTimelineDriftSeconds?: number;
+  timelineDriftWindows?: StreamerAvTimelineDriftWindow[];
   notes: string[];
+};
+
+export type StreamerAvTimelineDriftWindow = {
+  audioMediaIndex: number;
+  videoSegmentIndex: number;
+  audioSegmentIndex: number;
+  timelineStartSeconds: number;
+  timelineEndSeconds: number;
+  videoDurationSeconds: number;
+  audioDurationSeconds: number;
+  startDeltaSeconds: number;
+  endDeltaSeconds: number;
+  durationDeltaSeconds: number;
+  actualDurationDeltaSeconds?: number;
+  status: "ok" | "warn";
 };
 
 export type StreamerAnalysisIssue = {

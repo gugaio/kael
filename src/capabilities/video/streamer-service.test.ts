@@ -1288,6 +1288,111 @@ describe("StreamerService", () => {
     expect(report.issues.every((issue) => ["info", "warning", "error"].includes(issue.severity))).toBe(true);
   });
 
+  it("destaca drift de timeline entre video e audio externo por janela", async () => {
+    const root = await makeTempRoot();
+    const service = new StreamerService(
+      {
+        inspectHls: async ({ url }) => {
+          if (url === "https://example.com/master.m3u8") {
+            return makeInspectResult({
+              variants: [
+                {
+                  uri: "video.m3u8",
+                  url: "https://example.com/video.m3u8",
+                  bandwidth: 2_000_000,
+                  resolution: "1280x720",
+                  codecs: "mp4a.40.2,avc1.4D401F",
+                  audioGroupId: "audio",
+                },
+              ],
+              renditions: [
+                {
+                  type: "AUDIO",
+                  groupId: "audio",
+                  name: "Portuguese",
+                  uri: "audio.m3u8",
+                  url: "https://example.com/audio.m3u8",
+                },
+              ],
+            });
+          }
+
+          const isAudio = url.includes("audio.");
+          const durations = isAudio ? [6, 6, 6] : [6, 5, 6];
+          return makeInspectResult({
+            url,
+            finalUrl: url,
+            playlistType: "media",
+            targetDuration: 6,
+            segments: durations.map((duration, index) => ({
+              uri: `${isAudio ? "audio" : "video"}-${index}.${isAudio ? "aac" : "ts"}`,
+              url: `https://cdn.example.com/${isAudio ? "audio" : "video"}-${index}.bin`,
+              duration,
+            })),
+          });
+        },
+        probe: async ({ input }) => {
+          const isAudio = input.includes("/audio/");
+          const isShortVideo = input.includes("video-1.ts");
+          const duration = isAudio ? 6 : isShortVideo ? 5 : 6;
+          return {
+            ok: true,
+            input,
+            timeoutMs: 5000,
+            format: { duration: duration.toFixed(3) },
+            streams: isAudio ? [{ codec_type: "audio", codec_name: "aac" }] : [{ codec_type: "video", codec_name: "h264" }],
+            timeline: {
+              streamSelector: isAudio ? "a:0" : "v:0",
+              sampleKind: isAudio ? "packets" : "frames",
+              sampleCount: isAudio ? 258 : duration * 24,
+              firstPtsTime: 0,
+              lastPtsTime: duration,
+              keyframeCount: isAudio ? undefined : 1,
+              startsWithKeyframe: isAudio ? undefined : true,
+              maxKeyframeGapSeconds: isAudio ? undefined : 1,
+            },
+            errors: [],
+          };
+        },
+      },
+      root,
+      async () => new Response(new Uint8Array([1, 2, 3])),
+    );
+    await service.init();
+
+    const result = await service.cloneHls({
+      sessionKey: "test",
+      url: "https://example.com/master.m3u8",
+      durationSeconds: 17,
+      originId: "timeline-drift-origin",
+    });
+
+    const report = await service.analyzeOrigin(result.id, {
+      full: true,
+      maxMediaPlaylists: 4,
+      timeoutMs: 5000,
+    });
+
+    expect(report.avAlignment.status).toBe("warn");
+    expect(report.avAlignment.comparedTimelineWindows).toBe(3);
+    expect(report.avAlignment.maxTimelineDriftSeconds).toBeCloseTo(1, 3);
+    expect(report.avAlignment.timelineDriftWindows?.[0]).toMatchObject({
+      status: "warn",
+      videoSegmentIndex: 1,
+      audioSegmentIndex: 1,
+      videoDurationSeconds: 5,
+      audioDurationSeconds: 6,
+      endDeltaSeconds: 1,
+      durationDeltaSeconds: 1,
+    });
+    expect(report.issues.map((issue) => issue.code)).toContain("av_timeline_window_drift");
+
+    const html = renderStreamerAnalysisHtml(report);
+    expect(html).toContain("A/V Timeline Drift");
+    expect(html).toContain("0:06 -> 0:11");
+    expect(html).toContain("+1.000s");
+  });
+
   it("detecta audio timestamp discontinuity em modo full e renderiza no HTML", async () => {
     const root = await makeTempRoot();
     const service = new StreamerService(
@@ -1411,6 +1516,7 @@ describe("StreamerService", () => {
     expect(html).toContain("Audio Timestamp Discontinuities");
     expect(html).toContain("audio_timestamp_discontinuity");
     expect(html).toContain("400.000ms");
+    expect(html).toContain("279:17:09.221");
     expect(html).toContain("1005429221322us");
   });
 

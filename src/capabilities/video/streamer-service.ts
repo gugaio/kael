@@ -90,6 +90,8 @@ const DEFAULT_MAX_ANALYZE_SEGMENTS_PER_PLAYLIST = 3;
 const DURATION_DELTA_WARN_SECONDS = 0.150;
 const BOUNDARY_DELTA_WARN_SECONDS = 0.250;
 const AUDIO_TIMESTAMP_DELTA_WARN_SECONDS = 0.050;
+const AV_TIMELINE_DRIFT_WARN_SECONDS = 0.250;
+const MAX_AV_TIMELINE_DRIFT_WINDOWS = 20;
 const GOP_GAP_WARN_SECONDS = 3.000;
 const DEFAULT_LIVE_WINDOW_SIZE = 5;
 const DEFAULT_INITIAL_MEDIA_SEQUENCE = 100_000;
@@ -2037,6 +2039,7 @@ function buildAvAlignmentSummary(entries: StreamerOriginAnalysisReport["entries"
   const durationDeltas: number[] = [];
   const startPtsDeltas: number[] = [];
   const notes = new Set<string>();
+  const timelineDriftWindows = buildAvTimelineDriftWindows(videoEntries, audioEntries);
 
   for (const video of videoEntries) {
     for (const audio of audioEntries.filter((entry) => entry.segmentIndex === video.segmentIndex)) {
@@ -2063,18 +2066,112 @@ function buildAvAlignmentSummary(entries: StreamerOriginAnalysisReport["entries"
   if (startPtsDeltas.length === 0) {
     notes.add("PTS start alignment unavailable");
   }
+  const maxTimelineDriftSeconds = maxOptional(timelineDriftWindows.map(maxAvTimelineDrift));
+  if (timelineDriftWindows.length === 0 && audioEntries.length > 0 && videoEntries.length > 0) {
+    notes.add("audio/video manifest timeline windows unavailable");
+  }
 
+  const status = comparedPairs === 0 && timelineDriftWindows.length === 0
+    ? "unknown"
+    : (maxDurationDeltaSeconds !== undefined && maxDurationDeltaSeconds > DURATION_DELTA_WARN_SECONDS) ||
+      (maxTimelineDriftSeconds !== undefined && maxTimelineDriftSeconds > AV_TIMELINE_DRIFT_WARN_SECONDS)
+    ? "warn"
+    : "ok";
   return {
-    status: comparedPairs === 0
-      ? "unknown"
-      : maxDurationDeltaSeconds !== undefined && maxDurationDeltaSeconds > DURATION_DELTA_WARN_SECONDS
-      ? "warn"
-      : "ok",
+    status,
     comparedPairs,
     maxDurationDeltaSeconds,
     maxStartPtsDeltaSeconds,
+    comparedTimelineWindows: timelineDriftWindows.length,
+    maxTimelineDriftSeconds,
+    timelineDriftWindows: timelineDriftWindows.slice(0, MAX_AV_TIMELINE_DRIFT_WINDOWS),
     notes: [...notes],
   };
+}
+
+function buildAvTimelineDriftWindows(
+  videoEntries: StreamerOriginAnalysisReport["entries"],
+  audioEntries: StreamerOriginAnalysisReport["entries"],
+): NonNullable<StreamerAvAlignmentSummary["timelineDriftWindows"]> {
+  const sortedVideo = videoEntries
+    .filter(hasTimelineWindow)
+    .sort(compareMediaEntries);
+  const audioGroups = groupEntriesByMediaIndex(audioEntries.filter(hasTimelineWindow));
+  const windows: NonNullable<StreamerAvAlignmentSummary["timelineDriftWindows"]> = [];
+
+  for (const video of sortedVideo) {
+    for (const [audioMediaIndex, group] of audioGroups) {
+      const audio = group.find((entry) => entry.segmentIndex === video.segmentIndex);
+      if (!audio || !hasTimelineWindow(audio)) {
+        continue;
+      }
+      const videoDurationSeconds = video.timelineEndSeconds - video.timelineStartSeconds;
+      const audioDurationSeconds = audio.timelineEndSeconds - audio.timelineStartSeconds;
+      const startDeltaSeconds = audio.timelineStartSeconds - video.timelineStartSeconds;
+      const endDeltaSeconds = audio.timelineEndSeconds - video.timelineEndSeconds;
+      const durationDeltaSeconds = audioDurationSeconds - videoDurationSeconds;
+      const actualDurationDeltaSeconds =
+        typeof video.actualDurationSeconds === "number" && typeof audio.actualDurationSeconds === "number"
+          ? audio.actualDurationSeconds - video.actualDurationSeconds
+          : undefined;
+      const maxDriftSeconds = Math.max(
+        Math.abs(startDeltaSeconds),
+        Math.abs(endDeltaSeconds),
+        Math.abs(durationDeltaSeconds),
+        Math.abs(actualDurationDeltaSeconds ?? 0),
+      );
+
+      windows.push({
+        audioMediaIndex,
+        videoSegmentIndex: video.segmentIndex,
+        audioSegmentIndex: audio.segmentIndex,
+        timelineStartSeconds: video.timelineStartSeconds,
+        timelineEndSeconds: video.timelineEndSeconds,
+        videoDurationSeconds,
+        audioDurationSeconds,
+        startDeltaSeconds,
+        endDeltaSeconds,
+        durationDeltaSeconds,
+        actualDurationDeltaSeconds,
+        status: maxDriftSeconds > AV_TIMELINE_DRIFT_WARN_SECONDS ? "warn" : "ok",
+      });
+    }
+  }
+
+  return windows.sort((left, right) => maxAvTimelineDrift(right) - maxAvTimelineDrift(left));
+}
+
+function groupEntriesByMediaIndex(
+  entries: StreamerOriginAnalysisReport["entries"],
+): Map<number, StreamerOriginAnalysisReport["entries"]> {
+  const groups = new Map<number, StreamerOriginAnalysisReport["entries"]>();
+  for (const entry of [...entries].sort(compareMediaEntries)) {
+    groups.set(entry.mediaIndex, [...(groups.get(entry.mediaIndex) ?? []), entry]);
+  }
+  return groups;
+}
+
+function maxAvTimelineDrift(window: NonNullable<StreamerAvAlignmentSummary["timelineDriftWindows"]>[number]): number {
+  return Math.max(
+    Math.abs(window.startDeltaSeconds),
+    Math.abs(window.endDeltaSeconds),
+    Math.abs(window.durationDeltaSeconds),
+    Math.abs(window.actualDurationDeltaSeconds ?? 0),
+  );
+}
+
+function hasTimelineWindow(entry: StreamerOriginAnalysisReport["entries"][number]): entry is StreamerOriginAnalysisReport["entries"][number] & {
+  timelineStartSeconds: number;
+  timelineEndSeconds: number;
+} {
+  return typeof entry.timelineStartSeconds === "number" && typeof entry.timelineEndSeconds === "number";
+}
+
+function compareMediaEntries(
+  left: StreamerOriginAnalysisReport["entries"][number],
+  right: StreamerOriginAnalysisReport["entries"][number],
+): number {
+  return left.segmentIndex - right.segmentIndex;
 }
 
 function buildAnalysisIssues(
@@ -2175,6 +2272,28 @@ function buildAnalysisIssues(
       evidence: [
         `comparedPairs=${avAlignment.comparedPairs}`,
         `maxDurationDelta=${avAlignment.maxDurationDeltaSeconds.toFixed(3)}s`,
+      ],
+    });
+  }
+
+  const timelineDriftWindows = avAlignment.timelineDriftWindows?.filter((window) => window.status === "warn") ?? [];
+  if (
+    timelineDriftWindows.length > 0 &&
+    typeof avAlignment.maxTimelineDriftSeconds === "number"
+  ) {
+    issues.push({
+      severity: "warning",
+      code: "av_timeline_window_drift",
+      summary: `audio/video manifest timeline drift reached ${avAlignment.maxTimelineDriftSeconds.toFixed(3)}s`,
+      evidence: [
+        `comparedWindows=${avAlignment.comparedTimelineWindows ?? timelineDriftWindows.length}`,
+        `maxTimelineDrift=${avAlignment.maxTimelineDriftSeconds.toFixed(3)}s`,
+        ...timelineDriftWindows.slice(0, 3).map((window) =>
+          `video seg[${window.videoSegmentIndex}] audio[${window.audioMediaIndex}] seg[${window.audioSegmentIndex}] ` +
+          `startDelta=${window.startDeltaSeconds.toFixed(3)}s ` +
+          `endDelta=${window.endDeltaSeconds.toFixed(3)}s ` +
+          `durationDelta=${window.durationDeltaSeconds.toFixed(3)}s`,
+        ),
       ],
     });
   }

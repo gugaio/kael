@@ -6,6 +6,7 @@ export function renderStreamerAnalysisHtml(report: StreamerOriginAnalysisReport)
     .filter((entry) => entry.continuityStatus === "gap" || entry.continuityStatus === "overlap")
     .sort((left, right) => Math.abs(right.nextDeltaUs ?? 0) - Math.abs(left.nextDeltaUs ?? 0));
   const maxAudioDeltaUs = audioProblems[0]?.nextDeltaUs;
+  const timelineDriftWindows = report.avAlignment.timelineDriftWindows ?? [];
 
   return `<!doctype html>
 <html lang="en">
@@ -111,6 +112,7 @@ export function renderStreamerAnalysisHtml(report: StreamerOriginAnalysisReport)
       ${metric("Issues", String(report.issues.length))}
       ${metric("A/V alignment", report.avAlignment.status)}
       ${metric("Worst audio timestamp delta", typeof maxAudioDeltaUs === "number" ? formatUs(maxAudioDeltaUs) : "n/a")}
+      ${metric("Worst A/V timeline drift", typeof report.avAlignment.maxTimelineDriftSeconds === "number" ? formatSeconds(report.avAlignment.maxTimelineDriftSeconds) : "n/a")}
     </div>
   </header>
   <main>
@@ -118,6 +120,8 @@ export function renderStreamerAnalysisHtml(report: StreamerOriginAnalysisReport)
     ${renderIssues(report)}
     <h2>Audio Timestamp Discontinuities</h2>
     ${renderAudioProblems(audioProblems)}
+    <h2>A/V Timeline Drift</h2>
+    ${renderTimelineDrift(timelineDriftWindows)}
     <h2>Media Summary</h2>
     ${renderMediaSummary(report)}
     <h2>Chunk Detail</h2>
@@ -154,10 +158,31 @@ function renderAudioProblems(entries: StreamerSegmentAnalysisEntry[]): string {
       <td>${escapeHtml(`${entry.kind}[${entry.mediaIndex}]`)}</td>
       <td>${entry.segmentIndex - 1} -> ${entry.segmentIndex}</td>
       <td class="status-${escapeHtml(entry.continuityStatus ?? "unknown")}">${escapeHtml(entry.continuityStatus ?? "unknown")}</td>
-      <td><code>${formatUsRaw(entry.nextExpectedPtsUs)}</code></td>
-      <td><code>${formatUsRaw(entry.nextActualPtsUs)}</code></td>
+      <td>${formatPtsUs(entry.nextExpectedPtsUs)}</td>
+      <td>${formatPtsUs(entry.nextActualPtsUs)}</td>
       <td>${typeof entry.nextDeltaUs === "number" ? formatUs(entry.nextDeltaUs) : "n/a"}</td>
       <td><code>${escapeHtml(entry.localPath)}</code></td>
+    </tr>`).join("")}</tbody>
+  </table></div>`;
+}
+
+function renderTimelineDrift(windows: NonNullable<StreamerOriginAnalysisReport["avAlignment"]["timelineDriftWindows"]>): string {
+  if (windows.length === 0) {
+    return `<p class="subtle">No audio/video manifest timeline drift windows were detected.</p>`;
+  }
+  return `<div class="scroll"><table>
+    <thead><tr><th>Status</th><th>Video Seg</th><th>Audio</th><th>Asset Time</th><th>Video Dur</th><th>Audio Dur</th><th>Start Delta</th><th>End Delta</th><th>Duration Delta</th><th>Actual Delta</th></tr></thead>
+    <tbody>${windows.map((window) => `<tr class="row-${escapeHtml(window.status)}">
+      <td class="status-${escapeHtml(window.status)}">${escapeHtml(window.status)}</td>
+      <td>${window.videoSegmentIndex}</td>
+      <td>rendition[${window.audioMediaIndex}] seg[${window.audioSegmentIndex}]</td>
+      <td>${formatTimelineRange(window.timelineStartSeconds, window.timelineEndSeconds)}</td>
+      <td>${formatSeconds(window.videoDurationSeconds)}</td>
+      <td>${formatSeconds(window.audioDurationSeconds)}</td>
+      <td>${formatSignedSeconds(window.startDeltaSeconds)}</td>
+      <td>${formatSignedSeconds(window.endDeltaSeconds)}</td>
+      <td>${formatSignedSeconds(window.durationDeltaSeconds)}</td>
+      <td>${formatSignedSeconds(window.actualDurationDeltaSeconds)}</td>
     </tr>`).join("")}</tbody>
   </table></div>`;
 }
@@ -188,10 +213,10 @@ function renderChunkTable(entries: StreamerSegmentAnalysisEntry[]): string {
       <td class="status-${escapeHtml(entry.continuityStatus ?? entry.boundaryStatus ?? "unknown")}">${escapeHtml(entry.continuityStatus ?? entry.boundaryStatus ?? "unknown")}</td>
       <td>${formatSeconds(entry.declaredDurationSeconds)}</td>
       <td>${formatSeconds(entry.actualDurationSeconds)}</td>
-      <td><code>${formatUsRaw(entry.firstPtsUs)}</code></td>
-      <td><code>${formatUsRaw(entry.lastPtsUs)}</code></td>
-      <td><code>${formatUsRaw(entry.nextExpectedPtsUs)}</code></td>
-      <td><code>${formatUsRaw(entry.nextActualPtsUs)}</code></td>
+      <td>${formatPtsUs(entry.firstPtsUs)}</td>
+      <td>${formatPtsUs(entry.lastPtsUs)}</td>
+      <td>${formatPtsUs(entry.nextExpectedPtsUs)}</td>
+      <td>${formatPtsUs(entry.nextActualPtsUs)}</td>
       <td>${typeof entry.nextDeltaUs === "number" ? formatUs(entry.nextDeltaUs) : "n/a"}</td>
       <td>${escapeHtml(formatCodec(entry))}</td>
       <td>${entry.packetCount ?? "n/a"}</td>
@@ -208,9 +233,7 @@ function formatAssetTime(entry: StreamerSegmentAnalysisEntry): string {
   if (typeof entry.timelineStartSeconds !== "number" || typeof entry.timelineEndSeconds !== "number") {
     return "n/a";
   }
-  const raw = `${formatSeconds(entry.timelineStartSeconds)} -> ${formatSeconds(entry.timelineEndSeconds)}`;
-  const human = `${formatClockTime(entry.timelineStartSeconds)} -> ${formatClockTime(entry.timelineEndSeconds)}`;
-  return `<span class="asset-time" title="${escapeHtml(raw)}"><strong>${human}</strong><span class="raw">${raw}</span></span>`;
+  return formatTimelineRange(entry.timelineStartSeconds, entry.timelineEndSeconds);
 }
 
 function formatCodec(entry: StreamerSegmentAnalysisEntry): string {
@@ -223,6 +246,20 @@ function formatCodec(entry: StreamerSegmentAnalysisEntry): string {
 
 function formatSeconds(value: number | undefined): string {
   return typeof value === "number" ? `${value.toFixed(3)}s` : "n/a";
+}
+
+function formatSignedSeconds(value: number | undefined): string {
+  if (typeof value !== "number") {
+    return "n/a";
+  }
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${formatSeconds(value)}`;
+}
+
+function formatTimelineRange(startSeconds: number, endSeconds: number): string {
+  const raw = `${formatSeconds(startSeconds)} -> ${formatSeconds(endSeconds)}`;
+  const human = `${formatClockTime(startSeconds)} -> ${formatClockTime(endSeconds)}`;
+  return `<span class="asset-time" title="${escapeHtml(raw)}"><strong>${human}</strong><span class="raw">${raw}</span></span>`;
 }
 
 function formatClockTime(value: number): string {
@@ -247,6 +284,24 @@ function formatUs(value: number): string {
 
 function formatUsRaw(value: number | undefined): string {
   return typeof value === "number" ? `${value}us` : "n/a";
+}
+
+function formatPtsUs(value: number | undefined): string {
+  if (typeof value !== "number") {
+    return "n/a";
+  }
+  const seconds = value / 1_000_000;
+  const human = seconds >= 3600 ? formatClockTimeWithMillis(seconds) : `${seconds.toFixed(3)}s`;
+  return `<span class="asset-time" title="${escapeHtml(formatUsRaw(value))}"><strong>${human}</strong><span class="raw">${formatUsRaw(value)}</span></span>`;
+}
+
+function formatClockTimeWithMillis(value: number): string {
+  const totalMilliseconds = Math.max(0, Math.floor(value * 1_000));
+  const hours = Math.floor(totalMilliseconds / 3_600_000);
+  const minutes = Math.floor((totalMilliseconds % 3_600_000) / 60_000);
+  const seconds = Math.floor((totalMilliseconds % 60_000) / 1_000);
+  const milliseconds = totalMilliseconds % 1_000;
+  return `${hours}:${padTime(minutes)}:${padTime(seconds)}.${String(milliseconds).padStart(3, "0")}`;
 }
 
 function escapeHtml(value: string): string {
