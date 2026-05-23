@@ -35,6 +35,7 @@ type ManifestDiffOptions = ManifestAuditOptions;
 
 type StreamerCloneOptions = {
   duration?: string;
+  start?: string;
   variant?: string;
   allVariants?: boolean;
   allVariantes?: boolean;
@@ -151,6 +152,22 @@ function optionalNumber(value: string | undefined, label: string): number | unde
   return parsed;
 }
 
+function optionalTimeSeconds(value: string | undefined, label: string): number | undefined {
+  const raw = value?.trim();
+  if (!raw) {
+    return undefined;
+  }
+  if (!raw.includes(":")) {
+    return optionalNumber(raw, label);
+  }
+  const parts = raw.split(":").map((part) => Number(part));
+  if (parts.length < 2 || parts.length > 3 || parts.some((part) => !Number.isFinite(part) || part < 0)) {
+    throw new Error(`${label} deve ser segundos, mm:ss ou hh:mm:ss`);
+  }
+  const [hours, minutes, seconds] = parts.length === 3 ? parts : [0, parts[0], parts[1]];
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
@@ -166,7 +183,7 @@ function createStreamerProgressLogger(): (event: StreamerCloneProgressEvent) => 
     switch (event.type) {
       case "start":
         console.error(
-          `[streamer] criando origin ${event.originId} | duration=${event.durationSeconds}s | allVariants=${event.allVariants}`,
+          `[streamer] criando origin ${event.originId} | start=${formatSeconds(event.startSeconds)} | duration=${event.durationSeconds}s | allVariants=${event.allVariants}`,
         );
         return;
       case "manifest_fetch":
@@ -693,6 +710,7 @@ function formatStreamerOriginSummary(origin: StreamerOriginSummary): string {
     `variants=${origin.variantCount}`,
     `renditions=${origin.renditionCount}`,
     `segments=${origin.segmentCount}`,
+    `window=${formatSeconds(origin.requestedStartSeconds ?? 0)}->${formatSeconds((origin.requestedStartSeconds ?? 0) + origin.requestedDurationSeconds)}`,
     `duration=${formatSeconds(origin.cumulativeDurationSeconds)}/${origin.requestedDurationSeconds}s`,
     `bytes=${formatBytes(origin.bytes)}`,
     `allVariants=${origin.allVariants}`,
@@ -894,6 +912,9 @@ function formatStreamerAnalyzeReport(report: StreamerOriginAnalysisReport): stri
       `- [${entry.ok ? "ok" : "error"}] ${entry.kind}[${entry.mediaIndex}] seg[${entry.segmentIndex}] ${entry.type}`,
       `declared=${entry.declaredDurationSeconds?.toFixed(3) ?? "n/a"}s`,
       `actual=${entry.actualDurationSeconds?.toFixed(3) ?? "n/a"}s`,
+      ...(typeof entry.timelineStartSeconds === "number" && typeof entry.timelineEndSeconds === "number"
+        ? [`assetTime=${formatSeconds(entry.timelineStartSeconds)}->${formatSeconds(entry.timelineEndSeconds)}`]
+        : []),
       `durationDelta=${formatOptionalSignedSeconds(entry.durationDeltaSeconds)}`,
       `pts=${entry.firstPtsTime?.toFixed(3) ?? "n/a"} -> ${entry.lastPtsTime?.toFixed(3) ?? "n/a"}`,
       `boundary=${entry.boundaryStatus ?? "unknown"}`,
@@ -990,6 +1011,7 @@ async function commandStreamerInspect(originId: string): Promise<void> {
     `variants=${origin.variantCount}`,
     `renditions=${origin.renditionCount}`,
     `segments=${origin.segmentCount}`,
+    `window=${formatSeconds(origin.requestedStartSeconds ?? 0)} -> ${formatSeconds((origin.requestedStartSeconds ?? 0) + origin.requestedDurationSeconds)}`,
     `duration=${formatSeconds(origin.cumulativeDurationSeconds)} requested=${origin.requestedDurationSeconds}s reached=${origin.reachedTargetDuration}`,
     `targetDuration=${origin.targetDuration}s`,
     `bytes=${formatBytes(origin.bytes)}`,
@@ -1131,6 +1153,7 @@ async function commandStreamerRemove(originId: string, options: StreamerRemoveOp
 async function commandStreamerClone(url: string, options: StreamerCloneOptions): Promise<void> {
   const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
   const durationSeconds = optionalNumber(options.duration, "--duration");
+  const startSeconds = optionalTimeSeconds(options.start, "--start");
   const timeoutMs = optionalNumber(options.timeoutMs, "--timeout-ms");
   const segmentTimeoutMs = optionalNumber(options.segmentTimeoutMs, "--segment-timeout-ms");
   const segmentRetries = optionalNumber(options.segmentRetries, "--segment-retries");
@@ -1146,6 +1169,7 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
     sessionKey: "cli.streamer.clone",
     url,
     ...(Number.isFinite(durationSeconds) ? { durationSeconds } : {}),
+    ...(Number.isFinite(startSeconds) ? { startSeconds } : {}),
     ...(options.variant?.trim() ? { variant: options.variant.trim() } : {}),
     ...(allVariants ? { allVariants: true } : {}),
     ...(Number.isFinite(maxVariants) ? { maxVariants } : {}),
@@ -1174,6 +1198,7 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
       `variant=${variantText}`,
       `variants=${result.variantCount}`,
       `segments=${result.segmentCount}`,
+      `window=${formatSeconds(result.requestedStartSeconds ?? 0)} -> ${formatSeconds((result.requestedStartSeconds ?? 0) + result.requestedDurationSeconds)}`,
       `duration=${result.cumulativeDurationSeconds.toFixed(3)}s requested=${result.requestedDurationSeconds}s reached=${result.reachedTargetDuration}`,
       `bytes=${formatBytes(result.bytes)}`,
       `manifest=${result.manifestPath}`,
@@ -1403,6 +1428,7 @@ async function main(): Promise<void> {
     .description("Clona uma janela VOD HLS localmente e opcionalmente serve como origem HTTP")
     .argument("<url>", "URL do manifesto HLS (.m3u8)")
     .option("--duration <seconds>", "duracao alvo em segundos (baixa segmentos ate cumulative >= alvo)", "60")
+    .option("--start <time>", "offset aproximado de inicio da janela: segundos, mm:ss ou hh:mm:ss")
     .option("--variant <selector>", "aac-highest, highest, lowest ou indice zero-based da variant", "aac-highest")
     .option("--all-variants", "clona todas as variants da master playlist e gera uma master local", false)
     .option("--all-variantes", "alias de --all-variants", false)

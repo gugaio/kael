@@ -122,6 +122,81 @@ describe("StreamerService", () => {
     await expect(fs.stat(path.join(result.rootDir, "segments", "00002-seg-12.ts"))).resolves.toBeTruthy();
   });
 
+  it("clona uma janela a partir de um offset aproximado", async () => {
+    const root = await makeTempRoot();
+    const fetchedUrls: string[] = [];
+    const service = new StreamerService(
+      {
+        inspectHls: async ({ url }) =>
+          makeInspectResult({
+            url,
+            finalUrl: url,
+            playlistType: "media",
+            targetDuration: 4,
+            mediaSequence: 20,
+            segments: Array.from({ length: 8 }, (_, index) => ({
+              uri: `seg-${index}.ts`,
+              url: `https://cdn.example.com/seg-${index}.ts`,
+              duration: 4,
+            })),
+          }),
+        probe: async ({ input }) => ({
+          ok: true,
+          input,
+          timeoutMs: 5000,
+          format: { duration: "4.000" },
+          streams: [{ codec_type: "video", codec_name: "h264" }],
+          timeline: {
+            streamSelector: "v:0",
+            sampleKind: "frames",
+            sampleCount: 96,
+            firstPtsTime: 0,
+            lastPtsTime: 4,
+            keyframeCount: 1,
+            startsWithKeyframe: true,
+            maxKeyframeGapSeconds: 1,
+          },
+          errors: [],
+        }),
+      },
+      root,
+      async (input) => {
+        fetchedUrls.push(String(input));
+        return new Response(new Uint8Array([1, 2, 3]));
+      },
+    );
+    await service.init();
+
+    const result = await service.cloneHls({
+      sessionKey: "test",
+      url: "https://example.com/media.m3u8",
+      startSeconds: 10,
+      durationSeconds: 8,
+      originId: "window-origin",
+    });
+
+    expect(result.requestedStartSeconds).toBe(10);
+    expect(fetchedUrls).toEqual([
+      "https://cdn.example.com/seg-2.ts",
+      "https://cdn.example.com/seg-3.ts",
+      "https://cdn.example.com/seg-4.ts",
+    ]);
+    expect(result.segments.map((segment) => [segment.originalIndex, segment.timelineStartSeconds, segment.timelineEndSeconds])).toEqual([
+      [2, 8, 12],
+      [3, 12, 16],
+      [4, 16, 20],
+    ]);
+
+    const report = await service.analyzeOrigin(result.id, { full: true });
+    expect(report.entries.map((entry) => [entry.segmentIndex, entry.timelineStartSeconds, entry.timelineEndSeconds])).toEqual([
+      [0, 8, 12],
+      [1, 12, 16],
+      [2, 16, 20],
+    ]);
+    expect(renderStreamerAnalysisHtml(report)).toContain("8.000s -> 12.000s");
+    expect(renderStreamerAnalysisHtml(report)).toContain("0:08 -> 0:12");
+  });
+
   it("clona todas as variants e gera uma master local quando allVariants esta ativo", async () => {
     const root = await makeTempRoot();
     const fetchedUrls: string[] = [];

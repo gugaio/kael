@@ -93,6 +93,8 @@ export function renderStreamerAnalysisHtml(report: StreamerOriginAnalysisReport)
       color: #263235;
     }
     .evidence { color: var(--muted); white-space: normal; }
+    .asset-time strong { display: block; }
+    .asset-time .raw { display: block; color: var(--muted); font-size: 12px; }
     @media (max-width: 760px) {
       header, main { padding-left: 16px; padding-right: 16px; }
       th, td { padding: 7px; }
@@ -177,11 +179,12 @@ function renderMediaSummary(report: StreamerOriginAnalysisReport): string {
 
 function renderChunkTable(entries: StreamerSegmentAnalysisEntry[]): string {
   return `<div class="scroll"><table>
-    <thead><tr><th>Media</th><th>Type</th><th>Seg</th><th>Status</th><th>EXTINF</th><th>Actual</th><th>First PTS</th><th>Last PTS</th><th>Expected</th><th>Actual Next</th><th>Delta</th><th>Codec</th><th>Packets</th><th>Path</th></tr></thead>
+    <thead><tr><th>Media</th><th>Type</th><th>Seg</th><th>Asset Time</th><th>Status</th><th>EXTINF</th><th>Actual</th><th>First PTS</th><th>Last PTS</th><th>Expected</th><th>Actual Next</th><th>Delta</th><th>Codec</th><th>Packets</th><th>Path</th></tr></thead>
     <tbody>${entries.map((entry) => `<tr class="row-${escapeHtml(entry.continuityStatus ?? entry.boundaryStatus ?? "unknown")}">
       <td>${escapeHtml(`${entry.kind}[${entry.mediaIndex}]`)}</td>
       <td>${escapeHtml(entry.type)}</td>
       <td>${entry.segmentIndex}</td>
+      <td>${formatAssetTime(entry)}</td>
       <td class="status-${escapeHtml(entry.continuityStatus ?? entry.boundaryStatus ?? "unknown")}">${escapeHtml(entry.continuityStatus ?? entry.boundaryStatus ?? "unknown")}</td>
       <td>${formatSeconds(entry.declaredDurationSeconds)}</td>
       <td>${formatSeconds(entry.actualDurationSeconds)}</td>
@@ -201,6 +204,15 @@ function metric(label: string, value: string): string {
   return `<div class="metric"><span class="subtle">${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
 }
 
+function formatAssetTime(entry: StreamerSegmentAnalysisEntry): string {
+  if (typeof entry.timelineStartSeconds !== "number" || typeof entry.timelineEndSeconds !== "number") {
+    return "n/a";
+  }
+  const raw = `${formatSeconds(entry.timelineStartSeconds)} -> ${formatSeconds(entry.timelineEndSeconds)}`;
+  const human = `${formatClockTime(entry.timelineStartSeconds)} -> ${formatClockTime(entry.timelineEndSeconds)}`;
+  return `<span class="asset-time" title="${escapeHtml(raw)}"><strong>${human}</strong><span class="raw">${raw}</span></span>`;
+}
+
 function formatCodec(entry: StreamerSegmentAnalysisEntry): string {
   return [
     entry.codecName,
@@ -211,6 +223,22 @@ function formatCodec(entry: StreamerSegmentAnalysisEntry): string {
 
 function formatSeconds(value: number | undefined): string {
   return typeof value === "number" ? `${value.toFixed(3)}s` : "n/a";
+}
+
+function formatClockTime(value: number): string {
+  const totalSeconds = Math.max(0, Math.floor(value));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${padTime(minutes)}:${padTime(seconds)}`;
+  }
+  return `${minutes}:${padTime(seconds)}`;
+}
+
+function padTime(value: number): string {
+  return String(value).padStart(2, "0");
 }
 
 function formatUs(value: number): string {

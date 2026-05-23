@@ -14,6 +14,7 @@ O foco inicial e operacional:
 - selecao de variant em master playlist com default `aac-highest` para playback web;
 - clone opcional da ladder completa com `--all-variants`;
 - download sequencial de segmentos ate `cumulativeDuration >= duration`;
+- clonagem de janela aproximada por offset (`--start 16:00 --duration 60`);
 - rewrite de media playlist local ou master local apontando para variants clonadas;
 - origin HTTP local com CORS para players web, Smart TVs, STBs e ferramentas de QA;
 - simulacao live com sliding window virtual sobre os segmentos clonados;
@@ -84,6 +85,10 @@ O foco inicial e operacional:
 - O "corta-corrente" usa segmentos inteiros: ele para quando a soma das duracoes
   clonadas atinge ou ultrapassa a duracao alvo. Corte frame-exato fica para uma
   etapa futura com FFmpeg.
+- `streamer clone --start <time>` seleciona uma janela por tempo acumulado do
+  manifesto, aceitando segundos, `mm:ss` ou `hh:mm:ss`. A selecao continua por
+  segmento inteiro e cada chunk clonado registra `timelineStartSeconds` e
+  `timelineEndSeconds` para aparecer no `analyze`/HTML.
 - `origin.json` tem `schemaVersion` explicito. A fase atual usa apenas o schema
   mais recente; origins antigos podem ser removidos e recriados.
 - `kael streamer live` sem `originId` resolve para o origin mais recente
@@ -113,6 +118,7 @@ src/cli/index.ts            # namespace kael streamer
 
 ```bash
 kael streamer clone <url> --duration 60 --all-variants
+kael streamer clone <url> --start 16:00 --duration 60
 kael streamer list
 kael streamer inspect <originId>
 kael streamer inspect latest

@@ -37,6 +37,51 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-05-23 - Fase 23: Report HTML com tempo humano
+
+Resumo:
+- O `analysis.html` agora mostra o tempo do asset em formato humano (`mm:ss`/`h:mm:ss`) no detalhe de chunks.
+- Os segundos precisos continuam visiveis no mesmo campo e no tooltip para preservar analise tecnica.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-report-html.ts`
+- `src/capabilities/video/streamer-service.test.ts`
+
+Checklist de validacao:
+- [x] `npm test -- src/capabilities/video/streamer-service.test.ts`
+- [x] `npm run check`
+
+Pendencias:
+- Avaliar se Top Problems tambem deve ganhar uma coluna de tempo humano por issue.
+
+Proximo passo recomendado:
+- Regerar um `analysis.html` real e validar se pontos como `1002.001s` ficam mais rapidos de localizar como `16:42`.
+
+### 2026-05-23 - Fase 23: Clone por janela temporal
+
+Resumo:
+- `streamer clone` agora aceita `--start <time>` em segundos, `mm:ss` ou `hh:mm:ss`.
+- O clone seleciona uma janela aproximada por tempo acumulado do manifesto, preservando corte por segmentos inteiros.
+- Segmentos clonados registram `timelineStartSeconds`/`timelineEndSeconds`, exibidos no `analyze` e no HTML.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/types.ts`
+- `src/capabilities/video/streamer-report-html.ts`
+- `src/cli/index.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test -- src/capabilities/video/streamer-service.test.ts`
+
+Pendencias:
+- Para VODs longos, ainda pode ser necessario aumentar `--max-segments` para o parser enxergar a janela desejada.
+- O corte continua aproximado por segmento inteiro, sem corte frame-exato.
+
+Proximo passo recomendado:
+- Testar `./bin/kael streamer clone <url> --start 16:00 --duration 60 --max-segments 1000` em midia real e abrir `streamer analyze latest --full --html`.
+
 ### 2026-05-23 - Fase 23: Analyze full com audio timestamp discontinuity e HTML
 
 Resumo:

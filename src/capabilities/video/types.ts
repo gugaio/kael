@@ -283,6 +283,8 @@ export type StreamerCloneInput = {
   url: string;
   /** Duração alvo em segundos. O clone inclui segmentos até cumulative >= alvo. */
   durationSeconds?: number;
+  /** Offset aproximado em segundos para iniciar a janela clonada. */
+  startSeconds?: number;
   /** Para master playlists: aac-highest (default), highest, lowest ou índice zero-based da variant. */
   variant?: string;
   /** Quando true, clona todas as variants da master playlist e gera uma master local. */
@@ -305,6 +307,7 @@ export type StreamerCloneProgressEvent =
       originId: string;
       url: string;
       durationSeconds: number;
+      startSeconds: number;
       allVariants: boolean;
     }
   | {
@@ -378,6 +381,8 @@ export type StreamerClonedSegment = {
   sourceUrl: string;
   localUri: string;
   duration?: number;
+  timelineStartSeconds?: number;
+  timelineEndSeconds?: number;
   title?: string;
   bytes: number;
   map?: StreamerClonedMap;
@@ -454,6 +459,7 @@ export type StreamerCloneResult = {
   manifestPath: string;
   playbackPath: string;
   requestedDurationSeconds: number;
+  requestedStartSeconds?: number;
   cumulativeDurationSeconds: number;
   reachedTargetDuration: boolean;
   targetDuration: number;
@@ -567,6 +573,8 @@ export type StreamerSegmentAnalysisEntry = {
   type: "AUDIO" | "SUBTITLES" | "VIDEO";
   label: string;
   localPath: string;
+  timelineStartSeconds?: number;
+  timelineEndSeconds?: number;
   declaredDurationSeconds?: number;
   actualDurationSeconds?: number;
   durationDeltaSeconds?: number;
@@ -649,6 +657,7 @@ export type StreamerOriginSummary = {
   rootDir: string;
   playbackPath: string;
   requestedDurationSeconds: number;
+  requestedStartSeconds?: number;
   cumulativeDurationSeconds: number;
   reachedTargetDuration: boolean;
   targetDuration: number;

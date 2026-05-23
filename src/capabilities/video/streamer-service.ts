@@ -296,6 +296,8 @@ export class StreamerService {
           type: candidate.type,
           label: candidate.label,
           localPath,
+          timelineStartSeconds: segment.timelineStartSeconds,
+          timelineEndSeconds: segment.timelineEndSeconds,
           declaredDurationSeconds: segment.duration,
           actualDurationSeconds,
           durationDeltaSeconds: calculateDurationDelta(segment.duration, actualDurationSeconds),
@@ -359,6 +361,7 @@ export class StreamerService {
       1,
       60 * 60,
     );
+    const startSeconds = normalizeNonNegativeNumber(input.startSeconds, 0, 0, 24 * 60 * 60);
     const timeoutMs = normalizePositiveNumber(input.timeoutMs, DEFAULT_TIMEOUT_MS, 1_000, 60_000);
     const segmentTimeoutMs = normalizePositiveNumber(
       input.segmentTimeoutMs,
@@ -380,6 +383,7 @@ export class StreamerService {
       originId: id,
       url: input.url,
       durationSeconds,
+      startSeconds,
       allVariants: Boolean(input.allVariants),
     });
     emit({ type: "manifest_fetch", url: input.url });
@@ -427,6 +431,7 @@ export class StreamerService {
             originDir,
             localDir,
             durationSeconds,
+            startSeconds,
             timeoutMs,
             segmentTimeoutMs,
             segmentRetries,
@@ -450,6 +455,7 @@ export class StreamerService {
         variants: variantsToClone,
         originDir,
         durationSeconds,
+        startSeconds,
         timeoutMs,
         maxSegments,
         segmentTimeoutMs,
@@ -486,6 +492,7 @@ export class StreamerService {
             ? `variants/${buildVariantDirName(0, selected.selectedVariant)}`
             : ".",
           durationSeconds,
+          startSeconds,
           timeoutMs,
           segmentTimeoutMs,
           segmentRetries,
@@ -507,6 +514,7 @@ export class StreamerService {
           variants: [selected.selectedVariant],
           originDir,
           durationSeconds,
+          startSeconds,
           timeoutMs,
           maxSegments,
           segmentTimeoutMs,
@@ -540,6 +548,7 @@ export class StreamerService {
       manifestPath,
       playbackPath: "/index.m3u8",
       requestedDurationSeconds: durationSeconds,
+      requestedStartSeconds: startSeconds > 0 ? startSeconds : undefined,
       cumulativeDurationSeconds,
       reachedTargetDuration: clonedVariants.every((variant) => variant.reachedTargetDuration),
       targetDuration,
@@ -710,6 +719,7 @@ export class StreamerService {
     originDir: string;
     localDir: string;
     durationSeconds: number;
+    startSeconds: number;
     timeoutMs: number;
     segmentTimeoutMs: number;
     segmentRetries: number;
@@ -731,7 +741,7 @@ export class StreamerService {
     const segmentsDir = path.join(variantDir, "segments");
     await fs.mkdir(segmentsDir, { recursive: true });
 
-    const selectedSegments = selectSegmentsForDuration(params.inspected, params.durationSeconds);
+    const selectedSegments = selectSegmentsForWindow(params.inspected, params.startSeconds, params.durationSeconds);
     if (selectedSegments.length === 0) {
       throw new Error("streamer clone found no downloadable media segments");
     }
@@ -821,6 +831,8 @@ export class StreamerService {
         sourceUrl: selectedSegment.segment.url,
         localUri,
         duration: selectedSegment.segment.duration,
+        timelineStartSeconds: selectedSegment.timelineStartSeconds,
+        timelineEndSeconds: selectedSegment.timelineEndSeconds,
         title: selectedSegment.segment.title,
         bytes: bytes.byteLength,
         map: clonedMap,
@@ -869,6 +881,7 @@ export class StreamerService {
     variants: VariantSource[];
     originDir: string;
     durationSeconds: number;
+    startSeconds: number;
     timeoutMs: number;
     maxSegments: number;
     segmentTimeoutMs: number;
@@ -911,6 +924,7 @@ export class StreamerService {
         originDir: params.originDir,
         localDir,
         durationSeconds: params.durationSeconds,
+        startSeconds: params.startSeconds,
         timeoutMs: params.timeoutMs,
         segmentTimeoutMs: params.segmentTimeoutMs,
         segmentRetries: params.segmentRetries,
@@ -1254,6 +1268,18 @@ function normalizePositiveNumber(
   return Math.max(min, Math.min(max, value));
 }
 
+function normalizeNonNegativeNumber(
+  value: number | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  if (!Number.isFinite(value) || value === undefined) {
+    return fallback;
+  }
+  return Math.max(min, Math.min(max, value));
+}
+
 async function pathExists(filePath: string): Promise<boolean> {
   try {
     await fs.access(filePath);
@@ -1506,18 +1532,41 @@ function formatRenditionLabel(rendition: RenditionSource): string {
   return parts.length > 0 ? parts.join(" | ") : rendition.uri ?? "rendition";
 }
 
-function selectSegmentsForDuration(
+function selectSegmentsForWindow(
   inspected: VideoHlsInspectResult,
+  startSeconds: number,
   durationSeconds: number,
-): Array<{ index: number; segment: VideoHlsInspectResult["segments"][number] }> {
-  const out: Array<{ index: number; segment: VideoHlsInspectResult["segments"][number] }> = [];
+): Array<{
+  index: number;
+  segment: VideoHlsInspectResult["segments"][number];
+  timelineStartSeconds: number;
+  timelineEndSeconds: number;
+}> {
+  const out: Array<{
+    index: number;
+    segment: VideoHlsInspectResult["segments"][number];
+    timelineStartSeconds: number;
+    timelineEndSeconds: number;
+  }> = [];
   let cumulativeDuration = 0;
+  const windowEndSeconds = startSeconds + durationSeconds;
 
   for (let index = 0; index < inspected.segments.length; index += 1) {
     const segment = inspected.segments[index];
-    out.push({ index, segment });
-    cumulativeDuration += segment.duration ?? inspected.targetDuration ?? 0;
-    if (cumulativeDuration >= durationSeconds) {
+    const segmentDuration = segment.duration ?? inspected.targetDuration ?? 0;
+    const timelineStartSeconds = cumulativeDuration;
+    const timelineEndSeconds = cumulativeDuration + segmentDuration;
+    cumulativeDuration = timelineEndSeconds;
+
+    if (timelineEndSeconds <= startSeconds) {
+      continue;
+    }
+    if (timelineStartSeconds >= windowEndSeconds && out.length > 0) {
+      break;
+    }
+
+    out.push({ index, segment, timelineStartSeconds, timelineEndSeconds });
+    if (timelineEndSeconds >= windowEndSeconds) {
       break;
     }
   }
@@ -1544,6 +1593,7 @@ function toOriginSummary(result: StreamerCloneResult): StreamerOriginSummary {
     rootDir: result.rootDir,
     playbackPath: result.playbackPath,
     requestedDurationSeconds: result.requestedDurationSeconds,
+    requestedStartSeconds: result.requestedStartSeconds,
     cumulativeDurationSeconds: result.cumulativeDurationSeconds,
     reachedTargetDuration: result.reachedTargetDuration,
     targetDuration: result.targetDuration,
