@@ -115,7 +115,9 @@ src/capabilities/video/
   streamer-service.test.ts  # testes unitarios/integracao leve
   types.ts                  # contratos Streamer*
 
-src/cli/index.ts            # namespace kael streamer
+src/cli/index.ts            # bootstrap da CLI e registro dos grupos de comandos
+src/cli/streamer-commands.ts # namespace kael streamer
+src/cli/streamer-output.ts  # formatacao e diagnostico textual do streamer
 ```
 
 ## Comandos operacionais

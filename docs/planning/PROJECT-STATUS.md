@@ -37,6 +37,34 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-05-23 - CLI enxuta por grupos de comandos
+
+Resumo:
+- `src/cli/index.ts` virou apenas bootstrap da CLI e registro dos grupos de comandos.
+- Comandos foram separados em modulos por dominio: core, API, manifest e streamer.
+- Helpers compartilhados de CLI foram isolados em `src/cli/cli-utils.ts`.
+
+Arquivos-chave:
+- `src/cli/index.ts`
+- `src/cli/streamer-commands.ts`
+- `src/cli/api-commands.ts`
+- `src/cli/manifest-commands.ts`
+- `src/cli/core-commands.ts`
+- `src/cli/cli-utils.ts`
+- `src/cli/streamer-output.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `./bin/kael --help`
+- [x] `./bin/kael streamer --help`
+- [x] `./bin/kael streamer clone --help`
+
+Pendencias:
+- Avaliar se comandos de API antigos devem ganhar testes leves de help/registro.
+
+Proximo passo recomendado:
+- Manter novos comandos em arquivos de dominio para evitar que `index.ts` volte a acumular implementacao.
+
 ### 2026-05-23 - Fase 23: PTS humano no report HTML
 
 Resumo:
