@@ -32,10 +32,16 @@ export function formatStreamerOriginSummary(origin: StreamerOriginSummary): stri
     origin.id,
     `created=${origin.createdAt}`,
     `schema=${origin.schemaVersion}`,
+    `protocol=${origin.protocol ?? "hls"}`,
     `variants=${origin.variantCount}`,
     `renditions=${origin.renditionCount}`,
     `segments=${origin.segmentCount}`,
     `window=${formatSeconds(origin.requestedStartSeconds ?? 0)}->${formatSeconds((origin.requestedStartSeconds ?? 0) + origin.requestedDurationSeconds)}`,
+    ...(origin.requestedStartSegment !== undefined || origin.requestedSegmentCount !== undefined
+      ? [
+          `segmentWindow=${origin.requestedStartSegment ?? 0}->${(origin.requestedStartSegment ?? 0) + (origin.requestedSegmentCount ?? origin.segmentCount)}`,
+        ]
+      : []),
     `duration=${formatSeconds(origin.cumulativeDurationSeconds)}/${origin.requestedDurationSeconds}s`,
     `bytes=${formatBytes(origin.bytes)}`,
     `allVariants=${origin.allVariants}`,
@@ -234,7 +240,7 @@ export function formatStreamerAnalyzeReport(report: StreamerOriginAnalysisReport
     ].join(" | ")),
     "segments:",
     ...report.entries.map((entry) => [
-      `- [${entry.ok ? "ok" : "error"}] ${entry.kind}[${entry.mediaIndex}] seg[${entry.segmentIndex}] ${entry.type}`,
+      `- [${entry.ok ? "ok" : "error"}] ${entry.kind}[${entry.mediaIndex}] seg[${entry.segmentIndex}]${entry.originalSegmentIndex !== undefined ? ` original=${entry.originalSegmentIndex}` : ""} ${entry.type}`,
       `declared=${entry.declaredDurationSeconds?.toFixed(3) ?? "n/a"}s`,
       `actual=${entry.actualDurationSeconds?.toFixed(3) ?? "n/a"}s`,
       ...(typeof entry.timelineStartSeconds === "number" && typeof entry.timelineEndSeconds === "number"

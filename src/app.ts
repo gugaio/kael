@@ -93,6 +93,7 @@ export type KaelApp = {
     mutateOrigin(input: StreamerMutateInput): Promise<StreamerMutateResult>;
     removeOrigin(originId: string): Promise<StreamerRemoveResult>;
     cloneHls(input: StreamerCloneInput): Promise<StreamerCloneResult>;
+    cloneDash(input: StreamerCloneInput): Promise<StreamerCloneResult>;
     serveOrigin(originId: string, options?: StreamerServeOptions): Promise<StreamerServeHandle>;
     serveLiveOrigin(originId: string, options?: StreamerLiveServeOptions): Promise<StreamerLiveServeHandle>;
   };

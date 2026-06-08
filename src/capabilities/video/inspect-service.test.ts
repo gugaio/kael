@@ -88,4 +88,54 @@ describe("VideoInspectToolService", () => {
       "https://example.com/video/init.mp4",
     ]);
   });
+
+  it("inspeciona MPD DASH com SegmentTemplate e SegmentTimeline", async () => {
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response(
+          [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<MPD type="static" mediaPresentationDuration="PT12S" minBufferTime="PT1.5S">',
+            "  <Period>",
+            '    <AdaptationSet id="v" contentType="video" mimeType="video/mp4" codecs="avc1.4d401f">',
+            '      <SegmentTemplate timescale="1000" initialization="init-$RepresentationID$.mp4" media="chunk-$RepresentationID$-$Number%05d$.m4s" startNumber="7">',
+            "        <SegmentTimeline>",
+            '          <S t="0" d="4000" r="2"/>',
+            "        </SegmentTimeline>",
+            "      </SegmentTemplate>",
+            '      <Representation id="720p" bandwidth="1800000" width="1280" height="720" frameRate="24000/1001"/>',
+            "    </AdaptationSet>",
+            "  </Period>",
+            "</MPD>",
+          ].join("\n"),
+        ),
+    );
+
+    const result = await new VideoInspectToolService().inspectDash({
+      url: "https://example.com/dash/manifest.mpd",
+      maxSegments: 3,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.mediaPresentationDurationSeconds).toBe(12);
+    expect(result.representations[0]).toMatchObject({
+      id: "720p",
+      contentType: "video",
+      mimeType: "video/mp4",
+      codecs: "avc1.4d401f",
+      bandwidth: 1_800_000,
+      width: 1280,
+      height: 720,
+    });
+    expect(result.representations[0].initialization).toEqual({
+      uri: "init-720p.mp4",
+      url: "https://example.com/dash/init-720p.mp4",
+    });
+    expect(result.representations[0].segments.map((segment) => [segment.uri, segment.duration, segment.number])).toEqual([
+      ["chunk-720p-00007.m4s", 4, 7],
+      ["chunk-720p-00008.m4s", 4, 8],
+      ["chunk-720p-00009.m4s", 4, 9],
+    ]);
+  });
 });

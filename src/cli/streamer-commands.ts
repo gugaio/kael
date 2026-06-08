@@ -25,16 +25,19 @@ import {
 export function registerStreamerCommands(program: Command): void {
   const streamer = program
     .command("streamer")
-    .description("Ferramentas locais de clone e origem de streams HLS");
+    .description("Ferramentas locais de clone e origem de streams HLS/DASH");
 
   streamer
     .command("clone")
-    .description("Clona uma janela VOD HLS localmente e opcionalmente serve como origem HTTP")
-    .argument("<url>", "URL do manifesto HLS (.m3u8)")
+    .description("Clona uma janela VOD HLS/DASH localmente e opcionalmente serve como origem HTTP")
+    .argument("<url>", "URL do manifesto HLS (.m3u8) ou DASH (.mpd)")
+    .option("--format <format>", "auto, hls ou dash", "auto")
     .option("--duration <seconds>", "duracao alvo em segundos (baixa segmentos ate cumulative >= alvo)", "60")
     .option("--start <time>", "offset aproximado de inicio da janela: segundos, mm:ss ou hh:mm:ss")
+    .option("--start-segment <n>", "indice zero-based do primeiro segmento original a clonar")
+    .option("--segment-count <n>", "quantidade exata de segmentos a clonar a partir da janela")
     .option("--variant <selector>", "aac-highest, highest, lowest ou indice zero-based da variant", "aac-highest")
-    .option("--all-variants", "clona todas as variants da master playlist e gera uma master local", false)
+    .option("--all-variants", "clona todas as variants HLS ou Representations DASH e gera manifesto local", false)
     .option("--all-variantes", "alias de --all-variants", false)
     .option("--max-variants <n>", "limite opcional de variants quando --all-variants estiver ativo")
     .option("--live", "serve o clone como live sliding window apos clonar (implica --serve)", false)
@@ -43,7 +46,7 @@ export function registerStreamerCommands(program: Command): void {
     .option("--timeout-ms <ms>", "timeout de fetch para manifestos/playlists")
     .option("--segment-timeout-ms <ms>", "timeout de download por segmento (padrao: 60000)")
     .option("--segment-retries <n>", "retries por segmento apos a primeira tentativa (padrao: 2)")
-    .option("--max-segments <n>", "limite de segmentos lidos da media playlist")
+    .option("--max-segments <n>", "limite de segmentos lidos do manifesto de media")
     .option("--id <id>", "id seguro para o origin local")
     .option("--serve", "inicia servidor HTTP local com CORS apos clonar", false)
     .option("--host <host>", "host do servidor quando --serve estiver ativo", "127.0.0.1")
@@ -54,14 +57,14 @@ export function registerStreamerCommands(program: Command): void {
 
   streamer
     .command("list")
-    .description("Lista origins HLS clonados localmente")
+    .description("Lista origins HLS/DASH clonados localmente")
     .action(async () => {
       await commandStreamerList();
     });
 
   streamer
     .command("serve")
-    .description("Serve um origin clonado existente como VOD HLS local")
+    .description("Serve um origin clonado existente como VOD local")
     .argument("[originId]", "id do origin criado por streamer clone/mutate ou latest", "latest")
     .option("--host <host>", "host do servidor VOD", "127.0.0.1")
     .option("--port <port>", "porta do servidor VOD (0 = aleatoria)", "0")
@@ -83,7 +86,7 @@ export function registerStreamerCommands(program: Command): void {
 
   streamer
     .command("inspect")
-    .description("Mostra metadados de um origin HLS clonado")
+    .description("Mostra metadados de um origin HLS/DASH clonado")
     .argument("<originId>", "id do origin criado por streamer clone ou latest")
     .action(async (originId: string) => {
       await commandStreamerInspect(originId);
@@ -104,6 +107,8 @@ export function registerStreamerCommands(program: Command): void {
     .option("--timeout-ms <ms>", "timeout de ffprobe por segmento")
     .option("--max-media-playlists <n>", "quantidade maxima de playlists consideradas")
     .option("--max-segments-per-playlist <n>", "quantidade maxima de segmentos amostrados por playlist", "3")
+    .option("--start-segment <n>", "indice zero-based do primeiro segmento original a analisar")
+    .option("--segment-count <n>", "quantidade de segmentos originais a analisar a partir de --start-segment")
     .option("--full", "analisa todos os segmentos das playlists consideradas", false)
     .option("--html", "gera um relatorio HTML estatico", false)
     .option("--output <path>", "caminho do relatorio HTML")
@@ -133,7 +138,7 @@ export function registerStreamerCommands(program: Command): void {
 
   streamer
     .command("remove")
-    .description("Remove um origin HLS clonado do storage local")
+    .description("Remove um origin HLS/DASH clonado do storage local")
     .argument("<originId>", "id do origin criado por streamer clone")
     .option("--yes", "confirma a remocao do diretorio do origin", false)
     .action(async (originId: string, options: StreamerRemoveOptions) => {
@@ -143,8 +148,11 @@ export function registerStreamerCommands(program: Command): void {
 }
 
 type StreamerCloneOptions = {
+  format?: string;
   duration?: string;
   start?: string;
+  startSegment?: string;
+  segmentCount?: string;
   variant?: string;
   allVariants?: boolean;
   allVariantes?: boolean;
@@ -182,6 +190,8 @@ type StreamerAnalyzeOptions = {
   timeoutMs?: string;
   maxMediaPlaylists?: string;
   maxSegmentsPerPlaylist?: string;
+  startSegment?: string;
+  segmentCount?: string;
   full?: boolean;
   html?: boolean;
   output?: string;
@@ -207,7 +217,7 @@ function createStreamerProgressLogger(): (event: StreamerCloneProgressEvent) => 
     switch (event.type) {
       case "start":
         console.error(
-          `[streamer] criando origin ${event.originId} | start=${formatSeconds(event.startSeconds)} | duration=${event.durationSeconds}s | allVariants=${event.allVariants}`,
+          `[streamer] criando origin ${event.originId} | start=${formatSeconds(event.startSeconds)}${event.startSegment !== undefined ? ` | startSegment=${event.startSegment}` : ""}${event.segmentCount !== undefined ? ` | segmentCount=${event.segmentCount}` : ""} | duration=${event.durationSeconds}s | allVariants=${event.allVariants}`,
         );
         return;
       case "manifest_fetch":
@@ -230,17 +240,17 @@ function createStreamerProgressLogger(): (event: StreamerCloneProgressEvent) => 
         return;
       case "segment_download_start":
         console.error(
-          `[streamer] baixando segmento ${event.segmentIndex + 1}/${event.segmentCount} da variant ${event.variantIndex + 1}/${event.variantCount}${event.duration ? ` | ${event.duration.toFixed(3)}s` : ""}`,
+          `[streamer] baixando segmento ${event.segmentIndex + 1}/${event.segmentCount}${event.originalSegmentIndex !== undefined ? ` | original=${event.originalSegmentIndex}` : ""} da variant ${event.variantIndex + 1}/${event.variantCount}${event.duration ? ` | ${event.duration.toFixed(3)}s` : ""}`,
         );
         return;
       case "segment_download_retry":
         console.error(
-          `[streamer] retry segmento ${event.segmentIndex + 1}/${event.segmentCount} da variant ${event.variantIndex + 1}/${event.variantCount} | tentativa ${event.attempt}/${event.maxAttempts} | ${event.error}`,
+          `[streamer] retry segmento ${event.segmentIndex + 1}/${event.segmentCount}${event.originalSegmentIndex !== undefined ? ` | original=${event.originalSegmentIndex}` : ""} da variant ${event.variantIndex + 1}/${event.variantCount} | tentativa ${event.attempt}/${event.maxAttempts} | ${event.error}`,
         );
         return;
       case "segment_downloaded":
         console.error(
-          `[streamer] ok segmento ${event.segmentIndex + 1}/${event.segmentCount} | ${formatBytes(event.bytes)} | total=${formatBytes(event.cumulativeBytes)} | duration=${event.cumulativeDurationSeconds.toFixed(3)}s`,
+          `[streamer] ok segmento ${event.segmentIndex + 1}/${event.segmentCount}${event.originalSegmentIndex !== undefined ? ` | original=${event.originalSegmentIndex}` : ""} | ${formatBytes(event.bytes)} | total=${formatBytes(event.cumulativeBytes)} | duration=${event.cumulativeDurationSeconds.toFixed(3)}s`,
         );
         return;
       case "complete":
@@ -294,6 +304,7 @@ async function commandStreamerInspect(originId: string): Promise<void> {
   const lines = [
     `${highlight("streamer origin")}: ${origin.id}`,
     `schemaVersion=${origin.schemaVersion}`,
+    `protocol=${origin.protocol ?? "hls"}`,
     `created=${origin.createdAt}`,
     ...(origin.derivedFrom ? [`derivedFrom=${origin.derivedFrom}`] : []),
     ...(origin.faults && origin.faults.length > 0
@@ -314,6 +325,13 @@ async function commandStreamerInspect(originId: string): Promise<void> {
     `renditions=${origin.renditionCount}`,
     `segments=${origin.segmentCount}`,
     `window=${formatSeconds(origin.requestedStartSeconds ?? 0)} -> ${formatSeconds((origin.requestedStartSeconds ?? 0) + origin.requestedDurationSeconds)}`,
+    ...(origin.requestedStartSegment !== undefined || origin.requestedSegmentCount !== undefined
+      ? [
+          `segmentWindow=${origin.requestedStartSegment ?? 0} -> ${
+            (origin.requestedStartSegment ?? 0) + (origin.requestedSegmentCount ?? origin.segmentCount)
+          }`,
+        ]
+      : []),
     `duration=${formatSeconds(origin.cumulativeDurationSeconds)} requested=${origin.requestedDurationSeconds}s reached=${origin.reachedTargetDuration}`,
     `targetDuration=${origin.targetDuration}s`,
     `bytes=${formatBytes(origin.bytes)}`,
@@ -356,10 +374,14 @@ async function commandStreamerAnalyze(originId: string | undefined, options: Str
   const timeoutMs = optionalNumber(options.timeoutMs, "--timeout-ms");
   const maxMediaPlaylists = optionalNumber(options.maxMediaPlaylists, "--max-media-playlists");
   const maxSegmentsPerPlaylist = optionalNumber(options.maxSegmentsPerPlaylist, "--max-segments-per-playlist");
+  const startSegment = optionalNumber(options.startSegment, "--start-segment");
+  const segmentCount = optionalNumber(options.segmentCount, "--segment-count");
   const report = await app.streamer.analyzeOrigin(resolvedOriginId, {
     ...(Number.isFinite(timeoutMs) ? { timeoutMs } : {}),
     ...(Number.isFinite(maxMediaPlaylists) ? { maxMediaPlaylists } : {}),
     ...(Number.isFinite(maxSegmentsPerPlaylist) ? { maxSegmentsPerPlaylist } : {}),
+    ...(Number.isFinite(startSegment) ? { startSegment } : {}),
+    ...(Number.isFinite(segmentCount) ? { segmentCount } : {}),
     ...(options.full ? { full: true } : {}),
   });
 
@@ -456,6 +478,8 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
   const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
   const durationSeconds = optionalNumber(options.duration, "--duration");
   const startSeconds = optionalTimeSeconds(options.start, "--start");
+  const startSegment = optionalNumber(options.startSegment, "--start-segment");
+  const segmentCount = optionalNumber(options.segmentCount, "--segment-count");
   const timeoutMs = optionalNumber(options.timeoutMs, "--timeout-ms");
   const segmentTimeoutMs = optionalNumber(options.segmentTimeoutMs, "--segment-timeout-ms");
   const segmentRetries = optionalNumber(options.segmentRetries, "--segment-retries");
@@ -466,12 +490,21 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
   const port = optionalNumber(options.port, "--port");
   const allVariants = Boolean(options.allVariants || options.allVariantes);
   const logProgress = createStreamerProgressLogger();
-
-  const result = await app.streamer.cloneHls({
+  const format = resolveStreamerCloneFormat(url, options.format);
+  if (Number.isFinite(startSeconds) && Number.isFinite(startSegment)) {
+    throw new Error("use --start ou --start-segment, nao ambos");
+  }
+  if (format === "dash" && options.live) {
+    throw new Error("streamer live ainda suporta apenas origins HLS; use --serve para DASH VOD local");
+  }
+  const cloneInput = {
     sessionKey: "cli.streamer.clone",
     url,
+    format,
     ...(Number.isFinite(durationSeconds) ? { durationSeconds } : {}),
     ...(Number.isFinite(startSeconds) ? { startSeconds } : {}),
+    ...(Number.isFinite(startSegment) ? { startSegment } : {}),
+    ...(Number.isFinite(segmentCount) ? { segmentCount } : {}),
     ...(options.variant?.trim() ? { variant: options.variant.trim() } : {}),
     ...(allVariants ? { allVariants: true } : {}),
     ...(Number.isFinite(maxVariants) ? { maxVariants } : {}),
@@ -481,7 +514,10 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
     ...(Number.isFinite(maxSegments) ? { maxSegments } : {}),
     ...(options.id?.trim() ? { originId: options.id.trim() } : {}),
     onProgress: logProgress,
-  });
+  } satisfies Parameters<typeof app.streamer.cloneHls>[0];
+  const result = format === "dash"
+    ? await app.streamer.cloneDash(cloneInput)
+    : await app.streamer.cloneHls(cloneInput);
 
   const variantText = result.allVariants
     ? `all variants (${result.variantCount})`
@@ -495,12 +531,20 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
   console.log(
     [
       `${highlight("streamer origin cloned")}: ${result.id}`,
+      `protocol=${result.protocol ?? format}`,
       `source=${result.sourceUrl}`,
       `selected=${result.selectedUrl}`,
       `variant=${variantText}`,
       `variants=${result.variantCount}`,
       `segments=${result.segmentCount}`,
       `window=${formatSeconds(result.requestedStartSeconds ?? 0)} -> ${formatSeconds((result.requestedStartSeconds ?? 0) + result.requestedDurationSeconds)}`,
+      ...(result.requestedStartSegment !== undefined || result.requestedSegmentCount !== undefined
+        ? [
+            `segmentWindow=${result.requestedStartSegment ?? 0} -> ${
+              (result.requestedStartSegment ?? 0) + (result.requestedSegmentCount ?? result.segmentCount)
+            }`,
+          ]
+        : []),
       `duration=${result.cumulativeDurationSeconds.toFixed(3)}s requested=${result.requestedDurationSeconds}s reached=${result.reachedTargetDuration}`,
       `bytes=${formatBytes(result.bytes)}`,
       `manifest=${result.manifestPath}`,
@@ -536,6 +580,24 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
 
   console.log(`${highlight("origin serving")}: ${handle.playbackUrl}`);
   await waitForStreamerStop(handle.close);
+}
+
+function resolveStreamerCloneFormat(url: string, rawFormat: string | undefined): "hls" | "dash" {
+  const normalized = rawFormat?.trim().toLowerCase() || "auto";
+  if (normalized === "hls" || normalized === "dash") {
+    return normalized;
+  }
+  if (normalized !== "auto") {
+    throw new Error("--format deve ser auto, hls ou dash");
+  }
+  const pathname = (() => {
+    try {
+      return new URL(url).pathname.toLowerCase();
+    } catch {
+      return url.toLowerCase();
+    }
+  })();
+  return pathname.endsWith(".mpd") ? "dash" : "hls";
 }
 
 async function commandStreamerLive(originId: string | undefined, options: StreamerLiveOptions): Promise<void> {
@@ -585,4 +647,3 @@ async function waitForStreamerStop(close: () => Promise<void>): Promise<void> {
 
   await new Promise<void>(() => undefined);
 }
-

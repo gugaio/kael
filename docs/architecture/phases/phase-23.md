@@ -5,12 +5,14 @@ Status: em andamento
 ## Objetivo
 
 Adicionar ao Kael uma capability `streamer` para clonar uma janela curta de
-streams HLS reais e servi-la como origem HTTP local para testes de players.
+streams HLS/DASH reais e servi-la como origem HTTP local para testes de players.
 
 O foco inicial e operacional:
 
 - CLI minimalista: `kael streamer clone <url>`;
 - parsing de master/media playlist HLS;
+- parsing de MPD DASH VOD com `SegmentTemplate`, `SegmentTimeline`,
+  `SegmentList` e `BaseURL`;
 - selecao de variant em master playlist com default `aac-highest` para playback web;
 - clone opcional da ladder completa com `--all-variants`;
 - download sequencial de segmentos ate `cumulativeDuration >= duration`;
@@ -23,14 +25,17 @@ O foco inicial e operacional:
 - relatorio HTML de analise detalhada com foco em timeline de audio;
 - fault injection via origins derivados com `mutate`;
 - clonagem de renditions separadas de audio e subtitles referenciadas por `EXT-X-MEDIA`.
+- clonagem de Representations DASH de video e audio/texto para `index.mpd`
+  local com `SegmentList`.
 
 ## Decisao arquitetural
 
 - A capability chama-se `streamer`, nao `mock`, porque a fronteira representa
   operacao real de streams, nao apenas fixture falsa.
 - O subdominio fica dentro de `video`, em `src/capabilities/video/streamer-service.ts`,
-  reaproveitando `VideoInspectToolService.inspectHls()` como primitivo de
-  parsing/fetch de manifestos.
+  reaproveitando `VideoInspectToolService.inspectHls()` e
+  `VideoInspectToolService.inspectDash()` como primitivos de parsing/fetch de
+  manifestos.
 - O storage local fica em `<KAEL_DATA_DIR>/streamer/origins/<originId>/`.
 - A primeira entrega e CLI-only. Nenhum endpoint HTTP novo foi criado nesta fase.
 - O servidor de origin e local e efemero, iniciado por `--serve`; ele serve os
@@ -93,6 +98,21 @@ O foco inicial e operacional:
   manifesto, aceitando segundos, `mm:ss` ou `hh:mm:ss`. A selecao continua por
   segmento inteiro e cada chunk clonado registra `timelineStartSeconds` e
   `timelineEndSeconds` para aparecer no `analyze`/HTML.
+- `streamer clone --start-segment <n> --segment-count <n>` seleciona uma janela
+  por indice zero-based de segmento original, util para continuar uma clonagem
+  depois dos primeiros chunks sem precisar calcular o offset temporal. Quando a
+  janela exige mais segmentos do que o default, o clone aumenta automaticamente a
+  leitura do manifesto ate cobrir `startSegment + segmentCount`.
+- A CLI de clone registra em stderr o indice original de cada segmento baixado
+  (`original=<n>`) em download, retry e sucesso, mantendo visibilidade de qual
+  chunk da origem esta em processamento.
+- `streamer analyze` tambem aceita `--start-segment <n> --segment-count <n>`
+  para limitar a analise a uma janela de chunks originais ja clonados; o report
+  textual exibe `original=<n>` por segmento analisado.
+- `streamer clone` tambem aceita DASH (`.mpd` ou `--format dash`): o clone
+  inspeciona Representations, baixa init segment + media segments, gera um
+  `index.mpd` local e preserva o mesmo contrato de `inspect`, `probe` e
+  `analyze` usado pelos origins HLS.
 - `origin.json` tem `schemaVersion` explicito. A fase atual usa apenas o schema
   mais recente; origins antigos podem ser removidos e recriados.
 - `kael streamer live` sem `originId` resolve para o origin mais recente
@@ -108,10 +128,10 @@ O foco inicial e operacional:
 
 ```text
 src/capabilities/video/
-  inspect-service.ts        # parsing HLS usado pelo streamer
+  inspect-service.ts        # parsing HLS/DASH usado pelo streamer
   streamer-diagnostics.ts   # diagnostico de codecs/browser para origins clonados
   streamer-report-html.ts   # render HTML estatico do analyze
-  streamer-service.ts       # clone HLS + origin HTTP local
+  streamer-service.ts       # clone HLS/DASH + origin HTTP local
   streamer-service.test.ts  # testes unitarios/integracao leve
   types.ts                  # contratos Streamer*
 
@@ -123,8 +143,11 @@ src/cli/streamer-output.ts  # formatacao e diagnostico textual do streamer
 ## Comandos operacionais
 
 ```bash
-kael streamer clone <url> --duration 60 --all-variants
+kael streamer clone <url.m3u8> --duration 60 --all-variants
 kael streamer clone <url> --start 16:00 --duration 60
+kael streamer clone <url> --start-segment 200 --segment-count 50
+kael streamer clone <url.mpd> --duration 60
+kael streamer clone <url> --format dash --duration 60
 kael streamer list
 kael streamer inspect <originId>
 kael streamer inspect latest
@@ -134,6 +157,7 @@ kael streamer analyze
 kael streamer analyze <originId>
 kael streamer analyze <originId> --json
 kael streamer analyze <originId> --full --html
+kael streamer analyze <originId> --full --html --start-segment 200 --segment-count 50
 kael streamer analyze <originId> --full --html --output /tmp/kael-stream-report.html
 kael streamer mutate <originId> --fault discontinuity --at-segment 5
 kael streamer mutate <originId> --fault segment-swap --at-segment 5 --with-origin <donorOrigin> --with-segment 1
@@ -170,6 +194,30 @@ StreamerService.serveOrigin()
   | HTTP local com CORS
   v
 playbackUrl: http://127.0.0.1:<port>/index.m3u8
+```
+
+## Fluxo DASH
+
+```text
+CLI
+  |
+  | kael streamer clone <url.mpd> --duration 60 --serve
+  v
+StreamerService.cloneDash()
+  |
+  | inspectDash(root)
+  |-- MPD: seleciona Representation de video highest/lowest/index ou todas com --all-variants
+  |-- baixa init segment + media segments da janela escolhida
+  |-- baixa Representations de audio/texto como renditions locais
+  |-- escreve variants/<n>/segments/* e audio/<n>/segments/*
+  |-- escreve index.mpd local com SegmentList
+  |-- escreve origin.json com protocol=dash
+  v
+StreamerService.serveOrigin()
+  |
+  | HTTP local com CORS
+  v
+playbackUrl: http://127.0.0.1:<port>/index.mpd
 ```
 
 ## Fluxo live
@@ -228,6 +276,9 @@ StreamerService.serveLiveOrigin()
 - Reescrita de manifesto preserva apenas o basico necessario para playback local,
   `EXT-X-MAP` simples e audio groups externos. Em `--all-variants`, gera tambem
   uma master local simples com `EXT-X-STREAM-INF`/`EXT-X-MEDIA`.
+- Reescrita DASH gera MPD VOD estatico local com `SegmentList`; o parser inicial
+  cobre `SegmentTemplate` com `SegmentTimeline`, duracao fixa, `SegmentList` e
+  `BaseURL`.
 - Sem clonagem local de chaves DRM/AES (`EXT-X-KEY`), byte ranges ou I-frame
   playlists nesta primeira entrega.
 - Download ainda sequencial; retry de segmento e curto e sem backoff sofisticado.
@@ -251,6 +302,9 @@ StreamerService.serveLiveOrigin()
 - Fault injection agora cobre alteracoes de manifesto e um primeiro caso com
   FFmpeg (`segment-swap --ffmpeg-profile hevc`), mas ainda nao cobre mudancas
   mais finas de PTS/PCR/GOP por segmento.
+- DASH inicial nao cobre live MPD dinamico, DRM, byte range, `SegmentBase` nem
+  multiplos Periods com timeline complexa. `streamer live` continua restrito a
+  origins HLS; origins DASH sao servidos como VOD local via `streamer serve`.
 
 ## Proximos incrementos
 

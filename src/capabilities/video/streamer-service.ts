@@ -2,9 +2,10 @@ import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import http from "node:http";
+import os from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
-import type { VideoHlsInspectResult, VideoInspectToolService } from "./inspect-service.js";
+import type { VideoDashInspectResult, VideoHlsInspectResult, VideoInspectToolService } from "./inspect-service.js";
 import { isBrowserSafeHlsVariant } from "./streamer-diagnostics.js";
 import type {
   StreamerAnalyzeOptions,
@@ -32,6 +33,7 @@ import type {
 } from "./types.js";
 
 type HlsInspectLike = Pick<VideoInspectToolService, "inspectHls"> &
+  Partial<Pick<VideoInspectToolService, "inspectDash">> &
   Partial<Pick<VideoInspectToolService, "probe">>;
 
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
@@ -43,6 +45,7 @@ type SelectedMediaPlaylist = {
 
 type VariantSource = NonNullable<StreamerClonedVariant["variant"]>;
 type RenditionSource = VideoHlsInspectResult["renditions"][number];
+type DashRepresentationSource = VideoDashInspectResult["representations"][number];
 type RenditionKind = "AUDIO" | "SUBTITLES";
 type RenditionRef = {
   kind: RenditionKind;
@@ -67,6 +70,12 @@ type ClonedMediaSource = {
   segments: StreamerClonedSegment[];
 };
 type ProgressEmitter = (event: StreamerCloneProgressEvent) => void;
+type SegmentWindowRequest = {
+  startSeconds: number;
+  durationSeconds: number;
+  startSegment?: number;
+  segmentCount?: number;
+};
 
 const RENDITION_KIND_CONFIG: Record<RenditionKind, { dir: "audio" | "subtitles"; route: "audio" | "subtitles" }> = {
   AUDIO: {
@@ -84,6 +93,7 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_SEGMENT_TIMEOUT_MS = 60_000;
 const DEFAULT_SEGMENT_RETRIES = 2;
 const DEFAULT_MAX_SEGMENTS = 200;
+const MAX_CLONE_INSPECT_SEGMENTS = 10_000;
 const DEFAULT_PROBE_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_PROBE_MEDIA_PLAYLISTS = 4;
 const DEFAULT_MAX_ANALYZE_SEGMENTS_PER_PLAYLIST = 3;
@@ -256,6 +266,8 @@ export class StreamerService {
 
     const clone = await this.loadCloneResult(originId);
     const timeoutMs = normalizePositiveNumber(options.timeoutMs, DEFAULT_PROBE_TIMEOUT_MS, 1_000, 120_000);
+    const startSegment = normalizeOptionalNonNegativeInteger(options.startSegment, MAX_CLONE_INSPECT_SEGMENTS - 1);
+    const segmentCount = normalizeOptionalPositiveInteger(options.segmentCount, MAX_CLONE_INSPECT_SEGMENTS);
     const maxMediaPlaylists = Math.floor(
       normalizePositiveNumber(
         options.maxMediaPlaylists,
@@ -279,22 +291,29 @@ export class StreamerService {
 
     for (const candidate of candidates) {
       const candidateEntries: StreamerOriginAnalysisReport["entries"] = [];
-      for (const segmentIndex of sampleSegmentIndices(candidate.segments.length, maxSegmentsPerPlaylist)) {
+      for (const segmentIndex of sampleAnalyzeSegmentIndices(candidate.segments, maxSegmentsPerPlaylist, startSegment, segmentCount)) {
         const segment = candidate.segments[segmentIndex];
         const localPath = path.join(candidate.rootPath, segment.localUri);
         const streamSelector = probeStreamSelectorFor(candidate.type);
-        const result = await this.inspect.probe({
-          input: localPath,
-          timeoutMs,
-          timeline: true,
-          streamSelector,
-        });
-        const actualDurationSeconds = extractProbeDurationSeconds(result.format);
+        const probeInput = await prepareSegmentProbeInput(candidate.rootPath, segment, localPath);
+        let result;
+        try {
+          result = await this.inspect.probe({
+            input: probeInput.input,
+            timeoutMs,
+            timeline: true,
+            streamSelector,
+          });
+        } finally {
+          await probeInput.cleanup();
+        }
+        const actualDurationSeconds = extractActualSegmentDurationSeconds(result, Boolean(segment.map));
         const streamMetadata = extractProbeStreamMetadata(result.streams);
         candidateEntries.push({
           kind: candidate.kind,
           mediaIndex: candidate.index,
           segmentIndex,
+          originalSegmentIndex: segment.originalIndex,
           type: candidate.type,
           label: candidate.label,
           localPath,
@@ -364,6 +383,8 @@ export class StreamerService {
       60 * 60,
     );
     const startSeconds = normalizeNonNegativeNumber(input.startSeconds, 0, 0, 24 * 60 * 60);
+    const startSegment = normalizeOptionalNonNegativeInteger(input.startSegment, MAX_CLONE_INSPECT_SEGMENTS - 1);
+    const segmentCount = normalizeOptionalPositiveInteger(input.segmentCount, MAX_CLONE_INSPECT_SEGMENTS);
     const timeoutMs = normalizePositiveNumber(input.timeoutMs, DEFAULT_TIMEOUT_MS, 1_000, 60_000);
     const segmentTimeoutMs = normalizePositiveNumber(
       input.segmentTimeoutMs,
@@ -372,9 +393,7 @@ export class StreamerService {
       5 * 60_000,
     );
     const segmentRetries = normalizeNonNegativeInteger(input.segmentRetries, DEFAULT_SEGMENT_RETRIES, 0, 5);
-    const maxSegments = Math.floor(
-      normalizePositiveNumber(input.maxSegments, DEFAULT_MAX_SEGMENTS, 1, DEFAULT_MAX_SEGMENTS),
-    );
+    const maxSegments = normalizeCloneMaxSegments(input.maxSegments, startSegment, segmentCount);
     const id = sanitizeOriginId(input.originId?.trim() || randomUUID());
     const originDir = path.join(this.rootDir, id);
     const emit = input.onProgress ?? (() => undefined);
@@ -386,6 +405,8 @@ export class StreamerService {
       url: input.url,
       durationSeconds,
       startSeconds,
+      ...(startSegment !== undefined ? { startSegment } : {}),
+      ...(segmentCount !== undefined ? { segmentCount } : {}),
       allVariants: Boolean(input.allVariants),
     });
     emit({ type: "manifest_fetch", url: input.url });
@@ -434,6 +455,8 @@ export class StreamerService {
             localDir,
             durationSeconds,
             startSeconds,
+            startSegment,
+            segmentCount,
             timeoutMs,
             segmentTimeoutMs,
             segmentRetries,
@@ -458,6 +481,8 @@ export class StreamerService {
         originDir,
         durationSeconds,
         startSeconds,
+        startSegment,
+        segmentCount,
         timeoutMs,
         maxSegments,
         segmentTimeoutMs,
@@ -495,6 +520,8 @@ export class StreamerService {
             : ".",
           durationSeconds,
           startSeconds,
+          startSegment,
+          segmentCount,
           timeoutMs,
           segmentTimeoutMs,
           segmentRetries,
@@ -517,6 +544,8 @@ export class StreamerService {
           originDir,
           durationSeconds,
           startSeconds,
+          startSegment,
+          segmentCount,
           timeoutMs,
           maxSegments,
           segmentTimeoutMs,
@@ -542,6 +571,7 @@ export class StreamerService {
     const result: StreamerCloneResult = {
       id,
       schemaVersion: STREAMER_ORIGIN_SCHEMA_VERSION,
+      protocol: "hls",
       sessionKey: input.sessionKey,
       sourceUrl: root.url,
       selectedUrl,
@@ -551,6 +581,8 @@ export class StreamerService {
       playbackPath: "/index.m3u8",
       requestedDurationSeconds: durationSeconds,
       requestedStartSeconds: startSeconds > 0 ? startSeconds : undefined,
+      requestedStartSegment: startSegment,
+      requestedSegmentCount: segmentCount,
       cumulativeDurationSeconds,
       reachedTargetDuration: clonedVariants.every((variant) => variant.reachedTargetDuration),
       targetDuration,
@@ -578,16 +610,243 @@ export class StreamerService {
     return result;
   }
 
+  async cloneDash(input: StreamerCloneInput): Promise<StreamerCloneResult> {
+    if (!this.inspect.inspectDash) {
+      throw new Error("streamer DASH clone requires inspectDash support in VideoInspectToolService");
+    }
+
+    const durationSeconds = normalizePositiveNumber(
+      input.durationSeconds,
+      DEFAULT_DURATION_SECONDS,
+      1,
+      60 * 60,
+    );
+    const startSeconds = normalizeNonNegativeNumber(input.startSeconds, 0, 0, 24 * 60 * 60);
+    const startSegment = normalizeOptionalNonNegativeInteger(input.startSegment, MAX_CLONE_INSPECT_SEGMENTS - 1);
+    const segmentCount = normalizeOptionalPositiveInteger(input.segmentCount, MAX_CLONE_INSPECT_SEGMENTS);
+    const timeoutMs = normalizePositiveNumber(input.timeoutMs, DEFAULT_TIMEOUT_MS, 1_000, 60_000);
+    const segmentTimeoutMs = normalizePositiveNumber(
+      input.segmentTimeoutMs,
+      DEFAULT_SEGMENT_TIMEOUT_MS,
+      1_000,
+      5 * 60_000,
+    );
+    const segmentRetries = normalizeNonNegativeInteger(input.segmentRetries, DEFAULT_SEGMENT_RETRIES, 0, 5);
+    const maxSegments = normalizeCloneMaxSegments(input.maxSegments, startSegment, segmentCount);
+    const id = sanitizeOriginId(input.originId?.trim() || randomUUID());
+    const originDir = path.join(this.rootDir, id);
+    const emit = input.onProgress ?? (() => undefined);
+
+    await fs.mkdir(originDir, { recursive: true });
+    emit({
+      type: "start",
+      originId: id,
+      url: input.url,
+      durationSeconds,
+      startSeconds,
+      ...(startSegment !== undefined ? { startSegment } : {}),
+      ...(segmentCount !== undefined ? { segmentCount } : {}),
+      allVariants: Boolean(input.allVariants),
+    });
+    emit({ type: "manifest_fetch", url: input.url });
+
+    const root = await this.inspect.inspectDash({
+      url: input.url,
+      maxSegments,
+      timeoutMs,
+    });
+    const downloadableRepresentations = root.representations.filter((representation) => representation.segments.length > 0);
+    emit({
+      type: "manifest_ready",
+      url: root.finalUrl,
+      playlistType: "dash",
+      variantCount: downloadableRepresentations.filter((representation) => representation.contentType === "video").length,
+      segmentCount: downloadableRepresentations.reduce((sum, representation) => sum + representation.segments.length, 0),
+    });
+    if (!root.ok || downloadableRepresentations.length === 0) {
+      throw new Error(`DASH inspect failed: ${root.errors.join("; ") || "no downloadable representations"}`);
+    }
+
+    const videoRepresentations = downloadableRepresentations.filter((representation) => representation.contentType === "video");
+    const primaryRepresentations = videoRepresentations.length > 0 ? videoRepresentations : downloadableRepresentations;
+    const selectedVideoRepresentations = input.allVariants
+      ? selectDashRepresentations(primaryRepresentations, input.maxVariants)
+      : [selectDashRepresentation(primaryRepresentations, input.variant)];
+    const selectedVideoIds = new Set(selectedVideoRepresentations.map((representation) => representation.id));
+    const renditionRepresentations = downloadableRepresentations.filter((representation) => {
+      if (representation.contentType === "video") {
+        return false;
+      }
+      return !selectedVideoIds.has(representation.id);
+    });
+
+    const clonedVariants: StreamerClonedVariant[] = [];
+    for (let index = 0; index < selectedVideoRepresentations.length; index += 1) {
+      const representation = selectedVideoRepresentations[index];
+      emit({
+        type: "variant_inspect",
+        variantIndex: index,
+        variantCount: selectedVideoRepresentations.length,
+        label: formatDashRepresentationLabel(representation),
+        url: representation.baseUrl,
+      });
+      const localDir = `variants/${buildDashRepresentationDirName(index, representation)}`;
+      clonedVariants.push(
+        await this.cloneDashRepresentation({
+          representation,
+          originDir,
+          localDir,
+          durationSeconds,
+          startSeconds,
+          startSegment,
+          segmentCount,
+          segmentTimeoutMs,
+          segmentRetries,
+          variantIndex: index,
+          variantCount: selectedVideoRepresentations.length,
+          progress: emit,
+        }),
+      );
+    }
+
+    const clonedRenditions: StreamerClonedRendition[] = [];
+    for (let index = 0; index < renditionRepresentations.length; index += 1) {
+      const representation = renditionRepresentations[index];
+      emit({
+        type: "variant_inspect",
+        variantIndex: index,
+        variantCount: renditionRepresentations.length,
+        label: formatDashRepresentationLabel(representation),
+        url: representation.baseUrl,
+      });
+      const kind = dashRenditionKind(representation);
+      const localDir = `${kind === "AUDIO" ? "audio" : "subtitles"}/${buildDashRepresentationDirName(index, representation)}`;
+      const cloned = await this.cloneDashRepresentation({
+        representation,
+        originDir,
+        localDir,
+        durationSeconds,
+        startSeconds,
+        startSegment,
+        segmentCount,
+        segmentTimeoutMs,
+        segmentRetries,
+        variantIndex: index,
+        variantCount: renditionRepresentations.length,
+        progress: emit,
+      });
+      clonedRenditions.push({
+        type: kind,
+        id: representation.id,
+        groupId: representation.adaptationSetId,
+        name: representation.id ?? kind.toLowerCase(),
+        language: representation.lang,
+        codecs: representation.codecs,
+        mimeType: representation.mimeType,
+        bandwidth: representation.bandwidth,
+        audioSamplingRate: representation.audioSamplingRate,
+        sourceUri: cloned.sourceUri,
+        sourceUrl: cloned.sourceUrl,
+        finalUrl: cloned.finalUrl,
+        localUri: cloned.localUri,
+        manifestPath: cloned.manifestPath,
+        targetDuration: cloned.targetDuration,
+        segmentCount: cloned.segmentCount,
+        cumulativeDurationSeconds: cloned.cumulativeDurationSeconds,
+        reachedTargetDuration: cloned.reachedTargetDuration,
+        bytes: cloned.bytes,
+        maps: cloned.maps,
+        segments: cloned.segments,
+      });
+    }
+
+    await fs.writeFile(
+      path.join(originDir, "index.mpd"),
+      buildLocalDashMpd({
+        variants: clonedVariants,
+        renditions: clonedRenditions,
+        rootRelative: true,
+      }),
+      "utf-8",
+    );
+
+    for (const variant of clonedVariants) {
+      await fs.writeFile(
+        variant.manifestPath,
+        buildLocalDashMpd({ variants: [variant], renditions: [], rootRelative: false }),
+        "utf-8",
+      );
+    }
+    for (const rendition of clonedRenditions) {
+      await fs.writeFile(
+        rendition.manifestPath,
+        buildLocalDashMpd({ variants: [], renditions: [rendition], rootRelative: false }),
+        "utf-8",
+      );
+    }
+
+    const clonedSegments = clonedVariants.flatMap((variant) => variant.segments);
+    const cumulativeDurationSeconds = minVariantDuration(clonedVariants);
+    const targetDuration = Math.max(...clonedVariants.map((variant) => variant.targetDuration), 1);
+    const totalBytes =
+      clonedVariants.reduce((acc, variant) => acc + variant.bytes, 0) +
+      clonedRenditions.reduce((acc, rendition) => acc + rendition.bytes, 0);
+    const selectedRepresentation = selectedVideoRepresentations[0];
+    const createdAt = new Date().toISOString();
+    const result: StreamerCloneResult = {
+      id,
+      schemaVersion: STREAMER_ORIGIN_SCHEMA_VERSION,
+      protocol: "dash",
+      sessionKey: input.sessionKey,
+      sourceUrl: root.url,
+      selectedUrl: selectedRepresentation.baseUrl,
+      finalUrl: root.finalUrl,
+      rootDir: originDir,
+      manifestPath: path.join(originDir, "index.mpd"),
+      playbackPath: "/index.mpd",
+      requestedDurationSeconds: durationSeconds,
+      requestedStartSeconds: startSeconds > 0 ? startSeconds : undefined,
+      requestedStartSegment: startSegment,
+      requestedSegmentCount: segmentCount,
+      cumulativeDurationSeconds,
+      reachedTargetDuration: clonedVariants.every((variant) => variant.reachedTargetDuration),
+      targetDuration,
+      segmentCount: clonedVariants.reduce((acc, variant) => acc + variant.segmentCount, 0),
+      variantCount: clonedVariants.length,
+      renditionCount: clonedRenditions.length,
+      bytes: totalBytes,
+      allVariants: Boolean(input.allVariants),
+      selectedVariant: dashRepresentationToVariantSource(selectedRepresentation),
+      createdAt,
+      variants: clonedVariants,
+      renditions: clonedRenditions,
+      segments: clonedSegments,
+    };
+
+    await fs.writeFile(path.join(originDir, "origin.json"), `${JSON.stringify(result, null, 2)}\n`, "utf-8");
+    emit({
+      type: "complete",
+      originId: id,
+      segmentCount: result.segmentCount,
+      variantCount: result.variantCount,
+      bytes: result.bytes,
+      cumulativeDurationSeconds: result.cumulativeDurationSeconds,
+    });
+    return result;
+  }
+
   async serveOrigin(originId: string, options: StreamerServeOptions = {}): Promise<StreamerServeHandle> {
     const id = sanitizeOriginId(originId);
-    const originDir = path.join(this.rootDir, id);
-    await fs.access(path.join(originDir, "index.m3u8"));
+    const clone = await this.loadCloneResult(id);
+    const originDir = clone.rootDir;
+    const playbackPath = clone.playbackPath || "/index.m3u8";
+    await fs.access(path.join(originDir, playbackPath.replace(/^\/+/, "")));
 
     const host = options.host?.trim() || "127.0.0.1";
     const port = Math.max(0, Math.min(65_535, Math.floor(options.port ?? 0)));
 
     const server = http.createServer((request, response) => {
-      void this.handleStaticRequest(originDir, request, response);
+      void this.handleStaticRequest(originDir, playbackPath, request, response);
     });
 
     await new Promise<void>((resolve, reject) => {
@@ -605,7 +864,7 @@ export class StreamerService {
       originId: id,
       rootDir: originDir,
       baseUrl,
-      playbackUrl: `${baseUrl}/index.m3u8`,
+      playbackUrl: `${baseUrl}${playbackPath}`,
       close: () =>
         new Promise<void>((resolve, reject) => {
           server.close((error) => {
@@ -625,6 +884,9 @@ export class StreamerService {
   ): Promise<StreamerLiveServeHandle> {
     const id = sanitizeOriginId(originId);
     const clone = await this.loadCloneResult(id);
+    if ((clone.protocol ?? "hls") !== "hls") {
+      throw new Error("streamer live currently supports HLS origins only");
+    }
     const host = options.host?.trim() || "127.0.0.1";
     const port = Math.max(0, Math.min(65_535, Math.floor(options.port ?? 0)));
     const windowSize = Math.max(1, Math.min(30, Math.floor(options.windowSize ?? DEFAULT_LIVE_WINDOW_SIZE)));
@@ -722,6 +984,8 @@ export class StreamerService {
     localDir: string;
     durationSeconds: number;
     startSeconds: number;
+    startSegment?: number;
+    segmentCount?: number;
     timeoutMs: number;
     segmentTimeoutMs: number;
     segmentRetries: number;
@@ -743,7 +1007,12 @@ export class StreamerService {
     const segmentsDir = path.join(variantDir, "segments");
     await fs.mkdir(segmentsDir, { recursive: true });
 
-    const selectedSegments = selectSegmentsForWindow(params.inspected, params.startSeconds, params.durationSeconds);
+    const selectedSegments = selectSegmentsForWindow(params.inspected, {
+      startSeconds: params.startSeconds,
+      durationSeconds: params.durationSeconds,
+      startSegment: params.startSegment,
+      segmentCount: params.segmentCount,
+    });
     if (selectedSegments.length === 0) {
       throw new Error("streamer clone found no downloadable media segments");
     }
@@ -808,6 +1077,7 @@ export class StreamerService {
         variantCount: params.variantCount,
         segmentIndex: index,
         segmentCount: selectedSegments.length,
+        originalSegmentIndex: selectedSegment.index,
         url: selectedSegment.segment.url,
         duration: selectedSegment.segment.duration,
       });
@@ -820,6 +1090,7 @@ export class StreamerService {
         variantCount: params.variantCount,
         segmentIndex: index,
         segmentCount: selectedSegments.length,
+        originalSegmentIndex: selectedSegment.index,
       });
       const clonedMap = selectedSegment.segment.map
         ? await ensureClonedMap(selectedSegment.segment.map)
@@ -845,6 +1116,7 @@ export class StreamerService {
         variantCount: params.variantCount,
         segmentIndex: index,
         segmentCount: selectedSegments.length,
+        originalSegmentIndex: selectedSegment.index,
         localUri,
         bytes: bytes.byteLength,
         cumulativeBytes: totalBytes,
@@ -878,12 +1150,155 @@ export class StreamerService {
     };
   }
 
+  private async cloneDashRepresentation(params: {
+    representation: DashRepresentationSource;
+    originDir: string;
+    localDir: string;
+    durationSeconds: number;
+    startSeconds: number;
+    startSegment?: number;
+    segmentCount?: number;
+    segmentTimeoutMs: number;
+    segmentRetries: number;
+    variantIndex: number;
+    variantCount: number;
+    progress: ProgressEmitter;
+  }): Promise<StreamerClonedVariant> {
+    const representationDir = params.localDir === "." ? params.originDir : path.join(params.originDir, params.localDir);
+    const segmentsDir = path.join(representationDir, "segments");
+    await fs.mkdir(segmentsDir, { recursive: true });
+
+    const selectedSegments = selectDashSegmentsForWindow(
+      params.representation,
+      {
+        startSeconds: params.startSeconds,
+        durationSeconds: params.durationSeconds,
+        startSegment: params.startSegment,
+        segmentCount: params.segmentCount,
+      },
+    );
+    if (selectedSegments.length === 0) {
+      throw new Error("streamer DASH clone found no downloadable media segments");
+    }
+
+    params.progress({
+      type: "variant_ready",
+      variantIndex: params.variantIndex,
+      variantCount: params.variantCount,
+      label: formatDashRepresentationLabel(params.representation),
+      segmentCount: selectedSegments.length,
+      targetDuration: deriveDashTargetDuration(params.representation),
+    });
+
+    let totalBytes = 0;
+    let cumulativeDurationSeconds = 0;
+    const clonedMaps: StreamerClonedMap[] = [];
+    let clonedMap: StreamerClonedMap | undefined;
+    if (params.representation.initialization) {
+      const localUri = `init/${buildSegmentFileName(0, params.representation.initialization.uri)}`;
+      await fs.mkdir(path.dirname(path.join(representationDir, localUri)), { recursive: true });
+      const bytes = await this.fetchBytesWithRetries({
+        url: params.representation.initialization.url,
+        timeoutMs: params.segmentTimeoutMs,
+        retries: params.segmentRetries,
+        progress: () => undefined,
+        variantIndex: params.variantIndex,
+        variantCount: params.variantCount,
+        segmentIndex: 0,
+        segmentCount: 0,
+      });
+      await fs.writeFile(path.join(representationDir, localUri), bytes);
+      totalBytes += bytes.byteLength;
+      clonedMap = {
+        sourceUri: params.representation.initialization.uri,
+        sourceUrl: params.representation.initialization.url,
+        localUri,
+        bytes: bytes.byteLength,
+      };
+      clonedMaps.push(clonedMap);
+    }
+
+    const clonedSegments: StreamerClonedSegment[] = [];
+    for (let index = 0; index < selectedSegments.length; index += 1) {
+      const selectedSegment = selectedSegments[index];
+      const localUri = `segments/${buildSegmentFileName(index, selectedSegment.segment.uri)}`;
+      const localPath = path.join(representationDir, localUri);
+      params.progress({
+        type: "segment_download_start",
+        variantIndex: params.variantIndex,
+        variantCount: params.variantCount,
+        segmentIndex: index,
+        segmentCount: selectedSegments.length,
+        originalSegmentIndex: selectedSegment.index,
+        url: selectedSegment.segment.url,
+        duration: selectedSegment.segment.duration,
+      });
+      const bytes = await this.fetchBytesWithRetries({
+        url: selectedSegment.segment.url,
+        timeoutMs: params.segmentTimeoutMs,
+        retries: params.segmentRetries,
+        progress: params.progress,
+        variantIndex: params.variantIndex,
+        variantCount: params.variantCount,
+        segmentIndex: index,
+        segmentCount: selectedSegments.length,
+        originalSegmentIndex: selectedSegment.index,
+      });
+      await fs.writeFile(localPath, bytes);
+      totalBytes += bytes.byteLength;
+      cumulativeDurationSeconds += selectedSegment.segment.duration ?? 0;
+      clonedSegments.push({
+        originalIndex: selectedSegment.index,
+        sourceUri: selectedSegment.segment.uri,
+        sourceUrl: selectedSegment.segment.url,
+        localUri,
+        duration: selectedSegment.segment.duration,
+        timelineStartSeconds: selectedSegment.timelineStartSeconds,
+        timelineEndSeconds: selectedSegment.timelineEndSeconds,
+        bytes: bytes.byteLength,
+        map: clonedMap,
+      });
+      params.progress({
+        type: "segment_downloaded",
+        variantIndex: params.variantIndex,
+        variantCount: params.variantCount,
+        segmentIndex: index,
+        segmentCount: selectedSegments.length,
+        originalSegmentIndex: selectedSegment.index,
+        localUri,
+        bytes: bytes.byteLength,
+        cumulativeBytes: totalBytes,
+        cumulativeDurationSeconds,
+      });
+    }
+
+    const targetDuration = deriveDashTargetDuration(params.representation, clonedSegments);
+    const manifestPath = path.join(representationDir, "index.mpd");
+    return {
+      sourceUri: params.representation.id ?? params.representation.baseUrl,
+      sourceUrl: params.representation.baseUrl,
+      finalUrl: params.representation.baseUrl,
+      localUri: params.localDir === "." ? "index.mpd" : `${params.localDir}/index.mpd`,
+      manifestPath,
+      targetDuration,
+      segmentCount: clonedSegments.length,
+      cumulativeDurationSeconds,
+      reachedTargetDuration: cumulativeDurationSeconds >= params.durationSeconds,
+      bytes: totalBytes,
+      maps: clonedMaps,
+      variant: dashRepresentationToVariantSource(params.representation),
+      segments: clonedSegments,
+    };
+  }
+
   private async cloneLinkedRenditions(params: {
     root: VideoHlsInspectResult;
     variants: VariantSource[];
     originDir: string;
     durationSeconds: number;
     startSeconds: number;
+    startSegment?: number;
+    segmentCount?: number;
     timeoutMs: number;
     maxSegments: number;
     segmentTimeoutMs: number;
@@ -927,6 +1342,8 @@ export class StreamerService {
         localDir,
         durationSeconds: params.durationSeconds,
         startSeconds: params.startSeconds,
+        startSegment: params.startSegment,
+        segmentCount: params.segmentCount,
         timeoutMs: params.timeoutMs,
         segmentTimeoutMs: params.segmentTimeoutMs,
         segmentRetries: params.segmentRetries,
@@ -1000,6 +1417,7 @@ export class StreamerService {
     variantCount: number;
     segmentIndex: number;
     segmentCount: number;
+    originalSegmentIndex?: number;
   }): Promise<Uint8Array> {
     const maxAttempts = params.retries + 1;
     let lastError: unknown;
@@ -1018,6 +1436,7 @@ export class StreamerService {
           variantCount: params.variantCount,
           segmentIndex: params.segmentIndex,
           segmentCount: params.segmentCount,
+          originalSegmentIndex: params.originalSegmentIndex,
           attempt: attempt + 1,
           maxAttempts,
           error: errorMessage(error),
@@ -1032,6 +1451,7 @@ export class StreamerService {
 
   private async handleStaticRequest(
     rootDir: string,
+    defaultPlaybackPath: string,
     request: http.IncomingMessage,
     response: http.ServerResponse,
   ): Promise<void> {
@@ -1053,7 +1473,7 @@ export class StreamerService {
 
     try {
       const requestUrl = new URL(request.url || "/", "http://streamer.local");
-      const pathname = requestUrl.pathname === "/" ? "/index.m3u8" : requestUrl.pathname;
+      const pathname = requestUrl.pathname === "/" ? defaultPlaybackPath : requestUrl.pathname;
       const relativePath = decodeURIComponent(pathname).replace(/^\/+/, "");
       const filePath = path.resolve(rootDir, relativePath);
       const safeRoot = path.resolve(rootDir);
@@ -1280,6 +1700,38 @@ function normalizeNonNegativeNumber(
     return fallback;
   }
   return Math.max(min, Math.min(max, value));
+}
+
+function normalizeOptionalNonNegativeInteger(value: number | undefined, max: number): number | undefined {
+  if (!Number.isFinite(value) || value === undefined) {
+    return undefined;
+  }
+  return Math.floor(Math.max(0, Math.min(max, value)));
+}
+
+function normalizeOptionalPositiveInteger(value: number | undefined, max: number): number | undefined {
+  if (!Number.isFinite(value) || value === undefined) {
+    return undefined;
+  }
+  return Math.floor(Math.max(1, Math.min(max, value)));
+}
+
+function normalizeCloneMaxSegments(
+  requestedMaxSegments: number | undefined,
+  startSegment: number | undefined,
+  segmentCount: number | undefined,
+): number {
+  const requested = Math.floor(
+    normalizePositiveNumber(requestedMaxSegments, DEFAULT_MAX_SEGMENTS, 1, MAX_CLONE_INSPECT_SEGMENTS),
+  );
+  const requiredForSegmentWindow =
+    startSegment !== undefined
+      ? startSegment + (segmentCount ?? DEFAULT_MAX_SEGMENTS)
+      : segmentCount;
+  if (requiredForSegmentWindow === undefined) {
+    return requested;
+  }
+  return Math.min(MAX_CLONE_INSPECT_SEGMENTS, Math.max(requested, requiredForSegmentWindow));
 }
 
 async function pathExists(filePath: string): Promise<boolean> {
@@ -1514,6 +1966,58 @@ function toVariantSource(variant: VideoHlsInspectResult["variants"][number]): Va
   };
 }
 
+function dashRepresentationToVariantSource(representation: DashRepresentationSource): VariantSource {
+  return {
+    id: representation.id,
+    uri: representation.id ?? representation.baseUrl,
+    url: representation.baseUrl,
+    contentType: representation.contentType,
+    mimeType: representation.mimeType,
+    bandwidth: representation.bandwidth,
+    resolution:
+      typeof representation.width === "number" && typeof representation.height === "number"
+        ? `${representation.width}x${representation.height}`
+        : undefined,
+    frameRate: representation.frameRate,
+    codecs: representation.codecs,
+  };
+}
+
+function selectDashRepresentations(
+  representations: DashRepresentationSource[],
+  maxVariants: number | undefined,
+): DashRepresentationSource[] {
+  if (representations.length === 0) {
+    throw new Error("DASH MPD has no representations to clone");
+  }
+  const normalizedMax =
+    typeof maxVariants === "number" && Number.isFinite(maxVariants) && maxVariants > 0
+      ? Math.floor(maxVariants)
+      : representations.length;
+  return representations.slice(0, normalizedMax);
+}
+
+function selectDashRepresentation(
+  representations: DashRepresentationSource[],
+  selector: string | undefined,
+): DashRepresentationSource {
+  if (representations.length === 0) {
+    throw new Error("DASH MPD has no representations to clone");
+  }
+  const normalized = selector?.trim().toLowerCase() || "highest";
+  if (normalized === "aac-highest" || normalized === "highest" || normalized === "browser" || normalized === "browser-compatible") {
+    return selectHighestBandwidth(representations);
+  }
+  if (normalized === "aac-lowest" || normalized === "lowest") {
+    return selectLowestBandwidth(representations);
+  }
+  const index = Number(normalized);
+  if (Number.isInteger(index) && index >= 0 && index < representations.length) {
+    return representations[index];
+  }
+  throw new Error(`unknown DASH representation selector "${selector}". Use highest, lowest, or a zero-based index.`);
+}
+
 function formatVariantLabel(variant: VariantSource): string {
   const parts = [
     variant.resolution,
@@ -1522,6 +2026,21 @@ function formatVariantLabel(variant: VariantSource): string {
   ].filter((value): value is string => Boolean(value));
 
   return parts.length > 0 ? parts.join(" | ") : variant.uri;
+}
+
+function formatDashRepresentationLabel(representation: DashRepresentationSource): string {
+  const resolution =
+    typeof representation.width === "number" && typeof representation.height === "number"
+      ? `${representation.width}x${representation.height}`
+      : undefined;
+  const parts = [
+    representation.contentType,
+    resolution,
+    typeof representation.bandwidth === "number" ? `${representation.bandwidth}bps` : undefined,
+    representation.codecs,
+    representation.id,
+  ].filter((value): value is string => Boolean(value));
+  return parts.join(" | ") || representation.baseUrl;
 }
 
 function formatRenditionLabel(rendition: RenditionSource): string {
@@ -1536,8 +2055,7 @@ function formatRenditionLabel(rendition: RenditionSource): string {
 
 function selectSegmentsForWindow(
   inspected: VideoHlsInspectResult,
-  startSeconds: number,
-  durationSeconds: number,
+  request: SegmentWindowRequest,
 ): Array<{
   index: number;
   segment: VideoHlsInspectResult["segments"][number];
@@ -1551,7 +2069,7 @@ function selectSegmentsForWindow(
     timelineEndSeconds: number;
   }> = [];
   let cumulativeDuration = 0;
-  const windowEndSeconds = startSeconds + durationSeconds;
+  let firstIncludedTimelineStartSeconds: number | undefined;
 
   for (let index = 0; index < inspected.segments.length; index += 1) {
     const segment = inspected.segments[index];
@@ -1560,20 +2078,117 @@ function selectSegmentsForWindow(
     const timelineEndSeconds = cumulativeDuration + segmentDuration;
     cumulativeDuration = timelineEndSeconds;
 
-    if (timelineEndSeconds <= startSeconds) {
+    if (request.startSegment !== undefined && index < request.startSegment) {
       continue;
     }
-    if (timelineStartSeconds >= windowEndSeconds && out.length > 0) {
+    if (request.startSegment === undefined && timelineEndSeconds <= request.startSeconds) {
+      continue;
+    }
+
+    if (firstIncludedTimelineStartSeconds === undefined) {
+      firstIncludedTimelineStartSeconds = timelineStartSeconds;
+    }
+    const windowEndSeconds =
+      (request.startSegment === undefined ? request.startSeconds : firstIncludedTimelineStartSeconds) +
+      request.durationSeconds;
+    if (request.segmentCount !== undefined && out.length >= request.segmentCount) {
+      break;
+    }
+    if (
+      request.segmentCount === undefined &&
+      timelineStartSeconds >= windowEndSeconds &&
+      out.length > 0
+    ) {
       break;
     }
 
     out.push({ index, segment, timelineStartSeconds, timelineEndSeconds });
-    if (timelineEndSeconds >= windowEndSeconds) {
+    if (
+      request.segmentCount === undefined &&
+      timelineEndSeconds >= windowEndSeconds
+    ) {
       break;
     }
   }
 
   return out;
+}
+
+function selectDashSegmentsForWindow(
+  representation: DashRepresentationSource,
+  request: SegmentWindowRequest,
+): Array<{
+  index: number;
+  segment: DashRepresentationSource["segments"][number];
+  timelineStartSeconds: number;
+  timelineEndSeconds: number;
+}> {
+  const out: Array<{
+    index: number;
+    segment: DashRepresentationSource["segments"][number];
+    timelineStartSeconds: number;
+    timelineEndSeconds: number;
+  }> = [];
+  let cumulativeDuration = 0;
+  let firstIncludedTimelineStartSeconds: number | undefined;
+
+  for (let index = 0; index < representation.segments.length; index += 1) {
+    const segment = representation.segments[index];
+    const segmentDuration = segment.duration ?? 0;
+    const timelineStartSeconds = cumulativeDuration;
+    const timelineEndSeconds = cumulativeDuration + segmentDuration;
+    cumulativeDuration = timelineEndSeconds;
+
+    if (request.startSegment !== undefined && index < request.startSegment) {
+      continue;
+    }
+    if (request.startSegment === undefined && timelineEndSeconds <= request.startSeconds) {
+      continue;
+    }
+
+    if (firstIncludedTimelineStartSeconds === undefined) {
+      firstIncludedTimelineStartSeconds = timelineStartSeconds;
+    }
+    const windowEndSeconds =
+      (request.startSegment === undefined ? request.startSeconds : firstIncludedTimelineStartSeconds) +
+      request.durationSeconds;
+    if (request.segmentCount !== undefined && out.length >= request.segmentCount) {
+      break;
+    }
+    if (
+      request.segmentCount === undefined &&
+      timelineStartSeconds >= windowEndSeconds &&
+      out.length > 0
+    ) {
+      break;
+    }
+
+    out.push({ index, segment, timelineStartSeconds, timelineEndSeconds });
+    if (
+      request.segmentCount === undefined &&
+      timelineEndSeconds >= windowEndSeconds
+    ) {
+      break;
+    }
+  }
+
+  return out;
+}
+
+function deriveDashTargetDuration(
+  representation: DashRepresentationSource,
+  segments: StreamerClonedSegment[] = [],
+): number {
+  const maxDuration = Math.max(
+    ...segments.map((segment) => segment.duration).filter((duration): duration is number => typeof duration === "number"),
+    ...representation.segments.map((segment) => segment.duration).filter((duration): duration is number => typeof duration === "number"),
+    1,
+  );
+  return Math.ceil(maxDuration);
+}
+
+function dashRenditionKind(representation: DashRepresentationSource): RenditionKind {
+  return representation.contentType === "text" ? "SUBTITLES" : "AUDIO";
 }
 
 function minVariantDuration(variants: StreamerClonedVariant[]): number {
@@ -1587,6 +2202,7 @@ function toOriginSummary(result: StreamerCloneResult): StreamerOriginSummary {
   return {
     id: result.id,
     schemaVersion: result.schemaVersion,
+    protocol: result.protocol,
     derivedFrom: result.derivedFrom,
     faults: result.faults ?? [],
     createdAt: result.createdAt,
@@ -1596,6 +2212,8 @@ function toOriginSummary(result: StreamerCloneResult): StreamerOriginSummary {
     playbackPath: result.playbackPath,
     requestedDurationSeconds: result.requestedDurationSeconds,
     requestedStartSeconds: result.requestedStartSeconds,
+    requestedStartSegment: result.requestedStartSegment,
+    requestedSegmentCount: result.requestedSegmentCount,
     cumulativeDurationSeconds: result.cumulativeDurationSeconds,
     reachedTargetDuration: result.reachedTargetDuration,
     targetDuration: result.targetDuration,
@@ -1870,6 +2488,41 @@ function buildAnalyzeCandidates(clone: StreamerCloneResult): StreamerAnalyzeCand
   ];
 }
 
+async function prepareSegmentProbeInput(
+  rootPath: string,
+  segment: StreamerClonedSegment,
+  segmentPath: string,
+): Promise<{ input: string; cleanup(): Promise<void> }> {
+  if (!segment.map) {
+    return {
+      input: segmentPath,
+      cleanup: async () => undefined,
+    };
+  }
+
+  const mapPath = path.join(rootPath, segment.map.localUri);
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "kael-streamer-probe-"));
+  const ext = path.extname(segment.localUri) || ".mp4";
+  const tempPath = path.join(tempDir, `segment-with-init${ext === ".dash" ? ".mp4" : ext}`);
+
+  try {
+    const [initBytes, segmentBytes] = await Promise.all([
+      fs.readFile(mapPath),
+      fs.readFile(segmentPath),
+    ]);
+    await fs.writeFile(tempPath, Buffer.concat([initBytes, segmentBytes]));
+    return {
+      input: tempPath,
+      cleanup: async () => {
+        await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+      },
+    };
+  } catch (error) {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
 function sampleSegmentIndices(segmentCount: number, maxSegments: number): number[] {
   if (segmentCount <= 0 || maxSegments <= 0) {
     return [];
@@ -1887,6 +2540,24 @@ function sampleSegmentIndices(segmentCount: number, maxSegments: number): number
   }
 
   return [...samples].sort((left, right) => left - right).slice(0, maxSegments);
+}
+
+function sampleAnalyzeSegmentIndices(
+  segments: StreamerClonedSegment[],
+  maxSegments: number,
+  startSegment: number | undefined,
+  segmentCount: number | undefined,
+): number[] {
+  const filteredIndexes = segments.flatMap((segment, index) => {
+    if (startSegment === undefined && segmentCount === undefined) {
+      return [index];
+    }
+    const windowStart = startSegment ?? 0;
+    const windowEnd = segmentCount === undefined ? Number.POSITIVE_INFINITY : windowStart + segmentCount;
+    return segment.originalIndex >= windowStart && segment.originalIndex < windowEnd ? [index] : [];
+  });
+  const sampledPositions = sampleSegmentIndices(filteredIndexes.length, maxSegments);
+  return sampledPositions.map((position) => filteredIndexes[position]).filter((index): index is number => index !== undefined);
 }
 
 function applyBoundaryAnalysis(candidate: StreamerAnalyzeCandidate, entries: StreamerOriginAnalysisReport["entries"]): void {
@@ -2395,6 +3066,24 @@ function extractProbeDurationSeconds(format: unknown): number | undefined {
   return Number.isFinite(value) ? value : undefined;
 }
 
+function extractActualSegmentDurationSeconds(
+  result: Awaited<ReturnType<NonNullable<HlsInspectLike["probe"]>>>,
+  hasInitSegment: boolean,
+): number | undefined {
+  if (
+    hasInitSegment &&
+    typeof result.timeline?.firstPtsTime === "number" &&
+    typeof result.timeline.lastPtsTime === "number"
+  ) {
+    const sampleDuration = result.timeline.lastSampleDurationTime ?? 0;
+    const duration = result.timeline.lastPtsTime - result.timeline.firstPtsTime + sampleDuration;
+    if (Number.isFinite(duration) && duration > 0) {
+      return duration;
+    }
+  }
+  return extractProbeDurationSeconds(result.format);
+}
+
 function formatVariantProbeLabel(variant: StreamerClonedVariant): string {
   return formatVariantLabel(variant.variant ?? { uri: variant.sourceUri, url: variant.sourceUrl });
 }
@@ -2432,6 +3121,19 @@ function buildVariantDirName(index: number, variant: VariantSource): string {
 
   const readable = variant.resolution || basename || `variant-${index}`;
   const safeBase = readable.replace(/[^a-zA-Z0-9._-]/g, "-") || `variant-${index}`;
+  return `${String(index).padStart(3, "0")}-${safeBase}`;
+}
+
+function buildDashRepresentationDirName(index: number, representation: DashRepresentationSource): string {
+  const resolution =
+    typeof representation.width === "number" && typeof representation.height === "number"
+      ? `${representation.width}x${representation.height}`
+      : undefined;
+  const readable =
+    [representation.contentType, resolution, representation.id, representation.bandwidth]
+      .filter((value): value is string | number => value !== undefined && value !== "")
+      .join("-") || `representation-${index}`;
+  const safeBase = readable.replace(/[^a-zA-Z0-9._-]/g, "-") || `representation-${index}`;
   return `${String(index).padStart(3, "0")}-${safeBase}`;
 }
 
@@ -2580,8 +3282,105 @@ function buildLocalMediaPlaylist(params: {
   return `${lines.join("\n")}\n`;
 }
 
+function buildLocalDashMpd(params: {
+  variants: StreamerClonedVariant[];
+  renditions: StreamerClonedRendition[];
+  rootRelative: boolean;
+}): string {
+  const media = [
+    ...params.variants.map((variant, index) => ({
+      kind: "VIDEO" as const,
+      index,
+      item: variant,
+    })),
+    ...params.renditions.map((rendition, index) => ({
+      kind: requireRenditionKind(rendition.type),
+      index,
+      item: rendition,
+    })),
+  ];
+  const durationSeconds = Math.max(
+    ...media.map((entry) => entry.item.cumulativeDurationSeconds).filter((value) => Number.isFinite(value)),
+    1,
+  );
+  const lines = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    `<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="${formatIsoDuration(durationSeconds)}" minBufferTime="PT1.5S" profiles="urn:mpeg:dash:profile:isoff-main:2011">`,
+    `  <Period id="0" duration="${formatIsoDuration(durationSeconds)}">`,
+  ];
+
+  for (const entry of media) {
+    lines.push(...formatDashAdaptationSet(entry.item, entry.kind, entry.index, params.rootRelative));
+  }
+
+  lines.push("  </Period>", "</MPD>");
+  return `${lines.join("\n")}\n`;
+}
+
+function formatDashAdaptationSet(
+  item: StreamerClonedVariant | StreamerClonedRendition,
+  kind: "VIDEO" | RenditionKind,
+  index: number,
+  rootRelative: boolean,
+): string[] {
+  const source = "variant" in item ? item.variant : undefined;
+  const contentType = kind === "VIDEO" ? "video" : kind === "AUDIO" ? "audio" : "text";
+  const mimeType =
+    source?.mimeType ??
+    ("mimeType" in item ? item.mimeType : undefined) ??
+    (kind === "VIDEO" ? "video/mp4" : kind === "AUDIO" ? "audio/mp4" : "text/vtt");
+  const codecs = source?.codecs ?? ("codecs" in item ? item.codecs : undefined);
+  const representationId =
+    source?.id ??
+    ("id" in item ? item.id : undefined) ??
+    `${contentType}-${index}`;
+  const bandwidth =
+    source?.bandwidth ??
+    ("bandwidth" in item ? item.bandwidth : undefined) ??
+    estimateBandwidth(item as StreamerClonedVariant);
+  const resolution = source?.resolution?.split("x");
+  const width = resolution?.[0];
+  const height = resolution?.[1];
+  const mediaDir = rootRelative ? path.dirname(item.localUri) : ".";
+  const prefix = mediaDir === "." ? "" : `${mediaDir}/`;
+  const timescale = 1000;
+  const lines = [
+    `    <AdaptationSet id="${xmlEscape(`${contentType}-${index}`)}" contentType="${contentType}" mimeType="${xmlEscape(mimeType)}"${codecs ? ` codecs="${xmlEscape(codecs)}"` : ""}${"language" in item && item.language ? ` lang="${xmlEscape(item.language)}"` : ""}>`,
+    `      <Representation id="${xmlEscape(representationId)}" bandwidth="${Math.max(1, Math.ceil(bandwidth))}"${width && height ? ` width="${xmlEscape(width)}" height="${xmlEscape(height)}"` : ""}${source?.frameRate ? ` frameRate="${source.frameRate}"` : ""}>`,
+    `        <SegmentList timescale="${timescale}">`,
+  ];
+  const init = item.maps[0];
+  if (init) {
+    lines.push(`          <Initialization sourceURL="${xmlEscape(`${prefix}${init.localUri}`)}"/>`);
+  }
+  lines.push("          <SegmentTimeline>");
+  for (const segment of item.segments) {
+    const durationMs = Math.max(1, Math.round((segment.duration ?? item.targetDuration) * timescale));
+    lines.push(`            <S d="${durationMs}"/>`);
+  }
+  lines.push("          </SegmentTimeline>");
+  for (const segment of item.segments) {
+    lines.push(`          <SegmentURL media="${xmlEscape(`${prefix}${segment.localUri}`)}"/>`);
+  }
+  lines.push("        </SegmentList>", "      </Representation>", "    </AdaptationSet>");
+  return lines;
+}
+
+function formatIsoDuration(seconds: number): string {
+  return `PT${Math.max(0.001, seconds).toFixed(3)}S`;
+}
+
+function xmlEscape(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 function contentTypeFor(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".mpd") return "application/dash+xml";
   if (ext === ".m3u8") return "application/vnd.apple.mpegurl";
   if (ext === ".ts") return "video/mp2t";
   if (ext === ".m4s") return "video/iso.segment";

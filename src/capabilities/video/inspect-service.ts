@@ -42,6 +42,48 @@ type HlsSegment = {
   map?: HlsMap;
 };
 
+type DashSegment = {
+  uri: string;
+  url: string;
+  duration?: number;
+  number?: number;
+  time?: number;
+};
+
+type DashInitialization = {
+  uri: string;
+  url: string;
+};
+
+type DashRepresentation = {
+  id?: string;
+  adaptationSetId?: string;
+  contentType: "video" | "audio" | "text" | "unknown";
+  mimeType?: string;
+  codecs?: string;
+  bandwidth?: number;
+  width?: number;
+  height?: number;
+  frameRate?: number;
+  audioSamplingRate?: number;
+  lang?: string;
+  baseUrl: string;
+  initialization?: DashInitialization;
+  segments: DashSegment[];
+};
+
+export type VideoDashInspectResult = {
+  ok: boolean;
+  url: string;
+  finalUrl: string;
+  type?: "static" | "dynamic";
+  profiles?: string;
+  mediaPresentationDurationSeconds?: number;
+  minBufferTimeSeconds?: number;
+  representations: DashRepresentation[];
+  errors: string[];
+};
+
 export type VideoHlsInspectResult = {
   ok: boolean;
   url: string;
@@ -138,6 +180,289 @@ function resolveUrl(base: string, candidate: string): string {
   }
 }
 
+type XmlNode = {
+  name: string;
+  attrs: Record<string, string>;
+  children: XmlNode[];
+  text: string;
+};
+
+function parseXmlAttrs(raw: string): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  const attrRe = /([A-Za-z_:][A-Za-z0-9_.:-]*)\s*=\s*("([^"]*)"|'([^']*)')/g;
+  let match: RegExpExecArray | null;
+  while ((match = attrRe.exec(raw)) !== null) {
+    attrs[match[1]] = match[3] ?? match[4] ?? "";
+  }
+  return attrs;
+}
+
+function parseXml(text: string): XmlNode {
+  const root: XmlNode = { name: "#document", attrs: {}, children: [], text: "" };
+  const stack: XmlNode[] = [root];
+  const tagRe = /<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<!\[CDATA\[[\s\S]*?\]\]>|<\/?[A-Za-z_][A-Za-z0-9_.:-]*(?:\s+[^<>]*?)?\/?>/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = tagRe.exec(text)) !== null) {
+    const between = text.slice(lastIndex, match.index).trim();
+    if (between) {
+      stack[stack.length - 1].text += decodeXmlEntities(between);
+    }
+
+    const token = match[0];
+    lastIndex = tagRe.lastIndex;
+    if (token.startsWith("<!--") || token.startsWith("<?")) {
+      continue;
+    }
+    if (token.startsWith("<![CDATA[")) {
+      stack[stack.length - 1].text += token.slice("<![CDATA[".length, -"]]>".length);
+      continue;
+    }
+    if (token.startsWith("</")) {
+      const closingName = token.slice(2, -1).trim();
+      while (stack.length > 1) {
+        const popped = stack.pop();
+        if (popped?.name === closingName) {
+          break;
+        }
+      }
+      continue;
+    }
+
+    const selfClosing = token.endsWith("/>");
+    const body = token.slice(1, selfClosing ? -2 : -1).trim();
+    const spaceIndex = body.search(/\s/);
+    const name = spaceIndex === -1 ? body : body.slice(0, spaceIndex);
+    const attrText = spaceIndex === -1 ? "" : body.slice(spaceIndex + 1);
+    const node: XmlNode = {
+      name,
+      attrs: parseXmlAttrs(attrText),
+      children: [],
+      text: "",
+    };
+    stack[stack.length - 1].children.push(node);
+    if (!selfClosing) {
+      stack.push(node);
+    }
+  }
+
+  return root;
+}
+
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&quot;/g, "\"")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+function localXmlName(name: string): string {
+  return name.includes(":") ? name.slice(name.lastIndexOf(":") + 1) : name;
+}
+
+function childNodes(node: XmlNode, name: string): XmlNode[] {
+  return node.children.filter((child) => localXmlName(child.name) === name);
+}
+
+function firstChild(node: XmlNode, name: string): XmlNode | undefined {
+  return childNodes(node, name)[0];
+}
+
+function firstChildText(node: XmlNode, name: string): string | undefined {
+  const child = firstChild(node, name);
+  const text = child?.text.trim();
+  return text || undefined;
+}
+
+function attr(node: XmlNode | undefined, name: string): string | undefined {
+  if (!node) {
+    return undefined;
+  }
+  return node.attrs[name] ?? node.attrs[name.toLowerCase()] ?? node.attrs[name.toUpperCase()];
+}
+
+function numberAttr(node: XmlNode | undefined, name: string): number | undefined {
+  const raw = attr(node, name);
+  if (raw === undefined) {
+    return undefined;
+  }
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function parseIsoDurationSeconds(raw: string | undefined): number | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const match = raw.match(/^P(?:(\d+(?:\.\d+)?)Y)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)D)?(?:T(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?)?$/);
+  if (!match) {
+    return undefined;
+  }
+  const days = Number(match[3] ?? 0);
+  const hours = Number(match[4] ?? 0);
+  const minutes = Number(match[5] ?? 0);
+  const seconds = Number(match[6] ?? 0);
+  const total = days * 86_400 + hours * 3_600 + minutes * 60 + seconds;
+  return Number.isFinite(total) ? total : undefined;
+}
+
+function parseFrameRate(raw: string | undefined): number | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const [left, right] = raw.split("/");
+  const numerator = Number(left);
+  const denominator = right ? Number(right) : 1;
+  const value = denominator ? numerator / denominator : Number.NaN;
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function inferDashContentType(attrs: Record<string, string>): DashRepresentation["contentType"] {
+  const declared = (attrs.contentType ?? attrs.mimeType ?? attrs.MIMETYPE ?? "").toLowerCase();
+  if (declared.includes("video")) return "video";
+  if (declared.includes("audio")) return "audio";
+  if (declared.includes("text") || declared.includes("subtitle") || declared.includes("vtt")) return "text";
+  return "unknown";
+}
+
+function replaceDashTemplatePlaceholders(
+  template: string,
+  representation: DashRepresentation,
+  number: number | undefined,
+  time: number | undefined,
+): string {
+  return template.replace(/\$(RepresentationID|Bandwidth|Number(?:%0(\d+)d)?|Time)\$/g, (_full, key: string, width: string | undefined) => {
+    if (key === "RepresentationID") {
+      return representation.id ?? "";
+    }
+    if (key === "Bandwidth") {
+      return String(representation.bandwidth ?? "");
+    }
+    if (key.startsWith("Number")) {
+      const raw = String(number ?? "");
+      const pad = width ? Number(width) : 0;
+      return pad > 0 ? raw.padStart(pad, "0") : raw;
+    }
+    if (key === "Time") {
+      return String(time ?? "");
+    }
+    return "";
+  });
+}
+
+function buildDashTemplateInitialization(
+  template: XmlNode,
+  representation: DashRepresentation,
+): DashInitialization | undefined {
+  const raw = attr(template, "initialization");
+  if (!raw) {
+    return undefined;
+  }
+  const uri = replaceDashTemplatePlaceholders(raw, representation, undefined, undefined);
+  return {
+    uri,
+    url: resolveUrl(representation.baseUrl, uri),
+  };
+}
+
+function buildDashTemplateSegments(
+  template: XmlNode,
+  representation: DashRepresentation,
+  maxSegments: number,
+): DashSegment[] {
+  const media = attr(template, "media");
+  if (!media || maxSegments <= 0) {
+    return [];
+  }
+  const timescale = numberAttr(template, "timescale") ?? 1;
+  const startNumber = numberAttr(template, "startNumber") ?? 1;
+  const timeline = firstChild(template, "SegmentTimeline");
+  const segments: DashSegment[] = [];
+
+  if (timeline) {
+    let nextTime = 0;
+    let nextNumber = startNumber;
+    for (const s of childNodes(timeline, "S")) {
+      const d = numberAttr(s, "d");
+      if (!d || d <= 0) {
+        continue;
+      }
+      const t = numberAttr(s, "t");
+      if (typeof t === "number") {
+        nextTime = t;
+      }
+      const repeat = Math.max(-1, Math.floor(numberAttr(s, "r") ?? 0));
+      const count = repeat < 0 ? maxSegments - segments.length : repeat + 1;
+      for (let index = 0; index < count && segments.length < maxSegments; index += 1) {
+        const uri = replaceDashTemplatePlaceholders(media, representation, nextNumber, nextTime);
+        segments.push({
+          uri,
+          url: resolveUrl(representation.baseUrl, uri),
+          duration: d / timescale,
+          number: nextNumber,
+          time: nextTime,
+        });
+        nextNumber += 1;
+        nextTime += d;
+      }
+      if (segments.length >= maxSegments) {
+        break;
+      }
+    }
+    return segments;
+  }
+
+  const duration = numberAttr(template, "duration");
+  if (!duration || duration <= 0) {
+    return [];
+  }
+  for (let index = 0; index < maxSegments; index += 1) {
+    const number = startNumber + index;
+    const time = index * duration;
+    const uri = replaceDashTemplatePlaceholders(media, representation, number, time);
+    segments.push({
+      uri,
+      url: resolveUrl(representation.baseUrl, uri),
+      duration: duration / timescale,
+      number,
+      time,
+    });
+  }
+  return segments;
+}
+
+function buildDashListInitialization(list: XmlNode, baseUrl: string): DashInitialization | undefined {
+  const initialization = firstChild(list, "Initialization");
+  const sourceUrl = attr(initialization, "sourceURL");
+  if (!sourceUrl) {
+    return undefined;
+  }
+  return {
+    uri: sourceUrl,
+    url: resolveUrl(baseUrl, sourceUrl),
+  };
+}
+
+function buildDashListSegments(list: XmlNode, baseUrl: string, maxSegments: number): DashSegment[] {
+  const timescale = numberAttr(list, "timescale") ?? 1;
+  const duration = numberAttr(list, "duration");
+  return childNodes(list, "SegmentURL").slice(0, maxSegments).flatMap((segmentUrl, index): DashSegment[] => {
+    const media = attr(segmentUrl, "media");
+    if (!media) {
+      return [];
+    }
+    return [{
+      uri: media,
+      url: resolveUrl(baseUrl, media),
+      duration: duration && duration > 0 ? duration / timescale : undefined,
+      number: index + 1,
+    }];
+  });
+}
+
 async function fetchText(url: string, timeoutMs: number): Promise<{ finalUrl: string; text: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -179,7 +504,7 @@ export class VideoInspectToolService {
   }): Promise<VideoHlsInspectResult> {
     validateStreamUrl(params.url);
     const errors: string[] = [];
-    const maxSegments = Math.max(0, Math.min(200, Math.floor(params.maxSegments ?? 20)));
+    const maxSegments = Math.max(0, Math.min(10_000, Math.floor(params.maxSegments ?? 20)));
     const timeoutMs = Math.max(1_000, Math.min(60_000, Math.floor(params.timeoutMs ?? this.cfg.defaultFetchTimeoutMs)));
 
     const fetched = await fetchText(params.url, timeoutMs);
@@ -327,6 +652,106 @@ export class VideoInspectToolService {
     };
   }
 
+  async inspectDash(params: {
+    url: string;
+    maxSegments?: number;
+    timeoutMs?: number;
+  }): Promise<VideoDashInspectResult> {
+    validateStreamUrl(params.url);
+    const errors: string[] = [];
+    const maxSegments = Math.max(0, Math.min(10_000, Math.floor(params.maxSegments ?? 20)));
+    const timeoutMs = Math.max(1_000, Math.min(60_000, Math.floor(params.timeoutMs ?? this.cfg.defaultFetchTimeoutMs)));
+    const fetched = await fetchText(params.url, timeoutMs);
+    const document = parseXml(fetched.text);
+    const mpd = document.children.find((child) => localXmlName(child.name) === "MPD");
+    if (!mpd) {
+      return {
+        ok: false,
+        url: params.url,
+        finalUrl: fetched.finalUrl,
+        representations: [],
+        errors: ["manifest did not contain MPD root"],
+      };
+    }
+
+    const mpdBaseUrl = resolveUrl(fetched.finalUrl, firstChildText(mpd, "BaseURL") ?? "");
+    const periods = childNodes(mpd, "Period");
+    const representations: DashRepresentation[] = [];
+
+    for (const period of periods.length > 0 ? periods : [mpd]) {
+      const periodBaseUrl = resolveUrl(mpdBaseUrl, firstChildText(period, "BaseURL") ?? "");
+      for (const adaptationSet of childNodes(period, "AdaptationSet")) {
+        const adaptationBaseUrl = resolveUrl(periodBaseUrl, firstChildText(adaptationSet, "BaseURL") ?? "");
+        const adaptationTemplate = firstChild(adaptationSet, "SegmentTemplate");
+        const adaptationList = firstChild(adaptationSet, "SegmentList");
+        const adaptationAttrs = adaptationSet.attrs;
+        const adaptationContentType = inferDashContentType(adaptationAttrs);
+
+        for (const representationNode of childNodes(adaptationSet, "Representation")) {
+          const representationBaseUrl = resolveUrl(adaptationBaseUrl, firstChildText(representationNode, "BaseURL") ?? "");
+          const representationAttrs = { ...adaptationAttrs, ...representationNode.attrs };
+          const contentType = inferDashContentType(representationAttrs);
+          const representation: DashRepresentation = {
+            id: attr(representationNode, "id"),
+            adaptationSetId: attr(adaptationSet, "id"),
+            contentType: contentType === "unknown" ? adaptationContentType : contentType,
+            mimeType: attr(representationNode, "mimeType") ?? attr(adaptationSet, "mimeType"),
+            codecs: attr(representationNode, "codecs") ?? attr(adaptationSet, "codecs"),
+            bandwidth: numberAttr(representationNode, "bandwidth"),
+            width: numberAttr(representationNode, "width") ?? numberAttr(adaptationSet, "width"),
+            height: numberAttr(representationNode, "height") ?? numberAttr(adaptationSet, "height"),
+            frameRate: parseFrameRate(attr(representationNode, "frameRate") ?? attr(adaptationSet, "frameRate")),
+            audioSamplingRate:
+              numberAttr(representationNode, "audioSamplingRate") ?? numberAttr(adaptationSet, "audioSamplingRate"),
+            lang: attr(adaptationSet, "lang"),
+            baseUrl: representationBaseUrl,
+            segments: [],
+          };
+          const segmentTemplate = firstChild(representationNode, "SegmentTemplate") ?? adaptationTemplate;
+          const segmentList = firstChild(representationNode, "SegmentList") ?? adaptationList;
+          if (segmentTemplate) {
+            representation.initialization = buildDashTemplateInitialization(segmentTemplate, representation);
+            representation.segments = buildDashTemplateSegments(segmentTemplate, representation, maxSegments);
+          } else if (segmentList) {
+            representation.initialization = buildDashListInitialization(segmentList, representationBaseUrl);
+            representation.segments = buildDashListSegments(segmentList, representationBaseUrl, maxSegments);
+          } else {
+            const directBase = firstChildText(representationNode, "BaseURL");
+            if (directBase) {
+              representation.segments = [{
+                uri: directBase,
+                url: representationBaseUrl,
+                duration: parseIsoDurationSeconds(attr(mpd, "mediaPresentationDuration")),
+              }];
+            }
+          }
+          representations.push(representation);
+        }
+      }
+    }
+
+    if (representations.length === 0) {
+      errors.push("MPD did not contain downloadable representations");
+    }
+    for (const representation of representations) {
+      if (representation.segments.length === 0) {
+        errors.push(`representation ${representation.id ?? representation.baseUrl} has no supported segments`);
+      }
+    }
+
+    return {
+      ok: errors.length === 0,
+      url: params.url,
+      finalUrl: fetched.finalUrl,
+      type: attr(mpd, "type") === "dynamic" ? "dynamic" : "static",
+      profiles: attr(mpd, "profiles"),
+      mediaPresentationDurationSeconds: parseIsoDurationSeconds(attr(mpd, "mediaPresentationDuration")),
+      minBufferTimeSeconds: parseIsoDurationSeconds(attr(mpd, "minBufferTime")),
+      representations,
+      errors,
+    };
+  }
+
   async probe(params: {
     input: string;
     timeoutMs?: number;
@@ -443,7 +868,7 @@ export class VideoInspectToolService {
               streamSelector,
               "-show_frames",
               "-show_entries",
-              "frame=best_effort_timestamp_time,pkt_dts_time,pkt_pts_time,key_frame,pict_type",
+              "frame=best_effort_timestamp_time,pkt_dts_time,pkt_pts_time,pkt_duration_time,duration_time,key_frame,pict_type",
               "-of",
               "json",
               params.input,
@@ -487,11 +912,14 @@ export class VideoInspectToolService {
             .filter((value): value is number => value !== null);
           const durations = items
             .map((item) => {
-              const raw = item.duration_time;
+              const raw = item.duration_time ?? item.pkt_duration_time;
               const value = typeof raw === "string" || typeof raw === "number" ? Number(raw) : Number.NaN;
               return Number.isFinite(value) ? value : null;
             })
             .filter((value): value is number => value !== null);
+          const inferredLastSampleDuration = timestamps.length >= 2
+            ? timestamps[timestamps.length - 1] - timestamps[timestamps.length - 2]
+            : undefined;
           const keyframeTimestamps = useFrames
             ? (payload.frames ?? [])
               .map((frame) => {
@@ -520,7 +948,7 @@ export class VideoInspectToolService {
             sampleCount: items.length,
             firstPtsTime: timestamps[0],
             lastPtsTime: timestamps.at(-1),
-            lastSampleDurationTime: durations.at(-1),
+            lastSampleDurationTime: durations.at(-1) ?? inferredLastSampleDuration,
             keyframeCount: useFrames ? keyframeTimestamps.length : undefined,
             startsWithKeyframe: useFrames
               ? firstFrame?.key_frame === 1 || firstFrame?.key_frame === "1"

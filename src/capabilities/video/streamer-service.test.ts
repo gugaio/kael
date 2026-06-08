@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { VideoHlsInspectResult } from "./inspect-service.js";
+import type { VideoDashInspectResult, VideoHlsInspectResult } from "./inspect-service.js";
 import { diagnoseStreamerClone } from "./streamer-diagnostics.js";
 import { renderStreamerAnalysisHtml } from "./streamer-report-html.js";
 import { StreamerService } from "./streamer-service.js";
@@ -29,6 +29,18 @@ function makeInspectResult(overrides: Partial<VideoHlsInspectResult> = {}): Vide
     renditions: [],
     segments: [],
     discontinuityMarkers: [],
+    errors: [],
+    ...overrides,
+  };
+}
+
+function makeDashInspectResult(overrides: Partial<VideoDashInspectResult> = {}): VideoDashInspectResult {
+  return {
+    ok: true,
+    url: "https://example.com/manifest.mpd",
+    finalUrl: "https://example.com/manifest.mpd",
+    type: "static",
+    representations: [],
     errors: [],
     ...overrides,
   };
@@ -195,6 +207,95 @@ describe("StreamerService", () => {
     ]);
     expect(renderStreamerAnalysisHtml(report)).toContain("8.000s -> 12.000s");
     expect(renderStreamerAnalysisHtml(report)).toContain("0:08 -> 0:12");
+  });
+
+  it("clona os proximos segmentos a partir de um indice original sem ficar limitado aos 200 primeiros", async () => {
+    const root = await makeTempRoot();
+    const fetchedUrls: string[] = [];
+    const requestedMaxSegments: number[] = [];
+    const downloadedOriginalIndexes: number[] = [];
+    const service = new StreamerService(
+      {
+        inspectHls: async ({ url, maxSegments }) => {
+          requestedMaxSegments.push(maxSegments ?? 0);
+          return makeInspectResult({
+            url,
+            finalUrl: url,
+            playlistType: "media",
+            targetDuration: 4,
+            mediaSequence: 0,
+            segments: Array.from({ length: Math.min(maxSegments ?? 20, 260) }, (_, index) => ({
+              uri: `seg-${index}.ts`,
+              url: `https://cdn.example.com/seg-${index}.ts`,
+              duration: 4,
+            })),
+          });
+        },
+        probe: async ({ input }) => ({
+          ok: true,
+          input,
+          timeoutMs: 5000,
+          format: { duration: "4.000" },
+          streams: [{ codec_type: "video", codec_name: "h264" }],
+          timeline: {
+            streamSelector: "v:0",
+            sampleKind: "frames",
+            sampleCount: 96,
+            firstPtsTime: 0,
+            lastPtsTime: 4,
+            keyframeCount: 1,
+            startsWithKeyframe: true,
+            maxKeyframeGapSeconds: 1,
+          },
+          errors: [],
+        }),
+      },
+      root,
+      async (input) => {
+        fetchedUrls.push(String(input));
+        return new Response(new Uint8Array([1, 2, 3]));
+      },
+    );
+    await service.init();
+
+    const result = await service.cloneHls({
+      sessionKey: "test",
+      url: "https://example.com/media.m3u8",
+      startSegment: 200,
+      segmentCount: 50,
+      originId: "segment-window-origin",
+      onProgress: (event) => {
+        if (event.type === "segment_downloaded" && event.originalSegmentIndex !== undefined) {
+          downloadedOriginalIndexes.push(event.originalSegmentIndex);
+        }
+      },
+    });
+
+    expect(requestedMaxSegments).toEqual([250]);
+    expect(fetchedUrls).toHaveLength(50);
+    expect(fetchedUrls[0]).toBe("https://cdn.example.com/seg-200.ts");
+    expect(fetchedUrls.at(-1)).toBe("https://cdn.example.com/seg-249.ts");
+    expect(result.requestedStartSegment).toBe(200);
+    expect(result.requestedSegmentCount).toBe(50);
+    expect(result.segmentCount).toBe(50);
+    expect(result.segments[0]?.originalIndex).toBe(200);
+    expect(result.segments.at(-1)?.originalIndex).toBe(249);
+    expect(downloadedOriginalIndexes[0]).toBe(200);
+    expect(downloadedOriginalIndexes.at(-1)).toBe(249);
+
+    const report = await service.analyzeOrigin(result.id, {
+      full: true,
+      startSegment: 220,
+      segmentCount: 5,
+    });
+    expect(report.entries).toHaveLength(5);
+    expect(report.entries.map((entry) => [entry.segmentIndex, entry.originalSegmentIndex])).toEqual([
+      [20, 220],
+      [21, 221],
+      [22, 222],
+      [23, 223],
+      [24, 224],
+    ]);
   });
 
   it("clona todas as variants e gera uma master local quando allVariants esta ativo", async () => {
@@ -1518,6 +1619,158 @@ describe("StreamerService", () => {
     expect(html).toContain("400.000ms");
     expect(html).toContain("279:17:09.221");
     expect(html).toContain("1005429221322us");
+  });
+
+  it("clona DASH com init segment, MPD local e analyze sobre os chunks", async () => {
+    const root = await makeTempRoot();
+    const fetchedUrls: string[] = [];
+    const probeInputs: string[] = [];
+    const service = new StreamerService(
+      {
+        inspectHls: async () => {
+          throw new Error("HLS inspect should not be used for DASH clone");
+        },
+        inspectDash: async ({ url }) =>
+          makeDashInspectResult({
+            url,
+            finalUrl: url,
+            mediaPresentationDurationSeconds: 12,
+            representations: [
+              {
+                id: "v1",
+                adaptationSetId: "video",
+                contentType: "video",
+                mimeType: "video/mp4",
+                codecs: "avc1.4d401f",
+                bandwidth: 2_000_000,
+                width: 1280,
+                height: 720,
+                frameRate: 24,
+                baseUrl: "https://cdn.example.com/video/",
+                initialization: {
+                  uri: "init-v1.mp4",
+                  url: "https://cdn.example.com/video/init-v1.mp4",
+                },
+                segments: [
+                  { uri: "seg-1.m4s", url: "https://cdn.example.com/video/seg-1.m4s", duration: 4, number: 1 },
+                  { uri: "seg-2.m4s", url: "https://cdn.example.com/video/seg-2.m4s", duration: 4, number: 2 },
+                  { uri: "seg-3.m4s", url: "https://cdn.example.com/video/seg-3.m4s", duration: 4, number: 3 },
+                ],
+              },
+              {
+                id: "a1",
+                adaptationSetId: "audio",
+                contentType: "audio",
+                mimeType: "audio/mp4",
+                codecs: "mp4a.40.2",
+                bandwidth: 128_000,
+                audioSamplingRate: 48_000,
+                lang: "pt",
+                baseUrl: "https://cdn.example.com/audio/",
+                initialization: {
+                  uri: "init-a1.mp4",
+                  url: "https://cdn.example.com/audio/init-a1.mp4",
+                },
+                segments: [
+                  { uri: "aud-1.m4s", url: "https://cdn.example.com/audio/aud-1.m4s", duration: 4, number: 1 },
+                  { uri: "aud-2.m4s", url: "https://cdn.example.com/audio/aud-2.m4s", duration: 4, number: 2 },
+                  { uri: "aud-3.m4s", url: "https://cdn.example.com/audio/aud-3.m4s", duration: 4, number: 3 },
+                ],
+              },
+            ],
+        }),
+        probe: async ({ input, streamSelector }) => {
+          probeInputs.push(input);
+          const probeBytes = await fs.readFile(input, "utf-8");
+          const isSecondSegment = probeBytes.includes("seg-2.m4s") || probeBytes.includes("aud-2.m4s");
+          const firstPtsTime = isSecondSegment ? 4 : 0;
+          return {
+            ok: true,
+            input,
+            timeoutMs: 5000,
+            format: { duration: "4.000" },
+            streams: [
+              {
+                codec_type: streamSelector === "a:0" ? "audio" : "video",
+                codec_name: streamSelector === "a:0" ? "aac" : "h264",
+              },
+            ],
+            timeline: {
+              streamSelector: streamSelector ?? "v:0",
+              sampleKind: streamSelector === "a:0" ? "packets" : "frames",
+              sampleCount: 10,
+              firstPtsTime,
+              lastPtsTime: firstPtsTime + 3.979,
+              lastSampleDurationTime: 0.021,
+              keyframeCount: streamSelector === "a:0" ? undefined : 1,
+              startsWithKeyframe: streamSelector === "a:0" ? undefined : true,
+              maxKeyframeGapSeconds: streamSelector === "a:0" ? undefined : 1,
+            },
+            errors: [],
+          };
+        },
+      },
+      root,
+      async (input) => {
+        fetchedUrls.push(String(input));
+        return new Response(new TextEncoder().encode(String(input)));
+      },
+    );
+    await service.init();
+
+    const result = await service.cloneDash({
+      sessionKey: "test",
+      url: "https://example.com/manifest.mpd",
+      durationSeconds: 8,
+      originId: "dash-origin",
+    });
+
+    expect(result.protocol).toBe("dash");
+    expect(result.playbackPath).toBe("/index.mpd");
+    expect(result.variantCount).toBe(1);
+    expect(result.renditionCount).toBe(1);
+    expect(result.segmentCount).toBe(2);
+    expect(result.selectedVariant?.resolution).toBe("1280x720");
+    expect(result.renditions[0]).toMatchObject({
+      type: "AUDIO",
+      id: "a1",
+      language: "pt",
+      codecs: "mp4a.40.2",
+    });
+    expect(fetchedUrls).toEqual([
+      "https://cdn.example.com/video/init-v1.mp4",
+      "https://cdn.example.com/video/seg-1.m4s",
+      "https://cdn.example.com/video/seg-2.m4s",
+      "https://cdn.example.com/audio/init-a1.mp4",
+      "https://cdn.example.com/audio/aud-1.m4s",
+      "https://cdn.example.com/audio/aud-2.m4s",
+    ]);
+
+    const mpd = await fs.readFile(result.manifestPath, "utf-8");
+    expect(mpd).toContain("urn:mpeg:dash:schema:mpd:2011");
+    expect(mpd).toContain('variants/000-video-1280x720-v1-2000000/init/00000-init-v1.mp4');
+    expect(mpd).toContain('variants/000-video-1280x720-v1-2000000/segments/00000-seg-1.m4s');
+    expect(mpd).toContain('contentType="audio"');
+    expect(mpd).toContain('audio/000-audio-a1-128000/init/00000-init-a1.mp4');
+
+    const origin = await service.inspectOrigin(result.id);
+    expect(origin.protocol).toBe("dash");
+    const report = await service.analyzeOrigin(result.id, { full: true });
+    expect(report.sampledSegments).toBe(4);
+    expect(report.issues.filter((issue) => issue.code === "duration_delta_high")).toHaveLength(0);
+    expect(report.entries.map((entry) => entry.actualDurationSeconds)).toEqual([4, 4, 4, 4]);
+    expect(probeInputs.filter((input) => input.includes("kael-streamer-probe-"))).toHaveLength(4);
+    await expect(fs.access(probeInputs[0])).rejects.toThrow();
+
+    const handle = await service.serveOrigin(result.id);
+    try {
+      expect(handle.playbackUrl).toBe(`${handle.baseUrl}/index.mpd`);
+      const response = await fetch(handle.playbackUrl);
+      expect(response.headers.get("content-type")).toContain("application/dash+xml");
+      expect(await response.text()).toContain("<MPD");
+    } finally {
+      await handle.close();
+    }
   });
 
   it("serve o origin local com CORS", async () => {

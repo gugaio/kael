@@ -798,6 +798,9 @@ function makeFakeApp(): KaelApp {
       cloneHls: async () => {
         throw new Error("streamer clone not implemented in fake app");
       },
+      cloneDash: async () => {
+        throw new Error("streamer DASH clone not implemented in fake app");
+      },
       serveOrigin: async () => {
         throw new Error("streamer serve not implemented in fake app");
       },

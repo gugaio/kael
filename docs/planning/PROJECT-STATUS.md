@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-05-23**
+Ultima atualizacao: **2026-05-28**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,58 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-05-28 - Fase 23: Streamer por janela de segmentos
+
+Resumo:
+- `streamer clone` agora aceita `--start-segment <n>` e `--segment-count <n>` para continuar uma clonagem a partir de um indice original sem calcular offset temporal.
+- O clone autoajusta `maxSegments` para cobrir janelas como `200 + 50`, e os logs de progresso mostram `original=<n>` por chunk em download/retry/sucesso.
+- `streamer analyze` aceita os mesmos filtros por segmento original e mostra `original=<n>` no report textual.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/types.ts`
+- `src/cli/streamer-commands.ts`
+- `src/cli/streamer-output.ts`
+- `src/capabilities/video/inspect-service.ts`
+- `src/capabilities/video/streamer-service.test.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm test -- src/capabilities/video/streamer-service.test.ts`
+- [x] `npm run check`
+
+Pendencias:
+- Validar em stream real se os indices das variants/renditions externas permanecem alinhados quando a origem tem manifests inconsistentes.
+
+Proximo passo recomendado:
+- Rodar `./bin/kael streamer clone <url> --start-segment 200 --segment-count 50` no asset real e comparar os logs `original=200..249` com os chunks esperados.
+
+### 2026-05-26 - Fase 23: Streamer DASH baseline
+
+Resumo:
+- `streamer clone` agora suporta DASH por `.mpd` ou `--format dash`, com clone de Representations de video e audio/texto.
+- `inspectDash` parseia MPD VOD com `SegmentTemplate`, `SegmentTimeline`, `SegmentList` e `BaseURL`.
+- Origins DASH geram `index.mpd` local e preservam `inspect`, `serve`, `probe` e `analyze` sobre os chunks clonados.
+
+Arquivos-chave:
+- `src/capabilities/video/inspect-service.ts`
+- `src/capabilities/video/streamer-service.ts`
+- `src/cli/streamer-commands.ts`
+- `src/capabilities/video/streamer-service.test.ts`
+- `src/capabilities/video/inspect-service.test.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm test -- src/capabilities/video/inspect-service.test.ts src/capabilities/video/streamer-service.test.ts`
+- [x] `npm run check`
+
+Pendencias:
+- DASH live/dynamic MPD, DRM, byte range, `SegmentBase` e multiplos Periods complexos ainda fora do baseline.
+- `streamer live` segue exclusivo para origins HLS.
+
+Proximo passo recomendado:
+- Testar `./bin/kael streamer clone <url.mpd> --duration 60 --serve` com MPDs reais e calibrar compatibilidade Shaka/ExoPlayer/Tizen antes de ampliar o parser.
 
 ### 2026-05-23 - CLI enxuta por grupos de comandos
 

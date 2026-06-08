@@ -281,10 +281,16 @@ export type StreamWatchStatus = {
 export type StreamerCloneInput = {
   sessionKey: string;
   url: string;
+  /** Formato do manifesto de entrada. Auto usa a extensao da URL quando possivel. */
+  format?: "auto" | "hls" | "dash";
   /** Duração alvo em segundos. O clone inclui segmentos até cumulative >= alvo. */
   durationSeconds?: number;
   /** Offset aproximado em segundos para iniciar a janela clonada. */
   startSeconds?: number;
+  /** Indice zero-based do primeiro segmento original a clonar. */
+  startSegment?: number;
+  /** Quantidade exata de segmentos a clonar a partir da janela escolhida. */
+  segmentCount?: number;
   /** Para master playlists: aac-highest (default), highest, lowest ou índice zero-based da variant. */
   variant?: string;
   /** Quando true, clona todas as variants da master playlist e gera uma master local. */
@@ -308,6 +314,8 @@ export type StreamerCloneProgressEvent =
       url: string;
       durationSeconds: number;
       startSeconds: number;
+      startSegment?: number;
+      segmentCount?: number;
       allVariants: boolean;
     }
   | {
@@ -317,7 +325,7 @@ export type StreamerCloneProgressEvent =
   | {
       type: "manifest_ready";
       url: string;
-      playlistType: "master" | "media" | "unknown";
+      playlistType: "master" | "media" | "unknown" | "dash";
       variantCount: number;
       segmentCount: number;
     }
@@ -342,6 +350,7 @@ export type StreamerCloneProgressEvent =
       variantCount: number;
       segmentIndex: number;
       segmentCount: number;
+      originalSegmentIndex?: number;
       url: string;
       duration?: number;
     }
@@ -351,6 +360,7 @@ export type StreamerCloneProgressEvent =
       variantCount: number;
       segmentIndex: number;
       segmentCount: number;
+      originalSegmentIndex?: number;
       attempt: number;
       maxAttempts: number;
       error: string;
@@ -361,6 +371,7 @@ export type StreamerCloneProgressEvent =
       variantCount: number;
       segmentIndex: number;
       segmentCount: number;
+      originalSegmentIndex?: number;
       localUri: string;
       bytes: number;
       cumulativeBytes: number;
@@ -408,8 +419,11 @@ export type StreamerClonedVariant = {
   bytes: number;
   maps: StreamerClonedMap[];
   variant?: {
+    id?: string;
     uri: string;
     url: string;
+    contentType?: string;
+    mimeType?: string;
     bandwidth?: number;
     averageBandwidth?: number;
     resolution?: string;
@@ -424,9 +438,14 @@ export type StreamerClonedVariant = {
 
 export type StreamerClonedRendition = {
   type: string;
+  id?: string;
   groupId?: string;
   name?: string;
   language?: string;
+  codecs?: string;
+  mimeType?: string;
+  bandwidth?: number;
+  audioSamplingRate?: number;
   default?: boolean;
   autoselect?: boolean;
   forced?: boolean;
@@ -449,6 +468,7 @@ export type StreamerClonedRendition = {
 export type StreamerCloneResult = {
   id: string;
   schemaVersion: number;
+  protocol?: "hls" | "dash";
   derivedFrom?: string;
   faults?: StreamerOriginFault[];
   sessionKey: string;
@@ -460,6 +480,8 @@ export type StreamerCloneResult = {
   playbackPath: string;
   requestedDurationSeconds: number;
   requestedStartSeconds?: number;
+  requestedStartSegment?: number;
+  requestedSegmentCount?: number;
   cumulativeDurationSeconds: number;
   reachedTargetDuration: boolean;
   targetDuration: number;
@@ -469,8 +491,11 @@ export type StreamerCloneResult = {
   bytes: number;
   allVariants: boolean;
   selectedVariant?: {
+    id?: string;
     uri: string;
     url: string;
+    contentType?: string;
+    mimeType?: string;
     bandwidth?: number;
     averageBandwidth?: number;
     resolution?: string;
@@ -560,6 +585,10 @@ export type StreamerAnalyzeOptions = {
   maxMediaPlaylists?: number;
   /** Quantidade maxima de segmentos amostrados por playlist (first/middle/last). */
   maxSegmentsPerPlaylist?: number;
+  /** Indice zero-based do primeiro segmento original a analisar. */
+  startSegment?: number;
+  /** Quantidade de segmentos originais a analisar a partir de startSegment. */
+  segmentCount?: number;
   /** Analisa todos os segmentos das playlists consideradas. */
   full?: boolean;
 };
@@ -570,6 +599,7 @@ export type StreamerSegmentAnalysisEntry = {
   kind: "variant" | "rendition";
   mediaIndex: number;
   segmentIndex: number;
+  originalSegmentIndex?: number;
   type: "AUDIO" | "SUBTITLES" | "VIDEO";
   label: string;
   localPath: string;
@@ -667,6 +697,7 @@ export type StreamerOriginAnalysisReport = {
 export type StreamerOriginSummary = {
   id: string;
   schemaVersion: number;
+  protocol?: "hls" | "dash";
   derivedFrom?: string;
   faults: StreamerOriginFault[];
   createdAt: string;
@@ -676,6 +707,8 @@ export type StreamerOriginSummary = {
   playbackPath: string;
   requestedDurationSeconds: number;
   requestedStartSeconds?: number;
+  requestedStartSegment?: number;
+  requestedSegmentCount?: number;
   cumulativeDurationSeconds: number;
   reachedTargetDuration: boolean;
   targetDuration: number;

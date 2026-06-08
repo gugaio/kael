@@ -48,7 +48,7 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 20: em andamento (video intelligence platform: playback analysis + generation/artifacts base).
 - Fase 21: concluida (Clark runtime satelite incubado em `apps/clark` com daemon, protocolo WS com handshake + dispatch remoto baseline, capabilities MVP e bindings explicitos para MCP HTTP).
 - Fase 22: em andamento (stream watch: monitoramento continuo HLS + deteccao de discontinuities, gaps de audio, manifest stale e anomalias de duracao).
-- Fase 23: em andamento (streamer: clone HLS local, ladder completa opcional, audio externo, live origin e gestao de origins via CLI).
+- Fase 23: em andamento (streamer: clone HLS/DASH local, ladder HLS completa opcional, audio externo, live origin HLS e gestao de origins via CLI).
 
 ## Estudos e referencias tecnicas
 
