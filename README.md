@@ -1,15 +1,15 @@
 # Kael
 
-Kael e um super agente local para **video, automacao e execucao confiavel de pipelines**.
+Kael e um super agente local para **vídeo, automação e execução confiável de pipelines**.
 
-Projeto focado em runtime real: jobs assincronos, ferramentas operacionais, memoria persistente, pesquisa web com evidencias e integracao de canais como Discord e Email.
+Projeto focado em runtime real: jobs assincronos, ferramentas operacionais, memória persistente, pesquisa web com evidências e integração de canais como Discord e Email.
 
-## Por Que O Kael Chama Atencao
+## Detalhes sobre o projeto
 
 - **Runtime local de verdade**: nao e apenas chat; executa comandos, processos e jobs.
 - **Pipeline de video operacional**: transcode, HLS, capture e probe com controle de seguranca.
-- **Memoria util no dia a dia**: `memory_search`, `memory_get`, `memory_write` com persistencia local.
-- **Pesquisa web orientada a evidencia**: `web_search`, `web_fetch`, `web_research`.
+- **Memória útil no dia a dia**: `memory_search`, `memory_get`, `memory_write` com persistencia local.
+- **Pesquisa web orientada a evidência**: `web_search`, `web_fetch`, `web_research`.
 - **Arquitetura evolutiva por fases**: documentacao e status de projeto atualizados continuamente.
 
 ## Stack
