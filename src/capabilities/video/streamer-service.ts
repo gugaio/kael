@@ -2,8 +2,6 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { errorMessage, isAbortError } from "../../infra/errors.js";
-import { clampInteger, clampNumber } from "../../infra/numbers.js";
 import type { VideoDashInspectResult, VideoHlsInspectResult, VideoInspectToolService } from "./inspect-service.js";
 import { isBrowserSafeHlsVariant } from "./streamer-diagnostics.js";
 import { buildLocalDashMpd } from "./streamer/dash-manifests.js";
@@ -14,6 +12,16 @@ import {
 import { sanitizeOriginId, StreamerOriginStore } from "./streamer/origin-store.js";
 import { serveLiveOrigin, serveOrigin } from "./streamer/origin-server.js";
 import { mutateOrigin } from "./streamer/mutation.js";
+import {
+  normalizeAnalyzeOptions,
+  normalizeCloneOptions,
+  normalizeProbeOptions,
+} from "./streamer/options.js";
+import { SegmentDownloader } from "./streamer/segment-downloader.js";
+import {
+  selectDashSegmentWindow,
+  selectHlsSegmentWindow,
+} from "./streamer/segment-window.js";
 import type {
   StreamerAnalyzeOptions,
   StreamerCloneInput,
@@ -65,27 +73,12 @@ type StreamerAnalyzeCandidate = StreamerProbeCandidate & {
   segments: StreamerClonedSegment[];
 };
 type ProgressEmitter = (event: StreamerCloneProgressEvent) => void;
-type SegmentWindowRequest = {
-  startSeconds: number;
-  durationSeconds: number;
-  startSegment?: number;
-  segmentCount?: number;
-};
 
 const RENDITION_KIND_CONFIG: Record<RenditionKind, "audio" | "subtitles"> = {
   AUDIO: "audio",
   SUBTITLES: "subtitles",
 };
 
-const DEFAULT_DURATION_SECONDS = 60;
-const DEFAULT_TIMEOUT_MS = 15_000;
-const DEFAULT_SEGMENT_TIMEOUT_MS = 60_000;
-const DEFAULT_SEGMENT_RETRIES = 2;
-const DEFAULT_MAX_SEGMENTS = 200;
-const MAX_CLONE_INSPECT_SEGMENTS = 10_000;
-const DEFAULT_PROBE_TIMEOUT_MS = 10_000;
-const DEFAULT_MAX_PROBE_MEDIA_PLAYLISTS = 4;
-const DEFAULT_MAX_ANALYZE_SEGMENTS_PER_PLAYLIST = 3;
 const DURATION_DELTA_WARN_SECONDS = 0.150;
 const BOUNDARY_DELTA_WARN_SECONDS = 0.250;
 const AUDIO_TIMESTAMP_DELTA_WARN_SECONDS = 0.050;
@@ -96,13 +89,15 @@ const STREAMER_ORIGIN_SCHEMA_VERSION = 2;
 
 export class StreamerService {
   private readonly originStore: StreamerOriginStore;
+  private readonly downloader: SegmentDownloader;
 
   constructor(
     private readonly inspect: HlsInspectLike,
     private readonly rootDir: string,
-    private readonly fetchImpl: FetchLike = fetch,
+    fetchImpl: FetchLike = fetch,
   ) {
     this.originStore = new StreamerOriginStore(rootDir);
+    this.downloader = new SegmentDownloader(fetchImpl);
   }
 
   async init(): Promise<void> {
@@ -127,15 +122,7 @@ export class StreamerService {
     }
 
     const clone = await this.originStore.load(originId);
-    const timeoutMs = clampNumber(options.timeoutMs, DEFAULT_PROBE_TIMEOUT_MS, 1_000, 120_000);
-    const maxMediaPlaylists = Math.floor(
-      clampNumber(
-        options.maxMediaPlaylists,
-        DEFAULT_MAX_PROBE_MEDIA_PLAYLISTS,
-        1,
-        32,
-      ),
-    );
+    const { timeoutMs, maxMediaPlaylists } = normalizeProbeOptions(options);
     const candidates = buildProbeCandidates(clone).slice(0, maxMediaPlaylists);
     const entries: StreamerOriginProbeReport["entries"] = [];
 
@@ -174,27 +161,13 @@ export class StreamerService {
     }
 
     const clone = await this.originStore.load(originId);
-    const timeoutMs = clampNumber(options.timeoutMs, DEFAULT_PROBE_TIMEOUT_MS, 1_000, 120_000);
-    const startSegment = normalizeOptionalNonNegativeInteger(options.startSegment, MAX_CLONE_INSPECT_SEGMENTS - 1);
-    const segmentCount = normalizeOptionalPositiveInteger(options.segmentCount, MAX_CLONE_INSPECT_SEGMENTS);
-    const maxMediaPlaylists = Math.floor(
-      clampNumber(
-        options.maxMediaPlaylists,
-        DEFAULT_MAX_PROBE_MEDIA_PLAYLISTS,
-        1,
-        32,
-      ),
-    );
-    const maxSegmentsPerPlaylist = options.full
-      ? Number.POSITIVE_INFINITY
-      : Math.floor(
-          clampNumber(
-            options.maxSegmentsPerPlaylist,
-            DEFAULT_MAX_ANALYZE_SEGMENTS_PER_PLAYLIST,
-            1,
-            8,
-          ),
-        );
+    const {
+      timeoutMs,
+      startSegment,
+      segmentCount,
+      maxMediaPlaylists,
+      maxSegmentsPerPlaylist,
+    } = normalizeAnalyzeOptions(options);
     const candidates = buildAnalyzeCandidates(clone).slice(0, maxMediaPlaylists);
     const entries: StreamerOriginAnalysisReport["entries"] = [];
 
@@ -278,24 +251,16 @@ export class StreamerService {
   }
 
   async cloneHls(input: StreamerCloneInput): Promise<StreamerCloneResult> {
-    const durationSeconds = clampNumber(
-      input.durationSeconds,
-      DEFAULT_DURATION_SECONDS,
-      1,
-      60 * 60,
-    );
-    const startSeconds = clampNumber(input.startSeconds, 0, 0, 24 * 60 * 60);
-    const startSegment = normalizeOptionalNonNegativeInteger(input.startSegment, MAX_CLONE_INSPECT_SEGMENTS - 1);
-    const segmentCount = normalizeOptionalPositiveInteger(input.segmentCount, MAX_CLONE_INSPECT_SEGMENTS);
-    const timeoutMs = clampNumber(input.timeoutMs, DEFAULT_TIMEOUT_MS, 1_000, 60_000);
-    const segmentTimeoutMs = clampNumber(
-      input.segmentTimeoutMs,
-      DEFAULT_SEGMENT_TIMEOUT_MS,
-      1_000,
-      5 * 60_000,
-    );
-    const segmentRetries = clampInteger(input.segmentRetries, DEFAULT_SEGMENT_RETRIES, 0, 5);
-    const maxSegments = normalizeCloneMaxSegments(input.maxSegments, startSegment, segmentCount);
+    const {
+      durationSeconds,
+      startSeconds,
+      startSegment,
+      segmentCount,
+      timeoutMs,
+      segmentTimeoutMs,
+      segmentRetries,
+      maxSegments,
+    } = normalizeCloneOptions(input);
     const id = sanitizeOriginId(input.originId?.trim() || randomUUID());
     const originDir = path.join(this.rootDir, id);
     const emit = input.onProgress ?? (() => undefined);
@@ -516,24 +481,16 @@ export class StreamerService {
       throw new Error("streamer DASH clone requires inspectDash support in VideoInspectToolService");
     }
 
-    const durationSeconds = clampNumber(
-      input.durationSeconds,
-      DEFAULT_DURATION_SECONDS,
-      1,
-      60 * 60,
-    );
-    const startSeconds = clampNumber(input.startSeconds, 0, 0, 24 * 60 * 60);
-    const startSegment = normalizeOptionalNonNegativeInteger(input.startSegment, MAX_CLONE_INSPECT_SEGMENTS - 1);
-    const segmentCount = normalizeOptionalPositiveInteger(input.segmentCount, MAX_CLONE_INSPECT_SEGMENTS);
-    const timeoutMs = clampNumber(input.timeoutMs, DEFAULT_TIMEOUT_MS, 1_000, 60_000);
-    const segmentTimeoutMs = clampNumber(
-      input.segmentTimeoutMs,
-      DEFAULT_SEGMENT_TIMEOUT_MS,
-      1_000,
-      5 * 60_000,
-    );
-    const segmentRetries = clampInteger(input.segmentRetries, DEFAULT_SEGMENT_RETRIES, 0, 5);
-    const maxSegments = normalizeCloneMaxSegments(input.maxSegments, startSegment, segmentCount);
+    const {
+      durationSeconds,
+      startSeconds,
+      startSegment,
+      segmentCount,
+      timeoutMs,
+      segmentTimeoutMs,
+      segmentRetries,
+      maxSegments,
+    } = normalizeCloneOptions(input);
     const id = sanitizeOriginId(input.originId?.trim() || randomUUID());
     const originDir = path.join(this.rootDir, id);
     const emit = input.onProgress ?? (() => undefined);
@@ -814,7 +771,7 @@ export class StreamerService {
     const segmentsDir = path.join(variantDir, "segments");
     await fs.mkdir(segmentsDir, { recursive: true });
 
-    const selectedSegments = selectSegmentsForWindow(params.inspected, {
+    const selectedSegments = selectHlsSegmentWindow(params.inspected, {
       startSeconds: params.startSeconds,
       durationSeconds: params.durationSeconds,
       startSegment: params.startSegment,
@@ -852,7 +809,7 @@ export class StreamerService {
 
       const localUri = `init/${buildSegmentFileName(clonedMapsBySource.size, map.uri)}`;
       await fs.mkdir(path.dirname(path.join(variantDir, localUri)), { recursive: true });
-      const bytes = await this.fetchBytesWithRetries({
+      const bytes = await this.downloader.fetch({
         url: map.url,
         timeoutMs: params.segmentTimeoutMs,
         retries: params.segmentRetries,
@@ -888,7 +845,7 @@ export class StreamerService {
         url: selectedSegment.segment.url,
         duration: selectedSegment.segment.duration,
       });
-      const bytes = await this.fetchBytesWithRetries({
+      const bytes = await this.downloader.fetch({
         url: selectedSegment.segment.url,
         timeoutMs: params.segmentTimeoutMs,
         retries: params.segmentRetries,
@@ -975,7 +932,7 @@ export class StreamerService {
     const segmentsDir = path.join(representationDir, "segments");
     await fs.mkdir(segmentsDir, { recursive: true });
 
-    const selectedSegments = selectDashSegmentsForWindow(
+    const selectedSegments = selectDashSegmentWindow(
       params.representation,
       {
         startSeconds: params.startSeconds,
@@ -1004,7 +961,7 @@ export class StreamerService {
     if (params.representation.initialization) {
       const localUri = `init/${buildSegmentFileName(0, params.representation.initialization.uri)}`;
       await fs.mkdir(path.dirname(path.join(representationDir, localUri)), { recursive: true });
-      const bytes = await this.fetchBytesWithRetries({
+      const bytes = await this.downloader.fetch({
         url: params.representation.initialization.url,
         timeoutMs: params.segmentTimeoutMs,
         retries: params.segmentRetries,
@@ -1040,7 +997,7 @@ export class StreamerService {
         url: selectedSegment.segment.url,
         duration: selectedSegment.segment.duration,
       });
-      const bytes = await this.fetchBytesWithRetries({
+      const bytes = await this.downloader.fetch({
         url: selectedSegment.segment.url,
         timeoutMs: params.segmentTimeoutMs,
         retries: params.segmentRetries,
@@ -1192,102 +1149,6 @@ export class StreamerService {
     return cloned;
   }
 
-  private async fetchBytes(url: string, timeoutMs: number): Promise<Uint8Array> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await this.fetchImpl(url, {
-        signal: controller.signal,
-        redirect: "follow",
-        headers: { "user-agent": "Kael/0.1 (+streamer)" },
-      });
-      if (!response.ok) {
-        throw new Error(`failed to download segment ${url}: HTTP ${response.status}`);
-      }
-      return new Uint8Array(await response.arrayBuffer());
-    } catch (error) {
-      if (isAbortError(error)) {
-        throw new Error(`segment download timed out after ${timeoutMs}ms: ${url}`);
-      }
-      throw error;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  private async fetchBytesWithRetries(params: {
-    url: string;
-    timeoutMs: number;
-    retries: number;
-    progress: ProgressEmitter;
-    variantIndex: number;
-    variantCount: number;
-    segmentIndex: number;
-    segmentCount: number;
-    originalSegmentIndex?: number;
-  }): Promise<Uint8Array> {
-    const maxAttempts = params.retries + 1;
-    let lastError: unknown;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-      try {
-        return await this.fetchBytes(params.url, params.timeoutMs);
-      } catch (error) {
-        lastError = error;
-        if (attempt >= maxAttempts) {
-          break;
-        }
-        params.progress({
-          type: "segment_download_retry",
-          variantIndex: params.variantIndex,
-          variantCount: params.variantCount,
-          segmentIndex: params.segmentIndex,
-          segmentCount: params.segmentCount,
-          originalSegmentIndex: params.originalSegmentIndex,
-          attempt: attempt + 1,
-          maxAttempts,
-          error: errorMessage(error),
-        });
-      }
-    }
-
-    throw new Error(
-      `failed to download segment after ${maxAttempts} attempt(s): ${errorMessage(lastError)}`,
-    );
-  }
-
-}
-
-function normalizeOptionalNonNegativeInteger(value: number | undefined, max: number): number | undefined {
-  if (!Number.isFinite(value) || value === undefined) {
-    return undefined;
-  }
-  return Math.floor(Math.max(0, Math.min(max, value)));
-}
-
-function normalizeOptionalPositiveInteger(value: number | undefined, max: number): number | undefined {
-  if (!Number.isFinite(value) || value === undefined) {
-    return undefined;
-  }
-  return Math.floor(Math.max(1, Math.min(max, value)));
-}
-
-function normalizeCloneMaxSegments(
-  requestedMaxSegments: number | undefined,
-  startSegment: number | undefined,
-  segmentCount: number | undefined,
-): number {
-  const requested = Math.floor(
-    clampNumber(requestedMaxSegments, DEFAULT_MAX_SEGMENTS, 1, MAX_CLONE_INSPECT_SEGMENTS),
-  );
-  const requiredForSegmentWindow =
-    startSegment !== undefined
-      ? startSegment + (segmentCount ?? DEFAULT_MAX_SEGMENTS)
-      : segmentCount;
-  if (requiredForSegmentWindow === undefined) {
-    return requested;
-  }
-  return Math.min(MAX_CLONE_INSPECT_SEGMENTS, Math.max(requested, requiredForSegmentWindow));
 }
 
 function selectVariant(root: VideoHlsInspectResult, selector: string | undefined): VideoHlsInspectResult["variants"][number] {
@@ -1513,128 +1374,6 @@ function formatRenditionLabel(rendition: RenditionSource): string {
     rendition.channels ? `${rendition.channels}ch` : undefined,
   ].filter((value): value is string => Boolean(value));
   return parts.length > 0 ? parts.join(" | ") : rendition.uri ?? "rendition";
-}
-
-function selectSegmentsForWindow(
-  inspected: VideoHlsInspectResult,
-  request: SegmentWindowRequest,
-): Array<{
-  index: number;
-  segment: VideoHlsInspectResult["segments"][number];
-  timelineStartSeconds: number;
-  timelineEndSeconds: number;
-}> {
-  const out: Array<{
-    index: number;
-    segment: VideoHlsInspectResult["segments"][number];
-    timelineStartSeconds: number;
-    timelineEndSeconds: number;
-  }> = [];
-  let cumulativeDuration = 0;
-  let firstIncludedTimelineStartSeconds: number | undefined;
-
-  for (let index = 0; index < inspected.segments.length; index += 1) {
-    const segment = inspected.segments[index];
-    const segmentDuration = segment.duration ?? inspected.targetDuration ?? 0;
-    const timelineStartSeconds = cumulativeDuration;
-    const timelineEndSeconds = cumulativeDuration + segmentDuration;
-    cumulativeDuration = timelineEndSeconds;
-
-    if (request.startSegment !== undefined && index < request.startSegment) {
-      continue;
-    }
-    if (request.startSegment === undefined && timelineEndSeconds <= request.startSeconds) {
-      continue;
-    }
-
-    if (firstIncludedTimelineStartSeconds === undefined) {
-      firstIncludedTimelineStartSeconds = timelineStartSeconds;
-    }
-    const windowEndSeconds =
-      (request.startSegment === undefined ? request.startSeconds : firstIncludedTimelineStartSeconds) +
-      request.durationSeconds;
-    if (request.segmentCount !== undefined && out.length >= request.segmentCount) {
-      break;
-    }
-    if (
-      request.segmentCount === undefined &&
-      timelineStartSeconds >= windowEndSeconds &&
-      out.length > 0
-    ) {
-      break;
-    }
-
-    out.push({ index, segment, timelineStartSeconds, timelineEndSeconds });
-    if (
-      request.segmentCount === undefined &&
-      timelineEndSeconds >= windowEndSeconds
-    ) {
-      break;
-    }
-  }
-
-  return out;
-}
-
-function selectDashSegmentsForWindow(
-  representation: DashRepresentationSource,
-  request: SegmentWindowRequest,
-): Array<{
-  index: number;
-  segment: DashRepresentationSource["segments"][number];
-  timelineStartSeconds: number;
-  timelineEndSeconds: number;
-}> {
-  const out: Array<{
-    index: number;
-    segment: DashRepresentationSource["segments"][number];
-    timelineStartSeconds: number;
-    timelineEndSeconds: number;
-  }> = [];
-  let cumulativeDuration = 0;
-  let firstIncludedTimelineStartSeconds: number | undefined;
-
-  for (let index = 0; index < representation.segments.length; index += 1) {
-    const segment = representation.segments[index];
-    const segmentDuration = segment.duration ?? 0;
-    const timelineStartSeconds = cumulativeDuration;
-    const timelineEndSeconds = cumulativeDuration + segmentDuration;
-    cumulativeDuration = timelineEndSeconds;
-
-    if (request.startSegment !== undefined && index < request.startSegment) {
-      continue;
-    }
-    if (request.startSegment === undefined && timelineEndSeconds <= request.startSeconds) {
-      continue;
-    }
-
-    if (firstIncludedTimelineStartSeconds === undefined) {
-      firstIncludedTimelineStartSeconds = timelineStartSeconds;
-    }
-    const windowEndSeconds =
-      (request.startSegment === undefined ? request.startSeconds : firstIncludedTimelineStartSeconds) +
-      request.durationSeconds;
-    if (request.segmentCount !== undefined && out.length >= request.segmentCount) {
-      break;
-    }
-    if (
-      request.segmentCount === undefined &&
-      timelineStartSeconds >= windowEndSeconds &&
-      out.length > 0
-    ) {
-      break;
-    }
-
-    out.push({ index, segment, timelineStartSeconds, timelineEndSeconds });
-    if (
-      request.segmentCount === undefined &&
-      timelineEndSeconds >= windowEndSeconds
-    ) {
-      break;
-    }
-  }
-
-  return out;
 }
 
 function deriveDashTargetDuration(

@@ -140,6 +140,9 @@ src/capabilities/video/
     mutation.ts             # fault injection e segment swap
     hls-manifests.ts        # serializacao de manifests HLS locais
     dash-manifests.ts       # serializacao de MPDs DASH locais
+    options.ts              # normalizacao compartilhada de clone/probe/analyze
+    segment-downloader.ts   # download de chunks com timeout e retry
+    segment-window.ts       # selecao temporal/por indice para HLS e DASH
 
 src/cli/index.ts            # bootstrap da CLI e registro dos grupos de comandos
 src/cli/streamer-commands.ts # namespace kael streamer

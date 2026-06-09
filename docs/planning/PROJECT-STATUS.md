@@ -43,9 +43,13 @@ Resumo:
 - `StreamerService` preserva a API publica, mas delega persistencia de origins,
   servidor VOD/live e mutation para modulos focados.
 - Builders de manifests HLS e DASH foram separados por protocolo.
+- Normalizacao de opcoes de clone/probe/analyze foi centralizada e compartilhada
+  pelos fluxos HLS e DASH.
+- Download de segmentos com timeout/retry e selecao de janelas HLS/DASH foram
+  isolados em modulos proprios.
 - Helpers genericos de numeros, erros e filesystem agora ficam em `src/infra`
   para reutilizacao por outras capabilities.
-- O arquivo principal caiu de 3.547 para 2.383 linhas sem mudar contratos,
+- O arquivo principal caiu de 3.547 para 2.119 linhas sem mudar contratos,
   schema de `origin.json`, rotas locais ou comportamento da CLI.
 
 Arquivos-chave:
@@ -55,6 +59,9 @@ Arquivos-chave:
 - `src/capabilities/video/streamer/mutation.ts`
 - `src/capabilities/video/streamer/hls-manifests.ts`
 - `src/capabilities/video/streamer/dash-manifests.ts`
+- `src/capabilities/video/streamer/options.ts`
+- `src/capabilities/video/streamer/segment-downloader.ts`
+- `src/capabilities/video/streamer/segment-window.ts`
 - `src/infra/numbers.ts`
 - `src/infra/errors.ts`
 - `src/infra/fs.ts`
