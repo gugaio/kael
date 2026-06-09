@@ -131,9 +131,15 @@ src/capabilities/video/
   inspect-service.ts        # parsing HLS/DASH usado pelo streamer
   streamer-diagnostics.ts   # diagnostico de codecs/browser para origins clonados
   streamer-report-html.ts   # render HTML estatico do analyze
-  streamer-service.ts       # clone HLS/DASH + origin HTTP local
+  streamer-service.ts       # fachada publica + clone/probe/analyze
   streamer-service.test.ts  # testes unitarios/integracao leve
   types.ts                  # contratos Streamer*
+  streamer/
+    origin-store.ts         # persistencia e gestao de origin.json
+    origin-server.ts        # servidores HTTP VOD e live virtual
+    mutation.ts             # fault injection e segment swap
+    hls-manifests.ts        # serializacao de manifests HLS locais
+    dash-manifests.ts       # serializacao de MPDs DASH locais
 
 src/cli/index.ts            # bootstrap da CLI e registro dos grupos de comandos
 src/cli/streamer-commands.ts # namespace kael streamer

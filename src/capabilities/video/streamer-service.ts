@@ -1,12 +1,19 @@
 import { randomUUID } from "node:crypto";
-import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
-import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import type { AddressInfo } from "node:net";
+import { errorMessage, isAbortError } from "../../infra/errors.js";
+import { clampInteger, clampNumber } from "../../infra/numbers.js";
 import type { VideoDashInspectResult, VideoHlsInspectResult, VideoInspectToolService } from "./inspect-service.js";
 import { isBrowserSafeHlsVariant } from "./streamer-diagnostics.js";
+import { buildLocalDashMpd } from "./streamer/dash-manifests.js";
+import {
+  buildLocalMasterPlaylist,
+  buildLocalMediaPlaylist,
+} from "./streamer/hls-manifests.js";
+import { sanitizeOriginId, StreamerOriginStore } from "./streamer/origin-store.js";
+import { serveLiveOrigin, serveOrigin } from "./streamer/origin-server.js";
+import { mutateOrigin } from "./streamer/mutation.js";
 import type {
   StreamerAnalyzeOptions,
   StreamerCloneInput,
@@ -22,7 +29,6 @@ import type {
   StreamerMediaAnalysisSummary,
   StreamerMutateInput,
   StreamerMutateResult,
-  StreamerOriginFault,
   StreamerOriginAnalysisReport,
   StreamerOriginProbeReport,
   StreamerOriginSummary,
@@ -47,12 +53,6 @@ type VariantSource = NonNullable<StreamerClonedVariant["variant"]>;
 type RenditionSource = VideoHlsInspectResult["renditions"][number];
 type DashRepresentationSource = VideoDashInspectResult["representations"][number];
 type RenditionKind = "AUDIO" | "SUBTITLES";
-type RenditionRef = {
-  kind: RenditionKind;
-  routeIndex: number;
-  globalIndex: number;
-  rendition: StreamerClonedRendition;
-};
 type StreamerProbeCandidate = {
   kind: "variant" | "rendition";
   index: number;
@@ -64,11 +64,6 @@ type StreamerAnalyzeCandidate = StreamerProbeCandidate & {
   rootPath: string;
   segments: StreamerClonedSegment[];
 };
-type ClonedMediaSource = {
-  localUri: string;
-  targetDuration: number;
-  segments: StreamerClonedSegment[];
-};
 type ProgressEmitter = (event: StreamerCloneProgressEvent) => void;
 type SegmentWindowRequest = {
   startSeconds: number;
@@ -77,15 +72,9 @@ type SegmentWindowRequest = {
   segmentCount?: number;
 };
 
-const RENDITION_KIND_CONFIG: Record<RenditionKind, { dir: "audio" | "subtitles"; route: "audio" | "subtitles" }> = {
-  AUDIO: {
-    dir: "audio",
-    route: "audio",
-  },
-  SUBTITLES: {
-    dir: "subtitles",
-    route: "subtitles",
-  },
+const RENDITION_KIND_CONFIG: Record<RenditionKind, "audio" | "subtitles"> = {
+  AUDIO: "audio",
+  SUBTITLES: "subtitles",
 };
 
 const DEFAULT_DURATION_SECONDS = 60;
@@ -103,113 +92,33 @@ const AUDIO_TIMESTAMP_DELTA_WARN_SECONDS = 0.050;
 const AV_TIMELINE_DRIFT_WARN_SECONDS = 0.250;
 const MAX_AV_TIMELINE_DRIFT_WINDOWS = 20;
 const GOP_GAP_WARN_SECONDS = 3.000;
-const DEFAULT_LIVE_WINDOW_SIZE = 5;
-const DEFAULT_INITIAL_MEDIA_SEQUENCE = 100_000;
 const STREAMER_ORIGIN_SCHEMA_VERSION = 2;
 
 export class StreamerService {
+  private readonly originStore: StreamerOriginStore;
+
   constructor(
     private readonly inspect: HlsInspectLike,
     private readonly rootDir: string,
     private readonly fetchImpl: FetchLike = fetch,
-  ) {}
+  ) {
+    this.originStore = new StreamerOriginStore(rootDir);
+  }
 
   async init(): Promise<void> {
-    await fs.mkdir(this.rootDir, { recursive: true });
+    await this.originStore.init();
   }
 
   async listOrigins(): Promise<StreamerOriginSummary[]> {
-    const entries = await fs.readdir(this.rootDir, { withFileTypes: true }).catch((error: unknown) => {
-      if (isNodeError(error) && error.code === "ENOENT") {
-        return [];
-      }
-      throw error;
-    });
-    const origins: StreamerOriginSummary[] = [];
-
-    for (const entry of entries) {
-      if (!entry.isDirectory()) {
-        continue;
-      }
-
-      try {
-        const clone = await this.loadCloneResult(entry.name);
-        origins.push(toOriginSummary(clone));
-      } catch {
-        // Keep list resilient if a partially-written/corrupt origin exists.
-      }
-    }
-
-    return origins.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    return this.originStore.list();
   }
 
   async inspectOrigin(originId: string): Promise<StreamerCloneResult> {
-    return this.loadCloneResult(originId);
+    return this.originStore.load(originId);
   }
 
   async mutateOrigin(input: StreamerMutateInput): Promise<StreamerMutateResult> {
-    const source = await this.loadCloneResult(input.originId);
-    const newId = sanitizeOriginId(input.newOriginId?.trim() || randomUUID());
-    const newRootDir = path.join(this.rootDir, newId);
-    if (newId === source.id || await pathExists(newRootDir)) {
-      throw new Error(`streamer origin ${newId} already exists`);
-    }
-    await fs.cp(source.rootDir, newRootDir, { recursive: true, errorOnExist: false, force: true });
-
-    const mutated = rebaseCloneResult(source, newId, newRootDir);
-    const targetKind = input.targetKind ?? "variant";
-    const targetIndex = Math.max(0, Math.floor(input.targetIndex ?? 0));
-    const segmentIndex = Math.max(0, Math.floor(input.segmentIndex));
-    const target = resolveMutationTarget(mutated, targetKind, targetIndex);
-    if (segmentIndex >= target.segments.length) {
-      throw new Error(`${targetKind}[${targetIndex}] has no segment ${segmentIndex}`);
-    }
-    const createdAt = new Date().toISOString();
-    let fault: StreamerOriginFault;
-
-    switch (input.fault) {
-      case "discontinuity":
-        await injectDiscontinuityIntoManifest(target.manifestPath, segmentIndex);
-        fault = {
-          type: "discontinuity",
-          targetKind,
-          targetIndex,
-          segmentIndex,
-          description: `Inserted EXT-X-DISCONTINUITY before ${targetKind}[${targetIndex}] segment ${segmentIndex}`,
-          createdAt,
-        };
-        break;
-      case "segment-swap":
-        fault = await applySegmentSwapMutation({
-          source,
-          mutated,
-          targetKind,
-          targetIndex,
-          segmentIndex,
-          donorOriginId: input.donorOriginId,
-          donorTargetKind: input.donorTargetKind,
-          donorTargetIndex: input.donorTargetIndex,
-          donorSegmentIndex: input.donorSegmentIndex,
-          withDiscontinuity: input.withDiscontinuity,
-          ffmpegProfile: input.ffmpegProfile,
-          createdAt,
-        });
-        break;
-      default:
-        throw new Error(`unsupported streamer fault: ${input.fault}`);
-    }
-
-    mutated.derivedFrom = source.id;
-    mutated.faults = [...(source.faults ?? []), fault];
-    mutated.createdAt = createdAt;
-    mutated.segments = mutated.variants.flatMap((variant) => variant.segments);
-
-    await fs.writeFile(path.join(newRootDir, "origin.json"), `${JSON.stringify(mutated, null, 2)}\n`, "utf-8");
-    return {
-      sourceOriginId: source.id,
-      origin: mutated,
-      fault,
-    };
+    return mutateOrigin(this.originStore, input);
   }
 
   async probeOrigin(originId: string, options: StreamerProbeOptions = {}): Promise<StreamerOriginProbeReport> {
@@ -217,10 +126,10 @@ export class StreamerService {
       throw new Error("streamer probe requires ffprobe support in VideoInspectToolService");
     }
 
-    const clone = await this.loadCloneResult(originId);
-    const timeoutMs = normalizePositiveNumber(options.timeoutMs, DEFAULT_PROBE_TIMEOUT_MS, 1_000, 120_000);
+    const clone = await this.originStore.load(originId);
+    const timeoutMs = clampNumber(options.timeoutMs, DEFAULT_PROBE_TIMEOUT_MS, 1_000, 120_000);
     const maxMediaPlaylists = Math.floor(
-      normalizePositiveNumber(
+      clampNumber(
         options.maxMediaPlaylists,
         DEFAULT_MAX_PROBE_MEDIA_PLAYLISTS,
         1,
@@ -264,12 +173,12 @@ export class StreamerService {
       throw new Error("streamer analyze requires ffprobe support in VideoInspectToolService");
     }
 
-    const clone = await this.loadCloneResult(originId);
-    const timeoutMs = normalizePositiveNumber(options.timeoutMs, DEFAULT_PROBE_TIMEOUT_MS, 1_000, 120_000);
+    const clone = await this.originStore.load(originId);
+    const timeoutMs = clampNumber(options.timeoutMs, DEFAULT_PROBE_TIMEOUT_MS, 1_000, 120_000);
     const startSegment = normalizeOptionalNonNegativeInteger(options.startSegment, MAX_CLONE_INSPECT_SEGMENTS - 1);
     const segmentCount = normalizeOptionalPositiveInteger(options.segmentCount, MAX_CLONE_INSPECT_SEGMENTS);
     const maxMediaPlaylists = Math.floor(
-      normalizePositiveNumber(
+      clampNumber(
         options.maxMediaPlaylists,
         DEFAULT_MAX_PROBE_MEDIA_PLAYLISTS,
         1,
@@ -279,7 +188,7 @@ export class StreamerService {
     const maxSegmentsPerPlaylist = options.full
       ? Number.POSITIVE_INFINITY
       : Math.floor(
-          normalizePositiveNumber(
+          clampNumber(
             options.maxSegmentsPerPlaylist,
             DEFAULT_MAX_ANALYZE_SEGMENTS_PER_PLAYLIST,
             1,
@@ -365,34 +274,27 @@ export class StreamerService {
   }
 
   async removeOrigin(originId: string): Promise<StreamerRemoveResult> {
-    const id = sanitizeOriginId(originId);
-    const originDir = path.join(this.rootDir, id);
-    await fs.rm(originDir, { recursive: true, force: false });
-    return {
-      id,
-      rootDir: originDir,
-      removed: true,
-    };
+    return this.originStore.remove(originId);
   }
 
   async cloneHls(input: StreamerCloneInput): Promise<StreamerCloneResult> {
-    const durationSeconds = normalizePositiveNumber(
+    const durationSeconds = clampNumber(
       input.durationSeconds,
       DEFAULT_DURATION_SECONDS,
       1,
       60 * 60,
     );
-    const startSeconds = normalizeNonNegativeNumber(input.startSeconds, 0, 0, 24 * 60 * 60);
+    const startSeconds = clampNumber(input.startSeconds, 0, 0, 24 * 60 * 60);
     const startSegment = normalizeOptionalNonNegativeInteger(input.startSegment, MAX_CLONE_INSPECT_SEGMENTS - 1);
     const segmentCount = normalizeOptionalPositiveInteger(input.segmentCount, MAX_CLONE_INSPECT_SEGMENTS);
-    const timeoutMs = normalizePositiveNumber(input.timeoutMs, DEFAULT_TIMEOUT_MS, 1_000, 60_000);
-    const segmentTimeoutMs = normalizePositiveNumber(
+    const timeoutMs = clampNumber(input.timeoutMs, DEFAULT_TIMEOUT_MS, 1_000, 60_000);
+    const segmentTimeoutMs = clampNumber(
       input.segmentTimeoutMs,
       DEFAULT_SEGMENT_TIMEOUT_MS,
       1_000,
       5 * 60_000,
     );
-    const segmentRetries = normalizeNonNegativeInteger(input.segmentRetries, DEFAULT_SEGMENT_RETRIES, 0, 5);
+    const segmentRetries = clampInteger(input.segmentRetries, DEFAULT_SEGMENT_RETRIES, 0, 5);
     const maxSegments = normalizeCloneMaxSegments(input.maxSegments, startSegment, segmentCount);
     const id = sanitizeOriginId(input.originId?.trim() || randomUUID());
     const originDir = path.join(this.rootDir, id);
@@ -566,7 +468,6 @@ export class StreamerService {
       clonedVariants.reduce((acc, variant) => acc + variant.bytes, 0) +
       clonedRenditions.reduce((acc, rendition) => acc + rendition.bytes, 0);
 
-    const metadataPath = path.join(originDir, "origin.json");
     const createdAt = new Date().toISOString();
     const result: StreamerCloneResult = {
       id,
@@ -598,7 +499,7 @@ export class StreamerService {
       segments: clonedSegments,
     };
 
-    await fs.writeFile(metadataPath, `${JSON.stringify(result, null, 2)}\n`, "utf-8");
+    await this.originStore.save(result);
     emit({
       type: "complete",
       originId: id,
@@ -615,23 +516,23 @@ export class StreamerService {
       throw new Error("streamer DASH clone requires inspectDash support in VideoInspectToolService");
     }
 
-    const durationSeconds = normalizePositiveNumber(
+    const durationSeconds = clampNumber(
       input.durationSeconds,
       DEFAULT_DURATION_SECONDS,
       1,
       60 * 60,
     );
-    const startSeconds = normalizeNonNegativeNumber(input.startSeconds, 0, 0, 24 * 60 * 60);
+    const startSeconds = clampNumber(input.startSeconds, 0, 0, 24 * 60 * 60);
     const startSegment = normalizeOptionalNonNegativeInteger(input.startSegment, MAX_CLONE_INSPECT_SEGMENTS - 1);
     const segmentCount = normalizeOptionalPositiveInteger(input.segmentCount, MAX_CLONE_INSPECT_SEGMENTS);
-    const timeoutMs = normalizePositiveNumber(input.timeoutMs, DEFAULT_TIMEOUT_MS, 1_000, 60_000);
-    const segmentTimeoutMs = normalizePositiveNumber(
+    const timeoutMs = clampNumber(input.timeoutMs, DEFAULT_TIMEOUT_MS, 1_000, 60_000);
+    const segmentTimeoutMs = clampNumber(
       input.segmentTimeoutMs,
       DEFAULT_SEGMENT_TIMEOUT_MS,
       1_000,
       5 * 60_000,
     );
-    const segmentRetries = normalizeNonNegativeInteger(input.segmentRetries, DEFAULT_SEGMENT_RETRIES, 0, 5);
+    const segmentRetries = clampInteger(input.segmentRetries, DEFAULT_SEGMENT_RETRIES, 0, 5);
     const maxSegments = normalizeCloneMaxSegments(input.maxSegments, startSegment, segmentCount);
     const id = sanitizeOriginId(input.originId?.trim() || randomUUID());
     const originDir = path.join(this.rootDir, id);
@@ -823,7 +724,7 @@ export class StreamerService {
       segments: clonedSegments,
     };
 
-    await fs.writeFile(path.join(originDir, "origin.json"), `${JSON.stringify(result, null, 2)}\n`, "utf-8");
+    await this.originStore.save(result);
     emit({
       type: "complete",
       originId: id,
@@ -836,108 +737,14 @@ export class StreamerService {
   }
 
   async serveOrigin(originId: string, options: StreamerServeOptions = {}): Promise<StreamerServeHandle> {
-    const id = sanitizeOriginId(originId);
-    const clone = await this.loadCloneResult(id);
-    const originDir = clone.rootDir;
-    const playbackPath = clone.playbackPath || "/index.m3u8";
-    await fs.access(path.join(originDir, playbackPath.replace(/^\/+/, "")));
-
-    const host = options.host?.trim() || "127.0.0.1";
-    const port = Math.max(0, Math.min(65_535, Math.floor(options.port ?? 0)));
-
-    const server = http.createServer((request, response) => {
-      void this.handleStaticRequest(originDir, playbackPath, request, response);
-    });
-
-    await new Promise<void>((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(port, host, () => {
-        server.off("error", reject);
-        resolve();
-      });
-    });
-
-    const address = server.address() as AddressInfo;
-    const baseUrl = `http://${host}:${address.port}`;
-
-    return {
-      originId: id,
-      rootDir: originDir,
-      baseUrl,
-      playbackUrl: `${baseUrl}${playbackPath}`,
-      close: () =>
-        new Promise<void>((resolve, reject) => {
-          server.close((error) => {
-            if (error) {
-              reject(error);
-              return;
-            }
-            resolve();
-          });
-        }),
-    };
+    return serveOrigin(this.originStore, originId, options);
   }
 
   async serveLiveOrigin(
     originId: string,
     options: StreamerLiveServeOptions = {},
   ): Promise<StreamerLiveServeHandle> {
-    const id = sanitizeOriginId(originId);
-    const clone = await this.loadCloneResult(id);
-    if ((clone.protocol ?? "hls") !== "hls") {
-      throw new Error("streamer live currently supports HLS origins only");
-    }
-    const host = options.host?.trim() || "127.0.0.1";
-    const port = Math.max(0, Math.min(65_535, Math.floor(options.port ?? 0)));
-    const windowSize = Math.max(1, Math.min(30, Math.floor(options.windowSize ?? DEFAULT_LIVE_WINDOW_SIZE)));
-    const initialMediaSequence = Math.max(
-      0,
-      Math.floor(options.initialMediaSequence ?? DEFAULT_INITIAL_MEDIA_SEQUENCE),
-    );
-    const startedAtMs = Date.now();
-
-    const server = http.createServer((request, response) => {
-      void this.handleLiveRequest(
-        clone,
-        {
-          startedAtMs,
-          windowSize,
-          initialMediaSequence,
-        },
-        request,
-        response,
-      );
-    });
-
-    await new Promise<void>((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(port, host, () => {
-        server.off("error", reject);
-        resolve();
-      });
-    });
-
-    const address = server.address() as AddressInfo;
-    const baseUrl = `http://${host}:${address.port}`;
-
-    return {
-      originId: id,
-      rootDir: clone.rootDir,
-      baseUrl,
-      playbackUrl: `${baseUrl}/index.m3u8`,
-      windowSize,
-      initialMediaSequence,
-      close: () =>
-        new Promise<void>((resolve, reject) => {
-          server.close((error) => {
-            if (error) {
-              reject(error);
-              return;
-            }
-            resolve();
-          });
-        }),
-    };
+    return serveLiveOrigin(this.originStore, originId, options);
   }
 
   private async resolveMediaPlaylist(
@@ -1449,257 +1256,6 @@ export class StreamerService {
     );
   }
 
-  private async handleStaticRequest(
-    rootDir: string,
-    defaultPlaybackPath: string,
-    request: http.IncomingMessage,
-    response: http.ServerResponse,
-  ): Promise<void> {
-    response.setHeader("access-control-allow-origin", "*");
-    response.setHeader("access-control-allow-methods", "GET, HEAD, OPTIONS");
-    response.setHeader("access-control-allow-headers", "range, origin, accept, content-type");
-
-    if (request.method === "OPTIONS") {
-      response.statusCode = 204;
-      response.end();
-      return;
-    }
-
-    if (request.method !== "GET" && request.method !== "HEAD") {
-      response.statusCode = 405;
-      response.end("method not allowed");
-      return;
-    }
-
-    try {
-      const requestUrl = new URL(request.url || "/", "http://streamer.local");
-      const pathname = requestUrl.pathname === "/" ? defaultPlaybackPath : requestUrl.pathname;
-      const relativePath = decodeURIComponent(pathname).replace(/^\/+/, "");
-      const filePath = path.resolve(rootDir, relativePath);
-      const safeRoot = path.resolve(rootDir);
-
-      if (filePath !== safeRoot && !filePath.startsWith(`${safeRoot}${path.sep}`)) {
-        response.statusCode = 403;
-        response.end("forbidden");
-        return;
-      }
-
-      const data = await fs.readFile(filePath);
-      response.statusCode = 200;
-      response.setHeader("content-type", contentTypeFor(filePath));
-      response.setHeader("cache-control", "no-store");
-      if (request.method === "HEAD") {
-        response.end();
-        return;
-      }
-      response.end(data);
-    } catch {
-      response.statusCode = 404;
-      response.end("not found");
-    }
-  }
-
-  private async handleLiveRequest(
-    clone: StreamerCloneResult,
-    state: {
-      startedAtMs: number;
-      windowSize: number;
-      initialMediaSequence: number;
-    },
-    request: http.IncomingMessage,
-    response: http.ServerResponse,
-  ): Promise<void> {
-    response.setHeader("access-control-allow-origin", "*");
-    response.setHeader("access-control-allow-methods", "GET, HEAD, OPTIONS");
-    response.setHeader("access-control-allow-headers", "range, origin, accept, content-type");
-
-    if (request.method === "OPTIONS") {
-      response.statusCode = 204;
-      response.end();
-      return;
-    }
-
-    if (request.method !== "GET" && request.method !== "HEAD") {
-      response.statusCode = 405;
-      response.end("method not allowed");
-      return;
-    }
-
-    try {
-      const requestUrl = new URL(request.url || "/", "http://streamer.live");
-      const pathname = requestUrl.pathname === "/" ? "/index.m3u8" : requestUrl.pathname;
-
-      if (pathname === "/index.m3u8") {
-        const body =
-          clone.variants.length > 1 || clone.renditions.length > 0
-            ? buildLiveMasterPlaylist(clone.variants, clone.renditions)
-            : buildLiveMediaPlaylist(clone.variants[0], "/live/0", state, Date.now());
-        sendText(response, request.method, body, "application/vnd.apple.mpegurl");
-        return;
-      }
-
-      const mediaMatch = pathname.match(/^\/live\/(\d+)\/index\.m3u8$/);
-      if (mediaMatch) {
-        const variantIndex = parseVariantIndex(clone, mediaMatch[1]);
-        const variant = clone.variants[variantIndex];
-        const body = buildLiveMediaPlaylist(variant, `/live/${variantIndex}`, state, Date.now());
-        sendText(response, request.method, body, "application/vnd.apple.mpegurl");
-        return;
-      }
-
-      const renditionMediaMatch = pathname.match(/^\/live\/(audio|subtitles)\/(\d+)\/index\.m3u8$/);
-      if (renditionMediaMatch) {
-        const renditionKind = renditionKindFromRoute(renditionMediaMatch[1]);
-        const renditionIndex = parseRenditionIndex(renditionMediaMatch[2]);
-        const ref = findRenditionRef(clone.renditions, renditionKind, renditionIndex);
-        const body = buildLiveMediaPlaylist(ref.rendition, liveRenditionPath(ref), state, Date.now());
-        sendText(response, request.method, body, "application/vnd.apple.mpegurl");
-        return;
-      }
-
-      const segmentMatch = pathname.match(/^\/live\/(\d+)\/segments\/(\d+)(?:\.[^/]*)?$/);
-      if (segmentMatch) {
-        const variantIndex = parseVariantIndex(clone, segmentMatch[1]);
-        const variant = clone.variants[variantIndex];
-        const sequence = Number(segmentMatch[2]);
-        if (!Number.isSafeInteger(sequence) || sequence < 0) {
-          throw new Error("invalid live segment sequence");
-        }
-        const segment = segmentForSequence(variant, sequence);
-        const filePath = resolveClonedSegmentPath(clone.rootDir, variant, segment);
-        const data = await fs.readFile(filePath);
-        response.statusCode = 200;
-        response.setHeader("content-type", contentTypeFor(filePath));
-        response.setHeader("cache-control", "no-store");
-        if (request.method === "HEAD") {
-          response.end();
-          return;
-        }
-        response.end(data);
-        return;
-      }
-
-      const renditionSegmentMatch = pathname.match(/^\/live\/(audio|subtitles)\/(\d+)\/segments\/(\d+)(?:\.[^/]*)?$/);
-      if (renditionSegmentMatch) {
-        const renditionKind = renditionKindFromRoute(renditionSegmentMatch[1]);
-        const renditionIndex = parseRenditionIndex(renditionSegmentMatch[2]);
-        const ref = findRenditionRef(clone.renditions, renditionKind, renditionIndex);
-        const rendition = ref.rendition;
-        const sequence = Number(renditionSegmentMatch[3]);
-        if (!Number.isSafeInteger(sequence) || sequence < 0) {
-          throw new Error("invalid live rendition segment sequence");
-        }
-        const segment = segmentForSequence(rendition, sequence);
-        const filePath = resolveClonedSegmentPath(clone.rootDir, rendition, segment);
-        const data = await fs.readFile(filePath);
-        response.statusCode = 200;
-        response.setHeader("content-type", contentTypeFor(filePath));
-        response.setHeader("cache-control", "no-store");
-        if (request.method === "HEAD") {
-          response.end();
-          return;
-        }
-        response.end(data);
-        return;
-      }
-
-      const mapMatch = pathname.match(/^\/live\/(\d+)\/init\/([^/]+)$/);
-      if (mapMatch) {
-        const variantIndex = parseVariantIndex(clone, mapMatch[1]);
-        const variant = clone.variants[variantIndex];
-        const localUri = `init/${decodeURIComponent(mapMatch[2] ?? "")}`;
-        const clonedMap = (variant.maps ?? []).find((candidate) => candidate.localUri === localUri);
-        if (!clonedMap) {
-          throw new Error("live init segment not found");
-        }
-        const filePath = resolveClonedMapPath(clone.rootDir, variant, clonedMap);
-        const data = await fs.readFile(filePath);
-        response.statusCode = 200;
-        response.setHeader("content-type", contentTypeFor(filePath));
-        response.setHeader("cache-control", "no-store");
-        if (request.method === "HEAD") {
-          response.end();
-          return;
-        }
-        response.end(data);
-        return;
-      }
-
-      const renditionMapMatch = pathname.match(/^\/live\/(audio|subtitles)\/(\d+)\/init\/([^/]+)$/);
-      if (renditionMapMatch) {
-        const renditionKind = renditionKindFromRoute(renditionMapMatch[1]);
-        const renditionIndex = parseRenditionIndex(renditionMapMatch[2]);
-        const ref = findRenditionRef(clone.renditions, renditionKind, renditionIndex);
-        const rendition = ref.rendition;
-        const localUri = `init/${decodeURIComponent(renditionMapMatch[3] ?? "")}`;
-        const clonedMap = (rendition.maps ?? []).find((candidate) => candidate.localUri === localUri);
-        if (!clonedMap) {
-          throw new Error("live rendition init segment not found");
-        }
-        const filePath = resolveClonedMapPath(clone.rootDir, rendition, clonedMap);
-        const data = await fs.readFile(filePath);
-        response.statusCode = 200;
-        response.setHeader("content-type", contentTypeFor(filePath));
-        response.setHeader("cache-control", "no-store");
-        if (request.method === "HEAD") {
-          response.end();
-          return;
-        }
-        response.end(data);
-        return;
-      }
-
-      response.statusCode = 404;
-      response.end("not found");
-    } catch {
-      response.statusCode = 404;
-      response.end("not found");
-    }
-  }
-
-  private async loadCloneResult(originId: string): Promise<StreamerCloneResult> {
-    const id = sanitizeOriginId(originId);
-    const originDir = path.join(this.rootDir, id);
-    const raw = await fs.readFile(path.join(originDir, "origin.json"), "utf-8");
-    const parsed = JSON.parse(raw) as Partial<StreamerCloneResult>;
-    if (!Array.isArray(parsed.variants) || parsed.variants.length === 0) {
-      throw new Error(`streamer origin ${id} has no cloned variants`);
-    }
-    if (!Array.isArray(parsed.renditions)) {
-      throw new Error(`streamer origin ${id} is not compatible with current schema`);
-    }
-    const clone = parsed as StreamerCloneResult;
-    return {
-      ...clone,
-      id,
-      schemaVersion: STREAMER_ORIGIN_SCHEMA_VERSION,
-      rootDir: originDir,
-    };
-  }
-}
-
-function normalizePositiveNumber(
-  value: number | undefined,
-  fallback: number,
-  min: number,
-  max: number,
-): number {
-  if (!Number.isFinite(value) || value === undefined) {
-    return fallback;
-  }
-  return Math.max(min, Math.min(max, value));
-}
-
-function normalizeNonNegativeNumber(
-  value: number | undefined,
-  fallback: number,
-  min: number,
-  max: number,
-): number {
-  if (!Number.isFinite(value) || value === undefined) {
-    return fallback;
-  }
-  return Math.max(min, Math.min(max, value));
 }
 
 function normalizeOptionalNonNegativeInteger(value: number | undefined, max: number): number | undefined {
@@ -1722,7 +1278,7 @@ function normalizeCloneMaxSegments(
   segmentCount: number | undefined,
 ): number {
   const requested = Math.floor(
-    normalizePositiveNumber(requestedMaxSegments, DEFAULT_MAX_SEGMENTS, 1, MAX_CLONE_INSPECT_SEGMENTS),
+    clampNumber(requestedMaxSegments, DEFAULT_MAX_SEGMENTS, 1, MAX_CLONE_INSPECT_SEGMENTS),
   );
   const requiredForSegmentWindow =
     startSegment !== undefined
@@ -1732,50 +1288,6 @@ function normalizeCloneMaxSegments(
     return requested;
   }
   return Math.min(MAX_CLONE_INSPECT_SEGMENTS, Math.max(requested, requiredForSegmentWindow));
-}
-
-async function pathExists(filePath: string): Promise<boolean> {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function normalizeNonNegativeInteger(
-  value: number | undefined,
-  fallback: number,
-  min: number,
-  max: number,
-): number {
-  if (!Number.isFinite(value) || value === undefined) {
-    return fallback;
-  }
-  return Math.floor(Math.max(min, Math.min(max, value)));
-}
-
-function isAbortError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  return error.name === "AbortError" || error.message.toLowerCase().includes("aborted");
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
-}
-
-function sanitizeOriginId(raw: string): string {
-  const sanitized = raw.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/^-+|-+$/g, "");
-  if (!sanitized) {
-    throw new Error("origin id must contain at least one safe character");
-  }
-  return sanitized.slice(0, 96);
 }
 
 function selectVariant(root: VideoHlsInspectResult, selector: string | undefined): VideoHlsInspectResult["variants"][number] {
@@ -1881,14 +1393,6 @@ function selectRenditionsByGroups(
   return out;
 }
 
-function renditionGroupIdsFor(renditions: StreamerClonedRendition[], kind: RenditionKind): Set<string> {
-  return new Set(
-    renditions
-      .filter((rendition) => normalizeRenditionKind(rendition.type) === kind && rendition.groupId)
-      .map((rendition) => rendition.groupId as string),
-  );
-}
-
 function normalizeRenditionKind(type: string): RenditionKind | null {
   const normalized = type.trim().toUpperCase();
   if (normalized === "AUDIO" || normalized === "SUBTITLES") {
@@ -1906,49 +1410,7 @@ function requireRenditionKind(type: string): RenditionKind {
 }
 
 function renditionDirectory(rendition: RenditionSource | StreamerClonedRendition): "audio" | "subtitles" {
-  return RENDITION_KIND_CONFIG[requireRenditionKind(rendition.type)].dir;
-}
-
-function liveRenditionPath(ref: RenditionRef): string {
-  return `/live/${RENDITION_KIND_CONFIG[ref.kind].route}/${ref.routeIndex}`;
-}
-
-function renditionKindFromRoute(raw: string | undefined): RenditionKind {
-  return raw === "subtitles" ? "SUBTITLES" : "AUDIO";
-}
-
-function buildRenditionRefs(renditions: StreamerClonedRendition[]): RenditionRef[] {
-  const nextIndexByKind: Record<RenditionKind, number> = {
-    AUDIO: 0,
-    SUBTITLES: 0,
-  };
-  const refs: RenditionRef[] = [];
-
-  for (let globalIndex = 0; globalIndex < renditions.length; globalIndex += 1) {
-    const rendition = renditions[globalIndex];
-    const kind = requireRenditionKind(rendition.type);
-    refs.push({
-      kind,
-      routeIndex: nextIndexByKind[kind],
-      globalIndex,
-      rendition,
-    });
-    nextIndexByKind[kind] += 1;
-  }
-
-  return refs;
-}
-
-function findRenditionRef(
-  renditions: StreamerClonedRendition[],
-  kind: RenditionKind,
-  routeIndex: number,
-): RenditionRef {
-  const ref = buildRenditionRefs(renditions).find((candidate) => candidate.kind === kind && candidate.routeIndex === routeIndex);
-  if (!ref) {
-    throw new Error("invalid live rendition index");
-  }
-  return ref;
+  return RENDITION_KIND_CONFIG[requireRenditionKind(rendition.type)];
 }
 
 function toVariantSource(variant: VideoHlsInspectResult["variants"][number]): VariantSource {
@@ -2196,254 +1658,6 @@ function minVariantDuration(variants: StreamerClonedVariant[]): number {
     return 0;
   }
   return Math.min(...variants.map((variant) => variant.cumulativeDurationSeconds));
-}
-
-function toOriginSummary(result: StreamerCloneResult): StreamerOriginSummary {
-  return {
-    id: result.id,
-    schemaVersion: result.schemaVersion,
-    protocol: result.protocol,
-    derivedFrom: result.derivedFrom,
-    faults: result.faults ?? [],
-    createdAt: result.createdAt,
-    sourceUrl: result.sourceUrl,
-    selectedUrl: result.selectedUrl,
-    rootDir: result.rootDir,
-    playbackPath: result.playbackPath,
-    requestedDurationSeconds: result.requestedDurationSeconds,
-    requestedStartSeconds: result.requestedStartSeconds,
-    requestedStartSegment: result.requestedStartSegment,
-    requestedSegmentCount: result.requestedSegmentCount,
-    cumulativeDurationSeconds: result.cumulativeDurationSeconds,
-    reachedTargetDuration: result.reachedTargetDuration,
-    targetDuration: result.targetDuration,
-    segmentCount: result.segmentCount,
-    variantCount: result.variantCount,
-    renditionCount: result.renditionCount,
-    bytes: result.bytes,
-    allVariants: result.allVariants,
-  };
-}
-
-function rebaseCloneResult(source: StreamerCloneResult, id: string, rootDir: string): StreamerCloneResult {
-  const rebaseManifestPath = (manifestPath: string): string => path.join(rootDir, path.relative(source.rootDir, manifestPath));
-  return {
-    ...source,
-    id,
-    rootDir,
-    manifestPath: rebaseManifestPath(source.manifestPath),
-    variants: source.variants.map((variant) => ({
-      ...variant,
-      manifestPath: rebaseManifestPath(variant.manifestPath),
-      segments: variant.segments.map((segment) => ({ ...segment })),
-      maps: variant.maps.map((map) => ({ ...map })),
-    })),
-    renditions: source.renditions.map((rendition) => ({
-      ...rendition,
-      manifestPath: rebaseManifestPath(rendition.manifestPath),
-      segments: rendition.segments.map((segment) => ({ ...segment })),
-      maps: rendition.maps.map((map) => ({ ...map })),
-    })),
-    segments: source.segments.map((segment) => ({ ...segment })),
-  };
-}
-
-function resolveMutationTarget(
-  clone: StreamerCloneResult,
-  targetKind: "variant" | "rendition",
-  targetIndex: number,
-): StreamerClonedVariant | StreamerClonedRendition {
-  const target = targetKind === "variant" ? clone.variants[targetIndex] : clone.renditions[targetIndex];
-  if (!target) {
-    throw new Error(`invalid mutation target ${targetKind}[${targetIndex}]`);
-  }
-  return target;
-}
-
-async function injectDiscontinuityIntoManifest(manifestPath: string, segmentIndex: number): Promise<void> {
-  const text = await fs.readFile(manifestPath, "utf-8");
-  const lines = text.split(/\r?\n/);
-  const out: string[] = [];
-  let mediaSegmentIndex = 0;
-  let pendingExtinfIndex: number | null = null;
-  let inserted = false;
-
-  for (const line of lines) {
-    if (line.startsWith("#EXTINF:")) {
-      pendingExtinfIndex = out.length;
-      out.push(line);
-      continue;
-    }
-
-    if (line.trim() && !line.startsWith("#")) {
-      if (mediaSegmentIndex === segmentIndex) {
-        const insertAt = pendingExtinfIndex ?? out.length;
-        if (out[insertAt - 1] !== "#EXT-X-DISCONTINUITY") {
-          out.splice(insertAt, 0, "#EXT-X-DISCONTINUITY");
-        }
-        inserted = true;
-      }
-      mediaSegmentIndex += 1;
-      pendingExtinfIndex = null;
-    }
-
-    out.push(line);
-  }
-
-  if (!inserted) {
-    throw new Error(`manifest ${manifestPath} has no segment ${segmentIndex}`);
-  }
-  await fs.writeFile(manifestPath, out.join("\n"), "utf-8");
-}
-
-async function applySegmentSwapMutation(params: {
-  source: StreamerCloneResult;
-  mutated: StreamerCloneResult;
-  targetKind: "variant" | "rendition";
-  targetIndex: number;
-  segmentIndex: number;
-  donorOriginId?: string;
-  donorTargetKind?: "variant" | "rendition";
-  donorTargetIndex?: number;
-  donorSegmentIndex?: number;
-  withDiscontinuity?: boolean;
-  ffmpegProfile?: "hevc";
-  createdAt: string;
-}): Promise<StreamerOriginFault> {
-  const donorOriginId = params.donorOriginId?.trim();
-  if (!donorOriginId) {
-    throw new Error("segment-swap requires donorOriginId");
-  }
-
-  const donorOriginDir = path.join(params.source.rootDir, "..", sanitizeOriginId(donorOriginId));
-  const donorRaw = await fs.readFile(path.join(donorOriginDir, "origin.json"), "utf-8");
-  const donorParsed = JSON.parse(donorRaw) as StreamerCloneResult;
-  const donor = rebaseCloneResult(donorParsed, sanitizeOriginId(donorOriginId), donorOriginDir);
-  const donorTargetKind = params.donorTargetKind ?? params.targetKind;
-  const donorTargetIndex = Math.max(0, Math.floor(params.donorTargetIndex ?? 0));
-  const donorSegmentIndex = Math.max(0, Math.floor(params.donorSegmentIndex ?? params.segmentIndex));
-  const target = resolveMutationTarget(params.mutated, params.targetKind, params.targetIndex);
-  const donorTarget = resolveMutationTarget(donor, donorTargetKind, donorTargetIndex);
-  if (donorSegmentIndex >= donorTarget.segments.length) {
-    throw new Error(`${donorTargetKind}[${donorTargetIndex}] has no donor segment ${donorSegmentIndex}`);
-  }
-
-  const targetSegment = target.segments[params.segmentIndex];
-  const donorSegment = donorTarget.segments[donorSegmentIndex];
-  if (donorSegment.map) {
-    throw new Error("segment-swap does not support donor segments with EXT-X-MAP yet");
-  }
-
-  const targetSegmentPath = path.join(path.dirname(target.manifestPath), targetSegment.localUri);
-  const donorSegmentPath = path.join(path.dirname(donorTarget.manifestPath), donorSegment.localUri);
-  const donorBytes = params.ffmpegProfile
-    ? await transcodeDonorSegmentWithFfmpeg(donorSegmentPath, targetSegmentPath, params.ffmpegProfile)
-    : await fs.readFile(donorSegmentPath);
-  await fs.writeFile(targetSegmentPath, donorBytes);
-
-  const previousBytes = targetSegment.bytes;
-  targetSegment.sourceUri = donorSegment.sourceUri;
-  targetSegment.sourceUrl = donorSegment.sourceUrl;
-  targetSegment.duration = donorSegment.duration;
-  targetSegment.title = donorSegment.title;
-  targetSegment.bytes = donorBytes.byteLength;
-  targetSegment.map = undefined;
-
-  const byteDelta = donorBytes.byteLength - previousBytes;
-  target.bytes += byteDelta;
-  params.mutated.bytes += byteDelta;
-  target.cumulativeDurationSeconds = target.segments.reduce((sum, segment) => sum + (segment.duration ?? 0), 0);
-  target.targetDuration = Math.max(1, ...target.segments.map((segment) => Math.ceil(segment.duration ?? 0)));
-  params.mutated.cumulativeDurationSeconds = minVariantDuration(params.mutated.variants);
-  params.mutated.targetDuration = Math.max(...params.mutated.variants.map((variant) => variant.targetDuration), 1);
-
-  const manifestBefore = await fs.readFile(target.manifestPath, "utf-8");
-  const manifestText = replaceManifestSegmentDuration(manifestBefore, params.segmentIndex, donorSegment.duration);
-  await fs.writeFile(target.manifestPath, manifestText, "utf-8");
-  if (params.withDiscontinuity) {
-    await injectDiscontinuityIntoManifest(target.manifestPath, params.segmentIndex);
-  }
-
-  return {
-    type: "segment-swap",
-    targetKind: params.targetKind,
-    targetIndex: params.targetIndex,
-    segmentIndex: params.segmentIndex,
-    description: `Swapped ${params.targetKind}[${params.targetIndex}] segment ${params.segmentIndex} with ${donor.id} ${donorTargetKind}[${donorTargetIndex}] segment ${donorSegmentIndex}${params.ffmpegProfile ? ` transcoded=${params.ffmpegProfile}` : ""}${params.withDiscontinuity ? " and inserted EXT-X-DISCONTINUITY" : ""}`,
-    createdAt: params.createdAt,
-    donorOriginId: donor.id,
-    donorTargetKind,
-    donorTargetIndex,
-    donorSegmentIndex,
-    withDiscontinuity: Boolean(params.withDiscontinuity),
-  };
-}
-
-function replaceManifestSegmentDuration(manifestText: string, segmentIndex: number, duration: number | undefined): string {
-  if (typeof duration !== "number") {
-    return manifestText;
-  }
-  const lines = manifestText.split(/\r?\n/);
-  let mediaSegmentIndex = 0;
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (!line.startsWith("#EXTINF:")) {
-      continue;
-    }
-    const nextLine = lines[index + 1];
-    if (!nextLine || !nextLine.trim() || nextLine.startsWith("#")) {
-      continue;
-    }
-    if (mediaSegmentIndex === segmentIndex) {
-      const title = line.slice("#EXTINF:".length).split(",").slice(1).join(",");
-      lines[index] = `#EXTINF:${duration.toFixed(3)},${title}`;
-      return `${lines.join("\n")}${manifestText.endsWith("\n") ? "\n" : ""}`;
-    }
-    mediaSegmentIndex += 1;
-  }
-  return manifestText;
-}
-
-async function transcodeDonorSegmentWithFfmpeg(
-  donorSegmentPath: string,
-  targetSegmentPath: string,
-  profile: "hevc",
-): Promise<Buffer> {
-  const tempOutputPath = `${targetSegmentPath}.ffmpeg-swap.ts`;
-  const args = profile === "hevc"
-    ? [
-        "-y",
-        "-i",
-        donorSegmentPath,
-        "-c:v",
-        "libx265",
-        "-preset",
-        "ultrafast",
-        "-x265-params",
-        "keyint=25:min-keyint=25:scenecut=0",
-        "-c:a",
-        "aac",
-        "-f",
-        "mpegts",
-        tempOutputPath,
-      ]
-    : [];
-  const result = spawnSync("ffmpeg", args, {
-    encoding: "utf-8",
-    timeout: 120_000,
-    maxBuffer: 16 * 1024 * 1024,
-  });
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    throw new Error(result.stderr?.trim() || `ffmpeg exited with ${String(result.status)}`);
-  }
-  try {
-    return await fs.readFile(tempOutputPath);
-  } finally {
-    await fs.rm(tempOutputPath, { force: true }).catch(() => undefined);
-  }
 }
 
 function buildProbeCandidates(clone: StreamerCloneResult): StreamerProbeCandidate[] {
@@ -3163,385 +2377,4 @@ function deriveTargetDuration(source: VideoHlsInspectResult, segments: StreamerC
     1,
   );
   return Math.ceil(maxDuration);
-}
-
-function buildLocalMasterPlaylist(
-  variants: StreamerClonedVariant[],
-  renditions: StreamerClonedRendition[] = [],
-): string {
-  const lines = ["#EXTM3U", "#EXT-X-VERSION:3"];
-  const audioGroupIds = renditionGroupIdsFor(renditions, "AUDIO");
-  const subtitleGroupIds = renditionGroupIdsFor(renditions, "SUBTITLES");
-
-  for (const rendition of renditions) {
-    lines.push(`#EXT-X-MEDIA:${formatRenditionAttrs(rendition, rendition.localUri)}`);
-  }
-
-  for (const variant of variants) {
-    lines.push(`#EXT-X-STREAM-INF:${formatVariantAttrs(variant, audioGroupIds, subtitleGroupIds)}`);
-    lines.push(variant.localUri);
-  }
-
-  return `${lines.join("\n")}\n`;
-}
-
-function formatVariantAttrs(
-  cloned: StreamerClonedVariant,
-  availableAudioGroupIds = new Set<string>(),
-  availableSubtitleGroupIds = new Set<string>(),
-): string {
-  const attrs: string[] = [];
-  const variant = cloned.variant;
-
-  attrs.push(`BANDWIDTH=${variant?.bandwidth ?? estimateBandwidth(cloned)}`);
-  if (typeof variant?.averageBandwidth === "number") {
-    attrs.push(`AVERAGE-BANDWIDTH=${variant.averageBandwidth}`);
-  }
-  if (variant?.resolution) {
-    attrs.push(`RESOLUTION=${variant.resolution}`);
-  }
-  if (typeof variant?.frameRate === "number") {
-    attrs.push(`FRAME-RATE=${variant.frameRate}`);
-  }
-  if (variant?.codecs) {
-    attrs.push(`CODECS="${variant.codecs}"`);
-  }
-  if (variant?.audioGroupId && availableAudioGroupIds.has(variant.audioGroupId)) {
-    attrs.push(`AUDIO="${variant.audioGroupId}"`);
-  }
-  if (variant?.subtitlesGroupId && availableSubtitleGroupIds.has(variant.subtitlesGroupId)) {
-    attrs.push(`SUBTITLES="${variant.subtitlesGroupId}"`);
-  }
-  if (variant?.closedCaptions) {
-    attrs.push(`CLOSED-CAPTIONS=${variant.closedCaptions}`);
-  }
-
-  return attrs.join(",");
-}
-
-function formatRenditionAttrs(rendition: StreamerClonedRendition, uri: string): string {
-  const attrs = [
-    `TYPE=${rendition.type.toUpperCase()}`,
-    ...(rendition.groupId ? [`GROUP-ID=${quoteAttr(rendition.groupId)}`] : []),
-    ...(rendition.language ? [`LANGUAGE=${quoteAttr(rendition.language)}`] : []),
-    ...(rendition.name ? [`NAME=${quoteAttr(rendition.name)}`] : []),
-    ...(typeof rendition.default === "boolean" ? [`DEFAULT=${rendition.default ? "YES" : "NO"}`] : []),
-    ...(typeof rendition.autoselect === "boolean" ? [`AUTOSELECT=${rendition.autoselect ? "YES" : "NO"}`] : []),
-    ...(typeof rendition.forced === "boolean" ? [`FORCED=${rendition.forced ? "YES" : "NO"}`] : []),
-    ...(rendition.characteristics ? [`CHARACTERISTICS=${quoteAttr(rendition.characteristics)}`] : []),
-    ...(rendition.channels ? [`CHANNELS=${quoteAttr(rendition.channels)}`] : []),
-    `URI=${quoteAttr(uri)}`,
-  ];
-  return attrs.join(",");
-}
-
-function quoteAttr(value: string): string {
-  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-}
-
-function estimateBandwidth(cloned: StreamerClonedVariant): number {
-  if (cloned.cumulativeDurationSeconds <= 0) {
-    return Math.max(1, cloned.bytes * 8);
-  }
-  return Math.max(1, Math.ceil((cloned.bytes * 8) / cloned.cumulativeDurationSeconds));
-}
-
-function buildLocalMediaPlaylist(params: {
-  source: VideoHlsInspectResult;
-  segments: StreamerClonedSegment[];
-  targetDuration: number;
-}): string {
-  const mediaSequence = params.source.mediaSequence ?? 0;
-  const version = params.segments.some((segment) => segment.map) ? 7 : 3;
-  const lines = [
-    "#EXTM3U",
-    `#EXT-X-VERSION:${version}`,
-    `#EXT-X-TARGETDURATION:${params.targetDuration}`,
-    `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`,
-    ...(typeof params.source.discontinuitySequence === "number"
-      ? [`#EXT-X-DISCONTINUITY-SEQUENCE:${params.source.discontinuitySequence}`]
-      : []),
-  ];
-
-  let activeMapUri: string | null = null;
-  for (const segment of params.segments) {
-    if (params.source.discontinuityMarkers.includes(segment.originalIndex)) {
-      lines.push("#EXT-X-DISCONTINUITY");
-      activeMapUri = null;
-    }
-    if (segment.map && segment.map.localUri !== activeMapUri) {
-      lines.push(`#EXT-X-MAP:URI="${segment.map.localUri}"`);
-      activeMapUri = segment.map.localUri;
-    }
-    const duration = segment.duration ?? params.source.targetDuration ?? params.targetDuration;
-    lines.push(`#EXTINF:${duration.toFixed(3)},${segment.title ?? ""}`);
-    lines.push(segment.localUri);
-  }
-
-  lines.push("#EXT-X-ENDLIST");
-  return `${lines.join("\n")}\n`;
-}
-
-function buildLocalDashMpd(params: {
-  variants: StreamerClonedVariant[];
-  renditions: StreamerClonedRendition[];
-  rootRelative: boolean;
-}): string {
-  const media = [
-    ...params.variants.map((variant, index) => ({
-      kind: "VIDEO" as const,
-      index,
-      item: variant,
-    })),
-    ...params.renditions.map((rendition, index) => ({
-      kind: requireRenditionKind(rendition.type),
-      index,
-      item: rendition,
-    })),
-  ];
-  const durationSeconds = Math.max(
-    ...media.map((entry) => entry.item.cumulativeDurationSeconds).filter((value) => Number.isFinite(value)),
-    1,
-  );
-  const lines = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    `<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="${formatIsoDuration(durationSeconds)}" minBufferTime="PT1.5S" profiles="urn:mpeg:dash:profile:isoff-main:2011">`,
-    `  <Period id="0" duration="${formatIsoDuration(durationSeconds)}">`,
-  ];
-
-  for (const entry of media) {
-    lines.push(...formatDashAdaptationSet(entry.item, entry.kind, entry.index, params.rootRelative));
-  }
-
-  lines.push("  </Period>", "</MPD>");
-  return `${lines.join("\n")}\n`;
-}
-
-function formatDashAdaptationSet(
-  item: StreamerClonedVariant | StreamerClonedRendition,
-  kind: "VIDEO" | RenditionKind,
-  index: number,
-  rootRelative: boolean,
-): string[] {
-  const source = "variant" in item ? item.variant : undefined;
-  const contentType = kind === "VIDEO" ? "video" : kind === "AUDIO" ? "audio" : "text";
-  const mimeType =
-    source?.mimeType ??
-    ("mimeType" in item ? item.mimeType : undefined) ??
-    (kind === "VIDEO" ? "video/mp4" : kind === "AUDIO" ? "audio/mp4" : "text/vtt");
-  const codecs = source?.codecs ?? ("codecs" in item ? item.codecs : undefined);
-  const representationId =
-    source?.id ??
-    ("id" in item ? item.id : undefined) ??
-    `${contentType}-${index}`;
-  const bandwidth =
-    source?.bandwidth ??
-    ("bandwidth" in item ? item.bandwidth : undefined) ??
-    estimateBandwidth(item as StreamerClonedVariant);
-  const resolution = source?.resolution?.split("x");
-  const width = resolution?.[0];
-  const height = resolution?.[1];
-  const mediaDir = rootRelative ? path.dirname(item.localUri) : ".";
-  const prefix = mediaDir === "." ? "" : `${mediaDir}/`;
-  const timescale = 1000;
-  const lines = [
-    `    <AdaptationSet id="${xmlEscape(`${contentType}-${index}`)}" contentType="${contentType}" mimeType="${xmlEscape(mimeType)}"${codecs ? ` codecs="${xmlEscape(codecs)}"` : ""}${"language" in item && item.language ? ` lang="${xmlEscape(item.language)}"` : ""}>`,
-    `      <Representation id="${xmlEscape(representationId)}" bandwidth="${Math.max(1, Math.ceil(bandwidth))}"${width && height ? ` width="${xmlEscape(width)}" height="${xmlEscape(height)}"` : ""}${source?.frameRate ? ` frameRate="${source.frameRate}"` : ""}>`,
-    `        <SegmentList timescale="${timescale}">`,
-  ];
-  const init = item.maps[0];
-  if (init) {
-    lines.push(`          <Initialization sourceURL="${xmlEscape(`${prefix}${init.localUri}`)}"/>`);
-  }
-  lines.push("          <SegmentTimeline>");
-  for (const segment of item.segments) {
-    const durationMs = Math.max(1, Math.round((segment.duration ?? item.targetDuration) * timescale));
-    lines.push(`            <S d="${durationMs}"/>`);
-  }
-  lines.push("          </SegmentTimeline>");
-  for (const segment of item.segments) {
-    lines.push(`          <SegmentURL media="${xmlEscape(`${prefix}${segment.localUri}`)}"/>`);
-  }
-  lines.push("        </SegmentList>", "      </Representation>", "    </AdaptationSet>");
-  return lines;
-}
-
-function formatIsoDuration(seconds: number): string {
-  return `PT${Math.max(0.001, seconds).toFixed(3)}S`;
-}
-
-function xmlEscape(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-function contentTypeFor(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase();
-  if (ext === ".mpd") return "application/dash+xml";
-  if (ext === ".m3u8") return "application/vnd.apple.mpegurl";
-  if (ext === ".ts") return "video/mp2t";
-  if (ext === ".m4s") return "video/iso.segment";
-  if (ext === ".mp4") return "video/mp4";
-  if (ext === ".aac") return "audio/aac";
-  if (ext === ".webvtt") return "text/vtt";
-  if (ext === ".vtt") return "text/vtt";
-  return "application/octet-stream";
-}
-
-function sendText(
-  response: http.ServerResponse,
-  method: string | undefined,
-  body: string,
-  contentType: string,
-): void {
-  response.statusCode = 200;
-  response.setHeader("content-type", contentType);
-  response.setHeader("cache-control", "no-store");
-  if (method === "HEAD") {
-    response.end();
-    return;
-  }
-  response.end(body);
-}
-
-function buildLiveMasterPlaylist(
-  variants: StreamerClonedVariant[],
-  renditions: StreamerClonedRendition[] = [],
-): string {
-  const lines = ["#EXTM3U", "#EXT-X-VERSION:3"];
-  const audioGroupIds = renditionGroupIdsFor(renditions, "AUDIO");
-  const subtitleGroupIds = renditionGroupIdsFor(renditions, "SUBTITLES");
-  const renditionRefs = buildRenditionRefs(renditions);
-
-  for (const ref of renditionRefs) {
-    lines.push(`#EXT-X-MEDIA:${formatRenditionAttrs(ref.rendition, `${liveRenditionPath(ref)}/index.m3u8`)}`);
-  }
-
-  for (let index = 0; index < variants.length; index += 1) {
-    lines.push(`#EXT-X-STREAM-INF:${formatVariantAttrs(variants[index], audioGroupIds, subtitleGroupIds)}`);
-    lines.push(`/live/${index}/index.m3u8`);
-  }
-
-  return `${lines.join("\n")}\n`;
-}
-
-function buildLiveMediaPlaylist(
-  media: ClonedMediaSource,
-  pathPrefix: string,
-  state: {
-    startedAtMs: number;
-    windowSize: number;
-    initialMediaSequence: number;
-  },
-  nowMs: number,
-): string {
-  const currentSequence = currentLiveSequence(media, state, nowMs);
-  const version = media.segments.some((segment) => segment.map) ? 7 : 3;
-  const mediaSequence = Math.max(
-    state.initialMediaSequence,
-    currentSequence - state.windowSize + 1,
-  );
-  const discontinuitySequence = Math.floor(
-    Math.max(0, mediaSequence - state.initialMediaSequence) / media.segments.length,
-  );
-  const lines = [
-    "#EXTM3U",
-    `#EXT-X-VERSION:${version}`,
-    `#EXT-X-TARGETDURATION:${media.targetDuration}`,
-    `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`,
-    `#EXT-X-DISCONTINUITY-SEQUENCE:${discontinuitySequence}`,
-  ];
-
-  let activeMapUri: string | null = null;
-  for (let sequence = mediaSequence; sequence <= currentSequence; sequence += 1) {
-    const segment = segmentForSequence(media, sequence);
-    const previousSegment =
-      sequence > mediaSequence || mediaSequence > state.initialMediaSequence
-        ? segmentForSequence(media, sequence - 1)
-        : null;
-    if (
-      segment.originalIndex === 0 &&
-      previousSegment !== null &&
-      previousSegment.originalIndex !== 0
-    ) {
-      lines.push("#EXT-X-DISCONTINUITY");
-      activeMapUri = null;
-    }
-    if (segment.map && segment.map.localUri !== activeMapUri) {
-      lines.push(`#EXT-X-MAP:URI="${pathPrefix}/${segment.map.localUri}"`);
-      activeMapUri = segment.map.localUri;
-    }
-    const duration = segment.duration ?? media.targetDuration;
-    lines.push(`#EXTINF:${duration.toFixed(3)},${segment.title ?? ""}`);
-    lines.push(`${pathPrefix}/segments/${sequence}${extensionForSegment(segment)}`);
-  }
-
-  return `${lines.join("\n")}\n`;
-}
-
-function currentLiveSequence(
-  media: ClonedMediaSource,
-  state: {
-    startedAtMs: number;
-    windowSize: number;
-    initialMediaSequence: number;
-  },
-  nowMs: number,
-): number {
-  const targetMs = Math.max(1, media.targetDuration * 1000);
-  const elapsedSegments = Math.max(0, Math.floor((nowMs - state.startedAtMs) / targetMs));
-  return state.initialMediaSequence + state.windowSize - 1 + elapsedSegments;
-}
-
-function parseVariantIndex(clone: StreamerCloneResult, raw: string | undefined): number {
-  const index = Number(raw);
-  if (!Number.isInteger(index) || index < 0 || index >= clone.variants.length) {
-    throw new Error("invalid live variant index");
-  }
-  return index;
-}
-
-function parseRenditionIndex(raw: string | undefined): number {
-  const index = Number(raw);
-  if (!Number.isInteger(index) || index < 0) {
-    throw new Error("invalid live rendition index");
-  }
-  return index;
-}
-
-function segmentForSequence(
-  media: ClonedMediaSource,
-  sequence: number,
-): StreamerClonedSegment {
-  if (media.segments.length === 0) {
-    throw new Error("variant has no segments");
-  }
-  const index = sequence % media.segments.length;
-  return media.segments[index];
-}
-
-function resolveClonedSegmentPath(
-  rootDir: string,
-  media: ClonedMediaSource,
-  segment: StreamerClonedSegment,
-): string {
-  const mediaDir = path.dirname(media.localUri);
-  return path.join(rootDir, mediaDir === "." ? "" : mediaDir, segment.localUri);
-}
-
-function resolveClonedMapPath(
-  rootDir: string,
-  media: ClonedMediaSource,
-  clonedMap: StreamerClonedMap,
-): string {
-  const mediaDir = path.dirname(media.localUri);
-  return path.join(rootDir, mediaDir === "." ? "" : mediaDir, clonedMap.localUri);
-}
-
-function extensionForSegment(segment: StreamerClonedSegment): string {
-  const ext = path.extname(segment.localUri);
-  return ext || ".ts";
 }

@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-05-28**
+Ultima atualizacao: **2026-06-09**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,41 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-06-09 - Fase 23: decomposicao inicial do StreamerService
+
+Resumo:
+- `StreamerService` preserva a API publica, mas delega persistencia de origins,
+  servidor VOD/live e mutation para modulos focados.
+- Builders de manifests HLS e DASH foram separados por protocolo.
+- Helpers genericos de numeros, erros e filesystem agora ficam em `src/infra`
+  para reutilizacao por outras capabilities.
+- O arquivo principal caiu de 3.547 para 2.383 linhas sem mudar contratos,
+  schema de `origin.json`, rotas locais ou comportamento da CLI.
+
+Arquivos-chave:
+- `src/capabilities/video/streamer-service.ts`
+- `src/capabilities/video/streamer/origin-store.ts`
+- `src/capabilities/video/streamer/origin-server.ts`
+- `src/capabilities/video/streamer/mutation.ts`
+- `src/capabilities/video/streamer/hls-manifests.ts`
+- `src/capabilities/video/streamer/dash-manifests.ts`
+- `src/infra/numbers.ts`
+- `src/infra/errors.ts`
+- `src/infra/fs.ts`
+
+Checklist de validacao:
+- [x] `npm test -- src/capabilities/video/streamer-service.test.ts`
+- [x] `npm run check`
+
+Pendencias:
+- Extrair clone HLS/DASH e probe/analyze em etapas separadas, mantendo a
+  `StreamerService` como fachada publica.
+- Separar o arquivo de testes do streamer pelos mesmos casos de uso.
+
+Proximo passo recomendado:
+- Extrair `probeOrigin`/`analyzeOrigin` e seus helpers para
+  `streamer/analysis.ts`, pois esse e o maior bloco independente restante.
 
 ### 2026-05-28 - Fase 23: Streamer por janela de segmentos
 
