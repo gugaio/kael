@@ -47,9 +47,12 @@ Resumo:
   pelos fluxos HLS e DASH.
 - Download de segmentos com timeout/retry e selecao de janelas HLS/DASH foram
   isolados em modulos proprios.
+- `probeOrigin` foi extraido integralmente e a preparacao de chunks para
+  `analyzeOrigin` (amostragem, init segment e leitura de metadata FFprobe) agora
+  fica em modulo dedicado.
 - Helpers genericos de numeros, erros e filesystem agora ficam em `src/infra`
   para reutilizacao por outras capabilities.
-- O arquivo principal caiu de 3.547 para 2.119 linhas sem mudar contratos,
+- O arquivo principal caiu de 3.547 para 1.884 linhas sem mudar contratos,
   schema de `origin.json`, rotas locais ou comportamento da CLI.
 
 Arquivos-chave:
@@ -62,6 +65,8 @@ Arquivos-chave:
 - `src/capabilities/video/streamer/options.ts`
 - `src/capabilities/video/streamer/segment-downloader.ts`
 - `src/capabilities/video/streamer/segment-window.ts`
+- `src/capabilities/video/streamer/probe.ts`
+- `src/capabilities/video/streamer/analysis-probe.ts`
 - `src/infra/numbers.ts`
 - `src/infra/errors.ts`
 - `src/infra/fs.ts`
@@ -76,8 +81,8 @@ Pendencias:
 - Separar o arquivo de testes do streamer pelos mesmos casos de uso.
 
 Proximo passo recomendado:
-- Extrair `probeOrigin`/`analyzeOrigin` e seus helpers para
-  `streamer/analysis.ts`, pois esse e o maior bloco independente restante.
+- Extrair as regras de continuidade, drift, summaries e issues de
+  `analyzeOrigin` para `streamer/analysis.ts`.
 
 ### 2026-05-28 - Fase 23: Streamer por janela de segmentos
 

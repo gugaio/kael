@@ -143,6 +143,8 @@ src/capabilities/video/
     options.ts              # normalizacao compartilhada de clone/probe/analyze
     segment-downloader.ts   # download de chunks com timeout e retry
     segment-window.ts       # selecao temporal/por indice para HLS e DASH
+    probe.ts                # probe leve de playlists locais
+    analysis-probe.ts       # amostragem e execucao FFprobe por segmento
 
 src/cli/index.ts            # bootstrap da CLI e registro dos grupos de comandos
 src/cli/streamer-commands.ts # namespace kael streamer

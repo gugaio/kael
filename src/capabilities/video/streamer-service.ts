@@ -1,10 +1,19 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import type { VideoDashInspectResult, VideoHlsInspectResult, VideoInspectToolService } from "./inspect-service.js";
 import { isBrowserSafeHlsVariant } from "./streamer-diagnostics.js";
 import { buildLocalDashMpd } from "./streamer/dash-manifests.js";
+import {
+  buildAnalyzeCandidates,
+  extractActualSegmentDurationSeconds,
+  extractProbeStreamMetadata,
+  prepareSegmentProbeInput,
+  probeStreamSelectorFor,
+  sampleAnalyzeSegmentIndices,
+  secondsToMicroseconds,
+  type StreamerAnalyzeCandidate,
+} from "./streamer/analysis-probe.js";
 import {
   buildLocalMasterPlaylist,
   buildLocalMediaPlaylist,
@@ -15,9 +24,9 @@ import { mutateOrigin } from "./streamer/mutation.js";
 import {
   normalizeAnalyzeOptions,
   normalizeCloneOptions,
-  normalizeProbeOptions,
 } from "./streamer/options.js";
 import { SegmentDownloader } from "./streamer/segment-downloader.js";
+import { probeOrigin } from "./streamer/probe.js";
 import {
   selectDashSegmentWindow,
   selectHlsSegmentWindow,
@@ -61,17 +70,6 @@ type VariantSource = NonNullable<StreamerClonedVariant["variant"]>;
 type RenditionSource = VideoHlsInspectResult["renditions"][number];
 type DashRepresentationSource = VideoDashInspectResult["representations"][number];
 type RenditionKind = "AUDIO" | "SUBTITLES";
-type StreamerProbeCandidate = {
-  kind: "variant" | "rendition";
-  index: number;
-  type: "VIDEO" | RenditionKind;
-  label: string;
-  manifestPath: string;
-};
-type StreamerAnalyzeCandidate = StreamerProbeCandidate & {
-  rootPath: string;
-  segments: StreamerClonedSegment[];
-};
 type ProgressEmitter = (event: StreamerCloneProgressEvent) => void;
 
 const RENDITION_KIND_CONFIG: Record<RenditionKind, "audio" | "subtitles"> = {
@@ -117,42 +115,7 @@ export class StreamerService {
   }
 
   async probeOrigin(originId: string, options: StreamerProbeOptions = {}): Promise<StreamerOriginProbeReport> {
-    if (!this.inspect.probe) {
-      throw new Error("streamer probe requires ffprobe support in VideoInspectToolService");
-    }
-
-    const clone = await this.originStore.load(originId);
-    const { timeoutMs, maxMediaPlaylists } = normalizeProbeOptions(options);
-    const candidates = buildProbeCandidates(clone).slice(0, maxMediaPlaylists);
-    const entries: StreamerOriginProbeReport["entries"] = [];
-
-    for (const candidate of candidates) {
-      const result = await this.inspect.probe({
-        input: candidate.manifestPath,
-        timeoutMs,
-      });
-      entries.push({
-        kind: candidate.kind,
-        index: candidate.index,
-        type: candidate.type,
-        label: candidate.label,
-        manifestPath: candidate.manifestPath,
-        ok: result.ok,
-        streamCount: Array.isArray(result.streams) ? result.streams.length : 0,
-        errors: result.errors,
-      });
-    }
-
-    const okCount = entries.filter((entry) => entry.ok).length;
-    return {
-      originId: clone.id,
-      ok: entries.every((entry) => entry.ok),
-      sampledMediaPlaylists: entries.length,
-      totalMediaPlaylists: clone.variantCount + clone.renditionCount,
-      okCount,
-      failedCount: entries.length - okCount,
-      entries,
-    };
+    return probeOrigin(this.originStore, this.inspect, originId, options);
   }
 
   async analyzeOrigin(originId: string, options: StreamerAnalyzeOptions = {}): Promise<StreamerOriginAnalysisReport> {
@@ -1399,120 +1362,6 @@ function minVariantDuration(variants: StreamerClonedVariant[]): number {
   return Math.min(...variants.map((variant) => variant.cumulativeDurationSeconds));
 }
 
-function buildProbeCandidates(clone: StreamerCloneResult): StreamerProbeCandidate[] {
-  return [
-    ...clone.variants.map((variant, index) => ({
-      kind: "variant" as const,
-      index,
-      type: "VIDEO" as const,
-      label: formatVariantProbeLabel(variant),
-      manifestPath: variant.manifestPath,
-    })),
-    ...clone.renditions.map((rendition, index) => ({
-      kind: "rendition" as const,
-      index,
-      type: requireRenditionKind(rendition.type),
-      label: formatRenditionProbeLabel(rendition),
-      manifestPath: rendition.manifestPath,
-    })),
-  ];
-}
-
-function buildAnalyzeCandidates(clone: StreamerCloneResult): StreamerAnalyzeCandidate[] {
-  return [
-    ...clone.variants.map((variant, index) => ({
-      kind: "variant" as const,
-      index,
-      type: "VIDEO" as const,
-      label: formatVariantProbeLabel(variant),
-      manifestPath: variant.manifestPath,
-      rootPath: path.dirname(variant.manifestPath),
-      segments: variant.segments,
-    })),
-    ...clone.renditions.map((rendition, index) => ({
-      kind: "rendition" as const,
-      index,
-      type: requireRenditionKind(rendition.type),
-      label: formatRenditionProbeLabel(rendition),
-      manifestPath: rendition.manifestPath,
-      rootPath: path.dirname(rendition.manifestPath),
-      segments: rendition.segments,
-    })),
-  ];
-}
-
-async function prepareSegmentProbeInput(
-  rootPath: string,
-  segment: StreamerClonedSegment,
-  segmentPath: string,
-): Promise<{ input: string; cleanup(): Promise<void> }> {
-  if (!segment.map) {
-    return {
-      input: segmentPath,
-      cleanup: async () => undefined,
-    };
-  }
-
-  const mapPath = path.join(rootPath, segment.map.localUri);
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "kael-streamer-probe-"));
-  const ext = path.extname(segment.localUri) || ".mp4";
-  const tempPath = path.join(tempDir, `segment-with-init${ext === ".dash" ? ".mp4" : ext}`);
-
-  try {
-    const [initBytes, segmentBytes] = await Promise.all([
-      fs.readFile(mapPath),
-      fs.readFile(segmentPath),
-    ]);
-    await fs.writeFile(tempPath, Buffer.concat([initBytes, segmentBytes]));
-    return {
-      input: tempPath,
-      cleanup: async () => {
-        await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
-      },
-    };
-  } catch (error) {
-    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
-    throw error;
-  }
-}
-
-function sampleSegmentIndices(segmentCount: number, maxSegments: number): number[] {
-  if (segmentCount <= 0 || maxSegments <= 0) {
-    return [];
-  }
-  if (segmentCount <= maxSegments) {
-    return Array.from({ length: segmentCount }, (_, index) => index);
-  }
-
-  const samples = new Set<number>([0, Math.floor((segmentCount - 1) / 2), segmentCount - 1]);
-  if (maxSegments >= 4) {
-    samples.add(Math.floor(segmentCount / 3));
-  }
-  if (maxSegments >= 5) {
-    samples.add(Math.floor((2 * segmentCount) / 3));
-  }
-
-  return [...samples].sort((left, right) => left - right).slice(0, maxSegments);
-}
-
-function sampleAnalyzeSegmentIndices(
-  segments: StreamerClonedSegment[],
-  maxSegments: number,
-  startSegment: number | undefined,
-  segmentCount: number | undefined,
-): number[] {
-  const filteredIndexes = segments.flatMap((segment, index) => {
-    if (startSegment === undefined && segmentCount === undefined) {
-      return [index];
-    }
-    const windowStart = startSegment ?? 0;
-    const windowEnd = segmentCount === undefined ? Number.POSITIVE_INFINITY : windowStart + segmentCount;
-    return segment.originalIndex >= windowStart && segment.originalIndex < windowEnd ? [index] : [];
-  });
-  const sampledPositions = sampleSegmentIndices(filteredIndexes.length, maxSegments);
-  return sampledPositions.map((position) => filteredIndexes[position]).filter((index): index is number => index !== undefined);
-}
-
 function applyBoundaryAnalysis(candidate: StreamerAnalyzeCandidate, entries: StreamerOriginAnalysisReport["entries"]): void {
   const sorted = [...entries].sort((left, right) => left.segmentIndex - right.segmentIndex);
   for (let index = 0; index < sorted.length; index += 1) {
@@ -1964,92 +1813,8 @@ function averageAbsOptional(values: Array<number | undefined>): number | undefin
   return filtered.reduce((sum, value) => sum + Math.abs(value), 0) / filtered.length;
 }
 
-function secondsToMicroseconds(value: number | undefined): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? Math.round(value * 1_000_000) : undefined;
-}
-
 function formatMicrosecondsAsMs(value: number): string {
   return `${(value / 1_000).toFixed(3)}ms`;
-}
-
-function probeStreamSelectorFor(type: "VIDEO" | RenditionKind): string {
-  switch (type) {
-    case "VIDEO":
-      return "v:0";
-    case "AUDIO":
-      return "a:0";
-    case "SUBTITLES":
-      return "s:0";
-  }
-}
-
-function extractProbeStreamMetadata(streams: unknown[] | undefined): {
-  codecName?: string;
-  sampleRate?: number;
-  channels?: number;
-} {
-  const stream = Array.isArray(streams) && streams[0] && typeof streams[0] === "object"
-    ? streams[0] as Record<string, unknown>
-    : undefined;
-  if (!stream) {
-    return {};
-  }
-  const sampleRate = typeof stream.sample_rate === "string" || typeof stream.sample_rate === "number"
-    ? Number(stream.sample_rate)
-    : undefined;
-  const channels = typeof stream.channels === "string" || typeof stream.channels === "number"
-    ? Number(stream.channels)
-    : undefined;
-  return {
-    codecName: typeof stream.codec_name === "string" ? stream.codec_name : undefined,
-    sampleRate: Number.isFinite(sampleRate) ? sampleRate : undefined,
-    channels: Number.isFinite(channels) ? channels : undefined,
-  };
-}
-
-function extractProbeDurationSeconds(format: unknown): number | undefined {
-  if (!format || typeof format !== "object") {
-    return undefined;
-  }
-  const duration = (format as { duration?: unknown }).duration;
-  if (typeof duration !== "string" && typeof duration !== "number") {
-    return undefined;
-  }
-  const value = Number(duration);
-  return Number.isFinite(value) ? value : undefined;
-}
-
-function extractActualSegmentDurationSeconds(
-  result: Awaited<ReturnType<NonNullable<HlsInspectLike["probe"]>>>,
-  hasInitSegment: boolean,
-): number | undefined {
-  if (
-    hasInitSegment &&
-    typeof result.timeline?.firstPtsTime === "number" &&
-    typeof result.timeline.lastPtsTime === "number"
-  ) {
-    const sampleDuration = result.timeline.lastSampleDurationTime ?? 0;
-    const duration = result.timeline.lastPtsTime - result.timeline.firstPtsTime + sampleDuration;
-    if (Number.isFinite(duration) && duration > 0) {
-      return duration;
-    }
-  }
-  return extractProbeDurationSeconds(result.format);
-}
-
-function formatVariantProbeLabel(variant: StreamerClonedVariant): string {
-  return formatVariantLabel(variant.variant ?? { uri: variant.sourceUri, url: variant.sourceUrl });
-}
-
-function formatRenditionProbeLabel(rendition: StreamerClonedRendition): string {
-  return [
-    rendition.type.toUpperCase(),
-    rendition.groupId,
-    rendition.name,
-    rendition.channels ? `${rendition.channels}ch` : undefined,
-  ]
-    .filter((value): value is string => Boolean(value))
-    .join(" | ") || rendition.sourceUri;
 }
 
 function buildSegmentFileName(index: number, uri: string): string {
