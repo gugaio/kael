@@ -53,9 +53,11 @@ Resumo:
 - `analyzeOrigin` foi extraido integralmente: orchestration, regras de
   continuidade/boundary, drift A/V, summaries e geracao de issues agora ficam
   fora da fachada publica.
+- O clone DASH foi extraido integralmente para um modulo de caso de uso,
+  incluindo selecao de Representations, download, manifests e persistencia.
 - Helpers genericos de numeros, erros e filesystem agora ficam em `src/infra`
   para reutilizacao por outras capabilities.
-- O arquivo principal caiu de 3.547 para 1.326 linhas sem mudar contratos,
+- O arquivo principal caiu de 3.547 para 878 linhas sem mudar contratos,
   schema de `origin.json`, rotas locais ou comportamento da CLI.
 
 Arquivos-chave:
@@ -72,6 +74,7 @@ Arquivos-chave:
 - `src/capabilities/video/streamer/analysis-probe.ts`
 - `src/capabilities/video/streamer/analysis-rules.ts`
 - `src/capabilities/video/streamer/analysis.ts`
+- `src/capabilities/video/streamer/clone-dash.ts`
 - `src/infra/numbers.ts`
 - `src/infra/errors.ts`
 - `src/infra/fs.ts`
@@ -81,12 +84,11 @@ Checklist de validacao:
 - [x] `npm run check`
 
 Pendencias:
-- Extrair clone HLS e DASH em etapas separadas, mantendo a `StreamerService`
-  como fachada publica.
+- Extrair o clone HLS, mantendo a `StreamerService` como fachada publica.
 - Separar o arquivo de testes do streamer pelos mesmos casos de uso.
 
 Proximo passo recomendado:
-- Extrair primeiro o clone DASH, que tem menos ramificacoes que o fluxo HLS.
+- Extrair o clone HLS e manter no servico apenas delegacao dos casos de uso.
 
 ### 2026-05-28 - Fase 23: Streamer por janela de segmentos
 

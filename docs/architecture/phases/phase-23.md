@@ -32,10 +32,10 @@ O foco inicial e operacional:
 
 - A capability chama-se `streamer`, nao `mock`, porque a fronteira representa
   operacao real de streams, nao apenas fixture falsa.
-- O subdominio fica dentro de `video`, em `src/capabilities/video/streamer-service.ts`,
-  reaproveitando `VideoInspectToolService.inspectHls()` e
-  `VideoInspectToolService.inspectDash()` como primitivos de parsing/fetch de
-  manifestos.
+- O subdominio fica dentro de `video`; `streamer-service.ts` preserva a fachada
+  publica e delega casos de uso para modulos em `streamer/`, reaproveitando
+  `VideoInspectToolService.inspectHls()` e `VideoInspectToolService.inspectDash()`
+  como primitivos de parsing/fetch de manifestos.
 - O storage local fica em `<KAEL_DATA_DIR>/streamer/origins/<originId>/`.
 - A primeira entrega e CLI-only. Nenhum endpoint HTTP novo foi criado nesta fase.
 - O servidor de origin e local e efemero, iniciado por `--serve`; ele serve os
@@ -131,7 +131,7 @@ src/capabilities/video/
   inspect-service.ts        # parsing HLS/DASH usado pelo streamer
   streamer-diagnostics.ts   # diagnostico de codecs/browser para origins clonados
   streamer-report-html.ts   # render HTML estatico do analyze
-  streamer-service.ts       # fachada publica + orchestration de clone HLS/DASH
+  streamer-service.ts       # fachada publica + orchestration de clone HLS
   streamer-service.test.ts  # testes unitarios/integracao leve
   types.ts                  # contratos Streamer*
   streamer/
@@ -147,6 +147,7 @@ src/capabilities/video/
     analysis-probe.ts       # amostragem e execucao FFprobe por segmento
     analysis-rules.ts       # continuidade, drift, summaries e issues
     analysis.ts             # orchestration completa do analyze
+    clone-dash.ts           # orchestration completa do clone DASH
 
 src/cli/index.ts            # bootstrap da CLI e registro dos grupos de comandos
 src/cli/streamer-commands.ts # namespace kael streamer
@@ -217,6 +218,10 @@ CLI
   | kael streamer clone <url.mpd> --duration 60 --serve
   v
 StreamerService.cloneDash()
+  |
+  | delega para streamer/clone-dash.ts
+  v
+cloneDash()
   |
   | inspectDash(root)
   |-- MPD: seleciona Representation de video highest/lowest/index ou todas com --all-variants
