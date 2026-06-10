@@ -50,9 +50,12 @@ Resumo:
 - `probeOrigin` foi extraido integralmente e a preparacao de chunks para
   `analyzeOrigin` (amostragem, init segment e leitura de metadata FFprobe) agora
   fica em modulo dedicado.
+- `analyzeOrigin` foi extraido integralmente: orchestration, regras de
+  continuidade/boundary, drift A/V, summaries e geracao de issues agora ficam
+  fora da fachada publica.
 - Helpers genericos de numeros, erros e filesystem agora ficam em `src/infra`
   para reutilizacao por outras capabilities.
-- O arquivo principal caiu de 3.547 para 1.884 linhas sem mudar contratos,
+- O arquivo principal caiu de 3.547 para 1.326 linhas sem mudar contratos,
   schema de `origin.json`, rotas locais ou comportamento da CLI.
 
 Arquivos-chave:
@@ -67,6 +70,8 @@ Arquivos-chave:
 - `src/capabilities/video/streamer/segment-window.ts`
 - `src/capabilities/video/streamer/probe.ts`
 - `src/capabilities/video/streamer/analysis-probe.ts`
+- `src/capabilities/video/streamer/analysis-rules.ts`
+- `src/capabilities/video/streamer/analysis.ts`
 - `src/infra/numbers.ts`
 - `src/infra/errors.ts`
 - `src/infra/fs.ts`
@@ -76,13 +81,12 @@ Checklist de validacao:
 - [x] `npm run check`
 
 Pendencias:
-- Extrair clone HLS/DASH e probe/analyze em etapas separadas, mantendo a
-  `StreamerService` como fachada publica.
+- Extrair clone HLS e DASH em etapas separadas, mantendo a `StreamerService`
+  como fachada publica.
 - Separar o arquivo de testes do streamer pelos mesmos casos de uso.
 
 Proximo passo recomendado:
-- Extrair as regras de continuidade, drift, summaries e issues de
-  `analyzeOrigin` para `streamer/analysis.ts`.
+- Extrair primeiro o clone DASH, que tem menos ramificacoes que o fluxo HLS.
 
 ### 2026-05-28 - Fase 23: Streamer por janela de segmentos
 

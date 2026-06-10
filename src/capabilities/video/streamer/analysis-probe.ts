@@ -1,9 +1,11 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import type { VideoInspectToolService } from "../inspect-service.js";
 import type {
   StreamerCloneResult,
   StreamerClonedSegment,
+  StreamerOriginAnalysisReport,
 } from "../types.js";
 
 type MediaType = "AUDIO" | "SUBTITLES" | "VIDEO";
@@ -26,6 +28,73 @@ type ProbeResult = {
     lastSampleDurationTime?: number;
   };
 };
+
+export async function analyzeCandidate(params: {
+  candidate: StreamerAnalyzeCandidate;
+  probe: NonNullable<VideoInspectToolService["probe"]>;
+  timeoutMs: number;
+  maxSegments: number;
+  startSegment?: number;
+  segmentCount?: number;
+}): Promise<StreamerOriginAnalysisReport["entries"]> {
+  const entries: StreamerOriginAnalysisReport["entries"] = [];
+  const { candidate } = params;
+
+  for (const segmentIndex of sampleAnalyzeSegmentIndices(
+    candidate.segments,
+    params.maxSegments,
+    params.startSegment,
+    params.segmentCount,
+  )) {
+    const segment = candidate.segments[segmentIndex];
+    const localPath = path.join(candidate.rootPath, segment.localUri);
+    const probeInput = await prepareSegmentProbeInput(candidate.rootPath, segment, localPath);
+    let result;
+    try {
+      result = await params.probe({
+        input: probeInput.input,
+        timeoutMs: params.timeoutMs,
+        timeline: true,
+        streamSelector: probeStreamSelectorFor(candidate.type),
+      });
+    } finally {
+      await probeInput.cleanup();
+    }
+    const actualDurationSeconds = extractActualSegmentDurationSeconds(result, Boolean(segment.map));
+    const streamMetadata = extractProbeStreamMetadata(result.streams);
+    entries.push({
+      kind: candidate.kind,
+      mediaIndex: candidate.index,
+      segmentIndex,
+      originalSegmentIndex: segment.originalIndex,
+      type: candidate.type,
+      label: candidate.label,
+      localPath,
+      timelineStartSeconds: segment.timelineStartSeconds,
+      timelineEndSeconds: segment.timelineEndSeconds,
+      declaredDurationSeconds: segment.duration,
+      actualDurationSeconds,
+      durationDeltaSeconds: calculateDurationDelta(segment.duration, actualDurationSeconds),
+      streamCount: Array.isArray(result.streams) ? result.streams.length : 0,
+      codecName: streamMetadata.codecName,
+      sampleRate: streamMetadata.sampleRate,
+      channels: streamMetadata.channels,
+      packetCount: result.timeline?.sampleCount,
+      firstPtsTime: result.timeline?.firstPtsTime,
+      lastPtsTime: result.timeline?.lastPtsTime,
+      lastSampleDurationSeconds: result.timeline?.lastSampleDurationTime,
+      firstPtsUs: secondsToMicroseconds(result.timeline?.firstPtsTime),
+      lastPtsUs: secondsToMicroseconds(result.timeline?.lastPtsTime),
+      lastSampleDurationUs: secondsToMicroseconds(result.timeline?.lastSampleDurationTime),
+      keyframeCount: result.timeline?.keyframeCount,
+      startsWithKeyframe: result.timeline?.startsWithKeyframe,
+      maxKeyframeGapSeconds: result.timeline?.maxKeyframeGapSeconds,
+      ok: result.ok,
+      errors: result.errors,
+    });
+  }
+  return entries;
+}
 
 export function buildAnalyzeCandidates(clone: StreamerCloneResult): StreamerAnalyzeCandidate[] {
   return [
@@ -171,6 +240,15 @@ export function extractActualSegmentDurationSeconds(
 export function secondsToMicroseconds(value: number | undefined): number | undefined {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.round(value * 1_000_000)
+    : undefined;
+}
+
+function calculateDurationDelta(
+  declared?: number,
+  actual?: number,
+): number | undefined {
+  return typeof declared === "number" && typeof actual === "number"
+    ? actual - declared
     : undefined;
 }
 
