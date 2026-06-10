@@ -11,6 +11,7 @@ import type {
   StreamerMutateResult,
   StreamerOriginFault,
 } from "../types.js";
+import { minVariantDuration } from "./clone-utils.js";
 import { sanitizeOriginId, type StreamerOriginStore } from "./origin-store.js";
 
 export async function mutateOrigin(
@@ -272,10 +273,4 @@ async function transcodeDonorSegmentWithFfmpeg(
   } finally {
     await fs.rm(tempOutputPath, { force: true }).catch(() => undefined);
   }
-}
-
-function minVariantDuration(variants: StreamerClonedVariant[]): number {
-  return variants.length === 0
-    ? 0
-    : Math.min(...variants.map((variant) => variant.cumulativeDurationSeconds));
 }

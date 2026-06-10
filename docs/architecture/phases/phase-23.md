@@ -131,7 +131,7 @@ src/capabilities/video/
   inspect-service.ts        # parsing HLS/DASH usado pelo streamer
   streamer-diagnostics.ts   # diagnostico de codecs/browser para origins clonados
   streamer-report-html.ts   # render HTML estatico do analyze
-  streamer-service.ts       # fachada publica + orchestration de clone HLS
+  streamer-service.ts       # fachada publica dos casos de uso do streamer
   streamer-service.test.ts  # testes unitarios/integracao leve
   types.ts                  # contratos Streamer*
   streamer/
@@ -147,7 +147,9 @@ src/capabilities/video/
     analysis-probe.ts       # amostragem e execucao FFprobe por segmento
     analysis-rules.ts       # continuidade, drift, summaries e issues
     analysis.ts             # orchestration completa do analyze
+    clone-hls.ts            # orchestration completa do clone HLS
     clone-dash.ts           # orchestration completa do clone DASH
+    clone-utils.ts          # helpers compartilhados pelos clones HLS/DASH
 
 src/cli/index.ts            # bootstrap da CLI e registro dos grupos de comandos
 src/cli/streamer-commands.ts # namespace kael streamer
@@ -190,6 +192,10 @@ CLI
   | kael streamer clone <url> --duration 60 --serve
   v
 StreamerService.cloneHls()
+  |
+  | delega para streamer/clone-hls.ts
+  v
+cloneHls()
   |
   | inspectHls(root)
   |-- master: seleciona variant aac-highest/highest/lowest/index ou todas com --all-variants

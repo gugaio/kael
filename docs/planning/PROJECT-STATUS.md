@@ -55,9 +55,13 @@ Resumo:
   fora da fachada publica.
 - O clone DASH foi extraido integralmente para um modulo de caso de uso,
   incluindo selecao de Representations, download, manifests e persistencia.
+- O clone HLS foi extraido integralmente para um modulo de caso de uso, com
+  fluxos nomeados para ladder completa e variant selecionada.
+- Helpers de nome de segmento e duracao minima entre variants agora sao
+  compartilhados pelos clones HLS e DASH.
 - Helpers genericos de numeros, erros e filesystem agora ficam em `src/infra`
   para reutilizacao por outras capabilities.
-- O arquivo principal caiu de 3.547 para 878 linhas sem mudar contratos,
+- O arquivo principal caiu de 3.547 para 113 linhas sem mudar contratos,
   schema de `origin.json`, rotas locais ou comportamento da CLI.
 
 Arquivos-chave:
@@ -74,7 +78,9 @@ Arquivos-chave:
 - `src/capabilities/video/streamer/analysis-probe.ts`
 - `src/capabilities/video/streamer/analysis-rules.ts`
 - `src/capabilities/video/streamer/analysis.ts`
+- `src/capabilities/video/streamer/clone-hls.ts`
 - `src/capabilities/video/streamer/clone-dash.ts`
+- `src/capabilities/video/streamer/clone-utils.ts`
 - `src/infra/numbers.ts`
 - `src/infra/errors.ts`
 - `src/infra/fs.ts`
@@ -84,11 +90,12 @@ Checklist de validacao:
 - [x] `npm run check`
 
 Pendencias:
-- Extrair o clone HLS, mantendo a `StreamerService` como fachada publica.
 - Separar o arquivo de testes do streamer pelos mesmos casos de uso.
+- Extrair o download de media playlist de `clone-hls.ts` apenas se o caso de uso
+  precisar crescer novamente.
 
 Proximo passo recomendado:
-- Extrair o clone HLS e manter no servico apenas delegacao dos casos de uso.
+- Separar os testes de clone HLS/DASH dos testes de probe, analyze e serve.
 
 ### 2026-05-28 - Fase 23: Streamer por janela de segmentos
 

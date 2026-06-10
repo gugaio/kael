@@ -15,6 +15,7 @@ import type {
   StreamerClonedVariant,
 } from "../types.js";
 import { buildLocalDashMpd } from "./dash-manifests.js";
+import { buildSegmentFileName, minVariantDuration } from "./clone-utils.js";
 import { normalizeCloneOptions } from "./options.js";
 import { sanitizeOriginId, type StreamerOriginStore } from "./origin-store.js";
 import type { SegmentDownloader } from "./segment-downloader.js";
@@ -484,21 +485,4 @@ function buildRepresentationDirName(
       .filter((value): value is string | number => value !== undefined && value !== "")
       .join("-") || `representation-${index}`;
   return `${String(index).padStart(3, "0")}-${readable.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
-}
-
-function buildSegmentFileName(index: number, uri: string): string {
-  let basename = "";
-  try {
-    basename = path.basename(new URL(uri, "http://streamer.local").pathname);
-  } catch {
-    basename = path.basename(uri);
-  }
-  const safeBase = basename.replace(/[^a-zA-Z0-9._-]/g, "-") || "segment.ts";
-  return `${String(index).padStart(5, "0")}-${safeBase}`;
-}
-
-function minVariantDuration(variants: StreamerClonedVariant[]): number {
-  return variants.length === 0
-    ? 0
-    : Math.min(...variants.map((variant) => variant.cumulativeDurationSeconds));
 }
