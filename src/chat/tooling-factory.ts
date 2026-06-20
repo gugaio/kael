@@ -9,14 +9,12 @@ import type { ResearchService } from "../research/service.js";
 import type { ImageGeneratorService } from "../media/image-generator.js";
 import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
 import type { McpRuntime } from "../tools/mcp/mcp-bridge-service.js";
-import type { VideoInspectToolService } from "../capabilities/video/index.js";
 import type {
   ProviderBackedVideoGenerationService,
-  VideoManifestAuditService,
-  VideoManifestDiffService,
   HlsStreamMonitorService,
 } from "../capabilities/video/index.js";
-import type { PlaybackTriageService } from "@gugaio/vhs";
+import type { HlsManifestAuditInput, HlsManifestDiffInput } from "../capabilities/video/types.js";
+import type { ManifestAuditReport, ManifestDiffReport, MediaInspector, PlaybackTriageService } from "@gugaio/vhs";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
 import type { BrowserRuntime } from "../runtime/browser/index.js";
 import { buildJobLogTailResult, selectJobs } from "../jobs/tooling.js";
@@ -27,7 +25,7 @@ type ChatToolingExecutors = {
   shellRuntime: ShellRuntime;
   mcpRuntime: McpRuntime;
   edgeRuntime: EdgeRuntime;
-  videoInspect: Pick<VideoInspectToolService, "inspectHls" | "probe">;
+  videoInspect: Pick<MediaInspector, "inspectHls" | "probe">;
   memory: MemoryService;
   projects: ProjectContextService;
   workspace: WorkspaceInspector;
@@ -36,8 +34,8 @@ type ChatToolingExecutors = {
   imageGenerator: ImageGeneratorService;
   videoGeneration: ProviderBackedVideoGenerationService;
   playbackTriage: PlaybackTriageService;
-  manifestAudit: Pick<VideoManifestAuditService, "auditHlsManifest">;
-  manifestDiff: Pick<VideoManifestDiffService, "diffHlsManifests">;
+  manifestAudit: { auditHlsManifest(input: HlsManifestAuditInput): Promise<ManifestAuditReport> };
+  manifestDiff: { diffHlsManifests(input: HlsManifestDiffInput): Promise<ManifestDiffReport> };
   streamMonitor: HlsStreamMonitorService;
   browserRuntime: BrowserRuntime;
 };

@@ -1,73 +1,50 @@
+// Kael-owned video concerns: jobs, generated artifacts and agent session adapters.
 export { VideoJobCapability, VideoJobCapability as VideoCapability, VIDEO_JOB_ACTIONS } from "./jobs/job-capability.js";
 export { VideoJobService } from "./jobs/job-service.js";
-export { VideoInspectToolService } from "./inspect-service.js";
 export { VideoJobValidationError } from "./jobs/safety.js";
 export { VideoArtifactsService } from "./artifacts-service.js";
 export { ProviderBackedVideoGenerationService, NoopVideoGenerationService } from "./generation-service.js";
-export { PlaybackTriageService } from "./playback-triage-service.js";
-export { VideoManifestAuditService } from "./manifest-audit-service.js";
-export { VideoManifestDiffService } from "./manifest-diff-service.js";
 export { HlsStreamMonitorService } from "./stream-monitor-service.js";
-export { StreamerService } from "./streamer-service.js";
-export { renderStreamerAnalysisHtml } from "./streamer-report-html.js";
+
+// Deterministic media work belongs to the standalone VHS package.
 export {
+  MediaInspector as VideoInspectToolService,
+  PlaybackTriageService,
+  StreamerService,
+  renderStreamerAnalysisHtml,
   diagnoseStreamerClone,
-  inspectHlsVariantBrowserCompatibility,
-  isBrowserSafeHlsVariant,
-} from "./streamer-diagnostics.js";
+  analyzeSnapshotTransition,
+  toHlsSnapshot as toStreamSnapshot,
+  deriveHlsJsIssues,
+  parseHlsJsLogText,
+} from "@gugaio/vhs";
+
 export type {
+  HlsManifestAuditInput,
+  HlsManifestDiffInput,
+  StreamWatchEvent,
+  StreamWatchParams,
+  StreamWatchStatus,
+  StoredArtifactRecord,
+  VideoGenerationRequest,
+} from "./types.js";
+
+export type {
+  ManifestAuditIssue,
+  ManifestAuditReport as HlsManifestAuditReport,
+  ManifestDiffReport as HlsManifestDiffReport,
+  ManifestSeverity as PlaybackIssueSeverity,
+  ManifestVariantAudit as HlsVariantAuditReport,
+  PlaybackEngine,
+  PlaybackEvent,
+  PlaybackInput as PlaybackSessionInput,
+  PlaybackIssue,
+  PlaybackReport as PlaybackAnalysisReport,
+  HlsSnapshot as StreamSnapshot,
   StreamerBrowserCompatibility,
   StreamerCloneDiagnostic,
   StreamerDiagnosticIssue,
   StreamerVariantDiagnostic,
-} from "./streamer-diagnostics.js";
-export { analyzeSnapshotTransition, toHlsSnapshot as toStreamSnapshot } from "@gugaio/vhs";
-export { deriveHlsJsIssues, parseHlsJsLogText } from "./playback-adapters/hlsjs.js";
-export type {
-  HlsManifestAuditInput,
-  HlsManifestAuditReport,
-  HlsManifestDiffInput,
-  HlsManifestDiffReport,
-  HlsVariantAuditReport,
-  ManifestAuditIssue,
-  PlaybackAnalysisReport,
-  PlaybackEngine,
-  PlaybackEvent,
-  PlaybackIssue,
-  PlaybackIssueSeverity,
-  PlaybackSessionInput,
-  StoredArtifactRecord,
-  StreamerCloneInput,
-  StreamerCloneProgressEvent,
-  StreamerCloneResult,
-  StreamerClonedMap,
-  StreamerClonedRendition,
-  StreamerClonedSegment,
-  StreamerClonedVariant,
-  StreamerFaultTargetKind,
-  StreamerFaultType,
-  StreamerAnalyzeOptions,
-  StreamerAnalysisIssue,
-  StreamerAvAlignmentSummary,
-  StreamerMediaProbeEntry,
-  StreamerMediaAnalysisSummary,
-  StreamerOriginAnalysisReport,
-  StreamerLiveServeHandle,
-  StreamerLiveServeOptions,
-  StreamerOriginProbeReport,
-  StreamerOriginFault,
-  StreamerOriginSummary,
-  StreamerProbeOptions,
-  StreamerRemoveResult,
-  StreamerSegmentAnalysisEntry,
-  StreamerTimelineContinuityStatus,
-  StreamerMutateInput,
-  StreamerMutateResult,
-  StreamerServeHandle,
-  StreamerServeOptions,
-  StreamSnapshot,
-  StreamWatchEvent,
-  StreamWatchParams,
-  StreamWatchStatus,
-  VideoGenerationRequest,
-} from "./types.js";
+} from "@gugaio/vhs";
+
+export type * from "@gugaio/vhs";

@@ -9,7 +9,7 @@ streams HLS/DASH reais e servi-la como origem HTTP local para testes de players.
 
 O foco inicial e operacional:
 
-- CLI minimalista: `kael streamer clone <url>`;
+- CLI minimalista: `vhs stream clone <url>`;
 - parsing de master/media playlist HLS;
 - parsing de MPD DASH VOD com `SegmentTemplate`, `SegmentTimeline`,
   `SegmentList` e `BaseURL`;
@@ -43,17 +43,17 @@ O foco inicial e operacional:
 - A capability chama-se `streamer`, nao `mock`, porque a fronteira representa
   operacao real de streams, nao apenas fixture falsa.
 - O subdominio fica dentro de `video`; `streamer-service.ts` preserva a fachada
-  publica e delega casos de uso para modulos em `streamer/`, reaproveitando
+  publica e delega casos de uso para modulos em `vhs stream/`, reaproveitando
   `VideoInspectToolService.inspectHls()` e `VideoInspectToolService.inspectDash()`
   como primitivos de parsing/fetch de manifestos.
-- O storage local fica em `<KAEL_DATA_DIR>/streamer/origins/<originId>/`.
+- O storage local fica em `<KAEL_DATA_DIR>/vhs stream/origins/<originId>/`.
 - A primeira entrega e CLI-only. Nenhum endpoint HTTP novo foi criado nesta fase.
 - O servidor de origin e local e efemero, iniciado por `--serve`; ele serve os
   arquivos clonados com CORS permissivo.
 - `--all-variants` clona todas as variants da master playlist e gera uma
   master local em `index.m3u8`; `--max-variants` permite limitar o peso quando
   a ladder for grande.
-- `kael streamer live <originId>` serve um clone existente como live. O live e
+- `vhs stream live <originId>` serve um clone existente como live. O live e
   calculado on-demand pela hora atual, sem worker de background: `MEDIA-SEQUENCE`
   avanca virtualmente e cada segmento virtual mapeia por modulo para um chunk
   ja clonado.
@@ -125,7 +125,7 @@ O foco inicial e operacional:
   `analyze` usado pelos origins HLS.
 - `origin.json` tem `schemaVersion` explicito. A fase atual usa apenas o schema
   mais recente; origins antigos podem ser removidos e recriados.
-- `kael streamer live` sem `originId` resolve para o origin mais recente
+- `vhs stream live` sem `originId` resolve para o origin mais recente
   listado pelo storage local. `remove` permanece explicito e exige `--yes`.
 - Media playlists fMP4/CMAF sem DRM e sem byte range preservam `EXT-X-MAP`:
   o init segment e baixado para `init/*` e o manifesto local/live aponta para
@@ -137,61 +137,46 @@ O foco inicial e operacional:
 ## Estrutura de arquivos
 
 ```text
-src/capabilities/video/
-  inspect-service.ts        # parsing HLS/DASH usado pelo streamer
-  streamer-diagnostics.ts   # diagnostico de codecs/browser para origins clonados
-  streamer-report-html.ts   # render HTML estatico do analyze
-  streamer-service.ts       # fachada publica dos casos de uso do streamer
-  streamer-service.test.ts  # testes unitarios/integracao leve
-  types.ts                  # contratos Streamer*
-  streamer/
-    origin-store.ts         # persistencia e gestao de origin.json
-    origin-server.ts        # servidores HTTP VOD e live virtual
-    mutation.ts             # fault injection e segment swap
-    hls-manifests.ts        # serializacao de manifests HLS locais
-    dash-manifests.ts       # serializacao de MPDs DASH locais
-    options.ts              # normalizacao compartilhada de clone/probe/analyze
-    segment-downloader.ts   # download de chunks com timeout e retry
-    segment-window.ts       # selecao temporal/por indice para HLS e DASH
-    probe.ts                # probe leve de playlists locais
-    analysis-probe.ts       # amostragem e execucao FFprobe por segmento
-    analysis-rules.ts       # continuidade, drift, summaries e issues
-    analysis.ts             # orchestration completa do analyze
-    clone-hls.ts            # orchestration completa do clone HLS
-    clone-dash.ts           # orchestration completa do clone DASH
-    clone-utils.ts          # helpers compartilhados pelos clones HLS/DASH
+../vhs/src/
+  inspect.ts                # parsing HLS/DASH e ffprobe
+  manifest.ts               # audit HLS
+  manifest-diff.ts          # diff HLS
+  stream/                   # clone, origins, serve, live, probe, analyze, mutate
+  cli.ts                    # CLI `vhs`
 
-src/cli/index.ts            # bootstrap da CLI e registro dos grupos de comandos
-src/cli/streamer-commands.ts # namespace kael streamer
-src/cli/streamer-output.ts  # formatacao e diagnostico textual do streamer
+src/capabilities/video/
+  jobs/                     # jobs e politicas do Kael
+  artifacts-service.ts      # artifacts de geração do Kael
+  generation-service.ts     # providers de geração do Kael
+  stream-monitor-service.ts # adaptador VHS -> sessionKey do Kael
 ```
 
 ## Comandos operacionais
 
 ```bash
-kael streamer clone <url.m3u8> --duration 60 --all-variants
-kael streamer clone <url> --start 16:00 --duration 60
-kael streamer clone <url> --start-segment 200 --segment-count 50
-kael streamer clone <url.mpd> --duration 60
-kael streamer clone <url> --format dash --duration 60
-kael streamer list
-kael streamer inspect <originId>
-kael streamer inspect latest
-kael streamer probe
-kael streamer probe <originId>
-kael streamer analyze
-kael streamer analyze <originId>
-kael streamer analyze <originId> --json
-kael streamer analyze <originId> --full --html
-kael streamer analyze <originId> --full --html --start-segment 200 --segment-count 50
-kael streamer analyze <originId> --full --html --output /tmp/kael-stream-report.html
-kael streamer mutate <originId> --fault discontinuity --at-segment 5
-kael streamer mutate <originId> --fault segment-swap --at-segment 5 --with-origin <donorOrigin> --with-segment 1
-kael streamer mutate <originId> --fault segment-swap --at-segment 5 --with-origin <donorOrigin> --with-segment 1 --ffmpeg-profile hevc
-kael streamer serve <originId>
-kael streamer live
-kael streamer live <originId> --window-size 5
-kael streamer remove <originId> --yes
+vhs stream clone <url.m3u8> --duration 60 --all-variants
+vhs stream clone <url> --start 16:00 --duration 60
+vhs stream clone <url> --start-segment 200 --segment-count 50
+vhs stream clone <url.mpd> --duration 60
+vhs stream clone <url> --format dash --duration 60
+vhs stream list
+vhs stream inspect <originId>
+vhs stream inspect latest
+vhs stream probe
+vhs stream probe <originId>
+vhs stream analyze
+vhs stream analyze <originId>
+vhs stream analyze <originId> --json
+vhs stream analyze <originId> --full --html
+vhs stream analyze <originId> --full --html --start-segment 200 --segment-count 50
+vhs stream analyze <originId> --full --html --output /tmp/kael-stream-report.html
+vhs stream mutate <originId> --fault discontinuity --at-segment 5
+vhs stream mutate <originId> --fault segment-swap --at-segment 5 --with-origin <donorOrigin> --with-segment 1
+vhs stream mutate <originId> --fault segment-swap --at-segment 5 --with-origin <donorOrigin> --with-segment 1 --ffmpeg-profile hevc
+vhs stream serve <originId>
+vhs stream live
+vhs stream live <originId> --window-size 5
+vhs stream remove <originId> --yes
 ```
 
 ## Fluxo inicial
@@ -199,11 +184,11 @@ kael streamer remove <originId> --yes
 ```text
 CLI
   |
-  | kael streamer clone <url> --duration 60 --serve
+  | vhs stream clone <url> --duration 60 --serve
   v
-StreamerService.cloneHls()
+Vhs.stream.cloneHls()
   |
-  | delega para streamer/clone-hls.ts
+  | delega para ../vhs/src/stream/clone-hls.ts
   v
 cloneHls()
   |
@@ -219,7 +204,7 @@ cloneHls()
   | escreve index.m3u8 local (media ou master)
   | escreve origin.json
   v
-StreamerService.serveOrigin()
+Vhs.stream.serveOrigin()
   |
   | HTTP local com CORS
   v
@@ -231,11 +216,11 @@ playbackUrl: http://127.0.0.1:<port>/index.m3u8
 ```text
 CLI
   |
-  | kael streamer clone <url.mpd> --duration 60 --serve
+  | vhs stream clone <url.mpd> --duration 60 --serve
   v
-StreamerService.cloneDash()
+Vhs.stream.cloneDash()
   |
-  | delega para streamer/clone-dash.ts
+  | delega para ../vhs/src/stream/clone-dash.ts
   v
 cloneDash()
   |
@@ -247,7 +232,7 @@ cloneDash()
   |-- escreve index.mpd local com SegmentList
   |-- escreve origin.json com protocol=dash
   v
-StreamerService.serveOrigin()
+Vhs.stream.serveOrigin()
   |
   | HTTP local com CORS
   v
@@ -259,9 +244,9 @@ playbackUrl: http://127.0.0.1:<port>/index.mpd
 ```text
 CLI
   |
-  | kael streamer live <originId> --window-size 5
+  | vhs stream live <originId> --window-size 5
   v
-StreamerService.serveLiveOrigin()
+Vhs.stream.serveLiveOrigin()
   |
   | GET /index.m3u8
   |-- single variant: media playlist live

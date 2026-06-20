@@ -65,12 +65,11 @@ Checklist de validacao:
 
 Pendencias:
 - Publicar VHS em registry versionado e trocar `file:../vhs` por uma versao
-  imutavel antes de apagar as implementacoes legadas que ja nao participam do
-  runtime ativo.
+  imutavel.
 
 Proximo passo recomendado:
-- Remover os modulos legados de inspect/manifest/streamer do Kael depois da
-  publicacao versionada do VHS e de uma rodada de smoke tests com streams reais.
+- Executar smoke tests do CLI VHS contra streams reais antes da primeira
+  publicacao versionada.
 
 ### 2026-06-09 - Fase 23: decomposicao inicial do StreamerService
 
