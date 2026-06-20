@@ -6,7 +6,7 @@ import { JobManager } from "../jobs/manager.js";
 import { LocalProcessRunner } from "../tools/system/process-runner.js";
 import { ShellToolService } from "../tools/system/shell-tool-service.js";
 import { McpBridgeService } from "../tools/mcp/mcp-bridge-service.js";
-import { createVhs, type Vhs } from "@gugaime/vhs";
+import { createVhs, type Vhs } from "@gugaio/vhs";
 import {
   VideoArtifactsService,
   VideoJobCapability,
@@ -47,6 +47,7 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
   videoArtifacts: VideoArtifactsService;
   streamMonitor: HlsStreamMonitorService;
   streamer: Vhs["stream"];
+  playback: Vhs["playback"];
 }> {
   const runner = new LocalProcessRunner();
   const video = new VideoJobService(jobStore, runner, {
@@ -68,7 +69,7 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
   };
   const videoArtifacts = new VideoArtifactsService(path.join(config.dataDir, "video", "artifacts"));
   await videoArtifacts.init();
-  const streamMonitor = new HlsStreamMonitorService(videoInspect);
+  const streamMonitor = new HlsStreamMonitorService(vhs.watch);
   const streamer = vhs.stream;
   return {
     jobs,
@@ -78,6 +79,7 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
     videoArtifacts,
     streamMonitor,
     streamer,
+    playback: vhs.playback,
   };
 }
 

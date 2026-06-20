@@ -9,7 +9,7 @@ import {
   type StreamerCloneResult,
   type StreamerFaultTargetKind,
   type StreamerOriginSummary,
-} from "@gugaime/vhs";
+} from "@gugaio/vhs";
 import { formatBytes, formatSeconds, highlight, optionalNumber, optionalTimeSeconds } from "./cli-utils.js";
 import {
   buildStreamerFileProbe,

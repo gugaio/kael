@@ -40,7 +40,7 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "@gugaime/vhs": "file:../vhs",
+    "@gugaio/vhs": "file:../vhs",
     "@mariozechner/pi-agent-core": "^0.50.7",
     "@mariozechner/pi-ai": "^0.50.7",
     "commander": "^14.0.3",

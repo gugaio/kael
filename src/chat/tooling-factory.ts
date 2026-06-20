@@ -11,12 +11,12 @@ import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
 import type { McpRuntime } from "../tools/mcp/mcp-bridge-service.js";
 import type { VideoInspectToolService } from "../capabilities/video/index.js";
 import type {
-  PlaybackTriageService,
   ProviderBackedVideoGenerationService,
   VideoManifestAuditService,
   VideoManifestDiffService,
   HlsStreamMonitorService,
 } from "../capabilities/video/index.js";
+import type { PlaybackTriageService } from "@gugaio/vhs";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
 import type { BrowserRuntime } from "../runtime/browser/index.js";
 import { buildJobLogTailResult, selectJobs } from "../jobs/tooling.js";
@@ -75,8 +75,8 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
         }),
       videoGenerateImage: ({ sessionKey, prompt, provider, size }) =>
         executors.videoGeneration.generateImage({ sessionKey, prompt, provider, size }),
-      playbackAnalyze: async ({ sessionKey, player, source, streamUrl, logText, events }) =>
-        executors.playbackTriage.analyzeSession({ sessionKey, player, source, streamUrl, logText, events }),
+      playbackAnalyze: async ({ player, source, streamUrl, logText, events }) =>
+        executors.playbackTriage.analyzeSession({ player, source, streamUrl, logText, events }),
       videoStreamWatch: async ({ action, sessionKey, url, pollIntervalMs, maxPollCount, timeoutMs, watchId }) => {
         if (action === "start") {
           if (!url) return { ok: false, action, watchId: undefined };

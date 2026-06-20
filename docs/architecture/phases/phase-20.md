@@ -27,6 +27,9 @@ inteligencia de video, capaz de:
 - Dentro de `video`, a integracao com `JobManager` deve ficar isolada no subdominio `jobs/`, deixando claro que e uma borda operacional da capability de video, nao o coracao do dominio.
 - Tratar players como adapters de ingest/normalizacao, nao como capabilities do core.
 - Tratar providers de geracao como adapters plugaveis, nao como contratos centrais.
+- O parser de logs e a triagem deterministica de playback vivem no VHS
+  (`@gugaio/vhs`). Kael preserva apenas a tool PI, telemetria e contexto de
+  sessao; `sessionKey` nao cruza a fronteira do harness.
 
 ## Contratos canônicos iniciais
 

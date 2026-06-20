@@ -33,7 +33,6 @@ import { ChatService } from "./chat/service.js";
 import { createChatTooling } from "./chat/tooling-factory.js";
 import { TurnOrchestrator } from "./chat/turn-orchestrator.js";
 import type { ShellRuntime } from "./tools/system/shell-tool-service.js";
-import { PlaybackTriageService } from "./capabilities/video/index.js";
 import type { StreamWatchParams, StreamWatchStatus } from "./capabilities/video/index.js";
 import { SkillService } from "./skills/service.js";
 import type { McpRuntime } from "./tools/mcp/mcp-bridge-service.js";
@@ -53,7 +52,7 @@ import type {
   StreamerRemoveResult,
   StreamerServeHandle,
   StreamerServeOptions,
-} from "@gugaime/vhs";
+} from "@gugaio/vhs";
 import type {
   HlsManifestAuditInput,
   HlsManifestAuditReport,
@@ -119,7 +118,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   await sessions.init();
   await jobStore.init();
 
-  const { jobs, videoInspect, manifestAudit, manifestDiff, videoArtifacts, streamMonitor, streamer } =
+  const { jobs, videoInspect, manifestAudit, manifestDiff, videoArtifacts, streamMonitor, streamer, playback } =
     await createVideoRuntime(config, jobStore);
   const shell = await createShellRuntime(config);
   const mcp = await createMcpRuntime(config);
@@ -147,7 +146,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     workspace,
     research,
     planner,
-    playbackTriage: new PlaybackTriageService(),
+    playbackTriage: playback,
     manifestAudit,
     manifestDiff,
     streamMonitor,

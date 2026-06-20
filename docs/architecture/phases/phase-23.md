@@ -31,15 +31,15 @@ O foco inicial e operacional:
 ## Decisao arquitetural
 
 - A implementacao operacional de `manifest audit/diff` e `streamer` passa a
-  viver no repositorio independente `../vhs` (`@gugaime/vhs`). Kael consome o
+  viver no repositorio independente `../vhs` (`@gugaio/vhs`). Kael consome o
   pacote pelo bootstrap e preserva o contrato atual de `KaelApp` durante a
   migracao. O pacote e local (`file:../vhs`) ate receber publicacao versionada.
 - O harness nao conhece agente, sessao, jobs, memoria ou MCP. Kael continua
   dono de autorizacao, telemetria e das tools PI; VHS e dono de operacoes de
   manifestos e origins de stream.
-- O runtime ativo tambem usa o inspector do VHS. O `streamMonitor` permanece
-  no Kael somente como controle de lifecycle das watches do agente e recebe o
-  inspector por contrato minimo (`inspectHls`).
+- O runtime ativo tambem usa o inspector e o monitor HLS do VHS. Kael preserva
+  apenas um adaptador pequeno para associar uma watch a `sessionKey` e manter
+  seu contrato de tools/API atual.
 - A capability chama-se `streamer`, nao `mock`, porque a fronteira representa
   operacao real de streams, nao apenas fixture falsa.
 - O subdominio fica dentro de `video`; `streamer-service.ts` preserva a fachada

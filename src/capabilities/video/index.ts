@@ -21,7 +21,7 @@ export type {
   StreamerDiagnosticIssue,
   StreamerVariantDiagnostic,
 } from "./streamer-diagnostics.js";
-export { analyzeSnapshotTransition, toStreamSnapshot } from "./stream-snapshot-analyzer.js";
+export { analyzeSnapshotTransition, toHlsSnapshot as toStreamSnapshot } from "@gugaio/vhs";
 export { deriveHlsJsIssues, parseHlsJsLogText } from "./playback-adapters/hlsjs.js";
 export type {
   HlsManifestAuditInput,

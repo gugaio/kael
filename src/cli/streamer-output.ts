@@ -8,7 +8,7 @@ import {
   type StreamerOriginAnalysisReport,
   type StreamerOriginProbeReport,
   type StreamerOriginSummary,
-} from "@gugaime/vhs";
+} from "@gugaio/vhs";
 import { formatBytes, formatSeconds, highlight } from "./cli-utils.js";
 
 export type StreamerFileProbe = {

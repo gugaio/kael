@@ -37,22 +37,26 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
-### 2026-06-20 - Fase 23: Kael passa a consumir VHS
+### 2026-06-20 - Fases 20/23: Kael passa a consumir VHS
 
 Resumo:
 - `manifestAudit`, `manifestDiff` e `streamer` do bootstrap agora usam o
-  pacote independente `@gugaime/vhs`, com contratos de `KaelApp` preservados.
+  pacote independente `@gugaio/vhs`, com contratos de `KaelApp` preservados.
 - A dependencia e temporariamente local (`file:../vhs`) enquanto o pacote nao
   recebe publicacao versionada.
-- O runtime ativo tambem usa o inspector do VHS; `streamMonitor` permanece no
-  Kael somente como lifecycle das watches do agente.
+- O runtime ativo tambem usa o inspector e o monitor HLS do VHS; Kael preserva
+  somente o adaptador de `sessionKey` para tools e API existentes.
+- A triagem deterministica de playback e o parser de logs hls.js tambem sao
+  executados pelo VHS; Kael mantém apenas a orquestracao da tool PI.
 
 Arquivos-chave:
 - `package.json`
 - `src/bootstrap/runtime.ts`
 - `src/app.ts`
 - `src/chat/tooling-factory.ts`
+- `src/capabilities/video/stream-monitor-service.ts`
 - `docs/architecture/phases/phase-23.md`
+- `docs/architecture/phases/phase-20.md`
 
 Checklist de validacao:
 - [x] `npm run check`
@@ -61,13 +65,12 @@ Checklist de validacao:
 
 Pendencias:
 - Publicar VHS em registry versionado e trocar `file:../vhs` por uma versao
-  imutavel.
-- Mover o lifecycle de `streamMonitor` para VHS somente se ele precisar ser
-  consumido por runtimes fora do Kael; o parser/fetch ja esta no harness.
+  imutavel antes de apagar as implementacoes legadas que ja nao participam do
+  runtime ativo.
 
 Proximo passo recomendado:
-- Publicar VHS em registry versionado e substituir a dependencia local antes
-  de remover os modulos legados de manifest/streamer do Kael.
+- Remover os modulos legados de inspect/manifest/streamer do Kael depois da
+  publicacao versionada do VHS e de uma rodada de smoke tests com streams reais.
 
 ### 2026-06-09 - Fase 23: decomposicao inicial do StreamerService
 
