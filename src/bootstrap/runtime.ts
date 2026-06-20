@@ -6,16 +6,19 @@ import { JobManager } from "../jobs/manager.js";
 import { LocalProcessRunner } from "../tools/system/process-runner.js";
 import { ShellToolService } from "../tools/system/shell-tool-service.js";
 import { McpBridgeService } from "../tools/mcp/mcp-bridge-service.js";
+import { createVhs, type Vhs } from "@gugaime/vhs";
 import {
   VideoArtifactsService,
   VideoJobCapability,
-  VideoInspectToolService,
   VideoJobService,
   ProviderBackedVideoGenerationService,
-  VideoManifestAuditService,
-  VideoManifestDiffService,
   HlsStreamMonitorService,
-  StreamerService,
+} from "../capabilities/video/index.js";
+import type {
+  HlsManifestAuditInput,
+  HlsManifestAuditReport,
+  HlsManifestDiffInput,
+  HlsManifestDiffReport,
 } from "../capabilities/video/index.js";
 import { MemoryService } from "../memory/service.js";
 import { ProjectContextService } from "../projects/service.js";
@@ -38,12 +41,12 @@ import {
 
 export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore): Promise<{
   jobs: JobManager;
-  videoInspect: VideoInspectToolService;
-  manifestAudit: VideoManifestAuditService;
-  manifestDiff: VideoManifestDiffService;
+  videoInspect: Vhs["inspect"];
+  manifestAudit: { auditHlsManifest(input: HlsManifestAuditInput): Promise<HlsManifestAuditReport> };
+  manifestDiff: { diffHlsManifests(input: HlsManifestDiffInput): Promise<HlsManifestDiffReport> };
   videoArtifacts: VideoArtifactsService;
   streamMonitor: HlsStreamMonitorService;
-  streamer: StreamerService;
+  streamer: Vhs["stream"];
 }> {
   const runner = new LocalProcessRunner();
   const video = new VideoJobService(jobStore, runner, {
@@ -55,14 +58,18 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
     killGraceMs: config.execution.killGraceMs,
   });
   const jobs = new JobManager(jobStore, [new VideoJobCapability(video)]);
-  const videoInspect = new VideoInspectToolService();
-  const manifestAudit = new VideoManifestAuditService(videoInspect);
-  const manifestDiff = new VideoManifestDiffService(manifestAudit);
+  const vhs = await createVhs({ dataDir: path.join(config.dataDir, "streamer") });
+  const videoInspect = vhs.inspect;
+  const manifestAudit = {
+    auditHlsManifest: (input: HlsManifestAuditInput) => vhs.manifest.audit.audit(input),
+  };
+  const manifestDiff = {
+    diffHlsManifests: (input: HlsManifestDiffInput) => vhs.manifest.diff.diff(input),
+  };
   const videoArtifacts = new VideoArtifactsService(path.join(config.dataDir, "video", "artifacts"));
   await videoArtifacts.init();
   const streamMonitor = new HlsStreamMonitorService(videoInspect);
-  const streamer = new StreamerService(videoInspect, path.join(config.dataDir, "streamer", "origins"));
-  await streamer.init();
+  const streamer = vhs.stream;
   return {
     jobs,
     videoInspect,

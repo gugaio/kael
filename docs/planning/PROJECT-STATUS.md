@@ -37,6 +37,38 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-06-20 - Fase 23: Kael passa a consumir VHS
+
+Resumo:
+- `manifestAudit`, `manifestDiff` e `streamer` do bootstrap agora usam o
+  pacote independente `@gugaime/vhs`, com contratos de `KaelApp` preservados.
+- A dependencia e temporariamente local (`file:../vhs`) enquanto o pacote nao
+  recebe publicacao versionada.
+- O runtime ativo tambem usa o inspector do VHS; `streamMonitor` permanece no
+  Kael somente como lifecycle das watches do agente.
+
+Arquivos-chave:
+- `package.json`
+- `src/bootstrap/runtime.ts`
+- `src/app.ts`
+- `src/chat/tooling-factory.ts`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] testes de manifest e streamer
+- [x] bootstrap de video com `KAEL_ENGINE_MODE=simple`
+
+Pendencias:
+- Publicar VHS em registry versionado e trocar `file:../vhs` por uma versao
+  imutavel.
+- Mover o lifecycle de `streamMonitor` para VHS somente se ele precisar ser
+  consumido por runtimes fora do Kael; o parser/fetch ja esta no harness.
+
+Proximo passo recomendado:
+- Publicar VHS em registry versionado e substituir a dependencia local antes
+  de remover os modulos legados de manifest/streamer do Kael.
+
 ### 2026-06-09 - Fase 23: decomposicao inicial do StreamerService
 
 Resumo:

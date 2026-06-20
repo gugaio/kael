@@ -27,7 +27,7 @@ type ChatToolingExecutors = {
   shellRuntime: ShellRuntime;
   mcpRuntime: McpRuntime;
   edgeRuntime: EdgeRuntime;
-  videoInspect: VideoInspectToolService;
+  videoInspect: Pick<VideoInspectToolService, "inspectHls" | "probe">;
   memory: MemoryService;
   projects: ProjectContextService;
   workspace: WorkspaceInspector;
@@ -36,8 +36,8 @@ type ChatToolingExecutors = {
   imageGenerator: ImageGeneratorService;
   videoGeneration: ProviderBackedVideoGenerationService;
   playbackTriage: PlaybackTriageService;
-  manifestAudit: VideoManifestAuditService;
-  manifestDiff: VideoManifestDiffService;
+  manifestAudit: Pick<VideoManifestAuditService, "auditHlsManifest">;
+  manifestDiff: Pick<VideoManifestDiffService, "diffHlsManifests">;
   streamMonitor: HlsStreamMonitorService;
   browserRuntime: BrowserRuntime;
 };

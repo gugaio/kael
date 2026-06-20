@@ -41,7 +41,7 @@ type WatchSession = {
 export class HlsStreamMonitorService {
   private readonly sessions = new Map<string, WatchSession>();
 
-  constructor(private readonly inspect: VideoInspectToolService) {}
+  constructor(private readonly inspect: Pick<VideoInspectToolService, "inspectHls">) {}
 
   /**
    * Inicia uma nova sessão de monitoramento e retorna o ID da sessão.

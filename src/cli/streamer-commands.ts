@@ -5,11 +5,11 @@ import { createKaelApp } from "../app.js";
 import {
   diagnoseStreamerClone,
   renderStreamerAnalysisHtml,
-  StreamerCloneProgressEvent,
-  StreamerCloneResult,
+  type StreamerCloneProgressEvent,
+  type StreamerCloneResult,
   type StreamerFaultTargetKind,
-  StreamerOriginSummary,
-} from "../capabilities/video/index.js";
+  type StreamerOriginSummary,
+} from "@gugaime/vhs";
 import { formatBytes, formatSeconds, highlight, optionalNumber, optionalTimeSeconds } from "./cli-utils.js";
 import {
   buildStreamerFileProbe,
@@ -498,7 +498,6 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
     throw new Error("streamer live ainda suporta apenas origins HLS; use --serve para DASH VOD local");
   }
   const cloneInput = {
-    sessionKey: "cli.streamer.clone",
     url,
     format,
     ...(Number.isFinite(durationSeconds) ? { durationSeconds } : {}),

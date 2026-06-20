@@ -39,13 +39,9 @@ import { SkillService } from "./skills/service.js";
 import type { McpRuntime } from "./tools/mcp/mcp-bridge-service.js";
 import { EdgeRuntime } from "./edge/runtime.js";
 import type {
-  HlsManifestAuditInput,
-  HlsManifestAuditReport,
-  HlsManifestDiffInput,
-  HlsManifestDiffReport,
+  StreamerAnalyzeOptions,
   StreamerCloneInput,
   StreamerCloneResult,
-  StreamerAnalyzeOptions,
   StreamerLiveServeHandle,
   StreamerLiveServeOptions,
   StreamerMutateInput,
@@ -57,6 +53,12 @@ import type {
   StreamerRemoveResult,
   StreamerServeHandle,
   StreamerServeOptions,
+} from "@gugaime/vhs";
+import type {
+  HlsManifestAuditInput,
+  HlsManifestAuditReport,
+  HlsManifestDiffInput,
+  HlsManifestDiffReport,
 } from "./capabilities/video/index.js";
 
 export type KaelApp = {
