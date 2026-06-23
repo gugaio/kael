@@ -2,14 +2,14 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import type { ImageGeneratorService } from "../../media/image-generator.js";
-import { VideoArtifactsService } from "./artifacts-service.js";
-import { ProviderBackedVideoGenerationService } from "./generation-service.js";
+import type { ImageGeneratorService } from "./image-generator.js";
+import { MediaArtifactsService } from "./artifacts.js";
+import { ProviderBackedMediaGenerationService } from "./generation.js";
 
-describe("ProviderBackedVideoGenerationService", () => {
+describe("ProviderBackedMediaGenerationService", () => {
   it("gera imagem via provider e persiste artifact", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-video-generation-"));
-    const artifacts = new VideoArtifactsService(root);
+    const artifacts = new MediaArtifactsService(root);
     await artifacts.init();
 
     const imageGenerator: ImageGeneratorService = {
@@ -21,7 +21,7 @@ describe("ProviderBackedVideoGenerationService", () => {
       }),
     };
 
-    const service = new ProviderBackedVideoGenerationService(imageGenerator, artifacts, {
+    const service = new ProviderBackedMediaGenerationService(imageGenerator, artifacts, {
       imageProvider: "gpt-image-1",
     });
     const result = await service.generateImage({

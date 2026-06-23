@@ -17,7 +17,7 @@ sequenceDiagram
     participant Engine as PiEngineAdapter<br/>src/agents/pi-engine-adapter.ts
     participant PiSDK as PI Agent SDK
     participant Tooling as EngineToolingNamespaces
-    participant VideoJob as VideoJobService
+    participant VideoJob as ProcessJobService
     participant Memory as MemoryService
 
     User->>API: POST /chat<br/>{sessionKey, message, attachments?}
@@ -112,8 +112,8 @@ sequenceDiagram
                 Tavily-->>ResearchService: {results, summary, sources}
                 ResearchService-->>Tooling: {summary, evidence, confidence}
             else Tool é video (transcode/HLS/capture/probe)?
-                Engine->>VideoJobService: startTranscode/startConvertHls/etc.
-                VideoJobService-->>Tooling: {id, status, command, input, output}
+                Engine->>VideoJob: enqueue ffmpeg/ffprobe job
+                VideoJob-->>Tooling: {id, status, command, input, output}
             else Tool é image_generate?
                 Engine->>ImageGenerator: generate(prompt, size)
                 ImageGenerator->>OpenAI: /images/generations

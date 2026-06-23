@@ -5,7 +5,7 @@ export type ToolingExecutionMode = "job" | "interactive" | "remote" | "service";
 export type EngineToolingNamespaceDescriptor = {
   namespace: keyof EngineToolingInterface;
   executionMode: ToolingExecutionMode;
-  executor: "jobManager" | "shellRuntime" | "mcpRuntime" | "edgeRuntime" | "browserRuntime" | "service";
+  executor: "processJobs" | "shellRuntime" | "mcpRuntime" | "edgeRuntime" | "browserRuntime" | "service";
   description: string;
 };
 
@@ -13,7 +13,7 @@ export const ENGINE_TOOLING_NAMESPACE_DESCRIPTORS: EngineToolingNamespaceDescrip
   {
     namespace: "video",
     executionMode: "job",
-    executor: "jobManager",
+    executor: "processJobs",
     description: "Video pesado e operacional. Jobs persistentes, rastreaveis e cancelaveis.",
   },
   {

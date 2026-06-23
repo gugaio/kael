@@ -15,16 +15,16 @@ inteligencia de video, capaz de:
 ## Decisao arquitetural
 
 - Manter `video` como capability raiz.
-- Evoluir o dominio por subservicos, nao por um monolito:
-  - `jobs/VideoJobService`
-  - `jobs/VideoJobCapability`
-  - `VideoInspectToolService`
-  - `VideoManifestAuditService`
-  - `PlaybackTriageService`
+- Manter no Kael somente os subservicos que dependem de contexto de agente:
+  - `jobs/ProcessJobService`
+  - `video/jobs/createVideoJobs`
   - `VideoGenerationService`
   - `VideoArtifactsService`
+- Inspect, auditoria/diff de manifestos e triagem de playback vivem em
+  `@gugaio/vhs`, como API determinística reutilizável por qualquer agente.
 - Quando o problema for analise semantica de configuracao de player (por exemplo `hls.js`), preferir skill especializada com base oficial curada em vez de heuristica hardcoded no core.
-- Dentro de `video`, a integracao com `JobManager` deve ficar isolada no subdominio `jobs/`, deixando claro que e uma borda operacional da capability de video, nao o coracao do dominio.
+- O lifecycle de processos fica em `jobs/ProcessJobService`; vídeo apenas valida
+  entradas e constrói comandos para esse executor genérico.
 - Tratar players como adapters de ingest/normalizacao, nao como capabilities do core.
 - Tratar providers de geracao como adapters plugaveis, nao como contratos centrais.
 - O parser de logs e a triagem deterministica de playback vivem no VHS
@@ -45,7 +45,7 @@ Nota:
 - `PlaybackSessionInput` aceita `logText` como entrada principal para manter
   ingest flexivel desde o inicio; `events` estruturados seguem como formato
   opcional/derivado quando houver adapters dedicados por player.
-- `PlaybackTriageService` faz triagem deterministica de sinais; a interpretacao
+- `PlaybackTriageService` do VHS faz triagem deterministica de sinais; a interpretacao
   final por LLM continua sendo uma camada separada.
 
 ## Entregas implementadas (incremento 20.0)

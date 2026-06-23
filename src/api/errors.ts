@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { VideoJobValidationError } from "../capabilities/video/index.js";
+import { VideoJobValidationError } from "../video/safety.js";
 
 export type ApiErrorCode =
   | "BAD_REQUEST"

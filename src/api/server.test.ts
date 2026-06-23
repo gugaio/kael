@@ -206,6 +206,7 @@ function makeFakeApp(): KaelApp {
         canceled: true,
       }),
     } as unknown as KaelApp["jobs"],
+    videoJobs: {} as KaelApp["videoJobs"],
     planner: {
       list: () => [],
       get: () => null,

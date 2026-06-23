@@ -100,8 +100,8 @@ Notas de implementacao atual:
   - `expiredSessionsClosed`;
   - `evictedSessions`;
   - `lastError`.
-- O browser permanece como executor `interactive` stateful por sessao, e nao como `job` no `JobManager`.
-- O wiring do core deve explicitar o executor de cada namespace (`jobManager`, `shellRuntime`, `edgeRuntime`, `browserRuntime`, etc.) para evitar o uso ambiguo da palavra "capability".
+- O browser permanece como executor `interactive` stateful por sessao, e nao como job persistente no `ProcessJobService`.
+- O wiring do core deve explicitar o executor de cada namespace (`processJobs`, `shellRuntime`, `edgeRuntime`, `browserRuntime`, etc.) para evitar o uso ambiguo da palavra "capability".
 
 ### Fase 16.4 - UX e docs operacionais
 

@@ -32,7 +32,7 @@ graph TB
             Memory[MemoryService<br/>src/memory/service.ts]
             Planner[PlannerService<br/>src/planner/service.ts]
             Research[ResearchService<br/>src/research/service.ts]
-            Video[Video Capability<br/>src/capabilities/video/]
+            Video[Video command builders<br/>src/video/]
             Shell[ShellToolService<br/>src/tools/system/]
             Media[MediaUnderstandingService<br/>src/media/service.ts]
             EmailIngest[EmailIngestService<br/>src/email/ingest-service.ts]
@@ -144,7 +144,7 @@ graph TB
 - **MemoryService**: Memória persistente de longo prazo (MEMORY.md) e diária, com busca e escrita.
 - **PlannerService**: Planejamento de tarefas multi-etapa com estado persistido e reconciliação automática.
 - **ResearchService**: Pesquisa web com citações, cache por URL e suporte a múltiplos providers (Tavily).
-- **VideoJobService**: Execução assíncrona de jobs de vídeo (transcode, HLS, capture, probe, VLC).
+- **ProcessJobService**: Execução assíncrona genérica, com fila, logs, timeout e cancelamento; vídeo apenas monta os comandos.
 - **ShellToolService**: Execução segura de comandos shell com timeout, sessões em background e approvals.
 - **MediaUnderstandingService**: Entendimento multimodal (descrição de imagem, transcrição de audio).
 - **EmailIngestService**: Ingest de emails via provider desacoplado (Gmail POP3) com dedupe e auto-reply SMTP.

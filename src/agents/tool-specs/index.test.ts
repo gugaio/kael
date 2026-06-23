@@ -112,6 +112,7 @@ describe("createPiNamespaceTools", () => {
       "video_manifest_audit",
       "video_manifest_diff",
       "playback_analyze",
+      "video_stream_watch",
     ]);
     expect(registry.jobs.map((tool) => tool.name)).toEqual(["jobs_list", "jobs_get", "jobs_log_tail"]);
     expect(registry.projects.map((tool) => tool.name)).toEqual([

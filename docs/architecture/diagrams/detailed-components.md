@@ -29,8 +29,9 @@ graph TB
         end
 
         subgraph "Video Tools"
-            VideoJob[VideoJobService<br/>src/capabilities/video/job-service.ts<br/>Execução assíncrona de ffmpeg/ffprobe]
-            VideoInspect[VideoInspectToolService<br/>src/capabilities/video/inspect-service.ts<br/>Inspeção de HLS e streams]
+            VideoJob[ProcessJobService<br/>src/jobs/process-service.ts<br/>Execução assíncrona persistente]
+            Vhs[@gugaio/vhs<br/>Inspect, manifest, stream, watch e playback]
+            VideoWatch[HlsStreamMonitorService<br/>src/vhs/watch-registry.ts<br/>Adaptador de sessionKey]
         end
 
         subgraph "Shell Tools"
@@ -126,7 +127,8 @@ graph TB
 
     %% Tooling to Video
     Tooling -.->|startTranscode/startConvertHls/startCaptureStream/startProbeMedia/startPlayVLC| VideoJob
-    Tooling -.->|videoHlsInspect/videoProbe| VideoInspect
+    Tooling -.->|inspect/manifest/playback/watch| Vhs
+    Tooling -.->|video_stream_watch session correlation| VideoWatch
     VideoJob -->|persist| JobStore
 
     %% Tooling to Shell
@@ -199,7 +201,7 @@ graph TB
     class AgentEngine,Tooling interface
     class ChatSvc,AutoSvc entry
     class SimpleEngine,PiEngine,HybridEngine engine
-    class VideoJob,VideoInspect,Shell,Supervisor,Approvals,Mem,MemOrch,Planner,LlmGen,Research,Workspace,Browser,ImgGen tooling
+    class VideoJob,Vhs,VideoWatch,Shell,Supervisor,Approvals,Mem,MemOrch,Planner,LlmGen,Research,Workspace,Browser,ImgGen tooling
     class Media,EmailIngest,GmailPop3,GmailSmtp,EmailDedupe pipeline
     class TurnOrch,CmdRouter,RouteTel orchestrator
     class Scheduler,Heartbeat automation
@@ -288,8 +290,8 @@ Entendimento multimodal plugável:
 
 ## Services de Domínio
 
-### VideoJobService
-Execução assíncrona de jobs de vídeo (ffmpeg/ffprobe) com:
+### ProcessJobService
+Execução assíncrona genérica com:
 - Job assíncrono com timeout e graceful shutdown
 - Logs dedicados por job
 - Segurança por safe paths e allowed paths

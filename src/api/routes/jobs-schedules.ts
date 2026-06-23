@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import { IdempotencyConflictError, stableStringify } from "../../infra/idempotency-store.js";
-import { VIDEO_JOB_ACTIONS } from "../../capabilities/video/index.js";
 import { ApiError } from "../errors.js";
 import { readIdempotencyKey, withIdempotency } from "../request-utils.js";
 import type { ApiRouteDeps } from "../route-deps.js";
@@ -34,7 +33,7 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
         idempotencyKey,
         signature: stableStringify({ sessionKey, inputPath, outputPath, args }),
         execute: async () => {
-          const job = await app.jobs.startAction(VIDEO_JOB_ACTIONS.transcode, {
+          const job = await app.videoJobs.startTranscode({
             sessionKey,
             inputPath,
             outputPath,
@@ -77,7 +76,7 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
         idempotencyKey,
         signature: stableStringify({ sessionKey, input }),
         execute: async () => {
-          const job = await app.jobs.startAction(VIDEO_JOB_ACTIONS.playVlc, { sessionKey, input });
+          const job = await app.videoJobs.startPlayVlc({ sessionKey, input });
           return { ok: true, job };
         },
       });
@@ -119,7 +118,7 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
         idempotencyKey,
         signature: stableStringify({ sessionKey, inputPath, outputPlaylistPath, segmentTime }),
         execute: async () => {
-          const job = await app.jobs.startAction(VIDEO_JOB_ACTIONS.convertHls, {
+          const job = await app.videoJobs.startConvertHls({
             sessionKey,
             inputPath,
             outputPlaylistPath,
@@ -166,7 +165,7 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
         idempotencyKey,
         signature: stableStringify({ sessionKey, streamUrl, outputPath, durationSeconds }),
         execute: async () => {
-          const job = await app.jobs.startAction(VIDEO_JOB_ACTIONS.captureStream, {
+          const job = await app.videoJobs.startCaptureStream({
             sessionKey,
             streamUrl,
             outputPath,
@@ -209,7 +208,7 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
         idempotencyKey,
         signature: stableStringify({ sessionKey, streamUrl }),
         execute: async () => {
-          const job = await app.jobs.startAction(VIDEO_JOB_ACTIONS.probeUrl, { sessionKey, streamUrl });
+          const job = await app.videoJobs.startProbeUrl({ sessionKey, streamUrl });
           return { ok: true, job };
         },
       });
@@ -247,7 +246,7 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
         idempotencyKey,
         signature: stableStringify({ sessionKey, inputPath }),
         execute: async () => {
-          const job = await app.jobs.startAction(VIDEO_JOB_ACTIONS.probeMedia, { sessionKey, inputPath });
+          const job = await app.videoJobs.startProbeMedia({ sessionKey, inputPath });
           return { ok: true, job };
         },
       });

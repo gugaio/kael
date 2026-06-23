@@ -42,11 +42,11 @@ O foco inicial e operacional:
   seu contrato de tools/API atual.
 - A capability chama-se `streamer`, nao `mock`, porque a fronteira representa
   operacao real de streams, nao apenas fixture falsa.
-- O subdominio fica dentro de `video`; `streamer-service.ts` preserva a fachada
-  publica e delega casos de uso para modulos em `vhs stream/`, reaproveitando
-  `VideoInspectToolService.inspectHls()` e `VideoInspectToolService.inspectDash()`
-  como primitivos de parsing/fetch de manifestos.
-- O storage local fica em `<KAEL_DATA_DIR>/vhs stream/origins/<originId>/`.
+- O subdomínio determinístico de mídia foi removido de `src/capabilities/video`.
+  O Kael importa a API pública de `@gugaio/vhs`; `MediaInspector` é o primitivo
+  de parsing/fetch de HLS e DASH e `StreamerService` é dono dos origins.
+- O storage local do harness fica em `<VHS_DATA_DIR>/origins/<originId>/`, ou
+  `./.vhs-data/origins/<originId>/` quando a variável não é configurada.
 - A primeira entrega e CLI-only. Nenhum endpoint HTTP novo foi criado nesta fase.
 - O servidor de origin e local e efemero, iniciado por `--serve`; ele serve os
   arquivos clonados com CORS permissivo.
@@ -144,11 +144,10 @@ O foco inicial e operacional:
   stream/                   # clone, origins, serve, live, probe, analyze, mutate
   cli.ts                    # CLI `vhs`
 
-src/capabilities/video/
-  jobs/                     # jobs e politicas do Kael
-  artifacts-service.ts      # artifacts de geração do Kael
-  generation-service.ts     # providers de geração do Kael
-  stream-monitor-service.ts # adaptador VHS -> sessionKey do Kael
+src/jobs/                  # lifecycle genérico de processos
+src/video/                 # comandos ffmpeg/ffprobe/VLC
+src/media/                 # artifacts e providers de geração
+src/vhs/                   # adaptador VHS -> sessionKey do Kael
 ```
 
 ## Comandos operacionais

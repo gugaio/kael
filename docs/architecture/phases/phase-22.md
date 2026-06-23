@@ -28,22 +28,24 @@ identificar anomalias sem precisar de player ou client de vídeo.
 ## Decisão arquitetural
 
 - O monitoramento é uma **sessão leve de JavaScript** (polling + análise), não um processo externo.
-  Não usa o `VideoJobService`/`ProcessRunner` — tem seu próprio lifecycle.
-- `HlsStreamMonitorService` gerencia sessões de watch com UUID, start/stop/status.
-- `StreamSnapshotAnalyzer` é **stateless**: recebe dois snapshots consecutivos e retorna eventos.
-  Isso garante testabilidade unitária sem mocks de I/O.
-- O `VideoInspectToolService.inspectHls()` já existe e é o primitivo de fetch/parse.
-  Apenas estendemos para incluir os dados de discontinuity que ainda faltavam.
+  Não usa o `ProcessJobService` — tem seu próprio lifecycle.
+- `HlsWatchService` do VHS gerencia sessões de watch com UUID, start/stop/status.
+- `analyzeSnapshotTransition` do VHS é **stateless**: recebe dois snapshots
+  consecutivos e retorna eventos. Isso garante testabilidade unitária sem mocks de I/O.
+- `MediaInspector.inspectHls()` do VHS é o primitivo de fetch/parse.
+- Kael mantém somente `HlsStreamMonitorService`, um adaptador fino que associa
+  uma watch à `sessionKey` do agente.
 - A API expõe `/streams/watch` como namespace dedicado, separado de `/jobs`.
 
 ## Estrutura de arquivos (22.0)
 
 ```
-src/capabilities/video/
-  stream-snapshot.ts          # tipos de snapshot + helpers
-  stream-snapshot-analyzer.ts # análise stateless de transição entre snapshots
-  stream-monitor-service.ts   # serviço stateful de polling
-  stream-snapshot-analyzer.test.ts  # testes unitários
+../vhs/src/
+  watch.ts                     # serviço stateful de polling
+  watch-rules.ts               # snapshots + análise stateless de transição
+
+src/vhs/
+  watch-registry.ts            # adaptador VHS -> sessionKey
 
 src/api/routes/
   stream-watch.ts             # rotas POST/GET /streams/watch
@@ -59,15 +61,15 @@ Agent / API
     |
     | POST /streams/watch { url, pollIntervalMs }
     v
-HlsStreamMonitorService.startWatch()
+Kael HlsStreamMonitorService.startWatch()
     |
     |-- loop: setInterval(pollIntervalMs) ---->
     |                                          |
-    |                                 VideoInspectToolService.inspectHls(url)
+    |                                 VHS MediaInspector.inspectHls(url)
     |                                          |
     |                                 toSnapshot(inspectResult)
     |                                          |
-    |                                 StreamSnapshotAnalyzer.analyze(prev, next)
+    |                                 VHS analyzeSnapshotTransition(prev, next)
     |                                          |
     |                                 eventos acumulados na sessão
     |

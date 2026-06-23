@@ -93,7 +93,7 @@ Esta pasta contém visões UML em Mermaid para entender a arquitetura do Kael de
 
 - **Sequência de Email Ingress**: Email Poll → GmailPop3Provider → EmailIngestService → ChatService → Reply SMTP
 - **Sequência de Multimodal Pipeline**: Anexo recebido → MediaUnderstanding → Contexto injetado → Engine → Artifact gerado → Email reply
-- **Sequência de Job de Vídeo**: Tool call → VideoJobService → ProcessRunner → Job async → Poll/monitoramento
+- **Sequência de Job de Vídeo**: Tool call → video job builder → ProcessJobService → Job async → Poll/monitoramento
 - **Estado de Jobs**: Transições de estado (queued → running → succeeded/failed/canceled)
 - **Classes - ChatService e Orchestration**: ChatService, TurnOrchestrator, MemoryOrchestrator, CommandRouter
 - **Classes - Engine e Adapters**: AgentEngine (interface), PiEngineAdapter, SimpleEngine, HybridEngine

@@ -12,7 +12,7 @@ import type {
   PlaybackEvent,
   PlaybackEngine,
   StreamWatchStatus,
-} from "../capabilities/video/index.js";
+} from "../vhs/types.js";
 import type { McpCallResult, McpListResult } from "../tools/mcp/mcp-bridge-service.js";
 import type { EdgeCallResult, EdgeCapabilitySummary } from "../edge/runtime.js";
 

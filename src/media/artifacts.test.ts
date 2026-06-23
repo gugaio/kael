@@ -2,12 +2,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { VideoArtifactsService } from "./artifacts-service.js";
+import { MediaArtifactsService } from "./artifacts.js";
 
-describe("VideoArtifactsService", () => {
+describe("MediaArtifactsService", () => {
   it("persiste artifact gerado com metadata ao lado do arquivo", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "kael-video-artifacts-"));
-    const service = new VideoArtifactsService(root);
+    const service = new MediaArtifactsService(root);
     await service.init();
 
     const record = await service.saveGeneratedArtifact({

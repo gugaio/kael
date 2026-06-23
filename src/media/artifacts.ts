@@ -1,10 +1,22 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { EngineOutputArtifact } from "../../agents/types.js";
-import type { StoredArtifactRecord } from "./types.js";
+import type { EngineOutputArtifact } from "../agents/types.js";
+export type StoredMediaArtifact = {
+  id: string;
+  sessionKey: string;
+  kind: "image" | "video";
+  provider: string;
+  prompt: string;
+  fileName: string;
+  filePath: string;
+  metadataPath: string;
+  mimeType: string;
+  bytes: number;
+  createdAt: string;
+};
 
-export class VideoArtifactsService {
+export class MediaArtifactsService {
   constructor(private readonly rootDir: string) {}
 
   async init(): Promise<void> {
@@ -16,7 +28,7 @@ export class VideoArtifactsService {
     prompt: string;
     provider: string;
     artifact: EngineOutputArtifact;
-  }): Promise<StoredArtifactRecord> {
+  }): Promise<StoredMediaArtifact> {
     const id = randomUUID();
     const safeSessionKey = sanitizePathSegment(params.sessionKey);
     const dir = path.join(this.rootDir, safeSessionKey);
@@ -29,7 +41,7 @@ export class VideoArtifactsService {
     const bytes = Buffer.from(params.artifact.dataBase64, "base64");
     await fs.writeFile(filePath, bytes);
 
-    const record: StoredArtifactRecord = {
+    const record: StoredMediaArtifact = {
       id,
       sessionKey: params.sessionKey,
       kind: params.artifact.kind,

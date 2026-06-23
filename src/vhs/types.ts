@@ -1,4 +1,16 @@
-import type { HlsWatchEvent } from "@gugaio/vhs";
+import type {
+  HlsWatchEvent,
+  ManifestAuditReport,
+  ManifestDiffReport,
+  PlaybackEngine,
+  PlaybackEvent,
+  PlaybackReport,
+} from "@gugaio/vhs";
+
+export type HlsManifestAuditReport = ManifestAuditReport;
+export type HlsManifestDiffReport = ManifestDiffReport;
+export type PlaybackAnalysisReport = PlaybackReport;
+export type { PlaybackEngine, PlaybackEvent };
 
 /** Kael adds session correlation around the VHS manifest audit. */
 export type HlsManifestAuditInput = {
