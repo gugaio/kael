@@ -6,26 +6,8 @@ type JobIndex = {
   jobs: Record<string, JobRecord>;
 };
 
-const VIDEO_ACTIONS = new Set(["transcode", "convert_hls", "capture_stream", "probe_media", "probe_url", "play_vlc"]);
-
-function inferCapabilityFromAction(action: string): string {
-  if (VIDEO_ACTIONS.has(action)) {
-    return "video";
-  }
-  return "unknown";
-}
-
-function migrateLegacyJob(raw: JobRecord | (Partial<JobRecord> & { type?: string })): JobRecord | null {
-  const job = { ...(raw as Record<string, unknown>) };
-  const action = typeof job.action === "string"
-    ? job.action
-    : typeof job.type === "string"
-      ? job.type
-      : null;
-  if (!action) {
-    return null;
-  }
-  const capability = typeof job.capability === "string" ? job.capability : inferCapabilityFromAction(action);
+function migrateLegacyJob(raw: Partial<JobRecord>): JobRecord | null {
+  const job = raw as Record<string, unknown>;
   if (
     typeof job.id !== "string" ||
     typeof job.sessionKey !== "string" ||
@@ -40,8 +22,6 @@ function migrateLegacyJob(raw: JobRecord | (Partial<JobRecord> & { type?: string
   }
   return {
     id: job.id,
-    capability,
-    action,
     sessionKey: job.sessionKey,
     command: job.command,
     input: job.input,
@@ -70,7 +50,7 @@ export class JobStore {
 
   async init(): Promise<void> {
     await ensureDir(this.logsDir);
-    const loaded = await readJsonFile<{ jobs: Record<string, Partial<JobRecord> & { type?: string }> }>(
+    const loaded = await readJsonFile<{ jobs: Record<string, Partial<JobRecord>> }>(
       this.jobsPath,
       { jobs: {} },
     );

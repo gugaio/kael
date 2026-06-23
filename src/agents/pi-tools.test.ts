@@ -497,7 +497,7 @@ describe("createPiTools jobs/plans state tools", () => {
     const getText = String((getResult.content?.[0] as { text?: unknown })?.text ?? "");
 
     expect(listText).toContain("jobs=1");
-    expect(listText).toContain("video/transcode");
+    expect(listText).toContain("succeeded");
     expect(getText).toContain("found=true");
     expect(getText).toContain("jobId=job-1");
   });

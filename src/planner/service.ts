@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
+import { ActionRegistry, type ActionHandler } from "./action-registry.js";
 import { ensureDir, readJsonFile, writeJsonFile } from "../infra/fs.js";
 
 export type PlanStepStatus = "pending" | "in_progress" | "completed" | "blocked" | "failed" | "canceled";
@@ -120,6 +121,7 @@ export class PlannerService {
     objective: string;
     maxSteps?: number;
   }) => Promise<PlanStepDraftInput[]>;
+  private readonly actionRegistry = new ActionRegistry();
 
   constructor(
     dataDir: string,
@@ -133,6 +135,10 @@ export class PlannerService {
   ) {
     this.plansPath = path.join(dataDir, "plans", "plans.json");
     this.generateDrafts = options?.generateDrafts;
+  }
+
+  registerActionHandler(kind: string, handler: ActionHandler): void {
+    this.actionRegistry.register(kind, handler);
   }
 
   async init(): Promise<void> {
@@ -379,25 +385,6 @@ export class PlannerService {
     sessionKey?: string;
     inputs?: PlanExecutionInputs;
     runtime: {
-      startProbeMedia?: (args: { sessionKey: string; inputPath: string }) => Promise<{ id: string; status: string }>;
-      startCaptureStream?: (args: {
-        sessionKey: string;
-        streamUrl: string;
-        outputPath: string;
-        durationSeconds?: number;
-      }) => Promise<{ id: string; status: string }>;
-      startTranscode?: (args: {
-        sessionKey: string;
-        inputPath: string;
-        outputPath: string;
-        args?: string[];
-      }) => Promise<{ id: string; status: string }>;
-      startConvertHls?: (args: {
-        sessionKey: string;
-        inputPath: string;
-        outputPlaylistPath: string;
-        segmentTime?: number;
-      }) => Promise<{ id: string; status: string }>;
       execCommand?: (args: {
         sessionKey: string;
         command: string;
@@ -443,7 +430,12 @@ export class PlannerService {
       ...(params.inputs ?? {}),
     };
 
-    const missing = missingRequiredInputs(next.step.action.requiredInputs, inputs);
+    const isBuiltIn = action === "exec" || action === "wait_execution" || action === "cancel_execution";
+    const requiredInputs = isBuiltIn
+      ? requiredInputsForAction(action)
+      : this.actionRegistry.get(action)?.requiredInputs ?? [];
+
+    const missing = missingRequiredInputs(requiredInputs, inputs);
     if (missing) {
       const updated = await this.updateStep({
         planId: plan.id,
@@ -462,297 +454,34 @@ export class PlannerService {
     }
 
     try {
-      let execution: PlanStep["execution"] | undefined;
-      if (action === "probe") {
-        if (!params.runtime.startProbeMedia) {
-          return runtimeNotAvailable(action, plan, next.stepIndex);
-        }
-        const job = await params.runtime.startProbeMedia({
-          sessionKey,
-          inputPath: inputs.inputPath ?? "",
-        });
-        execution = {
-          kind: "job",
-          refId: job.id,
-          status: job.status,
-          startedAt: new Date().toISOString(),
-        };
-      } else if (action === "capture") {
-        if (!params.runtime.startCaptureStream) {
-          return runtimeNotAvailable(action, plan, next.stepIndex);
-        }
-        const job = await params.runtime.startCaptureStream({
-          sessionKey,
-          streamUrl: inputs.streamUrl ?? "",
-          outputPath: inputs.outputPath ?? "",
-          durationSeconds: inputs.durationSeconds,
-        });
-        execution = {
-          kind: "job",
-          refId: job.id,
-          status: job.status,
-          startedAt: new Date().toISOString(),
-        };
-      } else if (action === "transcode") {
-        if (!params.runtime.startTranscode) {
-          return runtimeNotAvailable(action, plan, next.stepIndex);
-        }
-        const job = await params.runtime.startTranscode({
-          sessionKey,
-          inputPath: inputs.inputPath ?? "",
-          outputPath: inputs.outputPath ?? "",
-          args: inputs.args,
-        });
-        execution = {
-          kind: "job",
-          refId: job.id,
-          status: job.status,
-          startedAt: new Date().toISOString(),
-        };
-      } else if (action === "hls") {
-        if (!params.runtime.startConvertHls) {
-          return runtimeNotAvailable(action, plan, next.stepIndex);
-        }
-        const job = await params.runtime.startConvertHls({
-          sessionKey,
-          inputPath: inputs.inputPath ?? "",
-          outputPlaylistPath: inputs.outputPlaylistPath ?? "",
-          segmentTime: inputs.segmentTime,
-        });
-        execution = {
-          kind: "job",
-          refId: job.id,
-          status: job.status,
-          startedAt: new Date().toISOString(),
-        };
-      } else if (action === "wait_execution") {
-        const target = resolveTargetExecution(plan, next.stepIndex, inputs);
-        if (!target) {
-          const updated = await this.updateStep({
-            planId: plan.id,
-            stepIndex: next.stepIndex,
-            status: "blocked",
-            notes: "Executor: wait_execution sem execucao alvo (use targetStepIndex ou mantenha um step anterior em andamento).",
-          });
-          return {
-            ok: false,
-            reason: "missing_input",
-            message: "missing execution target",
-            plan: updated ?? plan,
-            stepIndex: next.stepIndex,
-            action,
-          };
-        }
-        const canObserve =
-          (target.execution.kind === "job" && Boolean(params.runtime.getJob)) ||
-          (target.execution.kind === "exec" && Boolean(params.runtime.pollExec));
-        if (!canObserve) {
-          return runtimeNotAvailable(action, plan, next.stepIndex);
-        }
-        const resolution = await resolveExecutionStatus(target.execution, {
-          getJob: params.runtime.getJob,
-          pollExec: params.runtime.pollExec,
-        });
-        if (!resolution) {
-          const waiting = await this.updateStep({
-            planId: plan.id,
-            stepIndex: next.stepIndex,
-            status: "in_progress",
-            notes: `Executor: aguardando execucao ${target.execution.kind}:${target.execution.refId} finalizar.`,
-          });
-          return {
-            ok: true,
-            plan: waiting ?? plan,
-            stepIndex: next.stepIndex,
-            action,
-            execution: target.execution,
-          };
-        }
-        if (plan.steps[target.stepIndex]?.status === "in_progress") {
-          await this.updateStep({
-            planId: plan.id,
-            stepIndex: target.stepIndex,
-            status: resolution.status,
-            notes: `Waiter: execucao ${target.execution.kind}:${target.execution.refId} observada como ${resolution.observedStatus}.`,
-            execution: {
-              ...target.execution,
-              status: resolution.observedStatus,
-            },
-          });
-        }
-        const waitStatus = resolution.status;
-        const waitResult = await this.updateStep({
-          planId: plan.id,
+      if (action === "exec") {
+        return await this.executeExecBuiltIn({
+          plan,
           stepIndex: next.stepIndex,
-          status: waitStatus,
-          notes: `Executor: wait_execution finalizado com status=${resolution.observedStatus}.`,
-          execution: {
-            ...target.execution,
-            status: resolution.observedStatus,
-          },
-        });
-        if (waitStatus === "completed") {
-          return {
-            ok: true,
-            plan: waitResult ?? plan,
-            stepIndex: next.stepIndex,
-            action,
-            execution: target.execution,
-          };
-        }
-        return {
-          ok: false,
-          reason: "execution_failed",
-          message: `target execution finished with status=${resolution.observedStatus}`,
-          plan: waitResult ?? plan,
-          stepIndex: next.stepIndex,
-          action,
-        };
-      } else if (action === "cancel_execution") {
-        const target = resolveTargetExecution(plan, next.stepIndex, inputs);
-        if (!target) {
-          const updated = await this.updateStep({
-            planId: plan.id,
-            stepIndex: next.stepIndex,
-            status: "blocked",
-            notes: "Executor: cancel_execution sem execucao alvo (use targetStepIndex ou mantenha um step anterior em andamento).",
-          });
-          return {
-            ok: false,
-            reason: "missing_input",
-            message: "missing execution target",
-            plan: updated ?? plan,
-            stepIndex: next.stepIndex,
-            action,
-          };
-        }
-        const cancellation =
-          target.execution.kind === "job"
-            ? params.runtime.cancelJob
-              ? await params.runtime.cancelJob(target.execution.refId)
-              : null
-            : params.runtime.cancelExec
-              ? await params.runtime.cancelExec(target.execution.refId)
-              : null;
-        if (!cancellation) {
-          return runtimeNotAvailable(action, plan, next.stepIndex);
-        }
-        if (!cancellation.canceled) {
-          const failed = await this.updateStep({
-            planId: plan.id,
-            stepIndex: next.stepIndex,
-            status: "failed",
-            notes: `Executor: nao foi possivel cancelar execucao ${target.execution.kind}:${target.execution.refId}.`,
-          });
-          return {
-            ok: false,
-            reason: "execution_failed",
-            message: cancellation.message ?? "cancel request was not accepted",
-            plan: failed ?? plan,
-            stepIndex: next.stepIndex,
-            action,
-          };
-        }
-        await this.updateStep({
-          planId: plan.id,
-          stepIndex: target.stepIndex,
-          status: "canceled",
-          notes: `Canceler: execucao ${target.execution.kind}:${target.execution.refId} cancelada.`,
-          execution: {
-            ...target.execution,
-            status: cancellation.status ?? "canceled",
-          },
-        });
-        const cancelStep = await this.updateStep({
-          planId: plan.id,
-          stepIndex: next.stepIndex,
-          status: "completed",
-          notes: `Executor: cancel_execution concluido para ${target.execution.kind}:${target.execution.refId}.`,
-          execution: {
-            ...target.execution,
-            status: cancellation.status ?? "canceled",
-          },
-        });
-        return {
-          ok: true,
-          plan: cancelStep ?? plan,
-          stepIndex: next.stepIndex,
-          action,
-          execution: target.execution,
-        };
-      } else {
-        if (!params.runtime.execCommand) {
-          return runtimeNotAvailable(action, plan, next.stepIndex);
-        }
-        const normalizedCommand = normalizePlannerExecCommand(inputs.command ?? "");
-        const execOutcome = await executeExecWithRecovery({
           sessionKey,
-          command: normalizedCommand,
-          cwd: inputs.cwd,
-          timeoutMs: inputs.timeoutMs,
-          background: inputs.background,
-          run: params.runtime.execCommand,
+          inputs,
+          runtime: params.runtime,
         });
-        const exec = execOutcome.exec;
-        execution = {
-          kind: "exec",
-          refId: exec.id,
-          status: exec.status,
-          command: exec.command,
-          startedAt: new Date().toISOString(),
-        };
-
-        const finalStatus = toTerminalPlanStatusForExec(exec.status);
-        if (finalStatus) {
-          const noteParts = [
-            `Executor: exec finalizou com status=${exec.status}.`,
-            execOutcome.notes.length > 0 ? `Recuperacao: ${execOutcome.notes.join(" | ")}` : "",
-            exec.outputTail ? `Output: ${trimTail(exec.outputTail, 240)}` : "",
-          ].filter(Boolean);
-          const updated = await this.updateStep({
-            planId: plan.id,
-            stepIndex: next.stepIndex,
-            status: finalStatus,
-            notes: noteParts.join(" "),
-            execution: {
-              ...execution,
-              status: exec.status,
-            },
-          });
-          if (finalStatus === "completed") {
-            return {
-              ok: true,
-              plan: updated ?? plan,
-              stepIndex: next.stepIndex,
-              action,
-              execution,
-            };
-          }
-          return {
-            ok: false,
-            reason: "execution_failed",
-            message: exec.outputTail?.trim() || `exec terminou com status=${exec.status}`,
-            plan: updated ?? plan,
-            stepIndex: next.stepIndex,
-            action,
-          };
-        }
       }
 
-      const updated = await this.updateStep({
-        planId: plan.id,
-        stepIndex: next.stepIndex,
-        status: "in_progress",
-        notes: `Executor: acao ${action} disparada.`,
-        execution,
-      });
-      return {
-        ok: true,
-        plan: updated ?? plan,
+      if (action === "wait_execution" || action === "cancel_execution") {
+        return await this.executeControlAction({
+          plan,
+          stepIndex: next.stepIndex,
+          action,
+          sessionKey,
+          inputs,
+          runtime: params.runtime,
+        });
+      }
+
+      return await this.executeRegisteredAction({
+        plan,
         stepIndex: next.stepIndex,
         action,
-        execution,
-      };
+        sessionKey,
+        inputs,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const updated = await this.updateStep({
@@ -770,6 +499,345 @@ export class PlannerService {
         action,
       };
     }
+  }
+
+  private async executeExecBuiltIn(params: {
+    plan: ExecutionPlan;
+    stepIndex: number;
+    sessionKey: string;
+    inputs: PlanExecutionInputs;
+    runtime: {
+      execCommand?: (args: {
+        sessionKey: string;
+        command: string;
+        cwd?: string;
+        timeoutMs?: number;
+        background?: boolean;
+      }) => Promise<ExecRecoverySession>;
+      getJob?: (jobId: string) => Promise<{ status: string; error?: string } | null>;
+      pollExec?: (sessionId: string) => Promise<{ status: string; message?: string } | null>;
+    };
+  }): Promise<PlanExecuteNextResult> {
+    const { plan, stepIndex, sessionKey, inputs, runtime } = params;
+    if (!runtime.execCommand) {
+      return runtimeNotAvailable("exec", plan, stepIndex);
+    }
+    const normalizedCommand = normalizePlannerExecCommand(inputs.command ?? "");
+    const execOutcome = await executeExecWithRecovery({
+      sessionKey,
+      command: normalizedCommand,
+      cwd: inputs.cwd,
+      timeoutMs: inputs.timeoutMs,
+      background: inputs.background,
+      run: runtime.execCommand,
+    });
+    const exec = execOutcome.exec;
+    const execution: PlanStep["execution"] = {
+      kind: "exec",
+      refId: exec.id,
+      status: exec.status,
+      command: exec.command,
+      startedAt: new Date().toISOString(),
+    };
+
+    const finalStatus = toTerminalPlanStatusForExec(exec.status);
+    if (finalStatus) {
+      const noteParts = [
+        `Executor: exec finalizou com status=${exec.status}.`,
+        execOutcome.notes.length > 0 ? `Recuperacao: ${execOutcome.notes.join(" | ")}` : "",
+        exec.outputTail ? `Output: ${trimTail(exec.outputTail, 240)}` : "",
+      ].filter(Boolean);
+      const updated = await this.updateStep({
+        planId: plan.id,
+        stepIndex,
+        status: finalStatus,
+        notes: noteParts.join(" "),
+        execution: {
+          ...execution,
+          status: exec.status,
+        },
+      });
+      if (finalStatus === "completed") {
+        return {
+          ok: true,
+          plan: updated ?? plan,
+          stepIndex,
+          action: "exec",
+          execution,
+        };
+      }
+      return {
+        ok: false,
+        reason: "execution_failed",
+        message: exec.outputTail?.trim() || `exec terminou com status=${exec.status}`,
+        plan: updated ?? plan,
+        stepIndex,
+        action: "exec",
+      };
+    }
+
+    const updated = await this.updateStep({
+      planId: plan.id,
+      stepIndex,
+      status: "in_progress",
+      notes: `Executor: acao exec disparada.`,
+      execution,
+    });
+    return {
+      ok: true,
+      plan: updated ?? plan,
+      stepIndex,
+      action: "exec",
+      execution,
+    };
+  }
+
+  private async executeControlAction(params: {
+    plan: ExecutionPlan;
+    stepIndex: number;
+    action: PlanActionKind;
+    sessionKey: string;
+    inputs: PlanExecutionInputs;
+    runtime: {
+      getJob?: (jobId: string) => Promise<{ status: string; error?: string } | null>;
+      pollExec?: (sessionId: string) => Promise<{ status: string; message?: string } | null>;
+      cancelJob?: (jobId: string) => Promise<{ canceled: boolean; status?: string; message?: string }>;
+      cancelExec?: (sessionId: string) => Promise<{ canceled: boolean; status?: string; message?: string }>;
+    };
+  }): Promise<PlanExecuteNextResult> {
+    const { plan, stepIndex, action, sessionKey, inputs, runtime } = params;
+
+    if (action === "wait_execution") {
+      return this.executeWaitExecution({ plan, stepIndex, sessionKey, inputs, runtime });
+    }
+
+    return this.executeCancelExecution({ plan, stepIndex, sessionKey, inputs, runtime });
+  }
+
+  private async executeWaitExecution(params: {
+    plan: ExecutionPlan;
+    stepIndex: number;
+    sessionKey: string;
+    inputs: PlanExecutionInputs;
+    runtime: {
+      getJob?: (jobId: string) => Promise<{ status: string; error?: string } | null>;
+      pollExec?: (sessionId: string) => Promise<{ status: string; message?: string } | null>;
+    };
+  }): Promise<PlanExecuteNextResult> {
+    const { plan, stepIndex, inputs, runtime } = params;
+    const target = resolveTargetExecution(plan, stepIndex, inputs);
+    if (!target) {
+      const updated = await this.updateStep({
+        planId: plan.id,
+        stepIndex,
+        status: "blocked",
+        notes: "Executor: wait_execution sem execucao alvo (use targetStepIndex ou mantenha um step anterior em andamento).",
+      });
+      return {
+        ok: false,
+        reason: "missing_input",
+        message: "missing execution target",
+        plan: updated ?? plan,
+        stepIndex,
+        action: "wait_execution",
+      };
+    }
+    const canObserve =
+      (target.execution.kind === "job" && Boolean(runtime.getJob)) ||
+      (target.execution.kind === "exec" && Boolean(runtime.pollExec));
+    if (!canObserve) {
+      return runtimeNotAvailable("wait_execution", plan, stepIndex);
+    }
+    const resolution = await resolveExecutionStatus(target.execution, {
+      getJob: runtime.getJob,
+      pollExec: runtime.pollExec,
+    });
+    if (!resolution) {
+      const waiting = await this.updateStep({
+        planId: plan.id,
+        stepIndex,
+        status: "in_progress",
+        notes: `Executor: aguardando execucao ${target.execution.kind}:${target.execution.refId} finalizar.`,
+      });
+      return {
+        ok: true,
+        plan: waiting ?? plan,
+        stepIndex,
+        action: "wait_execution",
+        execution: target.execution,
+      };
+    }
+    if (plan.steps[target.stepIndex]?.status === "in_progress") {
+      await this.updateStep({
+        planId: plan.id,
+        stepIndex: target.stepIndex,
+        status: resolution.status,
+        notes: `Waiter: execucao ${target.execution.kind}:${target.execution.refId} observada como ${resolution.observedStatus}.`,
+        execution: {
+          ...target.execution,
+          status: resolution.observedStatus,
+        },
+      });
+    }
+    const waitStatus = resolution.status;
+    const waitResult = await this.updateStep({
+      planId: plan.id,
+      stepIndex,
+      status: waitStatus,
+      notes: `Executor: wait_execution finalizado com status=${resolution.observedStatus}.`,
+      execution: {
+        ...target.execution,
+        status: resolution.observedStatus,
+      },
+    });
+    if (waitStatus === "completed") {
+      return {
+        ok: true,
+        plan: waitResult ?? plan,
+        stepIndex,
+        action: "wait_execution",
+        execution: target.execution,
+      };
+    }
+    return {
+      ok: false,
+      reason: "execution_failed",
+      message: `target execution finished with status=${resolution.observedStatus}`,
+      plan: waitResult ?? plan,
+      stepIndex,
+      action: "wait_execution",
+    };
+  }
+
+  private async executeCancelExecution(params: {
+    plan: ExecutionPlan;
+    stepIndex: number;
+    sessionKey: string;
+    inputs: PlanExecutionInputs;
+    runtime: {
+      cancelJob?: (jobId: string) => Promise<{ canceled: boolean; status?: string; message?: string }>;
+      cancelExec?: (sessionId: string) => Promise<{ canceled: boolean; status?: string; message?: string }>;
+    };
+  }): Promise<PlanExecuteNextResult> {
+    const { plan, stepIndex, inputs, runtime } = params;
+    const target = resolveTargetExecution(plan, stepIndex, inputs);
+    if (!target) {
+      const updated = await this.updateStep({
+        planId: plan.id,
+        stepIndex,
+        status: "blocked",
+        notes: "Executor: cancel_execution sem execucao alvo (use targetStepIndex ou mantenha um step anterior em andamento).",
+      });
+      return {
+        ok: false,
+        reason: "missing_input",
+        message: "missing execution target",
+        plan: updated ?? plan,
+        stepIndex,
+        action: "cancel_execution",
+      };
+    }
+    const cancellation =
+      target.execution.kind === "job"
+        ? runtime.cancelJob
+          ? await runtime.cancelJob(target.execution.refId)
+          : null
+        : runtime.cancelExec
+          ? await runtime.cancelExec(target.execution.refId)
+          : null;
+    if (!cancellation) {
+      return runtimeNotAvailable("cancel_execution", plan, stepIndex);
+    }
+    if (!cancellation.canceled) {
+      const failed = await this.updateStep({
+        planId: plan.id,
+        stepIndex,
+        status: "failed",
+        notes: `Executor: nao foi possivel cancelar execucao ${target.execution.kind}:${target.execution.refId}.`,
+      });
+      return {
+        ok: false,
+        reason: "execution_failed",
+        message: cancellation.message ?? "cancel request was not accepted",
+        plan: failed ?? plan,
+        stepIndex,
+        action: "cancel_execution",
+      };
+    }
+    await this.updateStep({
+      planId: plan.id,
+      stepIndex: target.stepIndex,
+      status: "canceled",
+      notes: `Canceler: execucao ${target.execution.kind}:${target.execution.refId} cancelada.`,
+      execution: {
+        ...target.execution,
+        status: cancellation.status ?? "canceled",
+      },
+    });
+    const cancelStep = await this.updateStep({
+      planId: plan.id,
+      stepIndex,
+      status: "completed",
+      notes: `Executor: cancel_execution concluido para ${target.execution.kind}:${target.execution.refId}.`,
+      execution: {
+        ...target.execution,
+        status: cancellation.status ?? "canceled",
+      },
+    });
+    return {
+      ok: true,
+      plan: cancelStep ?? plan,
+      stepIndex,
+      action: "cancel_execution",
+      execution: target.execution,
+    };
+  }
+
+  private async executeRegisteredAction(params: {
+    plan: ExecutionPlan;
+    stepIndex: number;
+    action: PlanActionKind;
+    sessionKey: string;
+    inputs: PlanExecutionInputs;
+  }): Promise<PlanExecuteNextResult> {
+    const { plan, stepIndex, action, sessionKey, inputs } = params;
+    const handler = this.actionRegistry.get(action);
+    if (!handler) {
+      return runtimeNotAvailable(action, plan, stepIndex);
+    }
+
+    const result = await handler.execute({ sessionKey, inputs });
+    if (!result.ok) {
+      const updated = await this.updateStep({
+        planId: plan.id,
+        stepIndex,
+        status: "failed",
+        notes: `Executor: acao ${action} falhou: ${result.message}`,
+      });
+      return {
+        ok: false,
+        reason: "execution_failed",
+        message: result.message,
+        plan: updated ?? plan,
+        stepIndex,
+        action,
+      };
+    }
+
+    const updated = await this.updateStep({
+      planId: plan.id,
+      stepIndex,
+      status: "in_progress",
+      notes: `Executor: acao ${action} disparada.`,
+      execution: result.execution,
+    });
+    return {
+      ok: true,
+      plan: updated ?? plan,
+      stepIndex,
+      action,
+      execution: result.execution,
+    };
   }
 
   async reconcile(params: {
@@ -867,23 +935,10 @@ function normalizeDrafts(drafts: PlanStepDraftInput[], maxStepsRaw?: number): Pl
   return normalized;
 }
 
-function requiredInputsForAction(kind: PlanActionKind): string[] {
-  if (kind === "probe") {
-    return ["inputPath"];
-  }
-  if (kind === "capture") {
-    return ["streamUrl", "outputPath"];
-  }
-  if (kind === "transcode") {
-    return ["inputPath", "outputPath"];
-  }
-  if (kind === "hls") {
-    return ["inputPath", "outputPlaylistPath"];
-  }
-  if (kind === "wait_execution" || kind === "cancel_execution") {
-    return [];
-  }
-  return ["command"];
+function requiredInputsForAction(kind: string): string[] {
+  if (kind === "exec") return ["command"];
+  if (kind === "wait_execution" || kind === "cancel_execution") return [];
+  return [];
 }
 
 function createAction(kind: PlanActionKind, params: PlanExecutionInputs = {}): PlanStepAction {
@@ -1143,10 +1198,6 @@ function normalizePlannerExecCommand(command: string): string {
     return raw;
   }
 
-  // Common failure mode in generated shell:
-  // - command defines VAR=...
-  // - then inline Python reads os.environ.get("VAR")
-  // Without export, Python sees None.
   if (!/python\d*\s+-\s+<<['"]?PY['"]?/i.test(raw) && !/os\.environ\.get\(/i.test(raw)) {
     return raw;
   }
@@ -1294,15 +1345,15 @@ function buildExecRecoveryCommand(params: {
       "set -euo pipefail",
       "if [ -f /tmp/first_segment.bin ] && head -c 16 /tmp/first_segment.bin | grep -q '#EXTM3U'; then",
       "  PLAY='/tmp/first_segment.bin'",
-      "  BASE_URL=\"$(cat /tmp/first_segment_url.txt | sed 's|[^/]*$||')\"",
-      "  MAP_REF=\"$(grep -m1 '^#EXT-X-MAP:' \"$PLAY\" | sed -E 's/.*URI=\"([^\"]+)\".*/\\1/' || true)\"",
-      "  SEG_REF=\"$(grep -vE '^\\s*#' \"$PLAY\" | head -n 1 | tr -d '\\r' || true)\"",
-      "  [ -n \"$SEG_REF\" ] && curl -fsSL -L \"${BASE_URL}${SEG_REF}\" -o /tmp/_kael_seg.bin",
-      "  if [ -n \"$MAP_REF\" ]; then",
-      "    curl -fsSL -L \"${BASE_URL}${MAP_REF}\" -o /tmp/_kael_init.bin",
-      "    cat /tmp/_kael_init.bin /tmp/_kael_seg.bin > /tmp/first_segment.bin",
-      "  elif [ -f /tmp/_kael_seg.bin ]; then",
-      "    mv /tmp/_kael_seg.bin /tmp/first_segment.bin",
+      '  BASE_URL="$(cat /tmp/first_segment_url.txt | sed \'s|[^/]*$||\')"',
+      '  MAP_REF="$(grep -m1 \'^#EXT-X-MAP:\' "$PLAY" | sed -E \'s/.*URI="([^"]+)".*/\\1/\' || true)"',
+      '  SEG_REF="$(grep -vE \'^\\s*#\' "$PLAY" | head -n 1 | tr -d \'\\r\' || true)"',
+      '  [ -n "$SEG_REF" ] && curl -fsSL -L "${BASE_URL}${SEG_REF}" -o /tmp/_kael_seg.bin',
+      '  if [ -n "$MAP_REF" ]; then',
+      '    curl -fsSL -L "${BASE_URL}${MAP_REF}" -o /tmp/_kael_init.bin',
+      '    cat /tmp/_kael_init.bin /tmp/_kael_seg.bin > /tmp/first_segment.bin',
+      '  elif [ -f /tmp/_kael_seg.bin ]; then',
+      '    mv /tmp/_kael_seg.bin /tmp/first_segment.bin',
       "  fi",
       "fi",
       params.originalCommand,

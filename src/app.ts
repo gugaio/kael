@@ -35,6 +35,7 @@ import { TurnOrchestrator } from "./chat/turn-orchestrator.js";
 import type { ShellRuntime } from "./tools/system/shell-tool-service.js";
 import type { StreamWatchParams, StreamWatchStatus } from "./vhs/types.js";
 import type { VideoJobs } from "./video/jobs.js";
+import { createVideoPlannerHandlers } from "./video/planner-handlers.js";
 import { SkillService } from "./skills/service.js";
 import type { McpRuntime } from "./tools/mcp/mcp-bridge-service.js";
 import { EdgeRuntime } from "./edge/runtime.js";
@@ -131,6 +132,10 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   const browserRuntime = createBrowserRuntime(config);
   const research = createResearchRuntime(config);
   const planner = await createPlannerRuntime(config);
+  const videoHandlers = createVideoPlannerHandlers(videoJobs);
+  for (const [kind, handler] of Object.entries(videoHandlers)) {
+    planner.registerActionHandler(kind, handler);
+  }
   const engine = createEngine(config);
   const orchestrator = new TurnOrchestrator(sessions, engine, {
     maxContextMessages: config.context.maxMessages,

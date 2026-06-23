@@ -12,8 +12,6 @@ function makeJob(overrides: Partial<JobRecord> = {}): JobRecord {
   return {
     id: "j1",
     sessionKey: "s1",
-    capability: "video",
-    action: "transcode",
     command: "ffmpeg",
     input: "/tmp/in.mp4",
     output: "/tmp/out.mp4",
@@ -31,13 +29,12 @@ function makeJob(overrides: Partial<JobRecord> = {}): JobRecord {
 describe("jobs/tooling", () => {
   it("filtra jobs e respeita limit", () => {
     const jobs = [
-      makeJob({ id: "j1", sessionKey: "a", action: "transcode" }),
-      makeJob({ id: "j2", sessionKey: "a", action: "probe_media" }),
-      makeJob({ id: "j3", sessionKey: "b", action: "transcode" }),
+      makeJob({ id: "j1", sessionKey: "a" }),
+      makeJob({ id: "j2", sessionKey: "a" }),
+      makeJob({ id: "j3", sessionKey: "b" }),
     ];
-    const result = selectJobs(jobs, { sessionKey: "a", action: "transcode", limit: 5 });
-    expect(result).toHaveLength(1);
-    expect(result[0]?.id).toBe("j1");
+    const result = selectJobs(jobs, { sessionKey: "a", limit: 5 });
+    expect(result).toHaveLength(2);
   });
 
   it("gera tail de log quando solicitado", () => {
@@ -51,8 +48,8 @@ describe("jobs/tooling", () => {
 
   it("formata saidas de texto de jobs", () => {
     const job = makeJob();
-    expect(formatJobsListText([{ id: "j1", capability: "video", action: "transcode", status: "completed", createdAt: "x" }])).toContain("jobs=1");
-    expect(formatJobDetailsText(job)).toContain("capability=video");
+    expect(formatJobsListText([{ id: "j1", status: "completed", createdAt: "x" }])).toContain("jobs=1");
+    expect(formatJobDetailsText(job)).toContain("jobId=j1");
     expect(formatJobLogText({ jobId: "j1", log: "ok" })).toContain("chars=2");
   });
 });

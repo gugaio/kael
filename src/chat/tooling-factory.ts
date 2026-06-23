@@ -101,8 +101,8 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
       },
     },
     jobs: {
-      listJobs: ({ sessionKey, capability, action, status, limit } = {}) =>
-        selectJobs(executors.jobs.listJobs(), { sessionKey, capability, action, status, limit }),
+      listJobs: ({ sessionKey, status, limit } = {}) =>
+        selectJobs(executors.jobs.listJobs(), { sessionKey, status, limit }),
       getJob: ({ jobId }) => executors.jobs.getJob(jobId),
       getJobLog: async ({ jobId, tailChars }) => {
         const text = await executors.jobs.getJobLog(jobId);
@@ -254,7 +254,6 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
           inputs,
           runtime: createPlannerExecuteRuntime({
             jobs: executors.jobs,
-            videoJobs: executors.videoJobs,
             shell: executors.shellRuntime,
           }),
         }),

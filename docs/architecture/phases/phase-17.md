@@ -28,8 +28,13 @@ resultado e comportamento explicito em falhas.
 
 ## Decisao arquitetural
 
-- Manter contrato atual do planner (`executeNext`/`reconcile`) e evoluir por
-  extensao de `PlanActionKind` + runtime callbacks opcionais.
+- Manter contrato atual do planner (`executeNext`/`reconcile`).
+- Acoes de dominio (video, audio, etc.) sao registradas via `ActionRegistry`:
+  - Cada handler define `requiredInputs` e `execute()`;
+  - Planner core conhece apenas `exec`, `wait_execution`, `cancel_execution`.
+- `PlannerExecuteRuntime` contem apenas callbacks de infraestrutura:
+  - `execCommand`, `getJob`, `pollExec`, `cancelJob`, `cancelExec`;
+  - Callbacks de dominio (ex-`startProbeMedia`) foram removidos.
 - Separar claramente:
   - acoes que "disparam trabalho";
   - acoes que "controlam/observam trabalho";
@@ -48,8 +53,9 @@ resultado e comportamento explicito em falhas.
 - Novas actions no planner:
   - `wait_execution`;
   - `cancel_execution`.
-- Runtime de `executeNext` expandido com callbacks de observacao/cancelamento:
-  - `getJob`, `pollExec`, `cancelJob`, `cancelExec`.
+- Runtime de `executeNext` simplificado com callbacks de infraestrutura apenas:
+  - `getJob`, `pollExec`, `cancelJob`, `cancelExec`, `execCommand`.
+- `ActionRegistry` para handlers de acao de dominio (video registra probe, capture, transcode, hls).
 - Priorizacao de step de controle no `nextAction` quando ha step anterior em
   `in_progress` com execucao em curso.
 - Suporte de `targetStepIndex` para definir explicitamente qual step sera

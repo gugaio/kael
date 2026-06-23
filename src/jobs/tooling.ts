@@ -2,16 +2,12 @@ import type { JobRecord } from "../types.js";
 
 export type JobsListFilters = {
   sessionKey?: string;
-  capability?: string;
-  action?: string;
   status?: string;
   limit?: number;
 };
 
 export type ListedJob = {
   id: string;
-  capability: string;
-  action: string;
   status: string;
   output?: string;
   createdAt: string;
@@ -27,8 +23,6 @@ function clampListLimit(limit: number | undefined): number {
 export function mapJobForList(job: JobRecord): ListedJob {
   return {
     id: job.id,
-    capability: job.capability,
-    action: job.action,
     status: job.status,
     output: job.output,
     createdAt: job.createdAt,
@@ -39,11 +33,9 @@ export function mapJobForList(job: JobRecord): ListedJob {
 }
 
 export function selectJobs(jobs: JobRecord[], filters: JobsListFilters = {}): ListedJob[] {
-  const { sessionKey, capability, action, status, limit } = filters;
+  const { sessionKey, status, limit } = filters;
   return jobs
     .filter((job) => (sessionKey ? job.sessionKey === sessionKey : true))
-    .filter((job) => (capability ? job.capability === capability : true))
-    .filter((job) => (action ? job.action === action : true))
     .filter((job) => (status ? job.status === status : true))
     .slice(0, clampListLimit(limit))
     .map(mapJobForList);
@@ -75,14 +67,12 @@ export function formatJobsListText(jobs: ListedJob[]): string {
   }
   return [
     `jobs=${jobs.length}`,
-    ...jobs.map((job) => `${job.id} | ${job.capability}/${job.action} | ${job.status} | createdAt=${job.createdAt}`),
+    ...jobs.map((job) => `${job.id} | ${job.status} | createdAt=${job.createdAt}`),
   ].join("\n");
 }
 
 export function formatJobDetailsText(job: {
   id: string;
-  capability: string;
-  action: string;
   status: string;
   sessionKey: string;
   command: string;
@@ -97,8 +87,6 @@ export function formatJobDetailsText(job: {
   return [
     "found=true",
     `jobId=${job.id}`,
-    `capability=${job.capability}`,
-    `action=${job.action}`,
     `status=${job.status}`,
     `sessionKey=${job.sessionKey}`,
     `command=${job.command}`,

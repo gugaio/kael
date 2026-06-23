@@ -536,7 +536,6 @@ describe("Jobs E2E API", () => {
     expect(created.statusCode).toBe(200);
     const body = created.json();
     expect(body.ok).toBe(true);
-    expect(body.job.action).toBe("play_vlc");
     expect(body.job.command).toBe("vlc");
     await server.close();
   });

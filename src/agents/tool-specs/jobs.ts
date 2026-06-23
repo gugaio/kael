@@ -24,13 +24,11 @@ export function createJobsPiTools(params: {
     name: "jobs_list",
     label: "Jobs List",
     description:
-      "Lista jobs existentes com filtros opcionais (sessionKey, capability, action, status). Use para perguntas sobre jobs recentes/anteriores.",
+      "Lista jobs existentes com filtros opcionais (sessionKey, status). Use para perguntas sobre jobs recentes/anteriores.",
     parameters: {
       type: "object",
       properties: {
         sessionKey: { type: "string" },
-        capability: { type: "string" },
-        action: { type: "string" },
         status: { type: "string" },
         limit: { type: "number" },
       },
@@ -44,16 +42,12 @@ export function createJobsPiTools(params: {
       const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as {
         sessionKey?: string;
-        capability?: string;
-        action?: string;
         status?: string;
         limit?: number;
       };
       const intent = params.logToolStart("jobs_list", args);
       const jobs = params.tooling.listJobs({
         sessionKey: args.sessionKey,
-        capability: args.capability,
-        action: args.action,
         status: args.status,
         limit: args.limit,
       });

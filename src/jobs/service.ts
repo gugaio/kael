@@ -7,9 +7,7 @@ import { kaelLogger } from "../infra/logger.js";
 import type { ProcessSupervisor } from "../process/supervisor.js";
 import type { JobStore } from "./store.js";
 
-export type ProcessJobInput = {
-  capability: string;
-  action: string;
+export type JobInput = {
   sessionKey: string;
   command: string;
   input: string;
@@ -17,7 +15,7 @@ export type ProcessJobInput = {
   args: string[];
 };
 
-type QueuedJob = ProcessJobInput & { id: string };
+type QueuedJob = JobInput & { id: string };
 
 type JobServiceOptions = {
   maxConcurrentJobs: number;
@@ -37,6 +35,25 @@ export class JobService {
     private readonly supervisor: ProcessSupervisor,
     private readonly options: JobServiceOptions,
   ) {}
+
+  async enqueue(input: JobInput): Promise<JobRecord> {
+    const id = crypto.randomUUID();
+    const job: JobRecord = {
+      id,
+      sessionKey: input.sessionKey,
+      command: input.command,
+      input: input.input,
+      output: input.output,
+      args: input.args,
+      status: "queued",
+      createdAt: new Date().toISOString(),
+      logPath: this.store.getLogPath(id),
+    };
+    await this.store.create(job);
+    this.queue.push({ ...input, id });
+    this.drainQueue();
+    return job;
+  }
 
   listJobs(): JobRecord[] {
     return this.store.list();
@@ -63,26 +80,6 @@ export class JobService {
     };
   }
 
-  async enqueue(input: ProcessJobInput): Promise<JobRecord> {
-    const id = crypto.randomUUID();
-    const job: JobRecord = {
-      id,
-      capability: input.capability,
-      action: input.action,
-      sessionKey: input.sessionKey,
-      command: input.command,
-      input: input.input,
-      output: input.output,
-      args: input.args,
-      status: "queued",
-      createdAt: new Date().toISOString(),
-      logPath: this.store.getLogPath(id),
-    };
-    await this.store.create(job);
-    this.queue.push({ ...input, id });
-    this.drainQueue();
-    return job;
-  }
 
   async cancelJob(jobId: string): Promise<{ job: JobRecord | null; canceled: boolean }> {
     const job = this.store.get(jobId);
@@ -172,7 +169,7 @@ export class JobService {
       ...(result.code !== undefined ? { exitCode: result.code } : {}),
       ...(result.error ? { error: result.error } : {}),
     });
-    kaelLogger.info("jobs.execution.finished", { jobId: job.id, type: job.action, ...result, status });
+    kaelLogger.info("jobs.execution.finished", { jobId: job.id, command: job.command, ...result, status });
     this.drainQueue();
   }
 }

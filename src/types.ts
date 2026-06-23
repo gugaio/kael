@@ -21,18 +21,8 @@ export type SessionEntry = {
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "canceled";
 
-export type VideoJobType =
-  | "transcode"
-  | "convert_hls"
-  | "capture_stream"
-  | "probe_media"
-  | "probe_url"
-  | "play_vlc";
-
 export type JobRecord = {
   id: string;
-  capability: string;
-  action: string;
   sessionKey: string;
   command: string;
   input: string;
@@ -45,10 +35,4 @@ export type JobRecord = {
   exitCode?: number | null;
   error?: string;
   logPath: string;
-};
-
-export type VideoJob = JobRecord & {
-  capability: "video";
-  action: VideoJobType;
-  command: "ffmpeg" | "ffprobe" | "vlc";
 };

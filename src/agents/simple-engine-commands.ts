@@ -53,7 +53,7 @@ function listJobsReply(tooling: EngineToolingInterface): EngineTurnOutput {
   const summary = jobs
     .map(
       (job) =>
-        `- ${job.id} | ${job.capability}/${job.action} | ${job.status} | ${job.output ?? "(sem output)"}`,
+        `- ${job.id} | status=${job.status}${job.output ? ` | output=${job.output}` : ""}`,
     )
     .join("\n");
 

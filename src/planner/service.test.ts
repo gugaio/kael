@@ -161,8 +161,15 @@ describe("PlannerService", () => {
     expect(plan.steps.some((step) => step.action.kind === "hls")).toBe(true);
   });
 
-  it("executes next step and links runtime execution id", async () => {
+  it("executes next step via registered handler and links runtime execution id", async () => {
     const { planner } = await makePlanner();
+    planner.registerActionHandler("transcode", {
+      requiredInputs: ["inputPath", "outputPath"],
+      execute: async () => ({
+        ok: true,
+        execution: { kind: "job", refId: "job-123", status: "queued", startedAt: new Date().toISOString() },
+      }),
+    });
     const plan = await planner.create({
       sessionKey: "s1",
       title: "Pipeline",
@@ -175,9 +182,7 @@ describe("PlannerService", () => {
         inputPath: "/tmp/in.mp4",
         outputPath: "/tmp/out.mp4",
       },
-      runtime: {
-        startTranscode: async () => ({ id: "job-123", status: "queued" }),
-      },
+      runtime: {},
     });
 
     expect(result.ok).toBe(true);
@@ -190,8 +195,15 @@ describe("PlannerService", () => {
     expect(result.plan.steps[0].execution?.refId).toBe("job-123");
   });
 
-  it("blocks next step when required input is missing", async () => {
+  it("blocks next step when required input is missing via registered handler", async () => {
     const { planner } = await makePlanner();
+    planner.registerActionHandler("hls", {
+      requiredInputs: ["inputPath", "outputPlaylistPath"],
+      execute: async () => ({
+        ok: true,
+        execution: { kind: "job", refId: "job-hls", status: "queued", startedAt: new Date().toISOString() },
+      }),
+    });
     const plan = await planner.create({
       sessionKey: "s1",
       title: "Pipeline",
@@ -203,9 +215,7 @@ describe("PlannerService", () => {
       inputs: {
         inputPath: "/tmp/in.mp4",
       },
-      runtime: {
-        startConvertHls: async () => ({ id: "job-hls", status: "queued" }),
-      },
+      runtime: {},
     });
 
     expect(result.ok).toBe(false);
@@ -218,6 +228,13 @@ describe("PlannerService", () => {
 
   it("reconciles in_progress job step to completed", async () => {
     const { planner } = await makePlanner();
+    planner.registerActionHandler("transcode", {
+      requiredInputs: ["inputPath", "outputPath"],
+      execute: async () => ({
+        ok: true,
+        execution: { kind: "job", refId: "job-123", status: "running", startedAt: new Date().toISOString() },
+      }),
+    });
     const plan = await planner.create({
       sessionKey: "s1",
       title: "Pipeline",
@@ -229,9 +246,7 @@ describe("PlannerService", () => {
         inputPath: "/tmp/in.mp4",
         outputPath: "/tmp/out.mp4",
       },
-      runtime: {
-        startTranscode: async () => ({ id: "job-123", status: "running" }),
-      },
+      runtime: {},
     });
 
     const rec = await planner.reconcile({

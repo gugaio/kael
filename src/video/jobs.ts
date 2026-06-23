@@ -1,5 +1,5 @@
 import type { JobRecord } from "../types.js";
-import type { JobService } from "../jobs/service.js";
+import type { JobInput, JobService } from "../jobs/service.js";
 import {
   validateExistingInputPath,
   validateOutputPath,
@@ -32,14 +32,7 @@ export function createVideoJobs({ jobs, options }: VideoJobDeps) {
     allowedRoots: options.allowedPaths,
     safePathsEnabled: options.safePathsEnabled,
   });
-  const enqueue = (input: {
-    action: string;
-    sessionKey: string;
-    command: string;
-    input: string;
-    output?: string;
-    args: string[];
-  }): Promise<JobRecord> => jobs.enqueue({ capability: "video", ...input });
+  const enqueue = (input: JobInput): Promise<JobRecord> => jobs.enqueue(input);
 
   return {
     async startTranscode(params: { sessionKey: string; inputPath: string; outputPath: string; args?: string[] }) {
@@ -48,7 +41,6 @@ export function createVideoJobs({ jobs, options }: VideoJobDeps) {
       const customArgs = validateUserArgs(params.args, options.maxJobArgs);
       const codecArgs = customArgs.length > 0 ? customArgs : ["-c:v", "libx264", "-c:a", "aac"];
       return enqueue({
-        action: "transcode",
         sessionKey: params.sessionKey,
         command: "ffmpeg",
         input: params.inputPath,
@@ -69,7 +61,6 @@ export function createVideoJobs({ jobs, options }: VideoJobDeps) {
         ? Math.floor(params.segmentTime ?? 10)
         : 10;
       return enqueue({
-        action: "convert_hls",
         sessionKey: params.sessionKey,
         command: "ffmpeg",
         input: params.inputPath,
@@ -93,7 +84,6 @@ export function createVideoJobs({ jobs, options }: VideoJobDeps) {
         ? ["-t", String(Math.min(21600, Math.floor(params.durationSeconds ?? 0)))]
         : [];
       return enqueue({
-        action: "capture_stream",
         sessionKey: params.sessionKey,
         command: "ffmpeg",
         input: params.streamUrl,
@@ -105,7 +95,6 @@ export function createVideoJobs({ jobs, options }: VideoJobDeps) {
     async startProbeMedia(params: { sessionKey: string; inputPath: string }) {
       await inputPath(params.inputPath, "inputPath");
       return enqueue({
-        action: "probe_media",
         sessionKey: params.sessionKey,
         command: "ffprobe",
         input: params.inputPath,
@@ -116,7 +105,6 @@ export function createVideoJobs({ jobs, options }: VideoJobDeps) {
     async startProbeUrl(params: { sessionKey: string; streamUrl: string }) {
       validateStreamUrl(params.streamUrl);
       return enqueue({
-        action: "probe_url",
         sessionKey: params.sessionKey,
         command: "ffprobe",
         input: params.streamUrl,
@@ -129,7 +117,7 @@ export function createVideoJobs({ jobs, options }: VideoJobDeps) {
       if (!input) throw new Error("input is required");
       if (/^https?:\/\//i.test(input)) validateStreamUrl(input);
       else await inputPath(input, "input");
-      return enqueue({ action: "play_vlc", sessionKey: params.sessionKey, command: "vlc", input, args: [input] });
+      return enqueue({ sessionKey: params.sessionKey, command: "vlc", input, args: [input] });
     },
   };
 }

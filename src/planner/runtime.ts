@@ -1,27 +1,7 @@
-import type { VideoJobs } from "../video/jobs.js";
 import type { JobService } from "../jobs/service.js";
 import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
 
 export type PlannerExecuteRuntime = {
-  startProbeMedia: (args: { sessionKey: string; inputPath: string }) => Promise<{ id: string; status: string }>;
-  startCaptureStream: (args: {
-    sessionKey: string;
-    streamUrl: string;
-    outputPath: string;
-    durationSeconds?: number;
-  }) => Promise<{ id: string; status: string }>;
-  startTranscode: (args: {
-    sessionKey: string;
-    inputPath: string;
-    outputPath: string;
-    args?: string[];
-  }) => Promise<{ id: string; status: string }>;
-  startConvertHls: (args: {
-    sessionKey: string;
-    inputPath: string;
-    outputPlaylistPath: string;
-    segmentTime?: number;
-  }) => Promise<{ id: string; status: string }>;
   execCommand: (args: {
     sessionKey: string;
     command: string;
@@ -47,22 +27,16 @@ export type PlannerReconcileRuntime = {
   pollExec: (sessionId: string) => Promise<{ status: string; message?: string } | null>;
 };
 
-type PlannerReadDeps = {
+type PlannerDeps = {
   jobs: JobService;
   shell: ShellRuntime;
 };
 
-type PlannerExecuteDeps = PlannerReadDeps & { videoJobs: VideoJobs };
-
 export function createPlannerExecuteRuntime(
-  deps: PlannerExecuteDeps,
+  deps: PlannerDeps,
   sessionKey = "planner.execute",
 ): PlannerExecuteRuntime {
   return {
-    startProbeMedia: (args) => deps.videoJobs.startProbeMedia(args),
-    startCaptureStream: (args) => deps.videoJobs.startCaptureStream(args),
-    startTranscode: (args) => deps.videoJobs.startTranscode(args),
-    startConvertHls: (args) => deps.videoJobs.startConvertHls(args),
     execCommand: (args) =>
       deps.shell.exec({
         sessionKey: args.sessionKey,
@@ -119,7 +93,7 @@ export function createPlannerExecuteRuntime(
 }
 
 export function createPlannerReconcileRuntime(
-  deps: PlannerReadDeps,
+  deps: PlannerDeps,
   sessionKey = "planner.reconcile",
 ): PlannerReconcileRuntime {
   return {

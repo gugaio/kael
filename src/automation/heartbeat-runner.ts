@@ -3,8 +3,6 @@ import type { SessionStore } from "../session/store.js";
 
 type JobSnapshot = {
   status: string;
-  capability: string;
-  action: string;
   sessionKey: string;
   output?: string;
 };
@@ -29,8 +27,6 @@ export class HeartbeatRunner {
       for (const job of allJobs) {
         this.lastByJobId.set(job.id, {
           status: job.status,
-          capability: job.capability,
-          action: job.action,
           sessionKey: job.sessionKey,
           output: job.output,
         });
@@ -44,8 +40,6 @@ export class HeartbeatRunner {
       const previous = this.lastByJobId.get(job.id);
       const current: JobSnapshot = {
         status: job.status,
-        capability: job.capability,
-        action: job.action,
         sessionKey: job.sessionKey,
         output: job.output,
       };
@@ -59,7 +53,7 @@ export class HeartbeatRunner {
       await this.sessions.appendMessage(
         job.sessionKey,
         "system",
-        `[heartbeat] job ${job.id} (${job.capability}/${job.action}) mudou ${previous.status} -> ${current.status}.${details}`,
+        `[heartbeat] job ${job.id} (${job.command}) mudou ${previous.status} -> ${current.status}.${details}`,
       );
       notifiedCount += 1;
     }

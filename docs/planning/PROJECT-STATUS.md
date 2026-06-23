@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-06-21**
+Ultima atualizacao: **2026-06-23**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,37 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-06-23 - Planner refatorado: action registry desacopla dominio de video
+
+Resumo:
+- Criado `src/planner/action-registry.ts` com `ActionRegistry` e `ActionHandler` type
+- Video-specific actions (probe, capture, transcode, hls) removidas do if/else chain do `executeNext`
+- Criado `src/video/planner-handlers.ts` que registra handlers de video no planner
+- `PlannerExecuteRuntime` simplificado: nao tem mais callbacks de video (`startProbeMedia`, `startCaptureStream`, `startTranscode`, `startConvertHls`)
+- `createPlannerExecuteRuntime` nao depende mais de `VideoJobs`
+- Handler usa `requiredInputs` proprio validado em tempo de execucao
+- Controles built-in (`exec`, `wait_execution`, `cancel_execution`) permanecem no planner
+- `deriveStepFromTitle` mantem heuristica de titulo->kind (conveniencia, nao acoplamento)
+
+Arquivos-chave:
+- `src/planner/action-registry.ts` (novo)
+- `src/video/planner-handlers.ts` (novo)
+- `src/planner/service.ts`
+- `src/planner/runtime.ts`
+- `src/app.ts`
+- `src/chat/tooling-factory.ts`
+- `src/planner/service.test.ts`
+
+Checklist de validacao:
+- [x] `npx tsc --noEmit` (0 erros)
+- [x] `npx vitest run` (283 passed, 4 skipped)
+
+Pendencias:
+- Nenhuma, contratos externos preservados.
+
+Proximo passo recomendado:
+- Se novos dominios surgirem (audio, image processing), criar handlers especificos e registrar no planner sem modificar `service.ts`.
 
 ### 2026-06-21 - Kael sem capability de vídeo interna
 

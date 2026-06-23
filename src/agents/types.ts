@@ -172,14 +172,10 @@ export type EngineVideoTooling = {
 export type EngineJobsTooling = {
   listJobs: (params?: {
     sessionKey?: string;
-    capability?: string;
-    action?: string;
     status?: string;
     limit?: number;
   }) => {
     id: string;
-    capability: string;
-    action: string;
     status: string;
     output?: string;
     createdAt: string;
@@ -189,8 +185,6 @@ export type EngineJobsTooling = {
   }[];
   getJob: (params: { jobId: string }) => {
     id: string;
-    capability: string;
-    action: string;
     status: string;
     sessionKey: string;
     command: string;
