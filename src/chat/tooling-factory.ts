@@ -1,6 +1,6 @@
 import type { EngineToolingInterface } from "../agents/types.js";
-import type { JobManager } from "../jobs/manager.js";
-import { VIDEO_JOB_ACTIONS } from "../capabilities/video/index.js";
+import type { JobService } from "../jobs/service.js";
+import type { VideoJobs } from "../video/jobs.js";
 import type { MemoryService } from "../memory/service.js";
 import type { PlannerService } from "../planner/service.js";
 import type { ProjectContextService } from "../projects/service.js";
@@ -9,11 +9,9 @@ import type { ResearchService } from "../research/service.js";
 import type { ImageGeneratorService } from "../media/image-generator.js";
 import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
 import type { McpRuntime } from "../tools/mcp/mcp-bridge-service.js";
-import type {
-  ProviderBackedVideoGenerationService,
-  HlsStreamMonitorService,
-} from "../capabilities/video/index.js";
-import type { HlsManifestAuditInput, HlsManifestDiffInput } from "../capabilities/video/types.js";
+import type { HlsStreamMonitorService } from "../vhs/watch-registry.js";
+import type { ProviderBackedMediaGenerationService } from "../media/generation.js";
+import type { HlsManifestAuditInput, HlsManifestDiffInput } from "../vhs/types.js";
 import type { ManifestAuditReport, ManifestDiffReport, MediaInspector, PlaybackTriageService } from "@gugaio/vhs";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
 import type { BrowserRuntime } from "../runtime/browser/index.js";
@@ -21,7 +19,8 @@ import { buildJobLogTailResult, selectJobs } from "../jobs/tooling.js";
 import type { EdgeRuntime } from "../edge/runtime.js";
 
 type ChatToolingExecutors = {
-  jobManager: JobManager;
+  jobs: JobService;
+  videoJobs: VideoJobs;
   shellRuntime: ShellRuntime;
   mcpRuntime: McpRuntime;
   edgeRuntime: EdgeRuntime;
@@ -32,7 +31,7 @@ type ChatToolingExecutors = {
   research: ResearchService;
   planner: PlannerService;
   imageGenerator: ImageGeneratorService;
-  videoGeneration: ProviderBackedVideoGenerationService;
+  videoGeneration: ProviderBackedMediaGenerationService;
   playbackTriage: PlaybackTriageService;
   manifestAudit: { auditHlsManifest(input: HlsManifestAuditInput): Promise<ManifestAuditReport> };
   manifestDiff: { diffHlsManifests(input: HlsManifestDiffInput): Promise<ManifestDiffReport> };
@@ -43,11 +42,11 @@ type ChatToolingExecutors = {
 export function createChatTooling(executors: ChatToolingExecutors): EngineToolingInterface {
   return {
     video: {
-      startTranscode: (params) => executors.jobManager.startAction(VIDEO_JOB_ACTIONS.transcode, params),
-      startConvertHls: (params) => executors.jobManager.startAction(VIDEO_JOB_ACTIONS.convertHls, params),
-      startCaptureStream: (params) => executors.jobManager.startAction(VIDEO_JOB_ACTIONS.captureStream, params),
-      startProbeMedia: (params) => executors.jobManager.startAction(VIDEO_JOB_ACTIONS.probeMedia, params),
-      startPlayVlc: (params) => executors.jobManager.startAction(VIDEO_JOB_ACTIONS.playVlc, params),
+      startTranscode: (params) => executors.videoJobs.startTranscode(params),
+      startConvertHls: (params) => executors.videoJobs.startConvertHls(params),
+      startCaptureStream: (params) => executors.videoJobs.startCaptureStream(params),
+      startProbeMedia: (params) => executors.videoJobs.startProbeMedia(params),
+      startPlayVlc: (params) => executors.videoJobs.startPlayVlc(params),
       videoHlsInspect: async ({ url, maxSegments, timeoutMs }) =>
         executors.videoInspect.inspectHls({ url, maxSegments, timeoutMs }),
       videoProbe: async ({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }) =>
@@ -103,10 +102,10 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
     },
     jobs: {
       listJobs: ({ sessionKey, capability, action, status, limit } = {}) =>
-        selectJobs(executors.jobManager.listJobs(), { sessionKey, capability, action, status, limit }),
-      getJob: ({ jobId }) => executors.jobManager.getJob(jobId),
+        selectJobs(executors.jobs.listJobs(), { sessionKey, capability, action, status, limit }),
+      getJob: ({ jobId }) => executors.jobs.getJob(jobId),
       getJobLog: async ({ jobId, tailChars }) => {
-        const text = await executors.jobManager.getJobLog(jobId);
+        const text = await executors.jobs.getJobLog(jobId);
         return buildJobLogTailResult({ jobId, text, tailChars });
       },
     },
@@ -254,7 +253,8 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
           planId,
           inputs,
           runtime: createPlannerExecuteRuntime({
-            jobs: executors.jobManager,
+            jobs: executors.jobs,
+            videoJobs: executors.videoJobs,
             shell: executors.shellRuntime,
           }),
         }),
@@ -263,7 +263,7 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
           planId,
           limit,
           runtime: createPlannerReconcileRuntime({
-            jobs: executors.jobManager,
+            jobs: executors.jobs,
             shell: executors.shellRuntime,
           }),
         }),

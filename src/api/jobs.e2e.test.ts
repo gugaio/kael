@@ -9,9 +9,10 @@ import { describe, expect, it } from "vitest";
 import type { KaelApp } from "../app.js";
 import { createApiServer } from "./server.js";
 import { EdgeRuntime } from "../edge/runtime.js";
-import { JobManager } from "../jobs/manager.js";
+import { JobService } from "../jobs/service.js";
+import { LocalProcessSupervisor } from "../process/supervisor.js";
 import { JobStore } from "../jobs/store.js";
-import { VideoJobCapability, VideoJobService } from "../capabilities/video/index.js";
+import { createVideoJobs } from "../video/jobs.js";
 import type { ProcessRunner } from "../tools/system/process-runner.js";
 
 function sleep(ms: number): Promise<void> {
@@ -50,19 +51,20 @@ async function createJobsServer(params: {
   runner: FakeRunner;
   maxConcurrentJobs?: number;
   jobTimeoutMs?: number;
-}): Promise<{ server: ReturnType<typeof createApiServer>; jobs: JobManager }> {
+}): Promise<{ server: ReturnType<typeof createApiServer>; jobs: JobService }> {
   const store = new JobStore(params.root);
   await store.init();
 
-  const video = new VideoJobService(store, params.runner, {
-    safePathsEnabled: true,
-    allowedPaths: [params.root],
-    maxJobArgs: 24,
+  const supervisor = new LocalProcessSupervisor(params.runner);
+  const jobs = new JobService(store, supervisor, {
     maxConcurrentJobs: params.maxConcurrentJobs ?? 1,
     jobTimeoutMs: params.jobTimeoutMs ?? 60_000,
     killGraceMs: 10,
   });
-  const jobs = new JobManager(store, [new VideoJobCapability(video)]);
+  const videoJobs = createVideoJobs({
+    jobs,
+    options: { safePathsEnabled: true, allowedPaths: [params.root], maxJobArgs: 24 },
+  });
 
   const app: KaelApp = {
     config: {
@@ -178,6 +180,7 @@ async function createJobsServer(params: {
       countSessions: async () => 0,
     } as unknown as KaelApp["sessions"],
     jobs,
+    videoJobs,
     planner: {
       list: () => [],
       get: () => null,

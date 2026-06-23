@@ -1,4 +1,4 @@
-import type { JobManager } from "../jobs/manager.js";
+import type { JobService } from "../jobs/service.js";
 import type { SessionStore } from "../session/store.js";
 
 type JobSnapshot = {
@@ -18,7 +18,7 @@ export class HeartbeatRunner {
   private seeded = false;
 
   constructor(
-    private readonly jobs: JobManager,
+    private readonly jobs: JobService,
     private readonly sessions: SessionStore,
   ) {}
 

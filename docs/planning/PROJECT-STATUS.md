@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-06-09**
+Ultima atualizacao: **2026-06-21**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,84 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-06-21 - Kael sem capability de vídeo interna
+
+Resumo:
+- `src/capabilities/video` foi removido: builders de comandos ficam em
+  `src/video`, artifacts e geração em `src/media`, e a adaptação de sessão do
+  VHS em `src/vhs`.
+- `MediaArtifactsService` usa agora `<KAEL_DATA_DIR>/media/artifacts`.
+
+Arquivos-chave:
+- `src/video/jobs.ts`
+- `src/media/artifacts.ts`
+- `src/media/generation.ts`
+- `src/vhs/watch-registry.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Publicar VHS em registry versionado e remover `file:../vhs`.
+
+Proximo passo recomendado:
+- Fazer smoke test de VHS contra streams reais e publicar a primeira versão.
+
+### 2026-06-23 - Jobs: split ProcessJobService em ProcessSupervisor + JobService
+
+Resumo:
+- `ProcessJobService` foi separado em duas camadas seguindo o padrão do OpenClaw:
+  - `src/process/supervisor.ts` → `ProcessSupervisor`: spawn, timeout, logs, kill-tree
+  - `src/jobs/service.ts` → `JobService`: fila, persistência, delega ao supervisor
+- O nome `ProcessJobService` foi removido por ser ambíguo (fazia os dois papeis)
+- `ProcessSupervisor` é genérico e reusável para qualquer execução de processo
+- `JobService` mantém o contrato público idêntico ao antigo `ProcessJobService`
+- Testes e API preservados sem alteração de comportamento
+
+Arquivos-chave:
+- `src/process/supervisor.ts` (novo)
+- `src/jobs/service.ts` (refatorado de process-service.ts)
+- `src/bootstrap/runtime.ts`
+- `src/jobs/service.test.ts`
+
+Checklist de validacao:
+- [x] 279 testes passando (mesmo número de antes)
+- [x] `npm run check` (typecheck + lint)
+
+Pendencias:
+- Nenhuma, contratos externos preservados.
+
+Proximo passo recomendado:
+- N/A
+
+### 2026-06-21 - Jobs: executor genérico sem registry de capability
+
+Resumo:
+- O lifecycle de processo foi movido para `ProcessJobService`: fila,
+  concorrência, timeout, cancelamento, logs e status agora são genéricos.
+- O registry `JobManager`/`JobCapability` e o dispatcher por action foram
+  removidos; havia apenas a capability de vídeo registrada.
+- Vídeo ficou com `createVideoJobs()`, funções pequenas que validam entradas e
+  montam comandos de ffmpeg/ffprobe/VLC para o executor genérico.
+- Endpoints, tools e planner preservam os contratos externos atuais.
+
+Arquivos-chave:
+- `src/jobs/process-service.ts`
+- `src/capabilities/video/jobs/video-jobs.ts`
+- `src/bootstrap/runtime.ts`
+- `src/api/routes/jobs-schedules.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm test`
+
+Pendencias:
+- Publicar VHS em registry versionado e remover `file:../vhs`.
+
+Proximo passo recomendado:
+- Manter novos processos em `ProcessJobService`, sem reintroduzir registry de capabilities.
 
 ### 2026-06-20 - Fases 20/23: Kael passa a consumir VHS
 

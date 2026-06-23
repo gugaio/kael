@@ -1,5 +1,5 @@
-import { VIDEO_JOB_ACTIONS } from "../capabilities/video/index.js";
-import type { JobManager } from "../jobs/manager.js";
+import type { VideoJobs } from "../video/jobs.js";
+import type { JobService } from "../jobs/service.js";
 import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
 
 export type PlannerExecuteRuntime = {
@@ -47,20 +47,22 @@ export type PlannerReconcileRuntime = {
   pollExec: (sessionId: string) => Promise<{ status: string; message?: string } | null>;
 };
 
-type PlannerRuntimeDeps = {
-  jobs: JobManager;
+type PlannerReadDeps = {
+  jobs: JobService;
   shell: ShellRuntime;
 };
 
+type PlannerExecuteDeps = PlannerReadDeps & { videoJobs: VideoJobs };
+
 export function createPlannerExecuteRuntime(
-  deps: PlannerRuntimeDeps,
+  deps: PlannerExecuteDeps,
   sessionKey = "planner.execute",
 ): PlannerExecuteRuntime {
   return {
-    startProbeMedia: (args) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.probeMedia, args),
-    startCaptureStream: (args) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.captureStream, args),
-    startTranscode: (args) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.transcode, args),
-    startConvertHls: (args) => deps.jobs.startAction(VIDEO_JOB_ACTIONS.convertHls, args),
+    startProbeMedia: (args) => deps.videoJobs.startProbeMedia(args),
+    startCaptureStream: (args) => deps.videoJobs.startCaptureStream(args),
+    startTranscode: (args) => deps.videoJobs.startTranscode(args),
+    startConvertHls: (args) => deps.videoJobs.startConvertHls(args),
     execCommand: (args) =>
       deps.shell.exec({
         sessionKey: args.sessionKey,
@@ -117,7 +119,7 @@ export function createPlannerExecuteRuntime(
 }
 
 export function createPlannerReconcileRuntime(
-  deps: PlannerRuntimeDeps,
+  deps: PlannerReadDeps,
   sessionKey = "planner.reconcile",
 ): PlannerReconcileRuntime {
   return {

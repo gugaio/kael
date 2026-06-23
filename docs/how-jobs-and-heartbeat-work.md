@@ -23,14 +23,14 @@ Este documento explica a arquitetura de jobs de vídeo, ciclo de vida e o sistem
 ├──────────────────────────────────────────────────────────────────────┤
 │                                                              │
 │  ┌─────────────┐      ┌─────────────┐                │
-│  │   JobStore  │      │ VideoJobSrv │                │
+│  │   JobStore  │      │ ProcessJobs │                │
 │  │ (Persistência) │──────▶│(Execução)   │                │
 │  └─────────────┘      └─────────────┘                │
 │         │                     │                            │
 │         ▼                     ▼                            │
 │  ┌─────────────┐                                        │
-│  │ JobManager  │◀───── API pública                 │
-│  │   (Facade)  │                                        │
+│  │ Video jobs  │◀───── API pública                 │
+│  │ (builders)  │                                        │
 │  └─────────────┘                                        │
 │         │                                                   │
 │         ▼                                                   │
@@ -55,24 +55,28 @@ Este documento explica a arquitetura de jobs de vídeo, ciclo de vida e o sistem
 
 ```
 src/
-├── jobs/                          ← Core de jobs (genérico)
-│   ├── manager.ts                ← Orquestrador de capabilities (JobManager)
-│   └── store.ts                  ← Store em JSON (JobStore)
-├── capabilities/video/           ← Capability de vídeo
-│   ├── job-capability.ts         ← Registro de ações de vídeo
-│   ├── job-service.ts            ← VideoJobService (ffmpeg/ffprobe)
-│   └── inspect-service.ts        ← VideoInspectToolService
+├── process/                       ← Execução genérica de processos (separado do job)
+│   └── supervisor.ts             ← ProcessSupervisor: spawn, timeout, log, kill-tree
+├── jobs/                          ← Orquestração de jobs (fila + persistência)
+│   ├── service.ts                ← JobService: fila, estados, delega pro supervisor
+│   ├── store.ts                  ← Store em JSON (JobStore)
+│   └── tooling.ts                ← Formatação/filtro para exibição
+├── video/
+│   └── jobs.ts                   ← Validação e comandos ffmpeg/ffprobe/VLC
 └── automation/                   ← Camada de monitoramento
     └── heartbeat-runner.ts         ← HeartbeatRunner
 ```
 
-### JobManager (`src/jobs/manager.ts`)
+### JobService (`src/jobs/service.ts`) + ProcessSupervisor (`src/process/supervisor.ts`)
 
-**Responsabilidade:** Orquestrador de jobs por capability.
+**Responsabilidade:** O `JobService` gerencia a fila, persistência e ciclo de
+vida dos jobs. O `ProcessSupervisor` executa o processo em si (spawn, timeout,
+logs). A separação permite reusar `ProcessSupervisor` em outros contextos que
+não sejam jobs de vídeo.
 
 ```typescript
-class JobManager {
-  constructor(store, capabilities) {}
+class JobService {
+  constructor(store, supervisor, options) {}
   
   // Listagem
   listJobs() → store.list()
@@ -81,8 +85,9 @@ class JobManager {
   getJob(jobId) → store.get(jobId)
   getJobLog(jobId) → lê arquivo de log
   
-  // Execução (roteia por action registrada na capability)
-  startAction(actionName, params) → capability[actionName](params)
+  // Execução
+  enqueue({ capability, action, command, args, ... })
+  cancelJob(jobId)
 }
 ```
 
@@ -141,19 +146,18 @@ class JobStore {
 }
 ```
 
-### VideoJobService (`src/capabilities/video/job-service.ts`)
+### JobService + video jobs
 
-**Responsabilidade:** Executa comandos ffmpeg/ffprobe e gerencia ciclo de vida de jobs.
+**Responsabilidade:** `JobService` gerencia a fila e o ciclo de vida. Os builders
+de vídeo apenas validam entradas e montam os comandos ffmpeg/ffprobe/VLC. O
+`ProcessSupervisor` cuida da execução do processo em si.
 
 ```typescript
-class VideoJobService {
-  constructor(jobs, runner) {}
+class JobService {
+  constructor(store, supervisor, options) {}
   
   // Métodos públicos
-  async startTranscode(params) → startJob({ action: "transcode", command: "ffmpeg", ... })
-  async startConvertHls(params) → startJob({ action: "convert_hls", command: "ffmpeg", ... })
-  async startCaptureStream(params) → startJob({ action: "capture_stream", command: "ffmpeg", ... })
-  async startProbeMedia(params) → startJob({ action: "probe_media", command: "ffprobe", ... })
+  enqueue({ capability: "video", action: "transcode", command: "ffmpeg", ... })
   
   // Método privado core
   private async startJob(params) {
@@ -372,11 +376,11 @@ function isRelevantStatus(status: string): boolean {
 ```
 Usuário: /transcode /input/video.mp4 /output/result.mp4
          ↓
-ChatService → jobs.startAction("transcode", ...)
+ChatService → videoJobs.startTranscode(...)
          ↓
-VideoJobService → cria job (queued)
+JobService → cria job (queued)
          ↓
-JobManager → job aparece em listJobs()
+JobService → job aparece em listJobs()
          ↓
 [30s depois] Heartbeat roda (primeira vez, seed)
          ↓
@@ -404,9 +408,9 @@ Sessão recebe: "[heartbeat] job abc-123 (video/transcode) mudou running -> succ
 ```
 Usuário: /hls /input/broken.mp4 /playlist.m3u8
          ↓
-ChatService → jobs.startAction("convert_hls", ...)
+ChatService → videoJobs.startConvertHls(...)
          ↓
-VideoJobService → cria job (queued)
+ProcessJobService → cria job (queued)
          ↓
 [30s depois] Heartbeat roda (seed)
          ↓
@@ -515,7 +519,7 @@ KAEL_SCHEDULER_TICK_MS=1000          # Tick do scheduler (default: 1s)
 ```typescript
 // HeartbeatRunner
 async runOnce(): Promise<{ notifiedCount: number }> {
-  const allJobs = this.jobs.listJobs(); // ← Chama JobManager.listJobs()
+  const allJobs = this.jobs.listJobs(); // ← Chama JobService.listJobs()
                                           // ← Chama JobStore.list()
   for (const job of allJobs) {
     // Cria snapshot inicial
@@ -531,7 +535,7 @@ async runOnce(): Promise<{ notifiedCount: number }> {
 }
 ```
 
-### VideoJobService + JobStore
+### ProcessJobService + JobStore
 
 ```typescript
 private async startJob(params): Promise<VideoJob> {
@@ -562,8 +566,9 @@ private async startJob(params): Promise<VideoJob> {
 |--------|--------------|
 | **Job** | Unidade de trabalho executada por capability (ex.: `video/transcode`) |
 | **JobStore** | Persistência JSON de jobs (`jobs.json`) |
-| **JobManager** | Orquestrador de jobs por capability/action |
-| **VideoJobService** | Executor real de comandos ffmpeg/ffprobe |
+| **JobService** | Orquestrador de jobs: fila, persistência, delega execução ao supervisor |
+| **ProcessSupervisor** | Executor genérico de processos: spawn, timeout, logs, kill-tree |
+| **Video jobs** | Validação e montagem de comandos ffmpeg/ffprobe/VLC |
 | **Heartbeat** | Monitorador periódico de mudanças de status |
 | **HeartbeatRunner** | Implementação do heartbeat |
 | **Snapshot** | Estado anterior de um job armazenado pelo heartbeat |
@@ -580,10 +585,10 @@ private async startJob(params): Promise<VideoJob> {
 **A:** Porque `running` não é um status final. Apenas `succeeded` e `failed` indicam conclusão do trabalho, que são os eventos relevantes para o usuário.
 
 ### Q: O heartbeat reinicia jobs?
-**A:** Não. O heartbeat apenas **observa** e **notifica** mudanças. Jobs são executados pelo `VideoJobService` quando chamado via `ChatService`.
+**A:** Não. O heartbeat apenas **observa** e **notifica** mudanças. Jobs são executados pelo `JobService` (via `ProcessSupervisor`) quando chamados via `ChatService`.
 
 ### Q: Onde ficam os logs do ffmpeg?
-**A:** Em `dataDir/jobs/logs/job-id.log`. O `JobStore.getLogPath(jobId)` retorna este caminho, e o `VideoJobService` direciona stdout/stderr para esse arquivo.
+**A:** Em `dataDir/jobs/logs/job-id.log`. O `JobStore.getLogPath(jobId)` retorna este caminho, e o `ProcessSupervisor` direciona stdout/stderr para esse arquivo.
 
 ### Q: Como o scheduler recupera após restart?
 **A:** O `PersistentScheduler` carrega o estado de `scheduler-jobs.json` ao iniciar. Se um job tem `nextRunAt` no passado, o scheduler o executa no próximo tick (catch-up básico).
@@ -597,7 +602,7 @@ private async startJob(params): Promise<VideoJob> {
 
 - `src/jobs/manager.ts` - Facade de jobs
 - `src/jobs/store.ts` - Persistência JSON
-- `src/capabilities/video/job-service.ts` - Executor de ffmpeg
+- `src/video/jobs.ts` - Builders de comandos ffmpeg
 - `src/automation/heartbeat-runner.ts` - Monitorador de status
 - `src/automation/scheduler/persistent-scheduler.ts` - Agendador
 - `src/config.ts` - Configuração de heartbeat/scheduler

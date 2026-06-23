@@ -2,24 +2,22 @@ import path from "node:path";
 import type { KaelConfig } from "../config.js";
 import { resolveKaelHome } from "../global-config.js";
 import type { JobStore } from "../jobs/store.js";
-import { JobManager } from "../jobs/manager.js";
+import { JobService } from "../jobs/service.js";
+import { LocalProcessSupervisor } from "../process/supervisor.js";
 import { LocalProcessRunner } from "../tools/system/process-runner.js";
 import { ShellToolService } from "../tools/system/shell-tool-service.js";
 import { McpBridgeService } from "../tools/mcp/mcp-bridge-service.js";
 import { createVhs, type Vhs } from "@gugaio/vhs";
-import {
-  VideoArtifactsService,
-  VideoJobCapability,
-  VideoJobService,
-  ProviderBackedVideoGenerationService,
-  HlsStreamMonitorService,
-} from "../capabilities/video/index.js";
+import { createVideoJobs, type VideoJobs } from "../video/jobs.js";
+import { HlsStreamMonitorService } from "../vhs/watch-registry.js";
+import { MediaArtifactsService } from "../media/artifacts.js";
+import { ProviderBackedMediaGenerationService } from "../media/generation.js";
 import type {
   HlsManifestAuditInput,
   HlsManifestAuditReport,
   HlsManifestDiffInput,
   HlsManifestDiffReport,
-} from "../capabilities/video/index.js";
+} from "../vhs/types.js";
 import { MemoryService } from "../memory/service.js";
 import { ProjectContextService } from "../projects/service.js";
 import { WorkspaceInspector } from "../workspace/inspector.js";
@@ -40,25 +38,31 @@ import {
 } from "../media/image-generator.js";
 
 export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore): Promise<{
-  jobs: JobManager;
+  jobs: JobService;
+  videoJobs: VideoJobs;
   videoInspect: Vhs["inspect"];
   manifestAudit: { auditHlsManifest(input: HlsManifestAuditInput): Promise<HlsManifestAuditReport> };
   manifestDiff: { diffHlsManifests(input: HlsManifestDiffInput): Promise<HlsManifestDiffReport> };
-  videoArtifacts: VideoArtifactsService;
+  mediaArtifacts: MediaArtifactsService;
   streamMonitor: HlsStreamMonitorService;
   streamer: Vhs["stream"];
   playback: Vhs["playback"];
 }> {
   const runner = new LocalProcessRunner();
-  const video = new VideoJobService(jobStore, runner, {
-    safePathsEnabled: config.execution.safePathsEnabled,
-    allowedPaths: config.execution.allowedPaths,
-    maxJobArgs: config.execution.maxJobArgs,
+  const supervisor = new LocalProcessSupervisor(runner);
+  const jobs = new JobService(jobStore, supervisor, {
     maxConcurrentJobs: config.execution.maxConcurrentJobs,
     jobTimeoutMs: config.execution.jobTimeoutMs,
     killGraceMs: config.execution.killGraceMs,
   });
-  const jobs = new JobManager(jobStore, [new VideoJobCapability(video)]);
+  const videoJobs = createVideoJobs({
+    jobs,
+    options: {
+      safePathsEnabled: config.execution.safePathsEnabled,
+      allowedPaths: config.execution.allowedPaths,
+      maxJobArgs: config.execution.maxJobArgs,
+    },
+  });
   const vhs = await createVhs({ dataDir: path.join(config.dataDir, "streamer") });
   const videoInspect = vhs.inspect;
   const manifestAudit = {
@@ -67,16 +71,17 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
   const manifestDiff = {
     diffHlsManifests: (input: HlsManifestDiffInput) => vhs.manifest.diff.diff(input),
   };
-  const videoArtifacts = new VideoArtifactsService(path.join(config.dataDir, "video", "artifacts"));
-  await videoArtifacts.init();
+  const mediaArtifacts = new MediaArtifactsService(path.join(config.dataDir, "media", "artifacts"));
+  await mediaArtifacts.init();
   const streamMonitor = new HlsStreamMonitorService(vhs.watch);
   const streamer = vhs.stream;
   return {
     jobs,
+    videoJobs,
     videoInspect,
     manifestAudit,
     manifestDiff,
-    videoArtifacts,
+    mediaArtifacts,
     streamMonitor,
     streamer,
     playback: vhs.playback,
@@ -194,11 +199,11 @@ function createImageGenerator(config: KaelConfig): ImageGeneratorService {
 
 export function createMediaRuntime(
   config: KaelConfig,
-  videoArtifacts: VideoArtifactsService,
+  mediaArtifacts: MediaArtifactsService,
 ): {
   mediaUnderstanding: MediaUnderstandingService;
   imageGenerator: ImageGeneratorService;
-  videoGeneration: ProviderBackedVideoGenerationService;
+  videoGeneration: ProviderBackedMediaGenerationService;
 } {
   const imageGenerator = createImageGenerator(config);
   const mediaUnderstanding = config.media.enabled
@@ -218,9 +223,9 @@ export function createMediaRuntime(
       })
     : new NoopMediaUnderstandingService();
 
-  const videoGeneration = new ProviderBackedVideoGenerationService(
+  const videoGeneration = new ProviderBackedMediaGenerationService(
     imageGenerator,
-    videoArtifacts,
+    mediaArtifacts,
     {
       imageProvider: process.env.KAEL_IMAGE_GENERATION_MODEL?.trim() || "gpt-image-1",
       videoProvider: process.env.KAEL_VIDEO_GENERATION_PROVIDER?.trim() || undefined,

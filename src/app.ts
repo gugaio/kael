@@ -17,7 +17,7 @@ import {
   createWorkspaceRuntime,
 } from "./bootstrap/runtime.js";
 import { createEngine } from "./agents/factory.js";
-import { JobManager } from "./jobs/manager.js";
+import { JobService } from "./jobs/service.js";
 import { JobStore } from "./jobs/store.js";
 import { MemoryService } from "./memory/service.js";
 import { ProjectContextService } from "./projects/service.js";
@@ -33,7 +33,8 @@ import { ChatService } from "./chat/service.js";
 import { createChatTooling } from "./chat/tooling-factory.js";
 import { TurnOrchestrator } from "./chat/turn-orchestrator.js";
 import type { ShellRuntime } from "./tools/system/shell-tool-service.js";
-import type { StreamWatchParams, StreamWatchStatus } from "./capabilities/video/index.js";
+import type { StreamWatchParams, StreamWatchStatus } from "./vhs/types.js";
+import type { VideoJobs } from "./video/jobs.js";
 import { SkillService } from "./skills/service.js";
 import type { McpRuntime } from "./tools/mcp/mcp-bridge-service.js";
 import { EdgeRuntime } from "./edge/runtime.js";
@@ -58,12 +59,13 @@ import type {
   HlsManifestAuditReport,
   HlsManifestDiffInput,
   HlsManifestDiffReport,
-} from "./capabilities/video/index.js";
+} from "./vhs/types.js";
 
 export type KaelApp = {
   config: KaelConfig;
   sessions: SessionStore;
-  jobs: JobManager;
+  jobs: JobService;
+  videoJobs: VideoJobs;
   memory: MemoryService;
   projects: ProjectContextService;
   planner: PlannerService;
@@ -118,7 +120,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   await sessions.init();
   await jobStore.init();
 
-  const { jobs, videoInspect, manifestAudit, manifestDiff, videoArtifacts, streamMonitor, streamer, playback } =
+  const { jobs, videoJobs, videoInspect, manifestAudit, manifestDiff, mediaArtifacts, streamMonitor, streamer, playback } =
     await createVideoRuntime(config, jobStore);
   const shell = await createShellRuntime(config);
   const mcp = await createMcpRuntime(config);
@@ -134,9 +136,10 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     maxContextMessages: config.context.maxMessages,
     maxContextChars: config.context.maxChars,
   });
-  const { mediaUnderstanding, imageGenerator, videoGeneration } = createMediaRuntime(config, videoArtifacts);
+  const { mediaUnderstanding, imageGenerator, videoGeneration } = createMediaRuntime(config, mediaArtifacts);
   const tooling = createChatTooling({
-    jobManager: jobs,
+    jobs,
+    videoJobs,
     shellRuntime: shell,
     mcpRuntime: mcp,
     edgeRuntime: edge,
@@ -280,6 +283,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     config,
     sessions,
     jobs,
+    videoJobs,
     memory,
     projects,
     planner,

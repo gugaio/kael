@@ -31,22 +31,24 @@ Fabrica de runtimes do Kael. Modulo responsavel por instanciar e conectar todos 
 
 ### `createVideoRuntime(config, jobStore)`
 
-Instancia a pipeline completa de video: jobs, inspecao, auditoria de manifests, diff e artefatos.
+Instancia a pipeline de vídeo: jobs e artefatos do Kael, mais as operações
+determinísticas fornecidas por `@gugaio/vhs`.
 
 **Retorno:**
 | Campo | Tipo | Responsabilidade |
 |-------|------|------------------|
-| `jobs` | `JobManager` | Fila de jobs com `VideoJobCapability` |
-| `videoInspect` | `VideoInspectToolService` | Probe/inspecao de midia e HLS |
-| `manifestAudit` | `VideoManifestAuditService` | Auditoria de manifests HLS |
-| `manifestDiff` | `VideoManifestDiffService` | Diff entre dois audits HLS |
-| `videoArtifacts` | `VideoArtifactsService` | Persistencia de artefatos gerados |
+| `jobs` | `JobService` | Fila e lifecycle genérico de jobs (usa `ProcessSupervisor`) |
+| `videoJobs` | `createVideoJobs()` | Validação e comandos ffmpeg/ffprobe/VLC |
+| `videoInspect` | `MediaInspector` (VHS) | Probe/inspeção de mídia e HLS |
+| `manifestAudit` | `ManifestAudit` (VHS) | Auditoria de manifests HLS |
+| `manifestDiff` | `ManifestDiff` (VHS) | Diff entre dois audits HLS |
+| `mediaArtifacts` | `MediaArtifactsService` | Persistência de artifacts de imagem/vídeo |
 
 **Cadeia de dependencias:**
 ```
-LocalProcessRunner -> VideoJobService -> VideoJobCapability -> JobManager
-VideoInspectToolService -> VideoManifestAuditService -> VideoManifestDiffService
-VideoArtifactsService (init cria diretorio)
+LocalProcessRunner -> ProcessSupervisor -> JobService <- createVideoJobs
+VHS MediaInspector -> ManifestAudit -> ManifestDiff
+MediaArtifactsService (init cria diretorio)
 ```
 
 ```typescript
@@ -124,7 +126,7 @@ Instancia os servicos de midia: compreensao de imagem/audio, geracao de imagens 
 |-------|------|------------------|
 | `mediaUnderstanding` | `MediaUnderstandingService` | Analise de imagem/audio via OpenAI |
 | `imageGenerator` | `ImageGeneratorService` | Geracao de imagens |
-| `videoGeneration` | `ProviderBackedVideoGenerationService` | Geracao de video (usa imageGenerator + artifacts) |
+| `videoGeneration` | `ProviderBackedMediaGenerationService` | Geração de mídia usando imageGenerator + artifacts |
 
 **Fallback:** Se `media.enabled=false` ou sem API key, usa implementacoes `Noop*`.
 
