@@ -498,6 +498,28 @@ export async function getStreams(): Promise<StreamItem[]> {
   return data.streams;
 }
 
+export async function getStream(originId: string): Promise<StreamItem> {
+  const response = await fetch(`/api/streams/${encodeURIComponent(originId)}`);
+  const schema = z.object({
+    ok: z.boolean(),
+    stream: z.object({
+      id: z.string(),
+      createdAt: z.string(),
+      sourceUrl: z.string(),
+      cumulativeDurationSeconds: z.number(),
+      segmentCount: z.number(),
+      variantCount: z.number(),
+      bytes: z.number(),
+      allVariants: z.boolean(),
+      serving: z.boolean(),
+      servingUrl: z.string().nullable(),
+      protocol: z.string().optional(),
+    }),
+  });
+  const data = await parseJson(response, schema);
+  return data.stream;
+}
+
 export async function cloneStream(params: {
   url: string;
   originId?: string;

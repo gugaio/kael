@@ -40,7 +40,10 @@ export function AppShell(props: { children: ReactNode }): JSX.Element {
 
   const pendingApprovals = approvals.data ?? [];
   const firstApproval = pendingApprovals[0];
-  const activeNav = navItems.find((item) => item.to === location.pathname) ?? navItems[0];
+  const activeNav =
+    navItems.find((item) => item.to !== "/" && location.pathname.startsWith(item.to)) ??
+    navItems.find((item) => item.to === location.pathname) ??
+    navItems[0];
 
   return (
     <div className="dashboard-grid min-h-screen md:p-5">

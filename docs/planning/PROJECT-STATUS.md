@@ -37,6 +37,51 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-06-27 - Bootstrap: npm install volta a buildar VHS local
+
+Resumo:
+- Corrigido `npm install` na raiz: `vhs:build` agora compila `../vhs`, onde existe `tsconfig.json`.
+- A dependencia `@gugaio/vhs` voltou para `file:../vhs`, alinhada com a fase 23 enquanto o pacote nao esta publicado com artefatos.
+
+Arquivos-chave:
+- `package.json`
+- `package-lock.json`
+
+Checklist de validacao:
+- [x] `npm install`
+- [x] `npm run check`
+- [x] `node -e "import('@gugaio/vhs').then(...)"`
+
+Pendencias:
+- Publicar `@gugaio/vhs` com `dist` versionado/empacotado antes de voltar para dependencia GitHub/registry.
+
+Proximo passo recomendado:
+- Ajustar o pipeline de release do VHS para garantir que pacote remoto inclua `dist` ou rode build antes do pack.
+
+### 2026-06-27 - Streams UI: playground Clappr/hls.js
+
+Resumo:
+- Adicionado botao `Play` na lista de cloned streams; ele inicia o serving quando necessario e abre o playground.
+- Criada pagina `/streams/:originId/playground` com Clappr + `@clappr/hlsjs-playback`, campo de URL, reload e toggle de debug do hls.js.
+- Adicionadas dependencias UI `@clappr/player`, `@clappr/hlsjs-playback` e `hls.js@1.6.2`.
+
+Arquivos-chave:
+- `ui/src/pages/StreamsPage.tsx`
+- `ui/src/pages/StreamPlaygroundPage.tsx`
+- `ui/src/lib/api.ts`
+- `ui/package.json`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `cd ui && npm run build`
+
+Pendencias:
+- O bundle da UI ficou maior com Clappr/hls.js; considerar lazy loading da pagina se isso virar problema.
+- `npm install` reportou vulnerabilidades no grafo de dependencias da UI; revisar com `npm audit` antes de release publico.
+
+Proximo passo recomendado:
+- Testar manualmente com um clone real: clicar Play, confirmar serving automatico e reproduzir no playground.
+
 ### 2026-06-27 - Streams UI: remocao de clones persistidos
 
 Resumo:

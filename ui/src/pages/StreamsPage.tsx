@@ -3,6 +3,7 @@ import { Panel } from "../components/Panel";
 import { cloneStream, deleteStream, getStreams, serveStream, stopStream, type StreamItem } from "../lib/api";
 import { formatDate } from "../lib/format";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -19,6 +20,7 @@ function formatDuration(seconds: number): string {
 
 export function StreamsPage(): JSX.Element {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [cloneUrl, setCloneUrl] = useState("");
   const [cloneId, setCloneId] = useState("");
   const [cloneDuration, setCloneDuration] = useState("60");
@@ -69,6 +71,20 @@ export function StreamsPage(): JSX.Element {
     },
     onError: (err: Error) => {
       setDeleteError(err.message);
+    },
+  });
+
+  const playMut = useMutation({
+    mutationFn: async (stream: StreamItem) => {
+      if (stream.serving && stream.servingUrl) {
+        return { originId: stream.id, playbackUrl: stream.servingUrl };
+      }
+      const result = await serveStream(stream.id);
+      return { originId: stream.id, playbackUrl: result.serve.playbackUrl };
+    },
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ["streams"] });
+      navigate(`/streams/${encodeURIComponent(result.originId)}/playground?url=${encodeURIComponent(result.playbackUrl)}`);
     },
   });
 
@@ -141,9 +157,11 @@ export function StreamsPage(): JSX.Element {
                 onServe={() => serveMut.mutate(stream.id)}
                 onStop={() => stopMut.mutate(stream.id)}
                 onDelete={() => deleteMut.mutate(stream.id)}
+                onPlay={() => playMut.mutate(stream)}
                 servePending={serveMut.isPending}
                 stopPending={stopMut.isPending}
                 deletePending={deleteMut.isPending}
+                playPending={playMut.isPending}
               />
             ))}
           </div>
@@ -158,9 +176,11 @@ function StreamCard(props: {
   onServe: () => void;
   onStop: () => void;
   onDelete: () => void;
+  onPlay: () => void;
   servePending: boolean;
   stopPending: boolean;
   deletePending: boolean;
+  playPending: boolean;
 }): JSX.Element {
   const { stream } = props;
   const confirmDelete = (): void => {
@@ -201,7 +221,15 @@ function StreamCard(props: {
             </a>
           )}
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={props.onPlay}
+            disabled={props.playPending}
+            className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+          >
+            {props.playPending ? "Opening..." : "Play"}
+          </button>
           {stream.serving ? (
             <button
               type="button"

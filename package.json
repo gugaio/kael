@@ -35,14 +35,14 @@
     "test:coverage": "vitest --coverage",
     "test:smoke:browser": "KAEL_BROWSER_SMOKE=1 vitest run src/tools/browser/service.smoke.test.ts",
     "test:player:e2e": "PLAYER_E2E=1 vitest run tests/player/player-keys.test.ts",
-    "vhs:build": "npm --prefix node_modules/@gugaio/vhs run build",
+    "vhs:build": "npm --prefix ../vhs run build",
     "prepare": "npm run vhs:build"
   },
   "engines": {
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "@gugaio/vhs": "git+https://github.com/gugaio/vhs.git#dabe77441d12e037980ab099fc47e7f73b3ad292",
+    "@gugaio/vhs": "file:../vhs",
     "@mariozechner/pi-agent-core": "^0.50.7",
     "@mariozechner/pi-ai": "^0.50.7",
     "commander": "^14.0.3",
