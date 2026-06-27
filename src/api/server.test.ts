@@ -873,6 +873,54 @@ describe("API integration", () => {
     await server.close();
   });
 
+  it("deletes a cloned stream origin and stops active serving first", async () => {
+    const app = makeFakeApp();
+    const calls: string[] = [];
+    app.streamer.listOrigins = async () => [
+      {
+        id: "origin-a",
+        schemaVersion: 2,
+        faults: [],
+        createdAt: "2026-06-27T00:00:00.000Z",
+        sourceUrl: "https://example.com/index.m3u8",
+        selectedUrl: "https://example.com/index.m3u8",
+        rootDir: "/tmp/origin-a",
+        playbackPath: "index.m3u8",
+        requestedDurationSeconds: 60,
+        cumulativeDurationSeconds: 60,
+        reachedTargetDuration: true,
+        targetDuration: 6,
+        segmentCount: 10,
+        variantCount: 1,
+        renditionCount: 0,
+        bytes: 1024,
+        allVariants: false,
+      },
+    ];
+    app.serveManager.stop = async (originId: string) => {
+      calls.push(`stop:${originId}`);
+      return true;
+    };
+    app.streamer.removeOrigin = async (originId: string) => {
+      calls.push(`remove:${originId}`);
+      return { id: originId, rootDir: "/tmp/origin-a", removed: true };
+    };
+    const server = createApiServer(app);
+
+    const response = await server.inject({
+      method: "DELETE",
+      url: "/streams/origin-a",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      ok: true,
+      removed: { id: "origin-a", rootDir: "/tmp/origin-a", removed: true },
+    });
+    expect(calls).toEqual(["stop:origin-a", "remove:origin-a"]);
+    await server.close();
+  });
+
   it("lists, reads and writes project space documents through API", async () => {
     const server = createApiServer(makeFakeApp());
 

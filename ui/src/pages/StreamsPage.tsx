@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Panel } from "../components/Panel";
-import { cloneStream, getStreams, serveStream, stopStream, type StreamItem } from "../lib/api";
+import { cloneStream, deleteStream, getStreams, serveStream, stopStream, type StreamItem } from "../lib/api";
 import { formatDate } from "../lib/format";
 import { useState } from "react";
 
@@ -24,6 +24,7 @@ export function StreamsPage(): JSX.Element {
   const [cloneDuration, setCloneDuration] = useState("60");
   const [cloneAllVariants, setCloneAllVariants] = useState(false);
   const [cloneError, setCloneError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
 
   const streams = useQuery({ queryKey: ["streams"], queryFn: getStreams, refetchInterval: 5_000 });
 
@@ -57,6 +58,17 @@ export function StreamsPage(): JSX.Element {
     mutationFn: async (originId: string) => stopStream(originId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["streams"] });
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async (originId: string) => deleteStream(originId),
+    onSuccess: async () => {
+      setDeleteError("");
+      await queryClient.invalidateQueries({ queryKey: ["streams"] });
+    },
+    onError: (err: Error) => {
+      setDeleteError(err.message);
     },
   });
 
@@ -116,6 +128,7 @@ export function StreamsPage(): JSX.Element {
 
       <Panel title="Cloned Streams">
         {streams.isLoading && <p className="text-sm text-kael-muted">Loading...</p>}
+        {deleteError && <p className="mb-2 text-sm text-rose-700">{deleteError}</p>}
         {streams.data && streams.data.length === 0 && (
           <p className="text-sm text-kael-muted">No cloned streams yet. Clone one above.</p>
         )}
@@ -127,8 +140,10 @@ export function StreamsPage(): JSX.Element {
                 stream={stream}
                 onServe={() => serveMut.mutate(stream.id)}
                 onStop={() => stopMut.mutate(stream.id)}
+                onDelete={() => deleteMut.mutate(stream.id)}
                 servePending={serveMut.isPending}
                 stopPending={stopMut.isPending}
+                deletePending={deleteMut.isPending}
               />
             ))}
           </div>
@@ -142,10 +157,18 @@ function StreamCard(props: {
   stream: StreamItem;
   onServe: () => void;
   onStop: () => void;
+  onDelete: () => void;
   servePending: boolean;
   stopPending: boolean;
+  deletePending: boolean;
 }): JSX.Element {
   const { stream } = props;
+  const confirmDelete = (): void => {
+    if (window.confirm(`Delete cloned stream "${stream.id}" from local storage?`)) {
+      props.onDelete();
+    }
+  };
+
   return (
     <div className="rounded-2xl border border-kael-border bg-kael-panelSoft p-4">
       <div className="flex items-start justify-between gap-4">
@@ -198,6 +221,14 @@ function StreamCard(props: {
               {props.servePending ? "Serving..." : "Serve"}
             </button>
           )}
+          <button
+            type="button"
+            onClick={confirmDelete}
+            disabled={props.deletePending}
+            className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+          >
+            {props.deletePending ? "Deleting..." : "Delete"}
+          </button>
         </div>
       </div>
     </div>

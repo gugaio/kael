@@ -79,6 +79,19 @@ export function registerStreamRoutes(server: FastifyInstance, deps: ApiRouteDeps
     }
     return { ok: true, stopped: true };
   });
+
+  server.delete<{
+    Params: { originId: string };
+  }>("/streams/:originId", async (request) => {
+    const { originId } = request.params;
+    const origins = await app.streamer.listOrigins();
+    if (!origins.some((o) => o.id === originId)) {
+      throw new ApiError(404, "NOT_FOUND", `Origin ${originId} not found`);
+    }
+    await app.serveManager.stop(originId);
+    const result = await app.streamer.removeOrigin(originId);
+    return { ok: true, removed: result };
+  });
 }
 
 function resolveFormat(url: string, format: "auto" | "hls" | "dash"): "hls" | "dash" {

@@ -37,6 +37,29 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-06-27 - Streams UI: remocao de clones persistidos
+
+Resumo:
+- Adicionado `DELETE /streams/:originId` para parar serving ativo e remover origins clonados da base local.
+- A pagina `Cloned Streams` ganhou acao de delete com confirmacao e refresh da lista.
+
+Arquivos-chave:
+- `src/api/routes/streams.ts`
+- `ui/src/lib/api.ts`
+- `ui/src/pages/StreamsPage.tsx`
+- `docs/api.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `cd ui && npm run build`
+- [x] `npx vitest run src/api/server.test.ts`
+
+Pendencias:
+- Nenhuma conhecida.
+
+Proximo passo recomendado:
+- Testar manualmente com um clone real servido e confirmar que o delete remove o origin e limpa a lista.
+
 ### 2026-06-23 - Deploy Docker foundation: API autenticada e runtime de video
 
 Resumo:

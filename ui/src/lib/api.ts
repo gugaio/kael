@@ -525,6 +525,12 @@ export async function stopStream(originId: string): Promise<void> {
   await parseJson(response, schema);
 }
 
+export async function deleteStream(originId: string): Promise<void> {
+  const response = await fetch(`/api/streams/${encodeURIComponent(originId)}`, { method: "DELETE" });
+  const schema = z.object({ ok: z.boolean() });
+  await parseJson(response, schema);
+}
+
 export async function getExecSessionLog(params: {
   sessionId: string;
   offset?: number;

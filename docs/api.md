@@ -84,6 +84,7 @@ flowchart TD
             API --> StreamsClone[POST /streams/clone]
             API --> StreamsServe[POST /streams/:originId/serve]
             API --> StreamsStop[POST /streams/:originId/stop]
+            API --> StreamsDelete[DELETE /streams/:originId]
         end
 
         subgraph StreamWatch ["Stream Watch (quality monitor)"]
@@ -230,6 +231,7 @@ Exemplo resumido de item em `GET /jobs`:
 | POST | /streams/clone | Clone an HLS/DASH URL. Body: `{ url, durationSeconds?, allVariants?, format? }` |
 | POST | /streams/:originId/serve | Start serving an origin as VOD HTTP |
 | POST | /streams/:originId/stop | Stop serving an origin |
+| DELETE | /streams/:originId | Stop serving, if active, and remove a cloned origin from local storage |
 
 ### Stream Watch (Quality Monitor)
 | Method | Path | Description |
