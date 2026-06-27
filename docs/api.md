@@ -77,6 +77,15 @@ flowchart TD
             API --> ProbeUrl[POST /jobs/probe-url]
         end
 
+        subgraph Streams ["Streams (clone & serve)"]
+            direction LR
+            API --> StreamsGET[GET /streams]
+            API --> StreamsId[GET /streams/:originId]
+            API --> StreamsClone[POST /streams/clone]
+            API --> StreamsServe[POST /streams/:originId/serve]
+            API --> StreamsStop[POST /streams/:originId/stop]
+        end
+
         subgraph StreamWatch ["Stream Watch (quality monitor)"]
             direction LR
             API --> StreamWatchPOST[POST /streams/watch]
@@ -212,6 +221,15 @@ Exemplo resumido de item em `GET /jobs`:
   "output": "/videos/probe.json"
 }
 ```
+
+### Streams (Clone & Serve)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /streams | List all cloned origins with serving status |
+| GET | /streams/:originId | Get detailed origin info with serving status |
+| POST | /streams/clone | Clone an HLS/DASH URL. Body: `{ url, durationSeconds?, allVariants?, format? }` |
+| POST | /streams/:originId/serve | Start serving an origin as VOD HTTP |
+| POST | /streams/:originId/stop | Stop serving an origin |
 
 ### Stream Watch (Quality Monitor)
 | Method | Path | Description |

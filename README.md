@@ -186,6 +186,7 @@ Referencia completa: `docs/api.md`
 - `KAEL_PORT` (default `3210`)
 - `KAEL_HOST` (default `127.0.0.1`)
 - `KAEL_DATA_DIR` (default `./.kael-data`)
+- `KAEL_API_AUTH_TOKEN` (quando definido, exige `Authorization: Bearer <token>` em toda a API)
 - `KAEL_ENGINE_MODE` (`simple`, `pi`, `hybrid`)
 - `KAEL_PI_API_KEY` (obrigatoria em `pi|hybrid`)
 - `KAEL_PI_MODEL` (default `gpt-4o-mini`)
@@ -221,6 +222,7 @@ Referencia completa: `docs/api.md`
 - `docs/skills.md` (guia de criacao e operacao de skills em `.kael/skills`)
 - `docs/browser-control.md` (guia de browser control via CLI/chat)
 - `docs/ui/UI-GUIDE.md`
+- `docs/deployment-docker.md` (deploy inicial em VPS com Docker)
 
 ## Roadmap Atual
 

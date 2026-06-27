@@ -73,6 +73,7 @@ function makeFakeApp(): KaelApp {
       host: "127.0.0.1",
       port: 3210,
       dataDir: ".kael-data",
+      api: {},
       engineMode: "simple",
       context: { maxMessages: 24, maxChars: 12_000 },
       idempotency: { enabled: true, ttlMs: 60_000 },
@@ -709,69 +710,6 @@ function makeFakeApp(): KaelApp {
       }),
     },
     edge: new EdgeRuntime(),
-    manifestAudit: {
-      auditHlsManifest: async () => ({
-        ok: true,
-        url: "https://example.com/master.m3u8",
-        finalUrl: "https://example.com/master.m3u8",
-        playlistType: "master",
-        summary: "stub",
-        stats: { variants: 0, renditions: 0, segments: 0, variantsAudited: 0, variantsWithErrors: 0 },
-        issues: [],
-        variantAudits: [],
-        aggregateIssues: [],
-        recommendations: [],
-      }),
-    },
-    manifestDiff: {
-      diffHlsManifests: async () => ({
-        ok: true,
-        summary: "stub diff",
-        playlistTypeChanged: false,
-        left: {
-          ok: true,
-          url: "https://example.com/left.m3u8",
-          finalUrl: "https://example.com/left.m3u8",
-          playlistType: "master",
-          summary: "left",
-          stats: { variants: 0, renditions: 0, segments: 0, variantsAudited: 0, variantsWithErrors: 0 },
-          issues: [],
-          variantAudits: [],
-          aggregateIssues: [],
-          recommendations: [],
-        },
-        right: {
-          ok: true,
-          url: "https://example.com/right.m3u8",
-          finalUrl: "https://example.com/right.m3u8",
-          playlistType: "master",
-          summary: "right",
-          stats: { variants: 0, renditions: 0, segments: 0, variantsAudited: 0, variantsWithErrors: 0 },
-          issues: [],
-          variantAudits: [],
-          aggregateIssues: [],
-          recommendations: [],
-        },
-        delta: {
-          variants: 0,
-          renditions: 0,
-          segments: 0,
-          variantsAudited: 0,
-          variantsWithErrors: 0,
-        },
-        issueDiff: { added: [], removed: [], persisted: [] },
-        aggregateIssueDiff: { added: [], removed: [], persisted: [] },
-        variantDiff: {
-          added: [],
-          removed: [],
-          changed: [],
-          regressed: [],
-          improved: [],
-          unchanged: [],
-        },
-        recommendations: [],
-      }),
-    },
     streamMonitor: {
       startWatch: () => "watch-stub",
       stopWatch: () => true,
@@ -809,10 +747,36 @@ function makeFakeApp(): KaelApp {
         throw new Error("streamer live not implemented in fake app");
       },
     },
+    serveManager: {
+      serve: async () => { throw new Error("serve not implemented"); },
+      serveLive: async () => { throw new Error("serve live not implemented"); },
+      stop: async () => false,
+      listServing: () => [],
+      isServing: () => false,
+      stopAll: async () => {},
+    } as unknown as KaelApp["serveManager"],
   };
 }
 
 describe("API integration", () => {
+  it("requires a Bearer token when API authentication is configured", async () => {
+    const app = makeFakeApp();
+    app.config.api.authToken = "test-api-token";
+    const server = createApiServer(app);
+
+    const unauthorized = await server.inject({ method: "GET", url: "/health" });
+    expect(unauthorized.statusCode).toBe(401);
+    expect(unauthorized.json().error.code).toBe("UNAUTHORIZED");
+
+    const authorized = await server.inject({
+      method: "GET",
+      url: "/health",
+      headers: { authorization: "Bearer test-api-token" },
+    });
+    expect(authorized.statusCode).toBe(200);
+    await server.close();
+  });
+
   it("returns standardized BAD_REQUEST for invalid /chat payload", async () => {
     const server = createApiServer(makeFakeApp());
     const response = await server.inject({

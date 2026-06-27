@@ -1,0 +1,12 @@
+.git
+.kael-data
+.kael-test
+node_modules
+ui/node_modules
+ui/dist
+apps/*/node_modules
+coverage
+dist
+workspace
+.env
+npm-debug.log*

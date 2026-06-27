@@ -460,6 +460,71 @@ export async function getExecSessions(params?: {
   return data.sessions;
 }
 
+export type StreamItem = {
+  id: string;
+  createdAt: string;
+  sourceUrl: string;
+  cumulativeDurationSeconds: number;
+  segmentCount: number;
+  variantCount: number;
+  bytes: number;
+  allVariants: boolean;
+  serving: boolean;
+  servingUrl: string | null;
+  protocol?: string;
+};
+
+export async function getStreams(): Promise<StreamItem[]> {
+  const response = await fetch("/api/streams");
+  const schema = z.object({
+    ok: z.boolean(),
+    streams: z.array(
+      z.object({
+        id: z.string(),
+        createdAt: z.string(),
+        sourceUrl: z.string(),
+        cumulativeDurationSeconds: z.number(),
+        segmentCount: z.number(),
+        variantCount: z.number(),
+        bytes: z.number(),
+        allVariants: z.boolean(),
+        serving: z.boolean(),
+        servingUrl: z.string().nullable(),
+        protocol: z.string().optional(),
+      }),
+    ),
+  });
+  const data = await parseJson(response, schema);
+  return data.streams;
+}
+
+export async function cloneStream(params: {
+  url: string;
+  originId?: string;
+  durationSeconds?: number;
+  allVariants?: boolean;
+}): Promise<{ stream: { id: string } }> {
+  const response = await fetch("/api/streams/clone", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const schema = z.object({ ok: z.boolean(), stream: z.object({ id: z.string() }) });
+  return parseJson(response, schema);
+}
+
+export async function serveStream(originId: string): Promise<{ serve: { playbackUrl: string } }> {
+  const response = await fetch(`/api/streams/${encodeURIComponent(originId)}/serve`, { method: "POST" });
+  const schema = z.object({ ok: z.boolean(), serve: z.object({ playbackUrl: z.string() }) });
+  return parseJson(response, schema);
+}
+
+export async function stopStream(originId: string): Promise<void> {
+  const response = await fetch(`/api/streams/${encodeURIComponent(originId)}/stop`, { method: "POST" });
+  const schema = z.object({ ok: z.boolean() });
+  await parseJson(response, schema);
+}
+
 export async function getExecSessionLog(params: {
   sessionId: string;
   offset?: number;

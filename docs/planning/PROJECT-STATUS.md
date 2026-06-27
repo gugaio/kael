@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-06-23**
+Ultima atualizacao: **2026-06-27**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,66 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-06-23 - Deploy Docker foundation: API autenticada e runtime de video
+
+Resumo:
+- Adicionado `KAEL_API_AUTH_TOKEN`: quando configurado, todas as rotas HTTP exigem Bearer token com comparacao em tempo constante.
+- Criados `Dockerfile`, `compose.yml`, `.env.example` e guia de deploy para VPS.
+- Imagem usa Node 22, `ffmpeg`, `ffprobe`, usuario de runtime sem privilegios e volumes separados para dados e workspace.
+- Dependencia VHS agora e instalada do GitHub com SHA fixo, removendo o acoplamento de runtime a `../vhs`.
+
+Arquivos-chave:
+- `Dockerfile`
+- `compose.yml`
+- `src/api/server.ts`
+- `docs/deployment-docker.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm run build`
+- [x] `npm test` (284 passed, 4 skipped)
+- [x] `docker compose config` (com token de teste)
+- [ ] `docker compose build` (download da imagem base foi interrompido pelo ambiente de validacao)
+- [ ] `docker compose up -d` + healthcheck autenticado
+
+Pendencias:
+- Adicionar Caddy, TLS e entrega da UI.
+- Integrar `stream_serve` ao servidor HTTP principal para URLs publicas.
+
+Proximo passo recomendado:
+- Executar o smoke test do compose e, em seguida, adicionar o proxy HTTPS/UI.
+
+### 2026-06-23 - Streams API + UI: clone, serve e stop de origins
+
+Resumo:
+- Criado `src/video/serve-manager.ts` com `StreamServeManager` que trackeia handles ativos de `serveOrigin`/`serveLiveOrigin`
+- `serveManager` adicionado ao contrato `KaelApp` e instanciado em `createKaelApp`
+- Criada rota `GET /streams` (lista origins com status de serving), `GET /streams/:originId`, `POST /streams/clone`, `POST /streams/:originId/serve`, `POST /streams/:originId/stop`
+- Criada `ui/src/pages/StreamsPage.tsx` com input de clone, lista de streams clonados, botoes Serve/Stop por origin
+- Adicionada entrada `Streams` na navegacao do AppShell e rota `/streams` no React Router
+
+Arquivos-chave:
+- `src/video/serve-manager.ts` (novo)
+- `src/api/routes/streams.ts` (novo)
+- `ui/src/pages/StreamsPage.tsx` (novo)
+- `src/app.ts`
+- `src/api/server.ts`
+- `ui/src/App.tsx`
+- `ui/src/components/AppShell.tsx`
+- `ui/src/lib/api.ts`
+- `docs/api.md`
+
+Checklist de validacao:
+- [x] `npx tsc --noEmit` (0 erros)
+- [x] `npx vitest run` (283 passed, 4 skipped)
+- [x] `cd ui && npm run build` (build OK)
+
+Pendencias:
+- `POST /streams/clone` e síncrono e pode travar por minutos em streams longas; idealmente viraria job async
+
+Proximo passo recomendado:
+- Testar fluxo completo com stream real: clonar via UI, servir, abrir URL no VLC/player, parar
 
 ### 2026-06-23 - Planner refatorado: action registry desacopla dominio de video
 
@@ -149,8 +209,8 @@ Proximo passo recomendado:
 ### 2026-06-20 - Fases 20/23: Kael passa a consumir VHS
 
 Resumo:
-- `manifestAudit`, `manifestDiff` e `streamer` do bootstrap agora usam o
-  pacote independente `@gugaio/vhs`, com contratos de `KaelApp` preservados.
+- `streamer` do bootstrap agora usa o pacote independente `@gugaio/vhs`,
+  com contratos de `KaelApp` preservados.
 - A dependencia e temporariamente local (`file:../vhs`) enquanto o pacote nao
   recebe publicacao versionada.
 - O runtime ativo tambem usa o inspector e o monitor HLS do VHS; Kael preserva
@@ -303,7 +363,6 @@ Arquivos-chave:
 - `src/cli/index.ts`
 - `src/cli/streamer-commands.ts`
 - `src/cli/api-commands.ts`
-- `src/cli/manifest-commands.ts`
 - `src/cli/core-commands.ts`
 - `src/cli/cli-utils.ts`
 - `src/cli/streamer-output.ts`
@@ -4970,3 +5029,18 @@ Pendencias:
 
 Proximo passo recomendado:
 - Incluir tendencia (ultimos N polls) no backend e renderizar sparkline simples na UI de Ops.
+
+### 2026-06-27 - Simplificacao: remocao de manifestAudit / manifestDiff
+
+Fase impactada: 20 (Video capabilities)
+
+Entrega:
+- Removido `manifestAudit` e `manifestDiff` do runtime, app, tooling, CLI e agent tools.
+- Removidos tipos `HlsManifestAuditInput`, `HlsManifestAuditReport`, `HlsManifestDiffInput`, `HlsManifestDiffReport`.
+- Removido arquivo `src/cli/manifest-commands.ts` e registro no CLI.
+- Removidas tools PI `video_manifest_audit` e `video_manifest_diff`.
+- `videoInspect` (MediaInspector) mantido como unica forma de inspecao de HLS/midia.
+
+Pendencias: Nenhuma.
+
+Proximo passo: Seguir com o roadmap atual.

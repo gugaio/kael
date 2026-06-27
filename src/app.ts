@@ -36,6 +36,7 @@ import type { ShellRuntime } from "./tools/system/shell-tool-service.js";
 import type { StreamWatchParams, StreamWatchStatus } from "./vhs/types.js";
 import type { VideoJobs } from "./video/jobs.js";
 import { createVideoPlannerHandlers } from "./video/planner-handlers.js";
+import { StreamServeManager } from "./video/serve-manager.js";
 import { SkillService } from "./skills/service.js";
 import type { McpRuntime } from "./tools/mcp/mcp-bridge-service.js";
 import { EdgeRuntime } from "./edge/runtime.js";
@@ -55,13 +56,6 @@ import type {
   StreamerServeHandle,
   StreamerServeOptions,
 } from "@gugaio/vhs";
-import type {
-  HlsManifestAuditInput,
-  HlsManifestAuditReport,
-  HlsManifestDiffInput,
-  HlsManifestDiffReport,
-} from "./vhs/types.js";
-
 export type KaelApp = {
   config: KaelConfig;
   sessions: SessionStore;
@@ -76,12 +70,6 @@ export type KaelApp = {
   shell: ShellRuntime;
   mcp: McpRuntime;
   edge: EdgeRuntime;
-  manifestAudit: {
-    auditHlsManifest(input: HlsManifestAuditInput): Promise<HlsManifestAuditReport>;
-  };
-  manifestDiff: {
-    diffHlsManifests(input: HlsManifestDiffInput): Promise<HlsManifestDiffReport>;
-  };
   streamMonitor: {
     startWatch(params: StreamWatchParams): string;
     stopWatch(id: string): boolean;
@@ -104,6 +92,7 @@ export type KaelApp = {
   emailIngest?: {
     getRuntimeTelemetrySnapshot(): EmailIngestRuntimeTelemetry;
   };
+  serveManager: StreamServeManager;
 };
 
 export type CreateKaelAppOptions = {
@@ -121,8 +110,12 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   await sessions.init();
   await jobStore.init();
 
-  const { jobs, videoJobs, videoInspect, manifestAudit, manifestDiff, mediaArtifacts, streamMonitor, streamer, playback } =
+  const { jobs, videoJobs, videoInspect, mediaArtifacts, streamMonitor, streamer, playback } =
     await createVideoRuntime(config, jobStore);
+  const serveManager = new StreamServeManager(
+    (originId, opts) => streamer.serveOrigin(originId, opts),
+    (originId, opts) => streamer.serveLiveOrigin(originId, opts),
+  );
   const shell = await createShellRuntime(config);
   const mcp = await createMcpRuntime(config);
   const edge = new EdgeRuntime();
@@ -155,12 +148,12 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     research,
     planner,
     playbackTriage: playback,
-    manifestAudit,
-    manifestDiff,
     streamMonitor,
     browserRuntime,
     imageGenerator,
     videoGeneration,
+    streamer,
+    serveManager,
   });
   const chat = new ChatService(
     sessions,
@@ -298,10 +291,9 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     shell,
     mcp,
     edge,
-    manifestAudit,
-    manifestDiff,
     streamMonitor,
     streamer,
+    serveManager,
     ...(emailIngest ? { emailIngest } : {}),
   };
 }

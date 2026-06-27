@@ -25,6 +25,9 @@ export type KaelConfig = {
   port: number;
   host: string;
   dataDir: string;
+  api: {
+    authToken?: string;
+  };
   engineMode: EngineMode;
   context: {
     maxMessages: number;
@@ -469,6 +472,7 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     : undefined;
   const dataDir =
     process.env.KAEL_DATA_DIR?.trim() || globalDataDir || path.join(cwd, ".kael-data");
+  const apiAuthToken = process.env.KAEL_API_AUTH_TOKEN?.trim() || undefined;
 
   const engineMode = parseEngineMode(
     process.env.KAEL_ENGINE_MODE ?? globalConfig?.defaults.engineMode,
@@ -875,6 +879,7 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     port,
     host,
     dataDir,
+    api: { authToken: apiAuthToken },
     engineMode,
     context: {
       maxMessages: maxContextMessages,

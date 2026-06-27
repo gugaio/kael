@@ -12,12 +12,6 @@ import { createVideoJobs, type VideoJobs } from "../video/jobs.js";
 import { HlsStreamMonitorService } from "../vhs/watch-registry.js";
 import { MediaArtifactsService } from "../media/artifacts.js";
 import { ProviderBackedMediaGenerationService } from "../media/generation.js";
-import type {
-  HlsManifestAuditInput,
-  HlsManifestAuditReport,
-  HlsManifestDiffInput,
-  HlsManifestDiffReport,
-} from "../vhs/types.js";
 import { MemoryService } from "../memory/service.js";
 import { ProjectContextService } from "../projects/service.js";
 import { WorkspaceInspector } from "../workspace/inspector.js";
@@ -41,8 +35,6 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
   jobs: JobService;
   videoJobs: VideoJobs;
   videoInspect: Vhs["inspect"];
-  manifestAudit: { auditHlsManifest(input: HlsManifestAuditInput): Promise<HlsManifestAuditReport> };
-  manifestDiff: { diffHlsManifests(input: HlsManifestDiffInput): Promise<HlsManifestDiffReport> };
   mediaArtifacts: MediaArtifactsService;
   streamMonitor: HlsStreamMonitorService;
   streamer: Vhs["stream"];
@@ -65,12 +57,6 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
   });
   const vhs = await createVhs({ dataDir: path.join(config.dataDir, "streamer") });
   const videoInspect = vhs.inspect;
-  const manifestAudit = {
-    auditHlsManifest: (input: HlsManifestAuditInput) => vhs.manifest.audit.audit(input),
-  };
-  const manifestDiff = {
-    diffHlsManifests: (input: HlsManifestDiffInput) => vhs.manifest.diff.diff(input),
-  };
   const mediaArtifacts = new MediaArtifactsService(path.join(config.dataDir, "media", "artifacts"));
   await mediaArtifacts.init();
   const streamMonitor = new HlsStreamMonitorService(vhs.watch);
@@ -79,8 +65,6 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
     jobs,
     videoJobs,
     videoInspect,
-    manifestAudit,
-    manifestDiff,
     mediaArtifacts,
     streamMonitor,
     streamer,

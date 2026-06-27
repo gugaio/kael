@@ -1,7 +1,6 @@
 import { Command } from "commander";
 import { registerApiCommands } from "./api-commands.js";
 import { registerCoreCommands } from "./core-commands.js";
-import { registerManifestCommands } from "./manifest-commands.js";
 import { registerStreamerCommands } from "./streamer-commands.js";
 
 async function main(): Promise<void> {
@@ -14,7 +13,6 @@ async function main(): Promise<void> {
   registerCoreCommands(program);
   registerApiCommands(program);
 
-  registerManifestCommands(program);
   registerStreamerCommands(program);
 
   if (process.argv.slice(2).length === 0) {

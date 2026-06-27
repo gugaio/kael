@@ -7,6 +7,7 @@ import { HealthPage } from "./pages/HealthPage";
 import { JobDetailPage } from "./pages/JobDetailPage";
 import { JobsPage } from "./pages/JobsPage";
 import { OpsPage } from "./pages/OpsPage";
+import { StreamsPage } from "./pages/StreamsPage";
 import { PlansPage } from "./pages/PlansPage";
 import { SchedulesPage } from "./pages/SchedulesPage";
 
@@ -24,6 +25,7 @@ export function App(): JSX.Element {
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/jobs" element={<JobsPage />} />
               <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+              <Route path="/streams" element={<StreamsPage />} />
               <Route path="/exec" element={<ExecSessionsPage />} />
               <Route path="/schedules" element={<SchedulesPage />} />
               <Route path="/health" element={<HealthPage />} />

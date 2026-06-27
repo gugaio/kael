@@ -1,37 +1,12 @@
 import type {
   HlsWatchEvent,
-  ManifestAuditReport,
-  ManifestDiffReport,
   PlaybackEngine,
   PlaybackEvent,
   PlaybackReport,
 } from "@gugaio/vhs";
 
-export type HlsManifestAuditReport = ManifestAuditReport;
-export type HlsManifestDiffReport = ManifestDiffReport;
 export type PlaybackAnalysisReport = PlaybackReport;
 export type { PlaybackEngine, PlaybackEvent };
-
-/** Kael adds session correlation around the VHS manifest audit. */
-export type HlsManifestAuditInput = {
-  sessionKey: string;
-  url: string;
-  maxSegments?: number;
-  timeoutMs?: number;
-  followVariants?: boolean;
-  maxVariants?: number;
-};
-
-/** Kael adds session correlation around the VHS manifest diff. */
-export type HlsManifestDiffInput = {
-  sessionKey: string;
-  leftUrl: string;
-  rightUrl: string;
-  maxSegments?: number;
-  timeoutMs?: number;
-  followVariants?: boolean;
-  maxVariants?: number;
-};
 
 /** The watch core is VHS; Kael associates a watch with its agent session. */
 export type StreamWatchParams = {

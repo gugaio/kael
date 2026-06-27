@@ -50,6 +50,10 @@ function createToolingStub(): EngineToolingInterface {
       }),
       videoGenerateImage: undefined,
       playbackAnalyze: undefined,
+      streamList: async () => [],
+      streamClone: async () => { throw new Error("not used"); },
+      streamServe: async () => { throw new Error("not used"); },
+      streamStop: async () => { throw new Error("not used"); },
     },
     jobs: {
       listJobs: () => [],

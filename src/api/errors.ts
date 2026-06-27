@@ -3,6 +3,7 @@ import { VideoJobValidationError } from "../video/safety.js";
 
 export type ApiErrorCode =
   | "BAD_REQUEST"
+  | "UNAUTHORIZED"
   | "NOT_FOUND"
   | "IDEMPOTENCY_CONFLICT"
   | "INTERNAL_ERROR";

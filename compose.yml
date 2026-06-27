@@ -1,0 +1,34 @@
+services:
+  kael:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: kael:local
+    init: true
+    env_file:
+      - .env
+    environment:
+      KAEL_HOST: 0.0.0.0
+      KAEL_PORT: 3210
+      KAEL_DATA_DIR: /data
+      KAEL_EXEC_WORKSPACE_ROOT: /workspace
+      KAEL_ALLOWED_PATHS: /workspace,/data,/tmp
+      KAEL_API_AUTH_TOKEN: ${KAEL_API_AUTH_TOKEN:?KAEL_API_AUTH_TOKEN must be set in .env}
+      KAEL_UID: ${KAEL_UID:-1000}
+      KAEL_GID: ${KAEL_GID:-1000}
+    ports:
+      - "127.0.0.1:${KAEL_PORT:-3210}:3210"
+    volumes:
+      - kael-data:/data
+      - ./workspace:/workspace
+    restart: unless-stopped
+    healthcheck:
+      test:
+        ["CMD-SHELL", "curl --fail --silent --show-error -H \"Authorization: Bearer $$KAEL_API_AUTH_TOKEN\" http://127.0.0.1:3210/health >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  kael-data:

@@ -38,6 +38,7 @@ export function createToolBudget(params: {
   budget?: {
     maxToolCalls?: number;
     maxExecCalls?: number;
+    maxStreamerCalls?: number;
     maxWebFetchCalls?: number;
     maxWebSearchCalls?: number;
     maxWebResearchCalls?: number;
@@ -50,6 +51,7 @@ export function createToolBudget(params: {
 }) {
   let toolCalls = 0;
   let execCalls = 0;
+  let streamerCalls = 0;
   let webFetchCalls = 0;
   let webSearchCalls = 0;
   let webResearchCalls = 0;
@@ -61,6 +63,7 @@ export function createToolBudget(params: {
 
   const maxToolCalls = Math.max(1, Math.floor(params.budget?.maxToolCalls ?? 12));
   const maxExecCalls = Math.max(1, Math.floor(params.budget?.maxExecCalls ?? 6));
+  const maxStreamerCalls = Math.max(1, Math.floor(params.budget?.maxStreamerCalls ?? 8));
   const maxWebFetchCalls = Math.max(1, Math.floor(params.budget?.maxWebFetchCalls ?? 5));
   const maxWebSearchCalls = Math.max(1, Math.floor(params.budget?.maxWebSearchCalls ?? 3));
   const maxWebResearchCalls = Math.max(1, Math.floor(params.budget?.maxWebResearchCalls ?? 2));
@@ -161,6 +164,20 @@ export function createToolBudget(params: {
     return reserved ? { blocked: reserved.blocked } : null;
   };
 
+  const reserveStreamerCall = (): { blocked: BlockedToolResult } | null => {
+    if (toolCalls >= maxToolCalls) {
+      const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
+      return { blocked: blockByBudget({ tool: "streamer", reason }) };
+    }
+    if (streamerCalls >= maxStreamerCalls) {
+      const reason = `streamer_budget_exceeded:${streamerCalls}/${maxStreamerCalls}`;
+      return { blocked: blockByBudget({ tool: "streamer", reason }) };
+    }
+    toolCalls += 1;
+    streamerCalls += 1;
+    return null;
+  };
+
   const reserveImageCall = (): { blocked: BlockedToolResult } | null => {
     if (toolCalls >= maxToolCalls) {
       const reason = `tool_call_budget_exceeded:${toolCalls}/${maxToolCalls}`;
@@ -210,6 +227,7 @@ export function createToolBudget(params: {
     reserveWebCall,
     reserveExecCall,
     reserveProcessCall,
+    reserveStreamerCall,
     reserveImageCall,
     reserveMcpCall,
     reserveEdgeCall,

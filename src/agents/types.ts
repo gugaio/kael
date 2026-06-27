@@ -6,8 +6,6 @@ import type {
   BrowserRuntimeTelemetry,
 } from "../runtime/browser/index.js";
 import type {
-  HlsManifestAuditReport,
-  HlsManifestDiffReport,
   PlaybackAnalysisReport,
   PlaybackEvent,
   PlaybackEngine,
@@ -105,23 +103,6 @@ export type EngineVideoTooling = {
     };
     errors: string[];
   }>;
-  videoManifestAudit?: (params: {
-    sessionKey: string;
-    url: string;
-    maxSegments?: number;
-    timeoutMs?: number;
-    followVariants?: boolean;
-    maxVariants?: number;
-  }) => Promise<HlsManifestAuditReport>;
-  videoManifestDiff?: (params: {
-    sessionKey: string;
-    leftUrl: string;
-    rightUrl: string;
-    maxSegments?: number;
-    timeoutMs?: number;
-    followVariants?: boolean;
-    maxVariants?: number;
-  }) => Promise<HlsManifestDiffReport>;
   videoGenerateImage?: (params: {
     sessionKey: string;
     prompt: string;
@@ -167,6 +148,34 @@ export type EngineVideoTooling = {
     watches?: StreamWatchStatus[];
     stopped?: boolean;
   }>;
+  streamList: () => Promise<
+    Array<{
+      id: string;
+      sourceUrl: string;
+      cumulativeDurationSeconds: number;
+      segmentCount: number;
+      variantCount: number;
+      bytes: number;
+      createdAt: string;
+      serving: boolean;
+      servingUrl: string | null;
+    }>
+  >;
+  streamClone: (params: {
+    sessionKey: string;
+    url: string;
+    originId?: string;
+    durationSeconds?: number;
+    allVariants?: boolean;
+  }) => Promise<{ id: string }>;
+  streamServe: (params: {
+    sessionKey: string;
+    originId: string;
+  }) => Promise<{ playbackUrl: string }>;
+  streamStop: (params: {
+    sessionKey: string;
+    originId: string;
+  }) => Promise<void>;
 };
 
 export type EngineJobsTooling = {

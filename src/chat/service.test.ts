@@ -37,6 +37,11 @@ function createTooling(): EngineToolingInterface {
       },
       videoHlsInspect: async () => ({ ok: true, url: "", finalUrl: "", playlistType: "unknown", variants: [], renditions: [], segments: [], errors: [] }),
       videoProbe: async () => ({ ok: true, input: "", timeoutMs: 1000, errors: [] }),
+      startPlayVlc: undefined,
+      streamList: async () => [],
+      streamClone: async () => { throw new Error("not used"); },
+      streamServe: async () => { throw new Error("not used"); },
+      streamStop: async () => { throw new Error("not used"); },
     },
     jobs: {
       listJobs: () => [],

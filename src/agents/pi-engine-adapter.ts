@@ -382,6 +382,7 @@ export class PiEngineAdapter implements AgentEngine {
           budget: {
             maxToolCalls: 12,
             maxExecCalls: 6,
+            maxStreamerCalls: 8,
             maxWebFetchCalls: 5,
             maxWebSearchCalls: 3,
             maxWebResearchCalls: 2,

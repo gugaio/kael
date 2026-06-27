@@ -1,8 +1,9 @@
 import Fastify, { type FastifyInstance } from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import { createKaelApp, type KaelApp } from "../app.js";
 import { IdempotencyStore } from "../infra/idempotency-store.js";
 import { kaelLogger } from "../infra/logger.js";
-import { asApiError, sendApiError } from "./errors.js";
+import { ApiError, asApiError, sendApiError } from "./errors.js";
 import { registerEdgeWsGateway } from "./edge-ws.js";
 import type { RequestWithStart } from "./route-deps.js";
 import { registerChatAndLiveRoutes } from "./routes/chat-live.js";
@@ -10,6 +11,7 @@ import { registerJobAndScheduleRoutes } from "./routes/jobs-schedules.js";
 import { registerPlanRoutes } from "./routes/plans.js";
 import { registerProjectRoutes } from "./routes/projects.js";
 import { registerRuntimeAdminRoutes } from "./routes/runtime-admin.js";
+import { registerStreamRoutes } from "./routes/streams.js";
 import { registerStreamWatchRoutes } from "./routes/stream-watch.js";
 
 export function createApiServer(app: KaelApp): FastifyInstance {
@@ -60,6 +62,9 @@ export function createApiServer(app: KaelApp): FastifyInstance {
 
   server.addHook("onRequest", async (request) => {
     (request as RequestWithStart)._kaelStartNs = process.hrtime.bigint();
+    if (!isAuthorized(request.headers.authorization, app.config.api.authToken)) {
+      throw new ApiError(401, "UNAUTHORIZED", "Unauthorized");
+    }
   });
 
   server.addHook("onResponse", async (request, reply) => {
@@ -102,9 +107,23 @@ export function createApiServer(app: KaelApp): FastifyInstance {
   registerProjectRoutes(server, deps);
   registerRuntimeAdminRoutes(server, deps);
   registerJobAndScheduleRoutes(server, deps);
+  registerStreamRoutes(server, deps);
   registerStreamWatchRoutes(server, deps);
 
   return server;
+}
+
+function isAuthorized(authorization: string | undefined, expectedToken: string | undefined): boolean {
+  if (!expectedToken) {
+    return true;
+  }
+  const match = authorization?.match(/^Bearer\s+(.+)$/i);
+  if (!match) {
+    return false;
+  }
+  const actualToken = Buffer.from(match[1]);
+  const configuredToken = Buffer.from(expectedToken);
+  return actualToken.length === configuredToken.length && timingSafeEqual(actualToken, configuredToken);
 }
 
 export async function startApiServer(): Promise<void> {

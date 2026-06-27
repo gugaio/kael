@@ -11,6 +11,7 @@ export function createVideoPiTools(params: {
   tooling: EngineToolingInterface["video"];
   textResult: (text: string) => TextBlock[];
   reserveToolCall: (tool: string) => { blocked: { content: TextBlock[]; details: unknown } } | null;
+  reserveStreamerCall?: () => { blocked: { content: TextBlock[]; details: unknown } } | null;
   logToolStart: (tool: string, rawParams: unknown) => string;
   logToolEnd: (
     tool: string,
@@ -126,196 +127,6 @@ export function createVideoPiTools(params: {
         const details = { ok: false, status: "failed", error: message };
         params.logToolEnd("video_probe", intent, details, startedAtMs);
         return { content: params.textResult(`ok=false\nerror=${message}`), details };
-      }
-    },
-  };
-
-  const videoManifestAuditTool: AgentTool = {
-    name: "video_manifest_audit",
-    label: "Video Manifest Audit",
-    description:
-      "Audita um manifesto HLS e retorna diagnostico objetivo com issues, severidade e recomendacoes para QA de streaming, operacao e release.",
-    parameters: {
-      type: "object",
-      properties: {
-        url: { type: "string", description: "URL do manifesto HLS (.m3u8)" },
-        maxSegments: { type: "number", description: "Quantidade maxima de segmentos usados na auditoria" },
-        timeoutMs: { type: "number", description: "Timeout de fetch do manifesto" },
-        followVariants: {
-          type: "boolean",
-          description: "Se true, desce em memoria nas media playlists das variants selecionadas para auditoria expandida da ladder",
-        },
-        maxVariants: { type: "number", description: "Limite de variants auditadas quando followVariants=true" },
-      },
-      required: ["url"],
-      additionalProperties: false,
-    } as unknown as AgentTool["parameters"],
-    execute: async (_toolCallId, rawParams) => {
-      const blocked = params.reserveToolCall("video_manifest_audit");
-      if (blocked) {
-        return blocked.blocked;
-      }
-      const startedAtMs = Date.now();
-      const args = (rawParams ?? {}) as {
-        url: string;
-        maxSegments?: number;
-        timeoutMs?: number;
-        followVariants?: boolean;
-        maxVariants?: number;
-      };
-      const intent = params.logToolStart("video_manifest_audit", args);
-      if (!params.tooling.videoManifestAudit) {
-        const reason = "video_manifest_audit_unavailable";
-        const details = { status: "blocked", blocked: true, reason };
-        params.logToolEnd("video_manifest_audit", intent, details, startedAtMs);
-        return {
-          content: params.textResult(`blocked=true\nreason=${reason}`),
-          details,
-        };
-      }
-      try {
-        const result = await params.tooling.videoManifestAudit({
-          sessionKey: params.sessionKey,
-          url: args.url,
-          maxSegments: args.maxSegments,
-          timeoutMs: args.timeoutMs,
-          followVariants: args.followVariants,
-          maxVariants: args.maxVariants,
-        });
-        const text = [
-          `ok=${result.ok}`,
-          `playlistType=${result.playlistType}`,
-          `summary=${result.summary}`,
-          `variants=${result.stats.variants}`,
-          `renditions=${result.stats.renditions}`,
-          `segments=${result.stats.segments}`,
-          `variantsAudited=${result.stats.variantsAudited}`,
-          `variantsWithErrors=${result.stats.variantsWithErrors}`,
-          ...(typeof result.stats.targetDuration === "number"
-            ? [`targetDuration=${result.stats.targetDuration}`]
-            : []),
-          ...(result.issues.length > 0 ? ["issues:", ...result.issues.map((issue) => `- ${issue.code}: ${issue.summary}`)] : []),
-          ...(result.aggregateIssues.length > 0
-            ? ["aggregateIssues:", ...result.aggregateIssues.map((issue) => `- ${issue.code}: ${issue.summary}`)]
-            : []),
-        ].join("\n");
-        params.logToolEnd(
-          "video_manifest_audit",
-          intent,
-          result,
-          startedAtMs,
-          `manifest ok=${result.ok} type=${result.playlistType} issues=${result.issues.length}`,
-        );
-        return { content: params.textResult(text), details: result };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const details = { status: "failed", blocked: false, reason: "video_manifest_audit_failed", error: message };
-        params.logToolEnd("video_manifest_audit", intent, details, startedAtMs);
-        return {
-          content: params.textResult(`ok=false\nreason=video_manifest_audit_failed\nerror=${message}`),
-          details,
-        };
-      }
-    },
-  };
-
-  const videoManifestDiffTool: AgentTool = {
-    name: "video_manifest_diff",
-    label: "Video Manifest Diff",
-    description:
-      "Compara dois manifestos HLS usando o audit deterministico do Kael e destaca deltas de stats e issues adicionadas/removidas entre as duas versoes.",
-    parameters: {
-      type: "object",
-      properties: {
-        leftUrl: { type: "string", description: "URL base/referencia do manifesto HLS (.m3u8)" },
-        rightUrl: { type: "string", description: "URL candidata/comparada do manifesto HLS (.m3u8)" },
-        maxSegments: { type: "number", description: "Quantidade maxima de segmentos usados no audit" },
-        timeoutMs: { type: "number", description: "Timeout de fetch dos manifests" },
-        followVariants: { type: "boolean", description: "Se true, audita variants das duas ladders antes de comparar" },
-        maxVariants: { type: "number", description: "Limite de variants auditadas por lado quando followVariants=true" },
-      },
-      required: ["leftUrl", "rightUrl"],
-      additionalProperties: false,
-    } as unknown as AgentTool["parameters"],
-    execute: async (_toolCallId, rawParams) => {
-      const blocked = params.reserveToolCall("video_manifest_diff");
-      if (blocked) {
-        return blocked.blocked;
-      }
-      const startedAtMs = Date.now();
-      const args = (rawParams ?? {}) as {
-        leftUrl: string;
-        rightUrl: string;
-        maxSegments?: number;
-        timeoutMs?: number;
-        followVariants?: boolean;
-        maxVariants?: number;
-      };
-      const intent = params.logToolStart("video_manifest_diff", args);
-      if (!params.tooling.videoManifestDiff) {
-        const reason = "video_manifest_diff_unavailable";
-        const details = { status: "blocked", blocked: true, reason };
-        params.logToolEnd("video_manifest_diff", intent, details, startedAtMs);
-        return {
-          content: params.textResult(`blocked=true\nreason=${reason}`),
-          details,
-        };
-      }
-      try {
-        const result = await params.tooling.videoManifestDiff({
-          sessionKey: params.sessionKey,
-          leftUrl: args.leftUrl,
-          rightUrl: args.rightUrl,
-          maxSegments: args.maxSegments,
-          timeoutMs: args.timeoutMs,
-          followVariants: args.followVariants,
-          maxVariants: args.maxVariants,
-        });
-        const text = [
-          `ok=${result.ok}`,
-          `summary=${result.summary}`,
-          `playlistTypeChanged=${result.playlistTypeChanged}`,
-          `delta.variants=${result.delta.variants}`,
-          `delta.renditions=${result.delta.renditions}`,
-          `delta.segments=${result.delta.segments}`,
-          `delta.variantsWithErrors=${result.delta.variantsWithErrors}`,
-          `issues.added=${result.issueDiff.added.length}`,
-          `issues.removed=${result.issueDiff.removed.length}`,
-          `aggregateIssues.added=${result.aggregateIssueDiff.added.length}`,
-          `aggregateIssues.removed=${result.aggregateIssueDiff.removed.length}`,
-          `variants.added=${result.variantDiff.added.length}`,
-          `variants.removed=${result.variantDiff.removed.length}`,
-          `variants.regressed=${result.variantDiff.regressed.length}`,
-          `variants.improved=${result.variantDiff.improved.length}`,
-          `variants.changed=${result.variantDiff.changed.length}`,
-          ...(result.issueDiff.added.length > 0
-            ? ["addedIssues:", ...result.issueDiff.added.map((issue) => `- ${issue.code}: ${issue.summary}`)]
-            : []),
-          ...(result.variantDiff.regressed.length > 0
-            ? [
-                "regressedVariants:",
-                ...result.variantDiff.regressed.map((item) =>
-                  `- severity=${item.regressionSeverity} score=${item.regressionScore} ${item.summary}`
-                ),
-              ]
-            : []),
-        ].join("\n");
-        params.logToolEnd(
-          "video_manifest_diff",
-          intent,
-          result,
-          startedAtMs,
-          `manifest_diff ok=${result.ok} added=${result.issueDiff.added.length} removed=${result.issueDiff.removed.length}`,
-        );
-        return { content: params.textResult(text), details: result };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const details = { status: "failed", blocked: false, reason: "video_manifest_diff_failed", error: message };
-        params.logToolEnd("video_manifest_diff", intent, details, startedAtMs);
-        return {
-          content: params.textResult(`ok=false\nreason=video_manifest_diff_failed\nerror=${message}`),
-          details,
-        };
       }
     },
   };
@@ -550,12 +361,185 @@ export function createVideoPiTools(params: {
     },
   };
 
+  const reserveStreamer = params.reserveStreamerCall ?? params.reserveToolCall;
+
+  const streamListTool: AgentTool = {
+    name: "stream_list",
+    label: "Stream List",
+    description:
+      "Lista todos os streams clonados localmente (origins). Retorna id, sourceUrl, duracao, segmentos, variantes e se esta sendo servido com playbackUrl.",
+    parameters: {
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, _rawParams) => {
+      const blocked = reserveStreamer("stream_list");
+      if (blocked) {
+        return blocked.blocked;
+      }
+      const startedAtMs = Date.now();
+      const intent = params.logToolStart("stream_list", {});
+      try {
+        const list = await params.tooling.streamList();
+        const text = [
+          `count=${list.length}`,
+          ...list.map(
+            (s) =>
+              `- ${s.id} | serving=${s.serving}${s.servingUrl ? ` url=${s.servingUrl}` : ""} | duration=${s.cumulativeDurationSeconds}s | segments=${s.segmentCount} | variants=${s.variantCount} | source=${s.sourceUrl}`,
+          ),
+        ].join("\n");
+        params.logToolEnd("stream_list", intent, { count: list.length }, startedAtMs);
+        return { content: params.textResult(text), details: list };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        params.logToolEnd("stream_list", intent, { error: message }, startedAtMs);
+        return { content: params.textResult(`ok=false\nerror=${message}`), details: { error: message } };
+      }
+    },
+  };
+
+  const streamCloneTool: AgentTool = {
+    name: "stream_clone",
+    label: "Stream Clone",
+    description:
+      "Clona uma URL HLS/DASH para um origin local. Usar antes de stream_serve para disponibilizar playback local. " +
+      "O clone baixa os segmentos e cria manifestos locais. Pode demorar dependendo da duracao e da rede.",
+    parameters: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "URL do manifesto HLS (.m3u8) ou DASH (.mpd)" },
+        originId: {
+          type: "string",
+          description: "ID opcional para o origin. Se vazio, um UUID e gerado automaticamente.",
+        },
+        durationSeconds: {
+          type: "number",
+          description: "Duracao alvo em segundos (padrao: 60). O clone baixa segmentos ate atingir essa duracao acumulada.",
+        },
+        allVariants: {
+          type: "boolean",
+          description: "Se true, clona todas as variants/resolucoes da ladder em vez de apenas a melhor.",
+        },
+      },
+      required: ["url"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const blocked = reserveStreamer("stream_clone");
+      if (blocked) {
+        return blocked.blocked;
+      }
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as {
+        url: string;
+        originId?: string;
+        durationSeconds?: number;
+        allVariants?: boolean;
+      };
+      const intent = params.logToolStart("stream_clone", args);
+      try {
+        const result = await params.tooling.streamClone({
+          sessionKey: params.sessionKey,
+          url: args.url,
+          originId: args.originId,
+          durationSeconds: args.durationSeconds,
+          allVariants: args.allVariants,
+        });
+        const text = `ok=true\nid=${result.id}`;
+        params.logToolEnd("stream_clone", intent, result, startedAtMs);
+        return { content: params.textResult(text), details: result };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        params.logToolEnd("stream_clone", intent, { error: message }, startedAtMs);
+        return { content: params.textResult(`ok=false\nerror=${message}`), details: { error: message } };
+      }
+    },
+  };
+
+  const streamServeTool: AgentTool = {
+    name: "stream_serve",
+    label: "Stream Serve",
+    description:
+      "Inicia um servidor HTTP local para servir um origin clonado como VOD. " +
+      "Requer que o origin exista (criado por stream_clone). Retorna a playbackUrl para usar no player.",
+    parameters: {
+      type: "object",
+      properties: {
+        originId: { type: "string", description: "ID do origin a servir" },
+      },
+      required: ["originId"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const blocked = reserveStreamer("stream_serve");
+      if (blocked) {
+        return blocked.blocked;
+      }
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as { originId: string };
+      const intent = params.logToolStart("stream_serve", args);
+      try {
+        const result = await params.tooling.streamServe({
+          sessionKey: params.sessionKey,
+          originId: args.originId,
+        });
+        const text = `ok=true\nplaybackUrl=${result.playbackUrl}`;
+        params.logToolEnd("stream_serve", intent, result, startedAtMs);
+        return { content: params.textResult(text), details: result };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        params.logToolEnd("stream_serve", intent, { error: message }, startedAtMs);
+        return { content: params.textResult(`ok=false\nerror=${message}`), details: { error: message } };
+      }
+    },
+  };
+
+  const streamStopTool: AgentTool = {
+    name: "stream_stop",
+    label: "Stream Stop",
+    description:
+      "Para o servidor HTTP de um origin que esta sendo servido (criado por stream_serve). " +
+      "O origin continua existindo no disco, apenas o servidor e derrubado.",
+    parameters: {
+      type: "object",
+      properties: {
+        originId: { type: "string", description: "ID do origin a parar" },
+      },
+      required: ["originId"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const blocked = reserveStreamer("stream_stop");
+      if (blocked) {
+        return blocked.blocked;
+      }
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as { originId: string };
+      const intent = params.logToolStart("stream_stop", args);
+      try {
+        await params.tooling.streamStop({
+          sessionKey: params.sessionKey,
+          originId: args.originId,
+        });
+        params.logToolEnd("stream_stop", intent, { stopped: true }, startedAtMs);
+        return { content: params.textResult("ok=true\nstopped=true"), details: { stopped: true } };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        params.logToolEnd("stream_stop", intent, { error: message }, startedAtMs);
+        return { content: params.textResult(`ok=false\nerror=${message}`), details: { error: message } };
+      }
+    },
+  };
+
   return [
     videoHlsInspectTool,
     videoProbeTool,
-    videoManifestAuditTool,
-    videoManifestDiffTool,
     playbackAnalyzeTool,
     videoStreamWatchTool,
+    streamListTool,
+    streamCloneTool,
+    streamServeTool,
+    streamStopTool,
   ];
 }

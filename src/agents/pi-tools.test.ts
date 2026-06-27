@@ -56,9 +56,12 @@ function createTooling(overrides: ToolingOverrides = {}): EngineToolingInterface
         streams: [],
         errors: [],
       }),
-      videoManifestDiff: undefined,
       videoGenerateImage: undefined,
       playbackAnalyze: undefined,
+      streamList: async () => [],
+      streamClone: async () => { throw new Error("not used"); },
+      streamServe: async () => { throw new Error("not used"); },
+      streamStop: async () => { throw new Error("not used"); },
       ...overrides.video,
     },
     jobs: {
@@ -331,93 +334,6 @@ describe("createPiTools playback_analyze", () => {
     const text = String((result.content?.[0] as { text?: unknown })?.text ?? "");
     expect(text).toContain("blocked=true");
     expect(text).toContain("playback_analyze_unavailable");
-  });
-});
-
-describe("createPiTools video_manifest_diff", () => {
-  it("exposes video_manifest_diff and reports added issues", async () => {
-    const tools = createPiTools({
-      sessionKey: "s-diff",
-      tooling: createTooling({
-        video: {
-          videoManifestDiff: async ({ leftUrl, rightUrl }) => ({
-            ok: false,
-            summary: "1 issue nova no manifesto da direita",
-            playlistTypeChanged: false,
-            left: {
-              ok: true,
-              url: leftUrl,
-              finalUrl: leftUrl,
-              playlistType: "master",
-              summary: "left",
-              stats: { variants: 2, renditions: 1, segments: 0, variantsAudited: 0, variantsWithErrors: 0 },
-              issues: [],
-              variantAudits: [],
-              aggregateIssues: [],
-              recommendations: [],
-            },
-            right: {
-              ok: false,
-              url: rightUrl,
-              finalUrl: rightUrl,
-              playlistType: "master",
-              summary: "right",
-              stats: { variants: 2, renditions: 1, segments: 0, variantsAudited: 0, variantsWithErrors: 1 },
-              issues: [{ code: "variant_fetch_failures", severity: "error", summary: "Falha nova", evidence: [] }],
-              variantAudits: [],
-              aggregateIssues: [],
-              recommendations: [],
-            },
-            delta: {
-              variants: 0,
-              renditions: 0,
-              segments: 0,
-              variantsAudited: 0,
-              variantsWithErrors: 1,
-            },
-            issueDiff: {
-              added: [{ code: "variant_fetch_failures", severity: "error", summary: "Falha nova", evidence: [] }],
-              removed: [],
-              persisted: [],
-            },
-            aggregateIssueDiff: { added: [], removed: [], persisted: [] },
-            variantDiff: {
-              added: [],
-              removed: [],
-              changed: [],
-              regressed: [
-                {
-                  matchKey: "v1.m3u8",
-                  status: "regressed",
-                  regressionSeverity: "high",
-                  regressionScore: 85,
-                  delta: {},
-                  issueDiff: { added: [], removed: [], persisted: [] },
-                  changedFields: ["targetDuration", "audioGroupId"],
-                  summary: "Variant v1.m3u8 regrediu",
-                },
-              ],
-              improved: [],
-              unchanged: [],
-            },
-            recommendations: ["Priorizar as novas issues"],
-          }),
-        },
-      }),
-    });
-    const tool = tools.find((item) => item.name === "video_manifest_diff");
-    expect(tool).toBeTruthy();
-
-    const result = await tool!.execute("tc-diff", {
-      leftUrl: "https://a.example/master.m3u8",
-      rightUrl: "https://b.example/master.m3u8",
-    });
-    const text = String((result.content?.[0] as { text?: unknown })?.text ?? "");
-
-    expect(text).toContain("ok=false");
-    expect(text).toContain("issues.added=1");
-    expect(text).toContain("variants.regressed=1");
-    expect(text).toContain("variant_fetch_failures");
   });
 });
 

@@ -11,12 +11,45 @@ import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
 import type { McpRuntime } from "../tools/mcp/mcp-bridge-service.js";
 import type { HlsStreamMonitorService } from "../vhs/watch-registry.js";
 import type { ProviderBackedMediaGenerationService } from "../media/generation.js";
-import type { HlsManifestAuditInput, HlsManifestDiffInput } from "../vhs/types.js";
-import type { ManifestAuditReport, ManifestDiffReport, MediaInspector, PlaybackTriageService } from "@gugaio/vhs";
+import type { MediaInspector, PlaybackTriageService } from "@gugaio/vhs";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
 import type { BrowserRuntime } from "../runtime/browser/index.js";
 import { buildJobLogTailResult, selectJobs } from "../jobs/tooling.js";
 import type { EdgeRuntime } from "../edge/runtime.js";
+
+type StreamerRuntime = {
+  listOrigins(): Promise<
+    Array<{
+      id: string;
+      sourceUrl: string;
+      cumulativeDurationSeconds: number;
+      segmentCount: number;
+      variantCount: number;
+      bytes: number;
+      createdAt: string;
+    }>
+  >;
+  cloneHls(input: {
+    url: string;
+    originId?: string;
+    durationSeconds?: number;
+    allVariants?: boolean;
+    onProgress?: (event: unknown) => void;
+  }): Promise<{ id: string }>;
+  cloneDash(input: {
+    url: string;
+    originId?: string;
+    durationSeconds?: number;
+    allVariants?: boolean;
+    onProgress?: (event: unknown) => void;
+  }): Promise<{ id: string }>;
+};
+
+type ServeManagerRuntime = {
+  serve(originId: string): Promise<{ playbackUrl: string }>;
+  stop(originId: string): Promise<boolean>;
+  isServing(originId: string): boolean;
+};
 
 type ChatToolingExecutors = {
   jobs: JobService;
@@ -33,10 +66,10 @@ type ChatToolingExecutors = {
   imageGenerator: ImageGeneratorService;
   videoGeneration: ProviderBackedMediaGenerationService;
   playbackTriage: PlaybackTriageService;
-  manifestAudit: { auditHlsManifest(input: HlsManifestAuditInput): Promise<ManifestAuditReport> };
-  manifestDiff: { diffHlsManifests(input: HlsManifestDiffInput): Promise<ManifestDiffReport> };
   streamMonitor: HlsStreamMonitorService;
   browserRuntime: BrowserRuntime;
+  streamer: StreamerRuntime;
+  serveManager: ServeManagerRuntime;
 };
 
 export function createChatTooling(executors: ChatToolingExecutors): EngineToolingInterface {
@@ -51,29 +84,49 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
         executors.videoInspect.inspectHls({ url, maxSegments, timeoutMs }),
       videoProbe: async ({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }) =>
         executors.videoInspect.probe({ input, timeoutMs, keyframes, maxKeyframes, streamSelector }),
-      videoManifestAudit: async ({ url, maxSegments, timeoutMs, followVariants, maxVariants, sessionKey }) =>
-        executors.manifestAudit.auditHlsManifest({
-          sessionKey,
-          url,
-          maxSegments,
-          timeoutMs,
-          followVariants,
-          maxVariants,
-        }),
-      videoManifestDiff: async ({ leftUrl, rightUrl, maxSegments, timeoutMs, followVariants, maxVariants, sessionKey }) =>
-        executors.manifestDiff.diffHlsManifests({
-          sessionKey,
-          leftUrl,
-          rightUrl,
-          maxSegments,
-          timeoutMs,
-          followVariants,
-          maxVariants,
-        }),
       videoGenerateImage: ({ sessionKey, prompt, provider, size }) =>
         executors.videoGeneration.generateImage({ sessionKey, prompt, provider, size }),
       playbackAnalyze: async ({ player, source, streamUrl, logText, events }) =>
         executors.playbackTriage.analyzeSession({ player, source, streamUrl, logText, events }),
+      streamList: async () => {
+        const origins = await executors.streamer.listOrigins();
+        const serving = executors.serveManager;
+        return origins.map((o) => ({
+          id: o.id,
+          sourceUrl: o.sourceUrl,
+          cumulativeDurationSeconds: o.cumulativeDurationSeconds,
+          segmentCount: o.segmentCount,
+          variantCount: o.variantCount,
+          bytes: o.bytes,
+          createdAt: o.createdAt,
+          serving: serving.isServing(o.id),
+          servingUrl: null,
+        }));
+      },
+      streamClone: async ({ url, originId, durationSeconds, allVariants }) => {
+        const isDash = url.trim().toLowerCase().includes(".mpd");
+        if (isDash) {
+          return executors.streamer.cloneDash({
+            url,
+            originId,
+            durationSeconds,
+            allVariants,
+          });
+        }
+        return executors.streamer.cloneHls({
+          url,
+          originId,
+          durationSeconds,
+          allVariants,
+        });
+      },
+      streamServe: async ({ originId }) => {
+        const active = await executors.serveManager.serve(originId);
+        return { playbackUrl: active.playbackUrl };
+      },
+      streamStop: async ({ originId }) => {
+        await executors.serveManager.stop(originId);
+      },
       videoStreamWatch: async ({ action, sessionKey, url, pollIntervalMs, maxPollCount, timeoutMs, watchId }) => {
         if (action === "start") {
           if (!url) return { ok: false, action, watchId: undefined };
@@ -296,12 +349,6 @@ export function createChatOnlyTooling(tooling: EngineToolingInterface): EngineTo
       },
       videoProbe: async () => {
         throw new Error("chat-only mode: video_probe disabled");
-      },
-      videoManifestAudit: async () => {
-        throw new Error("chat-only mode: video_manifest_audit disabled");
-      },
-      videoManifestDiff: async () => {
-        throw new Error("chat-only mode: video_manifest_diff disabled");
       },
       videoGenerateImage: async () => {
         throw new Error("chat-only mode: video_generate_image disabled");

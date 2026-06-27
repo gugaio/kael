@@ -19,6 +19,7 @@ export function createPiTools(params: {
   budget?: {
     maxToolCalls?: number;
     maxExecCalls?: number;
+    maxStreamerCalls?: number;
     maxWebFetchCalls?: number;
     maxWebSearchCalls?: number;
     maxWebResearchCalls?: number;
@@ -74,6 +75,7 @@ export function createPiTools(params: {
       tooling: params.tooling.video,
       textResult,
       reserveToolCall: budget.reserveToolCall,
+      reserveStreamerCall: budget.reserveStreamerCall,
       logToolStart: telemetry.logToolStart,
       logToolEnd: (tool, intent, result, startedAtMs, summary) =>
         telemetry.logToolEnd(tool, intent, result, startedAtMs, summary),
@@ -166,9 +168,8 @@ export function createPiTools(params: {
   const [
     videoHlsInspectTool,
     videoProbeTool,
-    videoManifestAuditTool,
-    videoManifestDiffTool,
     playbackAnalyzeTool,
+    ...streamerTools
   ] = _tools.video;
   const [jobsListTool, jobsGetTool, jobsLogTailTool] = _tools.jobs;
   const [projectSearchTool, projectGetDocumentTool, projectUpsertDocumentTool, projectListDocumentsTool] = _tools.projects;
@@ -201,9 +202,8 @@ export function createPiTools(params: {
     processTool,
     videoHlsInspectTool,
     videoProbeTool,
-    videoManifestAuditTool,
-    videoManifestDiffTool,
     playbackAnalyzeTool,
+    ...streamerTools,
     jobsListTool,
     jobsGetTool,
     jobsLogTailTool,
