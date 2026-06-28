@@ -13,6 +13,7 @@ type HlsLogEntry = {
   event: string;
   level: "info" | "warning" | "error";
   details: string;
+  fragmentTiming?: FragmentTiming;
 };
 
 type HlsLoggerLevel = "trace" | "debug" | "log" | "info" | "warn" | "error";
@@ -21,20 +22,109 @@ type HlsLogger = Record<HlsLoggerLevel, (message?: unknown, ...optionalParams: u
 const HLS_DEBUG_EVENTS = [
   "hlsMediaAttaching",
   "hlsMediaAttached",
+  "hlsMediaDetaching",
+  "hlsMediaDetached",
   "hlsManifestLoading",
   "hlsManifestLoaded",
   "hlsManifestParsed",
+  "hlsLevelSwitching",
+  "hlsLevelSwitched",
   "hlsLevelLoading",
   "hlsLevelLoaded",
   "hlsLevelUpdated",
+  "hlsLevelPtsUpdated",
+  "hlsAudioTrackLoading",
+  "hlsAudioTrackLoaded",
+  "hlsSubtitleTrackLoading",
+  "hlsSubtitleTrackLoaded",
   "hlsFragLoading",
   "hlsFragLoaded",
+  "hlsFragParsed",
   "hlsFragBuffered",
   "hlsFragChanged",
+  "hlsInitPtsFound",
+  "hlsBufferCreated",
+  "hlsBufferAppending",
+  "hlsBufferAppended",
+  "hlsBufferEos",
+  "hlsBufferFlushing",
+  "hlsBufferFlushed",
+  "hlsFpsDrop",
+  "hlsFpsDropLevelCapping",
   "hlsError",
 ];
 
-function formatHlsEventData(data: unknown): { level: HlsLogEntry["level"]; details: string } {
+type DiagnosticStatus = "ok" | "warning" | "error" | "idle";
+
+type DiagnosticCard = {
+  label: string;
+  value: string;
+  caption: string;
+  status: DiagnosticStatus;
+};
+
+type DiagnosticFinding = {
+  id: string;
+  title: string;
+  detail: string;
+  status: Exclude<DiagnosticStatus, "idle">;
+};
+
+type FragmentDiagnostic = {
+  key: string;
+  sn: string;
+  trackType: "video" | "audio" | "subtitle" | "unknown";
+  duration?: string;
+  start?: string;
+  fragStartPts?: string;
+  fragEndPts?: string;
+  esStartPts?: string;
+  esEndPts?: string;
+  esStartDts?: string;
+  esEndDts?: string;
+  ptsDeltaFromPrevious?: number;
+  avDeltaFromVideo?: number;
+  url?: string;
+  loaded: boolean;
+  buffered: boolean;
+  changed: boolean;
+  error: boolean;
+};
+
+type FragmentTiming = {
+  sn?: string;
+  trackType?: FragmentDiagnostic["trackType"];
+  url?: string;
+  duration?: string;
+  start?: string;
+  fragStartPts?: string;
+  fragEndPts?: string;
+  elementaryStreams?: Partial<Record<"audio" | "video" | "audiovideo", ElementaryStreamTiming>>;
+};
+
+type ElementaryStreamTiming = {
+  startPts?: string;
+  endPts?: string;
+  startDts?: string;
+  endDts?: string;
+};
+
+type PlaybackDiagnostics = {
+  cards: DiagnosticCard[];
+  findings: DiagnosticFinding[];
+  fragments: FragmentDiagnostic[];
+  fragmentGroups: Array<{
+    label: string;
+    trackType: FragmentDiagnostic["trackType"];
+    fragments: FragmentDiagnostic[];
+  }>;
+};
+
+function formatHlsEventData(data: unknown): {
+  level: HlsLogEntry["level"];
+  details: string;
+  fragmentTiming?: FragmentTiming;
+} {
   if (!data || typeof data !== "object") {
     return { level: "info", details: data == null ? "" : String(data) };
   }
@@ -42,6 +132,7 @@ function formatHlsEventData(data: unknown): { level: HlsLogEntry["level"]; detai
   const record = data as Record<string, unknown>;
   const details: string[] = [];
   const level = record.fatal === true ? "error" : record.type === "networkError" ? "warning" : "info";
+  let fragmentTiming: FragmentTiming | undefined;
 
   appendValue(details, "url", record.url);
   appendValue(details, "type", record.type);
@@ -53,6 +144,17 @@ function formatHlsEventData(data: unknown): { level: HlsLogEntry["level"]; detai
   const frag = record.frag;
   if (frag && typeof frag === "object") {
     const fragRecord = frag as Record<string, unknown>;
+    const trackType = inferFragmentTrackType(eventNameFromRecord(record), fragRecord);
+    fragmentTiming = {
+      sn: formatOptionalValue(fragRecord.sn),
+      trackType,
+      url: formatOptionalValue(fragRecord.url),
+      duration: formatOptionalValue(fragRecord.duration),
+      start: formatOptionalValue(fragRecord.start),
+      fragStartPts: formatOptionalValue(fragRecord.startPTS),
+      fragEndPts: formatOptionalValue(fragRecord.endPTS),
+      elementaryStreams: readElementaryStreams(fragRecord.elementaryStreams),
+    };
     appendValue(details, "sn", fragRecord.sn);
     appendValue(details, "fragUrl", fragRecord.url);
     appendValue(details, "duration", fragRecord.duration);
@@ -72,15 +174,22 @@ function formatHlsEventData(data: unknown): { level: HlsLogEntry["level"]; detai
     appendValue(details, "total", statsRecord.total);
   }
 
-  return { level, details: details.length > 0 ? details.join(" | ") : compactJson(record) };
+  return { level, details: details.length > 0 ? details.join(" | ") : compactJson(record), fragmentTiming };
 }
 
 function appendValue(details: string[], label: string, value: unknown): void {
-  if (value == null || value === "") {
+  const formatted = formatOptionalValue(value);
+  if (!formatted) {
     return;
   }
-  const formatted = typeof value === "number" && !Number.isInteger(value) ? value.toFixed(3) : String(value);
   details.push(`${label}=${formatted}`);
+}
+
+function formatOptionalValue(value: unknown): string | undefined {
+  if (value == null || value === "") {
+    return undefined;
+  }
+  return typeof value === "number" && !Number.isInteger(value) ? value.toFixed(3) : String(value);
 }
 
 function compactJson(value: unknown): string {
@@ -94,6 +203,43 @@ function compactJson(value: unknown): string {
   } catch {
     return "[unserializable]";
   }
+}
+
+function eventNameFromRecord(record: Record<string, unknown>): string {
+  return String(record.event ?? record.type ?? "");
+}
+
+function inferFragmentTrackType(
+  eventName: string,
+  fragRecord: Record<string, unknown>,
+): FragmentDiagnostic["trackType"] {
+  const rawType = String(fragRecord.type ?? fragRecord.relurl ?? fragRecord.url ?? eventName).toLowerCase();
+  if (rawType.includes("audio")) return "audio";
+  if (rawType.includes("subtitle") || rawType.includes("text")) return "subtitle";
+  if (rawType.includes("main") || rawType.includes("video")) return "video";
+  return "unknown";
+}
+
+function readElementaryStreams(value: unknown): FragmentTiming["elementaryStreams"] | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const streams = value as Record<string, unknown>;
+  const result: FragmentTiming["elementaryStreams"] = {};
+  for (const streamType of ["audio", "video", "audiovideo"] as const) {
+    const stream = streams[streamType];
+    if (!stream || typeof stream !== "object") {
+      continue;
+    }
+    const streamRecord = stream as Record<string, unknown>;
+    result[streamType] = {
+      startPts: formatOptionalValue(streamRecord.startPTS),
+      endPts: formatOptionalValue(streamRecord.endPTS),
+      startDts: formatOptionalValue(streamRecord.startDTS),
+      endDts: formatOptionalValue(streamRecord.endDTS),
+    };
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 function formatLoggerArgs(args: unknown[]): string {
@@ -127,6 +273,381 @@ function createHlsLogger(onHlsLog: (entry: Omit<HlsLogEntry, "id" | "at">) => vo
     warn: (message?: unknown, ...optionalParams: unknown[]) => emit("warn", [message, ...optionalParams]),
     error: (message?: unknown, ...optionalParams: unknown[]) => emit("error", [message, ...optionalParams]),
   };
+}
+
+function buildPlaybackDiagnostics(logs: HlsLogEntry[]): PlaybackDiagnostics {
+  const chronologicalLogs = [...logs].reverse();
+  const fragments = new Map<string, FragmentDiagnostic>();
+  const findings: DiagnosticFinding[] = [];
+  let manifestLoads = 0;
+  let manifestErrors = 0;
+  let chunkErrors = 0;
+  let bufferedFragments = 0;
+  let changedFragments = 0;
+  let eosSeen = false;
+  let stallSignals = 0;
+  let discontinuitySignals = 0;
+  let timelineActivitySignals = 0;
+  let timelineIssueSignals = 0;
+  let lipsyncSignals = 0;
+  let lastFatalError: HlsLogEntry | undefined;
+
+  for (const entry of chronologicalLogs) {
+    const event = entry.event.toLowerCase();
+    const detail = entry.details.toLowerCase();
+    const combined = `${event} ${detail}`;
+
+    if (entry.event === "hlsManifestLoaded" || entry.event === "hlsManifestParsed") {
+      manifestLoads += 1;
+    }
+    if (entry.event === "hlsError" && (detail.includes("manifest") || detail.includes("level"))) {
+      manifestErrors += 1;
+    }
+    if (entry.event === "hlsError" && (detail.includes("frag") || detail.includes("chunk") || detail.includes("segment"))) {
+      chunkErrors += 1;
+    }
+    if (entry.level === "error") {
+      lastFatalError = entry;
+    }
+    if (combined.includes("buffer_stalled_error") || combined.includes("stall") || combined.includes("waiting for buffer")) {
+      stallSignals += 1;
+    }
+    const hasTimelineActivity =
+      combined.includes("pts") ||
+      combined.includes("dts") ||
+      combined.includes("drift") ||
+      combined.includes("timestamp") ||
+      combined.includes(" cc [");
+    const hasTimelineIssue =
+      combined.includes("discontinuity") ||
+      combined.includes("gap") ||
+      combined.includes("hole") ||
+      combined.includes("overlap") ||
+      combined.includes("invalid") ||
+      combined.includes("negative") ||
+      combined.includes("non-monotonic") ||
+      combined.includes("out of order") ||
+      combined.includes("append error") ||
+      combined.includes("buffer append error") ||
+      combined.includes("drift too") ||
+      combined.includes("drift exceeded");
+
+    if (combined.includes("discontinuity")) {
+      discontinuitySignals += 1;
+    }
+    if (hasTimelineActivity) {
+      timelineActivitySignals += 1;
+    }
+    if (hasTimelineActivity && hasTimelineIssue) {
+      timelineIssueSignals += 1;
+    }
+    if (combined.includes("lipsync") || combined.includes("lip sync") || combined.includes("audio/video")) {
+      lipsyncSignals += 1;
+    }
+    if (
+      combined.includes("endofstream") ||
+      combined.includes("media source ended") ||
+      combined.includes("buffer reached eos") ||
+      entry.event === "hlsBufferEos"
+    ) {
+      eosSeen = true;
+    }
+
+    const sn = entry.fragmentTiming?.sn ?? readDetailValue(entry.details, "sn");
+    if (sn) {
+      const fragmentStreams = expandFragmentTimings(entry, sn);
+      for (const fragmentStream of fragmentStreams) {
+        const current = fragments.get(fragmentStream.key) ?? {
+          ...fragmentStream,
+          loaded: false,
+          buffered: false,
+          changed: false,
+          error: false,
+        };
+        current.duration = current.duration ?? fragmentStream.duration;
+        current.start = current.start ?? fragmentStream.start;
+        current.fragStartPts = current.fragStartPts ?? fragmentStream.fragStartPts;
+        current.fragEndPts = current.fragEndPts ?? fragmentStream.fragEndPts;
+        current.esStartPts = current.esStartPts ?? fragmentStream.esStartPts;
+        current.esEndPts = current.esEndPts ?? fragmentStream.esEndPts;
+        current.esStartDts = current.esStartDts ?? fragmentStream.esStartDts;
+        current.esEndDts = current.esEndDts ?? fragmentStream.esEndDts;
+        current.url = current.url ?? fragmentStream.url;
+        current.loaded = current.loaded || entry.event === "hlsFragLoaded";
+        current.buffered = current.buffered || entry.event === "hlsFragBuffered";
+        current.changed = current.changed || entry.event === "hlsFragChanged";
+        current.error = current.error || entry.event === "hlsError";
+        fragments.set(fragmentStream.key, current);
+      }
+    }
+
+    const responseCode = Number(readDetailValue(entry.details, "code"));
+    if (Number.isFinite(responseCode) && responseCode >= 400) {
+      findings.push({
+        id: `${entry.id}-http`,
+        title: `HTTP ${responseCode}`,
+        detail: entry.details,
+        status: "error",
+      });
+    }
+  }
+
+  bufferedFragments = [...fragments.values()].filter((fragment) => fragment.buffered).length;
+  changedFragments = [...fragments.values()].filter((fragment) => fragment.changed).length;
+
+  if (manifestErrors > 0) {
+    findings.push({
+      id: "manifest-errors",
+      title: "Manifest load/parsing errors",
+      detail: `${manifestErrors} manifest or level error signal(s) found.`,
+      status: "error",
+    });
+  }
+  if (chunkErrors > 0) {
+    findings.push({
+      id: "chunk-errors",
+      title: "Chunk download errors",
+      detail: `${chunkErrors} fragment/chunk error signal(s) found.`,
+      status: "error",
+    });
+  }
+  if (stallSignals > 0) {
+    findings.push({
+      id: "buffer-stalls",
+      title: "Buffer pressure",
+      detail: `${stallSignals} stall or buffer-wait signal(s) found.`,
+      status: "warning",
+    });
+  }
+  if (discontinuitySignals > 0) {
+    findings.push({
+      id: "discontinuities",
+      title: "Discontinuity signals",
+      detail: `${discontinuitySignals} continuity/discontinuity marker(s) found in events or logs.`,
+      status: "warning",
+    });
+  }
+  if (timelineIssueSignals > 0) {
+    findings.push({
+      id: "pts-dts",
+      title: "Timeline/PTS-DTS issue",
+      detail: `${timelineIssueSignals} timeline issue signal(s) found near timestamp, PTS, DTS or drift logs.`,
+      status: "warning",
+    });
+  }
+  if (lipsyncSignals > 0) {
+    findings.push({
+      id: "lipsync",
+      title: "Audio/video sync signals",
+      detail: `${lipsyncSignals} lipsync or audio/video sync signal(s) found.`,
+      status: "warning",
+    });
+  }
+  if (lastFatalError) {
+    findings.push({
+      id: "last-fatal",
+      title: "Last fatal/error log",
+      detail: lastFatalError.details || lastFatalError.event,
+      status: "error",
+    });
+  }
+
+  const cards: DiagnosticCard[] = [
+    {
+      label: "Manifest",
+      value: manifestErrors > 0 ? `${manifestErrors} issue(s)` : manifestLoads > 0 ? "Loaded" : "Waiting",
+      caption: manifestLoads > 0 ? `${manifestLoads} manifest event(s)` : "No manifest event yet",
+      status: manifestErrors > 0 ? "error" : manifestLoads > 0 ? "ok" : "idle",
+    },
+    {
+      label: "Chunks",
+      value: chunkErrors > 0 ? `${chunkErrors} failed` : `${bufferedFragments} buffered`,
+      caption: `${fragments.size} fragment(s) observed`,
+      status: chunkErrors > 0 ? "error" : bufferedFragments > 0 ? "ok" : "idle",
+    },
+    {
+      label: "Buffer",
+      value: stallSignals > 0 ? `${stallSignals} stall(s)` : eosSeen ? "EOS" : "Active",
+      caption: eosSeen ? "MediaSource reached end" : `${changedFragments} playback fragment change(s)`,
+      status: stallSignals > 0 ? "warning" : "ok",
+    },
+    {
+      label: "Timeline",
+      value: timelineIssueSignals + discontinuitySignals > 0 ? `${timelineIssueSignals + discontinuitySignals} issue(s)` : "Normal",
+      caption:
+        timelineActivitySignals > 0
+          ? `${timelineActivitySignals} timestamp/PTS/DTS activity log(s)`
+          : "No timing activity yet",
+      status: timelineIssueSignals + discontinuitySignals > 0 ? "warning" : "ok",
+    },
+    {
+      label: "A/V Sync",
+      value: lipsyncSignals > 0 ? `${lipsyncSignals} signal(s)` : "No signal",
+      caption: "Explicit lipsync/audio-video hints",
+      status: lipsyncSignals > 0 ? "warning" : "ok",
+    },
+  ];
+
+  const sortedFragments = [...fragments.values()].sort(
+    (a, b) => trackSortValue(a.trackType) - trackSortValue(b.trackType) || Number(a.sn) - Number(b.sn),
+  );
+  for (const trackType of ["video", "audio", "subtitle", "unknown"] as const) {
+    const trackFragments = sortedFragments
+      .filter((fragment) => fragment.trackType === trackType)
+      .sort((a, b) => Number(a.sn) - Number(b.sn));
+    for (let index = 1; index < trackFragments.length; index += 1) {
+      const previousEndPts = Number(getComparableEndPts(trackFragments[index - 1]));
+      const currentStartPts = Number(getComparableStartPts(trackFragments[index]));
+      if (Number.isFinite(previousEndPts) && Number.isFinite(currentStartPts)) {
+        trackFragments[index].ptsDeltaFromPrevious = currentStartPts - previousEndPts;
+      }
+    }
+  }
+
+  const videoBySn = new Map(
+    sortedFragments
+      .filter((fragment) => fragment.trackType === "video")
+      .map((fragment) => [fragment.sn, fragment]),
+  );
+  for (const audioFragment of sortedFragments.filter((fragment) => fragment.trackType === "audio")) {
+    const videoFragment = videoBySn.get(audioFragment.sn);
+    const audioStartPts = Number(getComparableStartPts(audioFragment));
+    const videoStartPts = Number(videoFragment ? getComparableStartPts(videoFragment) : undefined);
+    if (Number.isFinite(audioStartPts) && Number.isFinite(videoStartPts)) {
+      audioFragment.avDeltaFromVideo = audioStartPts - videoStartPts;
+    }
+  }
+
+  const recentFragments = sortedFragments.slice(-36);
+  const fragmentGroups = [
+    { label: "Video PTS", trackType: "video" as const, fragments: recentFragments.filter((fragment) => fragment.trackType === "video") },
+    { label: "Audio PTS", trackType: "audio" as const, fragments: recentFragments.filter((fragment) => fragment.trackType === "audio") },
+    { label: "Other PTS", trackType: "unknown" as const, fragments: recentFragments.filter((fragment) => fragment.trackType !== "video" && fragment.trackType !== "audio") },
+  ].filter((group) => group.fragments.length > 0);
+
+  return {
+    cards,
+    findings: findings.slice(-8).reverse(),
+    fragments: recentFragments,
+    fragmentGroups,
+  };
+}
+
+function readDetailValue(details: string, key: string): string | undefined {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`${escapedKey}=([^|]+)`).exec(details);
+  return match?.[1]?.trim();
+}
+
+function expandFragmentTimings(
+  entry: HlsLogEntry,
+  sn: string,
+): Array<Omit<FragmentDiagnostic, "loaded" | "buffered" | "changed" | "error">> {
+  const timing = entry.fragmentTiming;
+  const base = {
+    sn,
+    duration: timing?.duration ?? readDetailValue(entry.details, "duration"),
+    start: timing?.start,
+    fragStartPts: timing?.fragStartPts,
+    fragEndPts: timing?.fragEndPts,
+    url: timing?.url ?? readDetailValue(entry.details, "fragUrl"),
+  };
+  const streams = timing?.elementaryStreams;
+  const expanded: Array<Omit<FragmentDiagnostic, "loaded" | "buffered" | "changed" | "error">> = [];
+
+  if (streams?.video) {
+    expanded.push(createFragmentDiagnosticBase(sn, "video", base, streams.video));
+  }
+  if (streams?.audio) {
+    expanded.push(createFragmentDiagnosticBase(sn, "audio", base, streams.audio));
+  }
+  if (streams?.audiovideo) {
+    expanded.push(createFragmentDiagnosticBase(sn, "video", base, streams.audiovideo));
+  }
+
+  if (expanded.length > 0) {
+    return expanded;
+  }
+
+  const fallbackTrackType = timing?.trackType ?? "unknown";
+  return [
+    {
+      key: `${fallbackTrackType}:${sn}`,
+      trackType: fallbackTrackType,
+      ...base,
+    },
+  ];
+}
+
+function createFragmentDiagnosticBase(
+  sn: string,
+  trackType: FragmentDiagnostic["trackType"],
+  base: Pick<FragmentDiagnostic, "sn" | "duration" | "start" | "fragStartPts" | "fragEndPts" | "url">,
+  stream: ElementaryStreamTiming,
+): Omit<FragmentDiagnostic, "loaded" | "buffered" | "changed" | "error"> {
+  return {
+    ...base,
+    key: `${trackType}:${sn}`,
+    trackType,
+    esStartPts: stream.startPts,
+    esEndPts: stream.endPts,
+    esStartDts: stream.startDts,
+    esEndDts: stream.endDts,
+  };
+}
+
+function diagnosticStatusClass(status: DiagnosticStatus): string {
+  if (status === "error") return "border-rose-200 bg-rose-50 text-rose-800";
+  if (status === "warning") return "border-amber-200 bg-amber-50 text-amber-800";
+  if (status === "ok") return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  return "border-kael-border bg-kael-panelSoft text-kael-muted";
+}
+
+function fragmentStatusClass(fragment: FragmentDiagnostic): string {
+  if (fragment.error) return "border-rose-300 bg-rose-500";
+  if (fragment.changed) return "border-blue-300 bg-blue-500";
+  if (fragment.buffered) return "border-emerald-300 bg-emerald-500";
+  if (fragment.loaded) return "border-amber-300 bg-amber-400";
+  return "border-zinc-300 bg-zinc-300";
+}
+
+function trackSortValue(trackType: FragmentDiagnostic["trackType"]): number {
+  if (trackType === "video") return 0;
+  if (trackType === "audio") return 1;
+  if (trackType === "subtitle") return 2;
+  return 3;
+}
+
+function formatRange(start?: string, end?: string): string | undefined {
+  if (start && end) return `${start} -> ${end}`;
+  return start ?? end;
+}
+
+function getComparableStartPts(fragment: FragmentDiagnostic): string | undefined {
+  return fragment.esStartPts ?? fragment.fragStartPts;
+}
+
+function getComparableEndPts(fragment: FragmentDiagnostic): string | undefined {
+  return fragment.esEndPts ?? fragment.fragEndPts;
+}
+
+function formatPtsDelta(delta?: number): string {
+  if (delta == null) return "prev n/a";
+  const normalized = Math.abs(delta) < 0.001 ? 0 : delta;
+  if (normalized === 0) return "prev +0.000s";
+  return normalized > 0 ? `gap +${normalized.toFixed(3)}s` : `overlap ${normalized.toFixed(3)}s`;
+}
+
+function ptsDeltaClass(delta?: number): string {
+  if (delta == null || Math.abs(delta) < 0.05) return "text-kael-muted";
+  return delta > 0 ? "text-amber-700" : "text-rose-700";
+}
+
+function formatAvDelta(delta?: number): string {
+  if (delta == null) return "A/V n/a";
+  const normalized = Math.abs(delta) < 0.001 ? 0 : delta;
+  if (normalized === 0) return "A/V +0.000s";
+  return normalized > 0 ? `A/V audio +${normalized.toFixed(3)}s` : `A/V audio ${normalized.toFixed(3)}s`;
 }
 
 function ClapprHlsPlayer(props: {
@@ -166,7 +687,12 @@ function ClapprHlsPlayer(props: {
               eventName,
               callback: (_event: unknown, data: unknown) => {
                 const formatted = formatHlsEventData(data);
-                props.onHlsLog({ event: eventName, level: formatted.level, details: formatted.details });
+                props.onHlsLog({
+                  event: eventName,
+                  level: formatted.level,
+                  details: formatted.details,
+                  fragmentTiming: formatted.fragmentTiming,
+                });
               },
             }))
           : [],
@@ -210,6 +736,8 @@ export function StreamPlaygroundPage(): JSX.Element {
     }
     return stream.data?.servingUrl ?? "";
   }, [activeSourceUrl, stream.data?.servingUrl]);
+
+  const diagnostics = useMemo(() => buildPlaybackDiagnostics(hlsLogs), [hlsLogs]);
 
   useEffect(() => {
     if (!sourceUrl && stream.data?.servingUrl) {
@@ -299,6 +827,146 @@ export function StreamPlaygroundPage(): JSX.Element {
           </div>
         </div>
       </Panel>
+
+      {hlsDebug && (
+        <Panel title="Playback Diagnostics">
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              {diagnostics.cards.map((card) => (
+                <div
+                  key={card.label}
+                  className={[
+                    "min-w-0 rounded-2xl border p-3",
+                    diagnosticStatusClass(card.status),
+                  ].join(" ")}
+                >
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] opacity-80">{card.label}</p>
+                  <p className="mt-2 truncate text-xl font-semibold">{card.value}</p>
+                  <p className="mt-1 truncate text-xs opacity-75">{card.caption}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-2xl border border-kael-border bg-kael-panelSoft p-3">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kael-muted">Fragment Timeline</p>
+                <div className="flex flex-wrap gap-2 text-[11px] text-kael-muted">
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" /> loaded</span>
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> buffered</span>
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-500" /> playing</span>
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" /> error</span>
+                </div>
+              </div>
+              {diagnostics.fragmentGroups.length === 0 ? (
+                <p className="mt-3 text-sm text-kael-muted">No fragment activity captured yet.</p>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {diagnostics.fragmentGroups.map((group) => (
+                    <div key={group.trackType} className="min-w-0">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-kael-muted">{group.label}</p>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-6 xl:grid-cols-9">
+                        {group.fragments.map((fragment) => (
+                          <div
+                            key={fragment.key}
+                            className="min-w-0 rounded-xl border border-kael-border bg-white p-2"
+                            title={fragment.url}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate text-xs font-semibold text-kael-text">
+                                {fragment.trackType} sn {fragment.sn}
+                              </span>
+                              <span className={["h-2.5 w-2.5 shrink-0 rounded-full border", fragmentStatusClass(fragment)].join(" ")} />
+                            </div>
+                            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-100">
+                              <div
+                                className={[
+                                  "h-full rounded-full",
+                                  fragment.error
+                                    ? "bg-rose-500"
+                                    : fragment.changed
+                                      ? "bg-blue-500"
+                                      : fragment.buffered
+                                        ? "bg-emerald-500"
+                                        : "bg-amber-400",
+                                ].join(" ")}
+                                style={{ width: fragment.buffered || fragment.changed ? "100%" : fragment.loaded ? "62%" : "28%" }}
+                              />
+                            </div>
+                            <div className="mt-1 space-y-0.5 text-[11px] text-kael-muted">
+                              <p className="truncate">
+                                {fragment.start ? `start ${fragment.start}s` : "start n/a"}
+                                {fragment.duration ? ` | dur ${fragment.duration}s` : ""}
+                              </p>
+                              <p className="truncate font-mono text-kael-text">
+                                frag PTS {formatRange(fragment.fragStartPts, fragment.fragEndPts) ?? "n/a"}
+                              </p>
+                              <p className="truncate font-mono text-kael-text">
+                                ES PTS {formatRange(fragment.esStartPts, fragment.esEndPts) ?? "n/a"}
+                              </p>
+                              <p className={["truncate font-mono", ptsDeltaClass(fragment.ptsDeltaFromPrevious)].join(" ")}>
+                                {formatPtsDelta(fragment.ptsDeltaFromPrevious)}
+                              </p>
+                              {fragment.trackType === "audio" && (
+                                <p className={["truncate font-mono", ptsDeltaClass(fragment.avDeltaFromVideo)].join(" ")}>
+                                  {formatAvDelta(fragment.avDeltaFromVideo)}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,360px)]">
+              <div className="rounded-2xl border border-kael-border bg-white p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kael-muted">Findings</p>
+                {diagnostics.findings.length === 0 ? (
+                  <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                    No manifest, chunk, buffer, discontinuity, PTS/DTS or sync issue detected in captured logs.
+                  </div>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    {diagnostics.findings.map((finding) => (
+                      <div
+                        key={finding.id}
+                        className={[
+                          "rounded-xl border px-3 py-2",
+                          diagnosticStatusClass(finding.status),
+                        ].join(" ")}
+                      >
+                        <p className="text-sm font-semibold">{finding.title}</p>
+                        <p className="mt-1 line-clamp-2 text-xs opacity-80">{finding.detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-kael-border bg-white p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kael-muted">Readout</p>
+                <dl className="mt-3 space-y-2 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-kael-muted">Raw lines</dt>
+                    <dd className="font-mono text-kael-text">{hlsLogs.length}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-kael-muted">Fragments</dt>
+                    <dd className="font-mono text-kael-text">{diagnostics.fragments.length}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-kael-muted">Issues</dt>
+                    <dd className="font-mono text-kael-text">{diagnostics.findings.length}</dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </Panel>
+      )}
 
       {hlsDebug && (
         <Panel title="hls.js Logs">

@@ -44,6 +44,10 @@ Resumo:
 - O player captura eventos hls.js via `customListeners` do `@clappr/hlsjs-playback`, incluindo attach, manifest, level, fragment e error events.
 - O `hlsjsConfig.debug` agora recebe um logger customizado para renderizar tambem os logs internos `debug/log/info/warn/error` do hls.js.
 - O painel mantem logs em ordem newest-first e registra a recriacao do player ao ativar debug.
+- Adicionado painel visual de diagnostico com cards de manifest/chunks/buffer/timeline/A-V sync, timeline de fragmentos e findings para erros de manifesto, chunks, buffer, discontinuity e PTS/DTS.
+- O card de timeline separa atividade normal de PTS/DTS/timestamp de issues reais para evitar falso positivo visual.
+- Os cards de chunks exibem start/duration, range PTS e gap/overlap em relacao ao `endPTS` do chunk anterior, sem poluir a tabela de logs brutos.
+- A timeline de chunks extrai `frag.elementaryStreams` quando disponivel, exibindo PTS do fragmento e PTS de elementary stream para video/audio, alem do delta A/V do audio contra o video do mesmo `sn`.
 
 Arquivos-chave:
 - `ui/src/pages/StreamPlaygroundPage.tsx`
