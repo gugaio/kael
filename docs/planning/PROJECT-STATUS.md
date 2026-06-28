@@ -37,6 +37,28 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-06-27 - Stream playground: painel de logs hls.js
+
+Resumo:
+- O toggle `hls.js debug` agora exibe um painel de logs no playground.
+- O player captura eventos hls.js via `customListeners` do `@clappr/hlsjs-playback`, incluindo attach, manifest, level, fragment e error events.
+- O `hlsjsConfig.debug` agora recebe um logger customizado para renderizar tambem os logs internos `debug/log/info/warn/error` do hls.js.
+- O painel mantem logs em ordem newest-first e registra a recriacao do player ao ativar debug.
+
+Arquivos-chave:
+- `ui/src/pages/StreamPlaygroundPage.tsx`
+- `ui/src/types/clappr.d.ts`
+
+Checklist de validacao:
+- [x] `cd ui && npm run build`
+- [x] `npm run check`
+
+Pendencias:
+- Nenhuma conhecida.
+
+Proximo passo recomendado:
+- Testar com stream real e ajustar a lista de eventos capturados conforme o diagnostico mais util.
+
 ### 2026-06-27 - Bootstrap: npm install volta a buildar VHS local
 
 Resumo:

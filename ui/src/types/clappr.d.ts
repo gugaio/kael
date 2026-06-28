@@ -11,7 +11,7 @@ declare module "@clappr/player" {
       preload?: boolean;
       customListeners?: Array<{
         eventName: string;
-        callback: (event: string, data: unknown) => void;
+        callback: (event: unknown, data: unknown) => void;
         once?: boolean;
       }>;
     };

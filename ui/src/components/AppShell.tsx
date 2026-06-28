@@ -7,9 +7,9 @@ import { useLiveEvents } from "../lib/live-events";
 const navItems = [
   { to: "/", label: "Ops" },
   { to: "/chat", label: "Chat" },
+  { to: "/streams", label: "Streams" },
   { to: "/plans", label: "Plans" },
   { to: "/jobs", label: "Jobs" },
-  { to: "/streams", label: "Streams" },
   { to: "/exec", label: "Execuções" },
   { to: "/schedules", label: "Schedules" },
   { to: "/health", label: "Health" },
@@ -18,7 +18,7 @@ const navItems = [
 export function AppShell(props: { children: ReactNode }): JSX.Element {
   const location = useLocation();
   const queryClient = useQueryClient();
-  const live = useLiveEvents();
+  useLiveEvents();
   const approvals = useQuery({
     queryKey: ["exec-approvals-open"],
     queryFn: () => getExecApprovals("open"),
@@ -49,17 +49,6 @@ export function AppShell(props: { children: ReactNode }): JSX.Element {
     <div className="dashboard-grid min-h-screen md:p-5">
       <div className="relative min-h-[calc(100vh-24px)] w-full">
         <aside className="rounded-[32px] border border-kael-border bg-kael-panel p-4 shadow-shell lg:fixed lg:left-5 lg:top-5 lg:h-[calc(100vh-40px)] lg:w-[280px] lg:overflow-y-auto">
-          <div className="border-b border-kael-border pb-4">
-            <p className="text-xs uppercase tracking-[0.28em] text-kael-muted">Kael Dashboard</p>
-          </div>
-
-          <div className="mt-4 rounded-[24px] border border-kael-border bg-kael-panelSoft p-4">
-            <p className="text-xs uppercase tracking-[0.22em] text-kael-muted">Realtime</p>
-            <p className="mt-2 text-lg font-semibold text-kael-text">{live.mode}</p>
-            <p className="mt-1 text-xs text-kael-muted">
-              {live.lastEventAt ? `Ultimo evento ${new Date(live.lastEventAt).toLocaleTimeString()}` : "Sem eventos recentes"}
-            </p>
-          </div>
 
           <nav className="mt-4 flex flex-col gap-2">
             {navItems.map((item) => (
@@ -103,18 +92,6 @@ export function AppShell(props: { children: ReactNode }): JSX.Element {
                 <p className="mt-2 max-w-2xl text-sm text-kael-muted">
                   Navegacao lateral persistente e area principal dedicada ao contexto ativo da operacao.
                 </p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[360px]">
-                <div className="rounded-2xl border border-kael-border bg-kael-panelSoft px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.2em] text-kael-muted">Modo</p>
-                  <p className="mt-1 text-base font-semibold text-kael-text">{live.mode}</p>
-                </div>
-                <div className="rounded-2xl border border-kael-border bg-kael-panelSoft px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.2em] text-kael-muted">Ultimo evento</p>
-                  <p className="mt-1 text-base font-semibold text-kael-text">
-                    {live.lastEventAt ? new Date(live.lastEventAt).toLocaleTimeString() : "-"}
-                  </p>
-                </div>
               </div>
             </div>
           </header>
