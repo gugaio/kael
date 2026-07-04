@@ -14,6 +14,7 @@ type HlsLogEntry = {
   level: "info" | "warning" | "error";
   details: string;
   fragmentTiming?: FragmentTiming;
+  requestError?: RequestErrorTiming;
 };
 
 type HlsLoggerLevel = "trace" | "debug" | "log" | "info" | "warn" | "error";
@@ -70,6 +71,17 @@ type DiagnosticFinding = {
   status: Exclude<DiagnosticStatus, "idle">;
 };
 
+type RequestErrorDiagnostic = {
+  id: string;
+  at: string;
+  category: "manifest" | "chunk" | "level" | "other";
+  httpCode?: string;
+  httpText?: string;
+  details?: string;
+  url?: string;
+  fatal: boolean;
+};
+
 type FragmentDiagnostic = {
   key: string;
   sn: string;
@@ -102,6 +114,8 @@ type FragmentTiming = {
   elementaryStreams?: Partial<Record<"audio" | "video" | "audiovideo", ElementaryStreamTiming>>;
 };
 
+type RequestErrorTiming = Omit<RequestErrorDiagnostic, "id" | "at">;
+
 type ElementaryStreamTiming = {
   startPts?: string;
   endPts?: string;
@@ -112,6 +126,7 @@ type ElementaryStreamTiming = {
 type PlaybackDiagnostics = {
   cards: DiagnosticCard[];
   findings: DiagnosticFinding[];
+  requestErrors: RequestErrorDiagnostic[];
   fragments: FragmentDiagnostic[];
   fragmentGroups: Array<{
     label: string;
@@ -124,6 +139,7 @@ function formatHlsEventData(data: unknown): {
   level: HlsLogEntry["level"];
   details: string;
   fragmentTiming?: FragmentTiming;
+  requestError?: RequestErrorTiming;
 } {
   if (!data || typeof data !== "object") {
     return { level: "info", details: data == null ? "" : String(data) };
@@ -133,6 +149,7 @@ function formatHlsEventData(data: unknown): {
   const details: string[] = [];
   const level = record.fatal === true ? "error" : record.type === "networkError" ? "warning" : "info";
   let fragmentTiming: FragmentTiming | undefined;
+  const requestError = readRequestError(record);
 
   appendValue(details, "url", record.url);
   appendValue(details, "type", record.type);
@@ -174,7 +191,7 @@ function formatHlsEventData(data: unknown): {
     appendValue(details, "total", statsRecord.total);
   }
 
-  return { level, details: details.length > 0 ? details.join(" | ") : compactJson(record), fragmentTiming };
+  return { level, details: details.length > 0 ? details.join(" | ") : compactJson(record), fragmentTiming, requestError };
 }
 
 function appendValue(details: string[], label: string, value: unknown): void {
@@ -242,6 +259,41 @@ function readElementaryStreams(value: unknown): FragmentTiming["elementaryStream
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+function readRequestError(record: Record<string, unknown>): RequestErrorTiming | undefined {
+  if (record.type !== "networkError" && record.fatal !== true) {
+    return undefined;
+  }
+  const details = formatOptionalValue(record.details);
+  const category = classifyRequestError(details, formatOptionalValue(record.url));
+  const response = record.response && typeof record.response === "object"
+    ? record.response as Record<string, unknown>
+    : undefined;
+  const httpCode = formatOptionalValue(response?.code);
+  const httpText = formatOptionalValue(response?.text);
+  const url = formatOptionalValue(response?.url) ?? formatOptionalValue(record.url);
+  if (!details && !httpCode && !url) {
+    return undefined;
+  }
+  return {
+    category,
+    httpCode,
+    httpText,
+    details,
+    url,
+    fatal: record.fatal === true,
+  };
+}
+
+function classifyRequestError(details?: string, url?: string): RequestErrorDiagnostic["category"] {
+  const value = `${details ?? ""} ${url ?? ""}`.toLowerCase();
+  if (value.includes("manifest")) return "manifest";
+  if (value.includes("level")) return "level";
+  if (value.includes("frag") || value.includes("chunk") || value.includes("segment") || value.includes(".ts") || value.includes(".m4s")) {
+    return "chunk";
+  }
+  return "other";
+}
+
 function formatLoggerArgs(args: unknown[]): string {
   return args.map(formatLoggerValue).join(" ");
 }
@@ -279,6 +331,7 @@ function buildPlaybackDiagnostics(logs: HlsLogEntry[]): PlaybackDiagnostics {
   const chronologicalLogs = [...logs].reverse();
   const fragments = new Map<string, FragmentDiagnostic>();
   const findings: DiagnosticFinding[] = [];
+  const requestErrors: RequestErrorDiagnostic[] = [];
   let manifestLoads = 0;
   let manifestErrors = 0;
   let chunkErrors = 0;
@@ -308,6 +361,13 @@ function buildPlaybackDiagnostics(logs: HlsLogEntry[]): PlaybackDiagnostics {
     }
     if (entry.level === "error") {
       lastFatalError = entry;
+    }
+    if (entry.requestError) {
+      requestErrors.push({
+        ...entry.requestError,
+        id: String(entry.id),
+        at: entry.at,
+      });
     }
     if (combined.includes("buffer_stalled_error") || combined.includes("stall") || combined.includes("waiting for buffer")) {
       stallSignals += 1;
@@ -518,16 +578,22 @@ function buildPlaybackDiagnostics(logs: HlsLogEntry[]): PlaybackDiagnostics {
     }
   }
 
-  const recentFragments = sortedFragments.slice(-36);
+  const videoFragments = sortedFragments.filter((fragment) => fragment.trackType === "video").slice(-12);
+  const audioFragments = sortedFragments.filter((fragment) => fragment.trackType === "audio").slice(-12);
+  const otherFragments = sortedFragments
+    .filter((fragment) => fragment.trackType !== "video" && fragment.trackType !== "audio")
+    .slice(-12);
+  const recentFragments = [...videoFragments, ...audioFragments, ...otherFragments];
   const fragmentGroups = [
-    { label: "Video PTS", trackType: "video" as const, fragments: recentFragments.filter((fragment) => fragment.trackType === "video") },
-    { label: "Audio PTS", trackType: "audio" as const, fragments: recentFragments.filter((fragment) => fragment.trackType === "audio") },
-    { label: "Other PTS", trackType: "unknown" as const, fragments: recentFragments.filter((fragment) => fragment.trackType !== "video" && fragment.trackType !== "audio") },
+    { label: "Video PTS", trackType: "video" as const, fragments: videoFragments },
+    { label: "Audio PTS", trackType: "audio" as const, fragments: audioFragments },
+    { label: "Other PTS", trackType: "unknown" as const, fragments: otherFragments },
   ].filter((group) => group.fragments.length > 0);
 
   return {
     cards,
     findings: findings.slice(-8).reverse(),
+    requestErrors: requestErrors.slice(-20).reverse(),
     fragments: recentFragments,
     fragmentGroups,
   };
@@ -650,6 +716,11 @@ function formatAvDelta(delta?: number): string {
   return normalized > 0 ? `A/V audio +${normalized.toFixed(3)}s` : `A/V audio ${normalized.toFixed(3)}s`;
 }
 
+function formatLogsForClipboard(logs: HlsLogEntry[]): string {
+  const rows = logs.map((entry) => [entry.at, entry.level, entry.event, entry.details || "-"].join("\t"));
+  return ["Time\tLevel\tEvent\tDetails", ...rows].join("\n");
+}
+
 function ClapprHlsPlayer(props: {
   source: string;
   reloadKey: number;
@@ -692,6 +763,7 @@ function ClapprHlsPlayer(props: {
                   level: formatted.level,
                   details: formatted.details,
                   fragmentTiming: formatted.fragmentTiming,
+                  requestError: formatted.requestError,
                 });
               },
             }))
@@ -723,6 +795,7 @@ export function StreamPlaygroundPage(): JSX.Element {
   const [reloadKey, setReloadKey] = useState(0);
   const [hlsDebug, setHlsDebug] = useState(false);
   const [hlsLogs, setHlsLogs] = useState<HlsLogEntry[]>([]);
+  const [copyLogsStatus, setCopyLogsStatus] = useState<"idle" | "copied" | "failed">("idle");
 
   const stream = useQuery({
     queryKey: ["stream", originId],
@@ -757,6 +830,7 @@ export function StreamPlaygroundPage(): JSX.Element {
   };
 
   const addHlsLog = useCallback((entry: Omit<HlsLogEntry, "id" | "at">): void => {
+    setCopyLogsStatus("idle");
     setHlsLogs((current) => [
       {
         ...entry,
@@ -766,6 +840,16 @@ export function StreamPlaygroundPage(): JSX.Element {
       ...current,
     ].slice(0, 300));
   }, []);
+
+  const copyHlsLogs = async (): Promise<void> => {
+    const text = formatLogsForClipboard(hlsLogs);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyLogsStatus("copied");
+    } catch {
+      setCopyLogsStatus("failed");
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -921,6 +1005,54 @@ export function StreamPlaygroundPage(): JSX.Element {
               )}
             </div>
 
+            <div className="rounded-2xl border border-kael-border bg-white p-3">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kael-muted">Request Errors</p>
+                <div className="flex flex-wrap gap-2 text-[11px] text-kael-muted">
+                  <span>total {diagnostics.requestErrors.length}</span>
+                  <span>manifest {diagnostics.requestErrors.filter((error) => error.category === "manifest").length}</span>
+                  <span>chunks {diagnostics.requestErrors.filter((error) => error.category === "chunk").length}</span>
+                  <span>levels {diagnostics.requestErrors.filter((error) => error.category === "level").length}</span>
+                </div>
+              </div>
+              {diagnostics.requestErrors.length === 0 ? (
+                <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                  No manifest, playlist or chunk request errors captured.
+                </div>
+              ) : (
+                <div className="mt-3 max-h-[220px] overflow-auto rounded-xl border border-kael-border">
+                  <table className="w-full min-w-[760px] text-left text-xs">
+                    <thead className="sticky top-0 bg-kael-panelSoft text-kael-muted">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Time</th>
+                        <th className="px-3 py-2 font-medium">Kind</th>
+                        <th className="px-3 py-2 font-medium">HTTP</th>
+                        <th className="px-3 py-2 font-medium">Details</th>
+                        <th className="px-3 py-2 font-medium">URL</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {diagnostics.requestErrors.map((error) => (
+                        <tr key={error.id} className="border-t border-kael-border">
+                          <td className="whitespace-nowrap px-3 py-2 font-mono text-kael-muted">{error.at}</td>
+                          <td className="whitespace-nowrap px-3 py-2 font-medium text-kael-text">
+                            {error.category}{error.fatal ? " fatal" : ""}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2 font-mono text-rose-700">
+                            {error.httpCode ? `${error.httpCode}${error.httpText ? ` ${error.httpText}` : ""}` : "-"}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-kael-text">{error.details ?? "-"}</td>
+                          <td className="max-w-[420px] truncate px-3 py-2 font-mono text-kael-muted" title={error.url}>
+                            {error.url ?? "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,360px)]">
               <div className="rounded-2xl border border-kael-border bg-white p-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kael-muted">Findings</p>
@@ -973,13 +1105,36 @@ export function StreamPlaygroundPage(): JSX.Element {
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-kael-muted">{hlsLogs.length} hls.js log lines and events</p>
-              <button
-                type="button"
-                onClick={() => setHlsLogs([])}
-                className="rounded-xl border border-kael-border bg-kael-panelSoft px-3 py-1.5 text-xs font-medium text-kael-muted hover:bg-white"
-              >
-                Clear
-              </button>
+              <div className="flex items-center gap-2">
+                {copyLogsStatus !== "idle" && (
+                  <span
+                    className={[
+                      "text-xs",
+                      copyLogsStatus === "copied" ? "text-emerald-700" : "text-rose-700",
+                    ].join(" ")}
+                  >
+                    {copyLogsStatus === "copied" ? "Copied" : "Copy failed"}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void copyHlsLogs()}
+                  disabled={hlsLogs.length === 0}
+                  className="rounded-xl border border-kael-border bg-kael-panelSoft px-3 py-1.5 text-xs font-medium text-kael-muted hover:bg-white disabled:opacity-50"
+                >
+                  Copy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCopyLogsStatus("idle");
+                    setHlsLogs([]);
+                  }}
+                  className="rounded-xl border border-kael-border bg-kael-panelSoft px-3 py-1.5 text-xs font-medium text-kael-muted hover:bg-white"
+                >
+                  Clear
+                </button>
+              </div>
             </div>
             <div className="max-h-[320px] overflow-auto rounded-2xl border border-kael-border bg-zinc-950">
               {hlsLogs.length === 0 ? (

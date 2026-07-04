@@ -48,6 +48,9 @@ Resumo:
 - O card de timeline separa atividade normal de PTS/DTS/timestamp de issues reais para evitar falso positivo visual.
 - Os cards de chunks exibem start/duration, range PTS e gap/overlap em relacao ao `endPTS` do chunk anterior, sem poluir a tabela de logs brutos.
 - A timeline de chunks extrai `frag.elementaryStreams` quando disponivel, exibindo PTS do fragmento e PTS de elementary stream para video/audio, alem do delta A/V do audio contra o video do mesmo `sn`.
+- O painel de logs ganhou botao `Copy` para copiar as linhas capturadas em formato tabulado.
+- A timeline limita os cards por track separadamente para evitar que audio/unknown esconda os ultimos chunks de video.
+- Adicionado historico visual de erros de request HLS, com totais por manifesto/chunk/level e codigo HTTP quando exposto pelo hls.js.
 
 Arquivos-chave:
 - `ui/src/pages/StreamPlaygroundPage.tsx`
