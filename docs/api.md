@@ -81,6 +81,8 @@ flowchart TD
             direction LR
             API --> StreamsGET[GET /streams]
             API --> StreamsId[GET /streams/:originId]
+            API --> StreamsProbe[POST /streams/:originId/probe]
+            API --> StreamsAnalyze[POST /streams/:originId/analyze]
             API --> StreamsClone[POST /streams/clone]
             API --> StreamsServe[POST /streams/:originId/serve]
             API --> StreamsStop[POST /streams/:originId/stop]
@@ -228,8 +230,10 @@ Exemplo resumido de item em `GET /jobs`:
 |--------|------|-------------|
 | GET | /streams | List all cloned origins with serving status |
 | GET | /streams/:originId | Get detailed origin info with serving status |
+| POST | /streams/:originId/probe | Probe cloned media playlists with ffprobe-level stream checks |
+| POST | /streams/:originId/analyze | Analyze cloned chunks with ffprobe. Body: `{ full?, timeoutMs?, maxMediaPlaylists?, maxSegmentsPerPlaylist?, startSegment?, segmentCount? }` |
 | POST | /streams/clone | Clone an HLS/DASH URL. Body: `{ url, durationSeconds?, allVariants?, format? }` |
-| POST | /streams/:originId/serve | Start serving an origin as VOD HTTP |
+| POST | /streams/:originId/serve | Start serving an origin as VOD HTTP. Body: `{ host? }`, where `host: "0.0.0.0"` exposes it on the LAN |
 | POST | /streams/:originId/stop | Stop serving an origin |
 | DELETE | /streams/:originId | Stop serving, if active, and remove a cloned origin from local storage |
 

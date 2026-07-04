@@ -51,20 +51,30 @@ Resumo:
 - O painel de logs ganhou botao `Copy` para copiar as linhas capturadas em formato tabulado.
 - A timeline limita os cards por track separadamente para evitar que audio/unknown esconda os ultimos chunks de video.
 - Adicionado historico visual de erros de request HLS, com totais por manifesto/chunk/level e codigo HTTP quando exposto pelo hls.js.
+- Adicionada pagina `Stream Details` para origins clonados, com overview, variants/renditions, lista clicavel de chunks e painel lateral de dados do manifesto/chunk.
+- Expostos endpoints `POST /streams/:originId/probe` e `POST /streams/:originId/analyze` para rodar diagnostico do VHS/ffprobe sobre origins clonados; a UI dispara analise sob demanda e cruza PTS/duracao/keyframes/continuidade com o chunk selecionado.
+- O serving de cloned streams ganhou modo LAN: `POST /streams/:originId/serve` aceita `host: "0.0.0.0"` e a UI mostra botao `Serve LAN` com URL acessivel pelo IP local da maquina.
 
 Arquivos-chave:
+- `src/api/routes/streams.ts`
+- `docs/api.md`
+- `ui/src/App.tsx`
+- `ui/src/lib/api.ts`
+- `ui/src/pages/StreamsPage.tsx`
+- `ui/src/pages/StreamDetailsPage.tsx`
 - `ui/src/pages/StreamPlaygroundPage.tsx`
 - `ui/src/types/clappr.d.ts`
 
 Checklist de validacao:
 - [x] `cd ui && npm run build`
 - [x] `npm run check`
+- [x] `npx vitest run src/api/server.test.ts`
 
 Pendencias:
-- Nenhuma conhecida.
+- A analise atual do VHS ainda trata variants como stream de video principal; para chunks `.ts` muxados, o proximo incremento deve expor probe por elementary stream (`v:0` e `a:0`) no inspector.
 
 Proximo passo recomendado:
-- Testar com stream real e ajustar a lista de eventos capturados conforme o diagnostico mais util.
+- Testar com stream real e evoluir o inspector para probe sob demanda de um chunk especifico, incluindo audio/video dentro de `.ts` muxado.
 
 ### 2026-06-27 - Bootstrap: npm install volta a buildar VHS local
 

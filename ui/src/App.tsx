@@ -7,6 +7,7 @@ import { HealthPage } from "./pages/HealthPage";
 import { JobDetailPage } from "./pages/JobDetailPage";
 import { JobsPage } from "./pages/JobsPage";
 import { OpsPage } from "./pages/OpsPage";
+import { StreamDetailsPage } from "./pages/StreamDetailsPage";
 import { StreamPlaygroundPage } from "./pages/StreamPlaygroundPage";
 import { StreamsPage } from "./pages/StreamsPage";
 import { PlansPage } from "./pages/PlansPage";
@@ -27,6 +28,7 @@ export function App(): JSX.Element {
               <Route path="/jobs" element={<JobsPage />} />
               <Route path="/jobs/:jobId" element={<JobDetailPage />} />
               <Route path="/streams" element={<StreamsPage />} />
+              <Route path="/streams/:originId/details" element={<StreamDetailsPage />} />
               <Route path="/streams/:originId/playground" element={<StreamPlaygroundPage />} />
               <Route path="/exec" element={<ExecSessionsPage />} />
               <Route path="/schedules" element={<SchedulesPage />} />

@@ -467,32 +467,240 @@ export type StreamItem = {
   cumulativeDurationSeconds: number;
   segmentCount: number;
   variantCount: number;
+  renditionCount?: number;
   bytes: number;
   allVariants: boolean;
   serving: boolean;
   servingUrl: string | null;
+  networkServingUrl?: string | null;
   protocol?: string;
+  targetDuration?: number;
+  selectedUrl?: string;
+  finalUrl?: string;
+  playbackPath?: string;
+  derivedFrom?: string;
+  requestedDurationSeconds?: number;
+  requestedStartSeconds?: number;
+  requestedStartSegment?: number;
+  requestedSegmentCount?: number;
+  variants?: StreamVariant[];
+  renditions?: StreamRendition[];
+  faults?: StreamFault[];
 };
+
+export type StreamSegment = {
+  originalIndex: number;
+  sourceUri: string;
+  sourceUrl: string;
+  localUri: string;
+  duration?: number;
+  timelineStartSeconds?: number;
+  timelineEndSeconds?: number;
+  title?: string;
+  bytes: number;
+  map?: {
+    sourceUri: string;
+    sourceUrl: string;
+    localUri: string;
+    bytes: number;
+  };
+};
+
+export type StreamVariant = {
+  localUri: string;
+  manifestPath: string;
+  targetDuration: number;
+  segmentCount: number;
+  cumulativeDurationSeconds: number;
+  bytes: number;
+  variant?: {
+    bandwidth?: number;
+    averageBandwidth?: number;
+    resolution?: string;
+    frameRate?: number;
+    codecs?: string;
+    audioGroupId?: string;
+    subtitlesGroupId?: string;
+  };
+  segments: StreamSegment[];
+};
+
+export type StreamRendition = {
+  type: string;
+  groupId?: string;
+  name?: string;
+  language?: string;
+  codecs?: string;
+  channels?: string;
+  localUri: string;
+  manifestPath: string;
+  targetDuration: number;
+  segmentCount: number;
+  cumulativeDurationSeconds: number;
+  bytes: number;
+  segments: StreamSegment[];
+};
+
+export type StreamFault = {
+  type: string;
+  targetKind: string;
+  targetIndex: number;
+  segmentIndex: number;
+  description: string;
+  createdAt: string;
+};
+
+export type StreamAnalysisEntry = {
+  kind: "variant" | "rendition";
+  mediaIndex: number;
+  segmentIndex: number;
+  originalSegmentIndex?: number;
+  type: "AUDIO" | "SUBTITLES" | "VIDEO";
+  label: string;
+  localPath: string;
+  timelineStartSeconds?: number;
+  timelineEndSeconds?: number;
+  declaredDurationSeconds?: number;
+  actualDurationSeconds?: number;
+  durationDeltaSeconds?: number;
+  streamCount: number;
+  codecName?: string;
+  sampleRate?: number;
+  channels?: number;
+  packetCount?: number;
+  firstPtsTime?: number;
+  lastPtsTime?: number;
+  lastSampleDurationSeconds?: number;
+  nextExpectedPtsUs?: number;
+  nextActualPtsUs?: number;
+  nextDeltaUs?: number;
+  continuityStatus?: string;
+  boundaryDeltaSeconds?: number;
+  boundaryStatus?: string;
+  keyframeCount?: number;
+  startsWithKeyframe?: boolean;
+  maxKeyframeGapSeconds?: number;
+  ok: boolean;
+  errors: string[];
+};
+
+export type StreamAnalysisReport = {
+  originId: string;
+  ok: boolean;
+  sampledSegments: number;
+  okSegments: number;
+  failedSegments: number;
+  issues: Array<{ severity: string; code: string; summary: string; evidence: string[] }>;
+  avAlignment: {
+    status: "ok" | "warn" | "unknown";
+    comparedPairs: number;
+    maxDurationDeltaSeconds?: number;
+    maxStartPtsDeltaSeconds?: number;
+    maxTimelineDriftSeconds?: number;
+    notes: string[];
+  };
+  entries: StreamAnalysisEntry[];
+};
+
+const StreamSegmentSchema: z.ZodType<StreamSegment> = z.object({
+  originalIndex: z.number(),
+  sourceUri: z.string(),
+  sourceUrl: z.string(),
+  localUri: z.string(),
+  duration: z.number().optional(),
+  timelineStartSeconds: z.number().optional(),
+  timelineEndSeconds: z.number().optional(),
+  title: z.string().optional(),
+  bytes: z.number(),
+  map: z
+    .object({
+      sourceUri: z.string(),
+      sourceUrl: z.string(),
+      localUri: z.string(),
+      bytes: z.number(),
+    })
+    .optional(),
+});
+
+const StreamVariantSchema: z.ZodType<StreamVariant> = z.object({
+  localUri: z.string(),
+  manifestPath: z.string(),
+  targetDuration: z.number(),
+  segmentCount: z.number(),
+  cumulativeDurationSeconds: z.number(),
+  bytes: z.number(),
+  variant: z
+    .object({
+      bandwidth: z.number().optional(),
+      averageBandwidth: z.number().optional(),
+      resolution: z.string().optional(),
+      frameRate: z.number().optional(),
+      codecs: z.string().optional(),
+      audioGroupId: z.string().optional(),
+      subtitlesGroupId: z.string().optional(),
+    })
+    .optional(),
+  segments: z.array(StreamSegmentSchema),
+});
+
+const StreamRenditionSchema: z.ZodType<StreamRendition> = z.object({
+  type: z.string(),
+  groupId: z.string().optional(),
+  name: z.string().optional(),
+  language: z.string().optional(),
+  codecs: z.string().optional(),
+  channels: z.string().optional(),
+  localUri: z.string(),
+  manifestPath: z.string(),
+  targetDuration: z.number(),
+  segmentCount: z.number(),
+  cumulativeDurationSeconds: z.number(),
+  bytes: z.number(),
+  segments: z.array(StreamSegmentSchema),
+});
+
+const StreamFaultSchema: z.ZodType<StreamFault> = z.object({
+  type: z.string(),
+  targetKind: z.string(),
+  targetIndex: z.number(),
+  segmentIndex: z.number(),
+  description: z.string(),
+  createdAt: z.string(),
+});
+
+const StreamSchema: z.ZodType<StreamItem> = z.object({
+  id: z.string(),
+  createdAt: z.string(),
+  sourceUrl: z.string(),
+  cumulativeDurationSeconds: z.number(),
+  segmentCount: z.number(),
+  variantCount: z.number(),
+  renditionCount: z.number().optional(),
+  bytes: z.number(),
+  allVariants: z.boolean(),
+  serving: z.boolean(),
+  servingUrl: z.string().nullable(),
+  networkServingUrl: z.string().nullable().optional(),
+  protocol: z.string().optional(),
+  targetDuration: z.number().optional(),
+  selectedUrl: z.string().optional(),
+  finalUrl: z.string().optional(),
+  playbackPath: z.string().optional(),
+  derivedFrom: z.string().optional(),
+  requestedDurationSeconds: z.number().optional(),
+  requestedStartSeconds: z.number().optional(),
+  requestedStartSegment: z.number().optional(),
+  requestedSegmentCount: z.number().optional(),
+  variants: z.array(StreamVariantSchema).optional(),
+  renditions: z.array(StreamRenditionSchema).optional(),
+  faults: z.array(StreamFaultSchema).optional(),
+});
 
 export async function getStreams(): Promise<StreamItem[]> {
   const response = await fetch("/api/streams");
   const schema = z.object({
     ok: z.boolean(),
-    streams: z.array(
-      z.object({
-        id: z.string(),
-        createdAt: z.string(),
-        sourceUrl: z.string(),
-        cumulativeDurationSeconds: z.number(),
-        segmentCount: z.number(),
-        variantCount: z.number(),
-        bytes: z.number(),
-        allVariants: z.boolean(),
-        serving: z.boolean(),
-        servingUrl: z.string().nullable(),
-        protocol: z.string().optional(),
-      }),
-    ),
+    streams: z.array(StreamSchema),
   });
   const data = await parseJson(response, schema);
   return data.streams;
@@ -502,22 +710,85 @@ export async function getStream(originId: string): Promise<StreamItem> {
   const response = await fetch(`/api/streams/${encodeURIComponent(originId)}`);
   const schema = z.object({
     ok: z.boolean(),
-    stream: z.object({
-      id: z.string(),
-      createdAt: z.string(),
-      sourceUrl: z.string(),
-      cumulativeDurationSeconds: z.number(),
-      segmentCount: z.number(),
-      variantCount: z.number(),
-      bytes: z.number(),
-      allVariants: z.boolean(),
-      serving: z.boolean(),
-      servingUrl: z.string().nullable(),
-      protocol: z.string().optional(),
-    }),
+    stream: StreamSchema,
   });
   const data = await parseJson(response, schema);
   return data.stream;
+}
+
+export async function analyzeStream(originId: string, params?: {
+  timeoutMs?: number;
+  maxMediaPlaylists?: number;
+  maxSegmentsPerPlaylist?: number;
+  startSegment?: number;
+  segmentCount?: number;
+  full?: boolean;
+}): Promise<StreamAnalysisReport> {
+  const response = await fetch(`/api/streams/${encodeURIComponent(originId)}/analyze`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params ?? {}),
+  });
+  const entrySchema: z.ZodType<StreamAnalysisEntry> = z.object({
+    kind: z.enum(["variant", "rendition"]),
+    mediaIndex: z.number(),
+    segmentIndex: z.number(),
+    originalSegmentIndex: z.number().optional(),
+    type: z.enum(["AUDIO", "SUBTITLES", "VIDEO"]),
+    label: z.string(),
+    localPath: z.string(),
+    timelineStartSeconds: z.number().optional(),
+    timelineEndSeconds: z.number().optional(),
+    declaredDurationSeconds: z.number().optional(),
+    actualDurationSeconds: z.number().optional(),
+    durationDeltaSeconds: z.number().optional(),
+    streamCount: z.number(),
+    codecName: z.string().optional(),
+    sampleRate: z.number().optional(),
+    channels: z.number().optional(),
+    packetCount: z.number().optional(),
+    firstPtsTime: z.number().optional(),
+    lastPtsTime: z.number().optional(),
+    lastSampleDurationSeconds: z.number().optional(),
+    nextExpectedPtsUs: z.number().optional(),
+    nextActualPtsUs: z.number().optional(),
+    nextDeltaUs: z.number().optional(),
+    continuityStatus: z.string().optional(),
+    boundaryDeltaSeconds: z.number().optional(),
+    boundaryStatus: z.string().optional(),
+    keyframeCount: z.number().optional(),
+    startsWithKeyframe: z.boolean().optional(),
+    maxKeyframeGapSeconds: z.number().optional(),
+    ok: z.boolean(),
+    errors: z.array(z.string()),
+  });
+  const schema = z.object({
+    ok: z.boolean(),
+    report: z.object({
+      originId: z.string(),
+      ok: z.boolean(),
+      sampledSegments: z.number(),
+      okSegments: z.number(),
+      failedSegments: z.number(),
+      issues: z.array(z.object({
+        severity: z.string(),
+        code: z.string(),
+        summary: z.string(),
+        evidence: z.array(z.string()),
+      })),
+      avAlignment: z.object({
+        status: z.enum(["ok", "warn", "unknown"]),
+        comparedPairs: z.number(),
+        maxDurationDeltaSeconds: z.number().optional(),
+        maxStartPtsDeltaSeconds: z.number().optional(),
+        maxTimelineDriftSeconds: z.number().optional(),
+        notes: z.array(z.string()),
+      }),
+      entries: z.array(entrySchema),
+    }),
+  });
+  const data = await parseJson(response, schema);
+  return data.report;
 }
 
 export async function cloneStream(params: {
@@ -535,9 +806,21 @@ export async function cloneStream(params: {
   return parseJson(response, schema);
 }
 
-export async function serveStream(originId: string): Promise<{ serve: { playbackUrl: string } }> {
-  const response = await fetch(`/api/streams/${encodeURIComponent(originId)}/serve`, { method: "POST" });
-  const schema = z.object({ ok: z.boolean(), serve: z.object({ playbackUrl: z.string() }) });
+export async function serveStream(originId: string, params?: {
+  host?: "127.0.0.1" | "localhost" | "0.0.0.0";
+}): Promise<{ serve: { playbackUrl: string; networkPlaybackUrl?: string | null } }> {
+  const response = await fetch(`/api/streams/${encodeURIComponent(originId)}/serve`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params ?? {}),
+  });
+  const schema = z.object({
+    ok: z.boolean(),
+    serve: z.object({
+      playbackUrl: z.string(),
+      networkPlaybackUrl: z.string().nullable().optional(),
+    }),
+  });
   return parseJson(response, schema);
 }
 

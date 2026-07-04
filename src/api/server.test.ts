@@ -921,6 +921,114 @@ describe("API integration", () => {
     await server.close();
   });
 
+  it("probes and analyzes cloned streams through API", async () => {
+    const app = makeFakeApp();
+    app.streamer.probeOrigin = async (originId, options) => ({
+      originId,
+      ok: true,
+      sampledMediaPlaylists: options?.maxMediaPlaylists ?? 1,
+      totalMediaPlaylists: 1,
+      okCount: 1,
+      failedCount: 0,
+      entries: [],
+    });
+    app.streamer.analyzeOrigin = async (originId, options) => ({
+      originId,
+      ok: true,
+      sampledMediaPlaylists: 1,
+      totalMediaPlaylists: 1,
+      sampledSegments: options?.full ? 2 : 1,
+      okSegments: options?.full ? 2 : 1,
+      failedSegments: 0,
+      media: [],
+      avAlignment: {
+        status: "unknown",
+        comparedPairs: 0,
+        notes: [],
+      },
+      issues: [],
+      entries: [],
+    });
+    const server = createApiServer(app);
+
+    const probe = await server.inject({
+      method: "POST",
+      url: "/streams/origin-a/probe",
+      payload: { maxMediaPlaylists: 2 },
+    });
+    expect(probe.statusCode).toBe(200);
+    expect(probe.json()).toMatchObject({
+      ok: true,
+      report: { originId: "origin-a", sampledMediaPlaylists: 2 },
+    });
+
+    const analyze = await server.inject({
+      method: "POST",
+      url: "/streams/origin-a/analyze",
+      payload: { full: true },
+    });
+    expect(analyze.statusCode).toBe(200);
+    expect(analyze.json()).toMatchObject({
+      ok: true,
+      report: { originId: "origin-a", sampledSegments: 2 },
+    });
+    await server.close();
+  });
+
+  it("starts cloned stream serving with requested host", async () => {
+    const app = makeFakeApp();
+    let requestedHost: string | undefined;
+    app.streamer.listOrigins = async () => [
+      {
+        id: "origin-a",
+        schemaVersion: 2,
+        faults: [],
+        createdAt: "2026-06-27T00:00:00.000Z",
+        sourceUrl: "https://example.com/index.m3u8",
+        selectedUrl: "https://example.com/index.m3u8",
+        rootDir: "/tmp/origin-a",
+        playbackPath: "index.m3u8",
+        requestedDurationSeconds: 60,
+        cumulativeDurationSeconds: 60,
+        reachedTargetDuration: true,
+        targetDuration: 6,
+        segmentCount: 10,
+        variantCount: 1,
+        renditionCount: 0,
+        bytes: 1024,
+        allVariants: false,
+      },
+    ];
+    app.serveManager.serve = async (originId, options) => {
+      requestedHost = options?.host;
+      return {
+        originId,
+        playbackUrl: "http://0.0.0.0:30000/index.m3u8",
+        baseUrl: "http://0.0.0.0:30000",
+        live: false,
+      };
+    };
+    const server = createApiServer(app);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/streams/origin-a/serve",
+      payload: { host: "0.0.0.0" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(requestedHost).toBe("0.0.0.0");
+    expect(response.json()).toMatchObject({
+      ok: true,
+      serve: {
+        originId: "origin-a",
+        playbackUrl: "http://0.0.0.0:30000/index.m3u8",
+      },
+    });
+    expect(response.json().serve).toHaveProperty("networkPlaybackUrl");
+    await server.close();
+  });
+
   it("lists, reads and writes project space documents through API", async () => {
     const server = createApiServer(makeFakeApp());
 

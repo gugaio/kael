@@ -56,6 +56,13 @@ export function StreamsPage(): JSX.Element {
     },
   });
 
+  const serveLanMut = useMutation({
+    mutationFn: async (originId: string) => serveStream(originId, { host: "0.0.0.0" }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["streams"] });
+    },
+  });
+
   const stopMut = useMutation({
     mutationFn: async (originId: string) => stopStream(originId),
     onSuccess: async () => {
@@ -155,10 +162,13 @@ export function StreamsPage(): JSX.Element {
                 key={stream.id}
                 stream={stream}
                 onServe={() => serveMut.mutate(stream.id)}
+                onServeLan={() => serveLanMut.mutate(stream.id)}
                 onStop={() => stopMut.mutate(stream.id)}
                 onDelete={() => deleteMut.mutate(stream.id)}
                 onPlay={() => playMut.mutate(stream)}
+                onDetails={() => navigate(`/streams/${encodeURIComponent(stream.id)}/details`)}
                 servePending={serveMut.isPending}
+                serveLanPending={serveLanMut.isPending}
                 stopPending={stopMut.isPending}
                 deletePending={deleteMut.isPending}
                 playPending={playMut.isPending}
@@ -174,10 +184,13 @@ export function StreamsPage(): JSX.Element {
 function StreamCard(props: {
   stream: StreamItem;
   onServe: () => void;
+  onServeLan: () => void;
   onStop: () => void;
   onDelete: () => void;
   onPlay: () => void;
+  onDetails: () => void;
   servePending: boolean;
+  serveLanPending: boolean;
   stopPending: boolean;
   deletePending: boolean;
   playPending: boolean;
@@ -211,17 +224,36 @@ function StreamCard(props: {
             <span>cloned: {formatDate(stream.createdAt)}</span>
           </div>
           {stream.serving && stream.servingUrl && (
-            <a
-              href={stream.servingUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 inline-block text-xs text-kael-accent underline"
-            >
-              {stream.servingUrl}
-            </a>
+            <div className="mt-2 space-y-1 text-xs">
+              <a
+                href={stream.servingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block truncate text-kael-accent underline"
+              >
+                local: {stream.servingUrl}
+              </a>
+              {stream.networkServingUrl && (
+                <a
+                  href={stream.networkServingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block truncate text-emerald-700 underline"
+                >
+                  LAN: {stream.networkServingUrl}
+                </a>
+              )}
+            </div>
           )}
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={props.onDetails}
+            className="rounded-xl border border-kael-border bg-white px-3 py-1.5 text-xs font-medium text-kael-text hover:bg-kael-panel"
+          >
+            Details
+          </button>
           <button
             type="button"
             onClick={props.onPlay}
@@ -240,14 +272,24 @@ function StreamCard(props: {
               {props.stopPending ? "Stopping..." : "Stop"}
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={props.onServe}
-              disabled={props.servePending}
-              className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-            >
-              {props.servePending ? "Serving..." : "Serve"}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={props.onServe}
+                disabled={props.servePending || props.serveLanPending}
+                className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+              >
+                {props.servePending ? "Serving..." : "Serve"}
+              </button>
+              <button
+                type="button"
+                onClick={props.onServeLan}
+                disabled={props.servePending || props.serveLanPending}
+                className="rounded-xl border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+              >
+                {props.serveLanPending ? "Serving..." : "Serve LAN"}
+              </button>
+            </>
           )}
           <button
             type="button"
