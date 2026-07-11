@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-06-27**
+Ultima atualizacao: **2026-07-11**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,35 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-07-11 - Remove probe/inspect como job
+
+Resumo:
+- Probe deixa de ser job: removidos os builders `startProbeMedia`/`startProbeUrl` de `src/video/jobs.ts` e o handler `probe` do planner.
+- Removidos os endpoints `POST /jobs/probe` e `POST /jobs/probe-url`; a inspeccao passa a ser feita apenas de forma sincrona via tools `video_probe`/`video_hls_inspect`.
+- `EngineToolingInterface` e `tooling-factory` (real + chat-only) nao expoem mais `startProbeMedia`.
+- Comando CLI `/probe` religado para inspeccao sincrona (`videoProbe`), retornando resultado inline em vez de `jobId`.
+- Testes e2e de lifecycle de job que usavam `/jobs/probe` repontados para `/jobs/transcode`.
+- Docs `api.md` e `README.md` atualizados (endpoints e action `probe_media` removidos).
+
+Arquivos-chave:
+- `src/video/jobs.ts`
+- `src/video/planner-handlers.ts`
+- `src/agents/types.ts`
+- `src/chat/tooling-factory.ts`
+- `src/agents/simple-engine-commands.ts`
+- `src/api/routes/jobs-schedules.ts`
+- `docs/api.md`
+
+Checklist de validacao:
+- [x] `npx vitest run` das suites afetadas (jobs.e2e, server, simple-engine, pi-tools, command-router, service, turn-orchestrator, jobs/service)
+- [ ] `npm run check` (pendencia pre-existente e nao relacionada: `StreamerService.inspectOrigin` / drift do pacote `@gugaio/vhs`)
+
+Pendencias:
+- Racionalizar tambem o disparo de jobs longos direto por tool (sem planner obrigatorio) e reavaliar o heartbeat, conforme analise de arquitetura.
+
+Proximo passo recomendado:
+- Considerar expor `video_transcode`/`video_capture` como tools diretas de job para reduzir a indirecao pelo planner.
 
 ### 2026-06-27 - Stream playground: painel de logs hls.js
 

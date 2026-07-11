@@ -201,7 +201,6 @@ function makeFakeApp(): KaelApp {
       startTranscode: async () => ({ id: "j1" }),
       startConvertHls: async () => ({ id: "j2" }),
       startCaptureStream: async () => ({ id: "j3" }),
-      startProbeMedia: async () => ({ id: "j4" }),
       cancelJob: async (jobId: string) => ({
         job: { id: jobId, status: "canceled" },
         canceled: true,

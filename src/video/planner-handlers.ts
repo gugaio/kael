@@ -3,24 +3,6 @@ import type { VideoJobs } from "./jobs.js";
 
 export function createVideoPlannerHandlers(videoJobs: VideoJobs): Record<string, ActionHandler> {
   return {
-    probe: {
-      requiredInputs: ["inputPath"],
-      execute: async ({ sessionKey, inputs }) => {
-        const job = await videoJobs.startProbeMedia({
-          sessionKey,
-          inputPath: inputs.inputPath ?? "",
-        });
-        return {
-          ok: true,
-          execution: {
-            kind: "job",
-            refId: job.id,
-            status: job.status,
-            startedAt: new Date().toISOString(),
-          },
-        };
-      },
-    },
     capture: {
       requiredInputs: ["streamUrl", "outputPath"],
       execute: async ({ sessionKey, inputs }) => {

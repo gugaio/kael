@@ -32,9 +32,6 @@ function createTooling(): EngineToolingInterface {
       startCaptureStream: async () => {
         throw new Error("unused");
       },
-      startProbeMedia: async () => {
-        throw new Error("unused");
-      },
       videoHlsInspect: async () => ({ ok: true, url: "", finalUrl: "", playlistType: "unknown", variants: [], renditions: [], segments: [], errors: [] }),
       videoProbe: async () => ({ ok: true, input: "", timeoutMs: 1000, errors: [] }),
       startPlayVlc: undefined,

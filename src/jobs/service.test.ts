@@ -119,9 +119,10 @@ describe("JobService runtime controls", () => {
     const runner = new FakeRunner();
     const { video: service } = createTestJobs(store, runner, 20);
 
-    const job = await service.startProbeMedia({
+    const job = await service.startTranscode({
       sessionKey: "s1",
       inputPath: input,
+      outputPath: path.join(root, "out.mp4"),
     });
 
     await sleep(40);

@@ -195,11 +195,13 @@ async function handleVideoJobCommand(
     }
 
     const [inputPath] = parsed.args;
-    const job = await tooling.video.startProbeMedia({
+    const result = await tooling.video.videoProbe({
       sessionKey: input.sessionKey,
-      inputPath,
+      input: inputPath,
     });
-    return { reply: `Probe iniciado. jobId=${job.id}` };
+    const streams = Array.isArray(result.streams) ? result.streams.length : 0;
+    const errors = result.errors.length > 0 ? ` errors=${result.errors.length}` : "";
+    return { reply: `Probe ok=${result.ok} input=${result.input} streams=${streams}${errors}` };
   }
 
   if (parsed.name === "/vlc" || parsed.name === "/playvlc") {

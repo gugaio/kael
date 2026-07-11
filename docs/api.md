@@ -73,8 +73,6 @@ flowchart TD
             API --> HLS[POST /jobs/hls]
             API --> Capture[POST /jobs/capture]
             API --> Vlc[POST /jobs/vlc]
-            API --> Probe[POST /jobs/probe]
-            API --> ProbeUrl[POST /jobs/probe-url]
         end
 
         subgraph Streams ["Streams (clone & serve)"]
@@ -179,8 +177,6 @@ flowchart TD
 | POST | /jobs/hls | Convert to HLS |
 | POST | /jobs/capture | Capture stream |
 | POST | /jobs/vlc | Play input/url with VLC |
-| POST | /jobs/probe | Probe local media |
-| POST | /jobs/probe-url | Probe URL/stream |
 
 #### Jobs Payload Contract
 
@@ -219,9 +215,9 @@ Exemplo resumido de item em `GET /jobs`:
 {
   "id": "a1b2c3d4",
   "capability": "video",
-  "action": "probe_media",
+  "action": "capture_stream",
   "status": "succeeded",
-  "output": "/videos/probe.json"
+  "output": "/videos/capture.ts"
 }
 ```
 

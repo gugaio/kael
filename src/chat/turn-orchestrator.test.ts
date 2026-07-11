@@ -25,9 +25,6 @@ function createToolingStub(): EngineToolingInterface {
       startCaptureStream: async () => {
         throw new Error("not used");
       },
-      startProbeMedia: async () => {
-        throw new Error("not used");
-      },
       startPlayVlc: async () => {
         throw new Error("not used");
       },

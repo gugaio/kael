@@ -493,10 +493,11 @@ describe("Jobs E2E API", () => {
 
     const response = await server.inject({
       method: "POST",
-      url: "/jobs/probe",
+      url: "/jobs/transcode",
       payload: {
         sessionKey: "s1",
         inputPath: "/etc/passwd",
+        outputPath: path.join(root, "out.mp4"),
       },
     });
 
@@ -517,10 +518,11 @@ describe("Jobs E2E API", () => {
 
     const created = await server.inject({
       method: "POST",
-      url: "/jobs/probe",
+      url: "/jobs/transcode",
       payload: {
         sessionKey: "s1",
         inputPath: input,
+        outputPath: path.join(root, "out.mp4"),
       },
     });
     expect(created.statusCode).toBe(200);
@@ -549,15 +551,15 @@ describe("Jobs E2E API", () => {
 
     const first = await server.inject({
       method: "POST",
-      url: "/jobs/probe",
-      payload: { sessionKey: "s1", inputPath: input },
+      url: "/jobs/transcode",
+      payload: { sessionKey: "s1", inputPath: input, outputPath: path.join(root, "out.mp4") },
     });
     const firstJobId = first.json().job.id as string;
 
     const second = await server.inject({
       method: "POST",
-      url: "/jobs/probe",
-      payload: { sessionKey: "s1", inputPath: input },
+      url: "/jobs/transcode",
+      payload: { sessionKey: "s1", inputPath: input, outputPath: path.join(root, "out.mp4") },
     });
     const secondJobId = second.json().job.id as string;
 

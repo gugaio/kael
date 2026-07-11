@@ -11,7 +11,6 @@ function createTooling(
       startTranscode: async () => ({ id: "j1" } as never),
       startConvertHls: async () => ({ id: "j2" } as never),
       startCaptureStream: async () => ({ id: "j3" } as never),
-      startProbeMedia: async () => ({ id: "j4" } as never),
       startPlayVlc: async () => ({ id: "j5" } as never),
       videoHlsInspect: async () => ({
         ok: true,
