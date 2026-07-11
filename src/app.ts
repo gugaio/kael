@@ -79,7 +79,7 @@ export type KaelApp = {
   };
   streamer: {
     listOrigins(): Promise<StreamerOriginSummary[]>;
-    inspectOrigin(originId: string): Promise<StreamerCloneResult>;
+    loadOrigin(originId: string): Promise<StreamerCloneResult>;
     probeOrigin(originId: string, options?: StreamerProbeOptions): Promise<StreamerOriginProbeReport>;
     analyzeOrigin(originId: string, options?: StreamerAnalyzeOptions): Promise<StreamerOriginAnalysisReport>;
     mutateOrigin(input: StreamerMutateInput): Promise<StreamerMutateResult>;

@@ -414,7 +414,7 @@ async function createJobsServer(params: {
     },
     streamer: {
       listOrigins: async () => [],
-      inspectOrigin: async () => {
+      loadOrigin: async () => {
         throw new Error("streamer inspect not implemented in fake app");
       },
       probeOrigin: async () => {
