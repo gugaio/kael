@@ -1,5 +1,5 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineToolingInterface } from "../types.js";
+import type { EngineToolingInterface } from "../../agents/types.js";
 
 type TextBlock = {
   type: "text";

@@ -10,7 +10,7 @@ import { createSystemPiTools } from "./system.js";
 import { createVideoPiTools } from "./video.js";
 import { createWebPiTools } from "./web.js";
 import { createWorkspacePiTools } from "./workspace.js";
-import type { EngineToolingInterface } from "../types.js";
+import type { EngineToolingInterface } from "../../agents/types.js";
 
 export {
   createBrowserPiTool,

@@ -5,7 +5,7 @@ import {
   formatBrowserToolText,
   isBrowserInteractionAction,
 } from "../../runtime/browser/index.js";
-import type { EngineToolingInterface } from "../types.js";
+import type { EngineToolingInterface } from "../../agents/types.js";
 
 type TextBlock = {
   type: "text";

@@ -1,6 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { ToolLoopGuard } from "../tool-loop-guard.js";
-import type { EngineToolingInterface } from "../types.js";
+import type { ToolLoopGuard } from "../../agents/tool-loop-guard.js";
+import type { EngineToolingInterface } from "../../agents/types.js";
 
 type TextBlock = {
   type: "text";

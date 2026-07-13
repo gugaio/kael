@@ -1,4 +1,4 @@
-import { isInteractionActionRaw } from "./tool-specs/browser.js";
+import { isInteractionActionRaw } from "../tools/pi/browser.js";
 import { textResult } from "./pi-tools-telemetry.js";
 
 type BlockedToolResult = {

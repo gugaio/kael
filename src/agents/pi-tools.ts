@@ -1,5 +1,5 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { buildPiTools } from "./tool-specs/index.js";
+import { buildPiTools } from "../tools/pi/index.js";
 import type { EngineOutputArtifact, EngineToolingInterface } from "./types.js";
 import type { ToolLoopGuard } from "./tool-loop-guard.js";
 import { createToolBudget } from "./pi-tools-budget.js";

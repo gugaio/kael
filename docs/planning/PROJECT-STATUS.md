@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-07-11**
+Ultima atualizacao: **2026-07-13**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,29 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-07-13 - PI tools movidas para src/tools/pi
+
+Resumo:
+- Movidos os wrappers/specs `AgentTool` do PI de `src/agents/tool-specs` para `src/tools/pi`.
+- `src/agents/pi-tools.ts` e `src/agents/pi-tools-budget.ts` agora consomem o catalogo pelo novo namespace.
+- Atualizada a arquitetura da fase 22 para apontar `video_stream_watch` no novo caminho.
+
+Arquivos-chave:
+- `src/tools/pi/index.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/pi-tools-budget.ts`
+- `docs/architecture/phases/phase-22.md`
+
+Checklist de validacao:
+- [x] `npx vitest run src/tools/pi/index.test.ts src/agents/pi-tools.test.ts`
+- [ ] `npm run check` (falha pre-existente/nao relacionada: `src/app.ts` espera `StreamerService.loadOrigin`, ausente no pacote VHS atual)
+
+Pendencias:
+- Resolver o drift de contrato `StreamerService`/VHS para recuperar `npm run check`.
+
+Proximo passo recomendado:
+- Ao criar novas tools para o PI, adicionar o wrapper em `src/tools/pi` e manter `src/agents` focado em orquestracao do engine.
 
 ### 2026-07-04 - Stream details: análise por chunk e elementary streams
 

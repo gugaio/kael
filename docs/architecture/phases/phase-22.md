@@ -50,7 +50,7 @@ src/vhs/
 src/api/routes/
   stream-watch.ts             # rotas POST/GET /streams/watch
 
-src/agents/tool-specs/
+src/tools/pi/
   video.ts                    # + tool video_stream_watch
 ```
 
