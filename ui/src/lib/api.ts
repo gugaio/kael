@@ -6,6 +6,7 @@ const ApiErrorSchema = z.object({
     status: z.number(),
     code: z.string(),
     message: z.string(),
+    details: z.object({ cause: z.string().optional() }).passthrough().optional(),
     requestId: z.string().optional(),
   }),
 });
@@ -140,7 +141,8 @@ async function parseJson<T>(response: Response, schema: z.ZodSchema<T>): Promise
   if (!response.ok) {
     const err = ApiErrorSchema.safeParse(raw);
     if (err.success) {
-      throw new Error(err.data.error.message);
+      const cause = err.data.error.details?.cause;
+      throw new Error(cause ? `${err.data.error.message}: ${cause}` : err.data.error.message);
     }
     throw new Error(`Request failed with status ${String(response.status)}`);
   }
@@ -556,6 +558,8 @@ export type StreamAnalysisEntry = {
   segmentIndex: number;
   originalSegmentIndex?: number;
   type: "AUDIO" | "SUBTITLES" | "VIDEO";
+  streamSelector?: string;
+  sourceKind?: "variant_muxed" | "rendition";
   label: string;
   localPath: string;
   timelineStartSeconds?: number;
@@ -735,6 +739,8 @@ export async function analyzeStream(originId: string, params?: {
     segmentIndex: z.number(),
     originalSegmentIndex: z.number().optional(),
     type: z.enum(["AUDIO", "SUBTITLES", "VIDEO"]),
+    streamSelector: z.string().optional(),
+    sourceKind: z.enum(["variant_muxed", "rendition"]).optional(),
     label: z.string(),
     localPath: z.string(),
     timelineStartSeconds: z.number().optional(),

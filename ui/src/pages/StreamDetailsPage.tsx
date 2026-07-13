@@ -113,9 +113,9 @@ function buildGroups(stream: Awaited<ReturnType<typeof getStream>> | undefined):
 function findAnalysisEntry(
   report: StreamAnalysisReport | undefined,
   selected: SelectedChunk | null,
-): StreamAnalysisEntry | undefined {
-  if (!report || !selected) return undefined;
-  return report.entries.find((entry) =>
+): StreamAnalysisEntry[] {
+  if (!report || !selected) return [];
+  return report.entries.filter((entry) =>
     entry.kind === selected.group.kind &&
     entry.mediaIndex === selected.group.index &&
     entry.segmentIndex === selected.segmentIndex
@@ -133,7 +133,8 @@ export function StreamDetailsPage(): JSX.Element {
   });
 
   const analyze = useMutation({
-    mutationFn: () => analyzeStream(originId, { full: true, timeoutMs: 15_000 }),
+    mutationFn: (params?: Parameters<typeof analyzeStream>[1]) =>
+      analyzeStream(originId, params ?? { full: true, timeoutMs: 15_000 }),
   });
 
   const groups = useMemo(() => buildGroups(stream.data), [stream.data]);
@@ -149,7 +150,7 @@ export function StreamDetailsPage(): JSX.Element {
         </div>
         <button
           type="button"
-          onClick={() => analyze.mutate()}
+          onClick={() => analyze.mutate({ full: true, timeoutMs: 15_000 })}
           disabled={analyze.isPending || !stream.data}
           className="rounded-xl border border-kael-accent bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
         >
@@ -208,7 +209,20 @@ export function StreamDetailsPage(): JSX.Element {
               </div>
             </Panel>
 
-            <ChunkDetails selected={selected} analysis={selectedAnalysis} />
+            <ChunkDetails
+              selected={selected}
+              analysis={selectedAnalysis}
+              analyzing={analyze.isPending}
+              onAnalyzeSelected={() => {
+                if (!selected) return;
+                analyze.mutate({
+                  full: true,
+                  startSegment: selected.segment.originalIndex,
+                  segmentCount: 1,
+                  timeoutMs: 15_000,
+                });
+              }}
+            />
           </div>
         </>
       )}
@@ -247,9 +261,12 @@ function AnalysisSummary(props: { report: StreamAnalysisReport }): JSX.Element {
           <p className="font-medium text-kael-text">Issues</p>
           {report.issues.length === 0 && <p className="mt-1 text-kael-muted">No issues reported.</p>}
           {report.issues.slice(0, 4).map((issue) => (
-            <p key={`${issue.code}-${issue.summary}`} className="mt-1 text-kael-muted">
-              {issue.severity}: {issue.summary}
-            </p>
+            <div key={`${issue.code}-${issue.summary}`} className="mt-2 rounded border border-kael-border bg-white p-2">
+              <p className="text-kael-muted">{issue.severity}: {issue.summary}</p>
+              {issue.evidence.slice(0, 3).map((line) => (
+                <p key={line} className="mt-1 break-all font-mono text-[11px] text-kael-muted">{line}</p>
+              ))}
+            </div>
           ))}
         </div>
       </div>
@@ -282,11 +299,12 @@ function MediaGroupView(props: {
       </div>
       <div className="grid grid-cols-1 divide-y divide-kael-border">
         {group.segments.map((segment, segmentIndex) => {
-          const entry = props.analysis?.entries.find((candidate) =>
+          const entries = props.analysis?.entries.filter((candidate) =>
             candidate.kind === group.kind &&
             candidate.mediaIndex === group.index &&
             candidate.segmentIndex === segmentIndex
-          );
+          ) ?? [];
+          const entry = preferAnalysisEntry(entries);
           const active = props.selected?.group.kind === group.kind &&
             props.selected.group.index === group.index &&
             props.selected.segmentIndex === segmentIndex;
@@ -309,7 +327,9 @@ function MediaGroupView(props: {
               </div>
               <div className="text-right">
                 <p className={entry && !entry.ok ? "font-medium text-rose-700" : "text-kael-muted"}>
-                  {entry ? entry.boundaryStatus ?? entry.continuityStatus ?? "probed" : "not probed"}
+                  {entries.length > 0
+                    ? `${entries.length} probe${entries.length === 1 ? "" : "s"}`
+                    : "not probed"}
                 </p>
                 <p className="text-kael-muted">PTS {formatSeconds(entry?.firstPtsTime)} {"->"} {formatSeconds(entry?.lastPtsTime)}</p>
               </div>
@@ -323,7 +343,9 @@ function MediaGroupView(props: {
 
 function ChunkDetails(props: {
   selected: SelectedChunk | null;
-  analysis?: StreamAnalysisEntry;
+  analysis?: StreamAnalysisEntry[];
+  analyzing: boolean;
+  onAnalyzeSelected: () => void;
 }): JSX.Element {
   if (!props.selected) {
     return (
@@ -334,13 +356,21 @@ function ChunkDetails(props: {
   }
 
   const { group, segment, segmentIndex } = props.selected;
-  const analysis = props.analysis;
+  const analysis = props.analysis ?? [];
   return (
     <Panel title="Chunk">
       <div className="space-y-4">
         <div>
           <p className="text-sm font-semibold text-kael-text">{group.label}</p>
           <p className="mt-1 text-xs text-kael-muted">local chunk {segmentIndex} | original {segment.originalIndex}</p>
+          <button
+            type="button"
+            onClick={props.onAnalyzeSelected}
+            disabled={props.analyzing}
+            className="mt-3 rounded-lg border border-kael-accent bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+          >
+            {props.analyzing ? "Analyzing..." : "Analyze selected chunk"}
+          </button>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
@@ -359,31 +389,45 @@ function ChunkDetails(props: {
 
         <div className="rounded-lg border border-kael-border bg-kael-panelSoft p-3 text-xs">
           <p className="font-medium text-kael-text">ffprobe data</p>
-          {!analysis && <p className="mt-2 text-kael-muted">Run ffprobe analysis to populate this chunk.</p>}
-          {analysis && (
-            <div className="mt-2 space-y-1 text-kael-muted">
-              <p>status: {analysis.ok ? "ok" : "failed"}</p>
-              <p>type: {analysis.type}</p>
-              <p>codec: {analysis.codecName ?? "-"}</p>
-              <p>streams: {analysis.streamCount}</p>
-              <p>packets/samples: {analysis.packetCount ?? "-"}</p>
-              <p>actual duration: {formatSeconds(analysis.actualDurationSeconds)}</p>
-              <p>duration delta: {formatSignedSeconds(analysis.durationDeltaSeconds)}</p>
-              <p>PTS: {formatSeconds(analysis.firstPtsTime)} {"->"} {formatSeconds(analysis.lastPtsTime)}</p>
-              <p>boundary: {analysis.boundaryStatus ?? "-"} {formatSignedSeconds(analysis.boundaryDeltaSeconds)}</p>
-              <p>continuity: {analysis.continuityStatus ?? "-"} {formatPtsDeltaUs(analysis.nextDeltaUs)}</p>
-              <p>keyframes: {analysis.keyframeCount ?? "-"}</p>
-              <p>starts with keyframe: {analysis.startsWithKeyframe == null ? "-" : String(analysis.startsWithKeyframe)}</p>
-              <p>max keyframe gap: {formatSeconds(analysis.maxKeyframeGapSeconds)}</p>
-              {analysis.errors.length > 0 && (
-                <div className="mt-2 rounded border border-rose-200 bg-rose-50 p-2 text-rose-700">
-                  {analysis.errors.map((error) => <p key={error}>{error}</p>)}
-                </div>
-              )}
-            </div>
-          )}
+          {analysis.length === 0 && <p className="mt-2 text-kael-muted">Run ffprobe analysis to populate this chunk.</p>}
+          {analysis.map((entry) => <AnalysisEntryDetails key={`${entry.type}-${entry.streamSelector ?? "stream"}`} entry={entry} />)}
         </div>
       </div>
     </Panel>
+  );
+}
+
+function preferAnalysisEntry(entries: StreamAnalysisEntry[]): StreamAnalysisEntry | undefined {
+  return entries.find((entry) => entry.type === "VIDEO") ?? entries[0];
+}
+
+function AnalysisEntryDetails(props: { entry: StreamAnalysisEntry }): JSX.Element {
+  const { entry } = props;
+  return (
+    <div className="mt-3 rounded border border-kael-border bg-white p-2 text-kael-muted">
+      <p className="font-medium text-kael-text">
+        {entry.type} {entry.streamSelector ? `(${entry.streamSelector})` : ""}
+      </p>
+      <p>status: {entry.ok ? "ok" : "failed"}</p>
+      <p>source: {entry.sourceKind ?? "-"}</p>
+      <p>codec: {entry.codecName ?? "-"}</p>
+      <p>streams: {entry.streamCount}</p>
+      <p>sample rate: {entry.sampleRate ?? "-"}</p>
+      <p>channels: {entry.channels ?? "-"}</p>
+      <p>packets/samples: {entry.packetCount ?? "-"}</p>
+      <p>actual duration: {formatSeconds(entry.actualDurationSeconds)}</p>
+      <p>duration delta: {formatSignedSeconds(entry.durationDeltaSeconds)}</p>
+      <p>PTS: {formatSeconds(entry.firstPtsTime)} {"->"} {formatSeconds(entry.lastPtsTime)}</p>
+      <p>boundary: {entry.boundaryStatus ?? "-"} {formatSignedSeconds(entry.boundaryDeltaSeconds)}</p>
+      <p>continuity: {entry.continuityStatus ?? "-"} {formatPtsDeltaUs(entry.nextDeltaUs)}</p>
+      <p>keyframes: {entry.keyframeCount ?? "-"}</p>
+      <p>starts with keyframe: {entry.startsWithKeyframe == null ? "-" : String(entry.startsWithKeyframe)}</p>
+      <p>max keyframe gap: {formatSeconds(entry.maxKeyframeGapSeconds)}</p>
+      {entry.errors.length > 0 && (
+        <div className="mt-2 rounded border border-rose-200 bg-rose-50 p-2 text-rose-700">
+          {entry.errors.map((error) => <p key={error}>{error}</p>)}
+        </div>
+      )}
+    </div>
   );
 }

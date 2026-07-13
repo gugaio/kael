@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-06-27**
+Ultima atualizacao: **2026-07-04**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,45 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-07-04 - Stream details: análise por chunk e elementary streams
+
+Resumo:
+- O VHS agora emite entradas separadas de análise para elementary streams em variants muxadas, com `streamSelector` (`v:0`/`a:0`) e `sourceKind=variant_muxed`.
+- A análise de variant muxada tenta áudio como stream opcional e descarta a entrada quando o container não expõe `a:0`, evitando falso erro em video-only.
+- A extração de codec/sample rate/channels passou a usar o stream selecionado pelo `streamSelector`, não o primeiro stream do container.
+- A página `Stream Details` ganhou ação `Analyze selected chunk`, usando `startSegment` + `segmentCount=1`.
+- O painel lateral de chunk agora renderiza múltiplas entradas ffprobe para o mesmo segmento, incluindo vídeo e áudio quando presentes.
+- Corrigido fallback de erro do analyze: falhas pontuais de `ffprobe`/arquivo local agora retornam entrada `ok=false` em `entries`, em vez de derrubar a rota com HTTP 500.
+- A UI agora mostra `details.cause` em erros da API quando ainda houver falha 500 externa ao probe.
+- Corrigida a chamada do `MediaInspector.probe` no VHS para preservar o receiver (`this`); a falha real era `Cannot read properties of undefined (reading 'maxProbeTimeoutMs')` ao chamar `analyzeOrigin`.
+- Validado diretamente contra o origin local `osoutros` em `/home/gugaime/.kael/data/streamer`: `startSegment=0` retornou video H.264, duas renditions AAC e legenda WebVTT sem falhas.
+
+Arquivos-chave:
+- `../vhs/src/stream/analysis.ts`
+- `../vhs/src/stream/analysis-model.ts`
+- `../vhs/src/stream/analysis-probe.ts`
+- `../vhs/src/stream/analysis-rules.ts`
+- `../vhs/test/stream.test.ts`
+- `../vhs/SKILL.md`
+- `ui/src/lib/api.ts`
+- `ui/src/pages/StreamDetailsPage.tsx`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm --prefix ../vhs run build`
+- [x] `npm --prefix ../vhs run check`
+- [x] `npm --prefix ../vhs test -- test/stream.test.ts`
+- [x] `npm --prefix ui run check`
+- [x] `npm --prefix ui run build`
+- [x] `npm run check`
+- [x] `npx vitest run src/api/server.test.ts`
+
+Pendencias:
+- Nenhuma conhecida.
+
+Proximo passo recomendado:
+- Usar o fluxo diário em stream real para confirmar se a UI mostra `v:0` e `a:0` nos chunks `.ts` muxados e ajustar thresholds de A/V se aparecerem falsos positivos.
 
 ### 2026-06-27 - Stream playground: painel de logs hls.js
 
