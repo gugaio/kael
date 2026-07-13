@@ -246,7 +246,6 @@ async function createJobsServer(params: {
     } as unknown as KaelApp["planner"],
     research: {} as KaelApp["research"],
     memory: {} as KaelApp["memory"],
-    projects: {} as KaelApp["projects"],
     chat: {
       handleMessage: async () => ({
         reply: "ok",

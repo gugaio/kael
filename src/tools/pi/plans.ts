@@ -1,5 +1,8 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineToolingInterface } from "../../agents/types.js";
+import { createPlannerExecuteRuntime, createPlannerReconcileRuntime } from "../../planner/runtime.js";
+import type { PlannerService } from "../../planner/service.js";
+import type { JobService } from "../../jobs/service.js";
+import type { ShellRuntime } from "../system/shell-tool-service.js";
 
 type TextBlock = {
   type: "text";
@@ -8,7 +11,9 @@ type TextBlock = {
 
 export function createPlanPiTools(params: {
   sessionKey: string;
-  tooling: EngineToolingInterface["plans"];
+  planner: PlannerService;
+  jobs: JobService;
+  shell: ShellRuntime;
   textResult: (text: string) => TextBlock[];
 }): AgentTool[] {
   const planCreateTool: AgentTool = {
@@ -26,7 +31,7 @@ export function createPlanPiTools(params: {
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
       const args = (rawParams ?? {}) as { title: string; steps: string[] };
-      const plan = await params.tooling.planCreate({
+      const plan = await params.planner.create({
         sessionKey: params.sessionKey,
         title: args.title,
         steps: Array.isArray(args.steps) ? args.steps : [],
@@ -53,7 +58,7 @@ export function createPlanPiTools(params: {
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
       const args = (rawParams ?? {}) as { objective: string; maxSteps?: number };
-      const plan = await params.tooling.planGenerate({
+      const plan = await params.planner.generate({
         sessionKey: params.sessionKey,
         objective: args.objective,
         maxSteps: args.maxSteps,
@@ -87,7 +92,7 @@ export function createPlanPiTools(params: {
         status?: "active" | "completed" | "blocked" | "failed" | "canceled";
         limit?: number;
       };
-      const plans = params.tooling.planList({
+      const plans = params.planner.list({
         sessionKey: args.sessionKey,
         status: args.status,
         limit: args.limit,
@@ -120,7 +125,7 @@ export function createPlanPiTools(params: {
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
       const args = (rawParams ?? {}) as { planId: string };
-      const plan = params.tooling.planGet({ planId: args.planId });
+      const plan = params.planner.get(args.planId);
       if (!plan) {
         return {
           content: params.textResult("found=false"),
@@ -167,7 +172,7 @@ export function createPlanPiTools(params: {
         status: "pending" | "in_progress" | "completed" | "blocked" | "failed" | "canceled";
         notes?: string;
       };
-      const updated = await params.tooling.planUpdateStep({
+      const updated = await params.planner.updateStep({
         planId: args.planId,
         stepIndex: Math.floor(args.stepIndex),
         status: args.status,
@@ -200,7 +205,7 @@ export function createPlanPiTools(params: {
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
       const args = (rawParams ?? {}) as { planId: string };
-      const next = params.tooling.planNextAction({ planId: args.planId });
+      const next = params.planner.nextAction(args.planId);
       if (!next) {
         return {
           content: params.textResult("next=none"),
@@ -265,17 +270,21 @@ export function createPlanPiTools(params: {
           targetStepIndex?: number;
         };
       };
-      const result = await params.tooling.planExecuteNext({
+      const result = await params.planner.executeNext({
         planId: args.planId,
         inputs: args.inputs,
+        runtime: createPlannerExecuteRuntime({
+          jobs: params.jobs,
+          shell: params.shell,
+        }),
       });
       const text = [
         `ok=${result.ok}`,
         result.reason ? `reason=${result.reason}` : "",
         result.action ? `action=${result.action}` : "",
         result.stepIndex !== undefined ? `stepIndex=${result.stepIndex}` : "",
-        result.execution ? `execution=${result.execution.kind}:${result.execution.refId}` : "",
-        result.message ? `message=${result.message}` : "",
+        "execution" in result && result.execution ? `execution=${result.execution.kind}:${result.execution.refId}` : "",
+        "message" in result && result.message ? `message=${result.message}` : "",
       ]
         .filter(Boolean)
         .join("\n");
@@ -300,9 +309,13 @@ export function createPlanPiTools(params: {
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
       const args = (rawParams ?? {}) as { planId?: string; limit?: number };
-      const result = await params.tooling.planReconcile({
+      const result = await params.planner.reconcile({
         planId: args.planId,
         limit: args.limit,
+        runtime: createPlannerReconcileRuntime({
+          jobs: params.jobs,
+          shell: params.shell,
+        }),
       });
       return {
         content: params.textResult(

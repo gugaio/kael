@@ -1,5 +1,8 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineToolingInterface } from "../../agents/types.js";
+import type { MediaInspector, PlaybackTriageService } from "@gugaio/vhs";
+import type { StreamerRuntime } from "../../runtime/agent-runtime.js";
+import type { StreamServeManager } from "../../video/serve-manager.js";
+import type { HlsStreamMonitorService } from "../../vhs/watch-registry.js";
 
 type TextBlock = {
   type: "text";
@@ -8,7 +11,11 @@ type TextBlock = {
 
 export function createVideoPiTools(params: {
   sessionKey: string;
-  tooling: EngineToolingInterface["video"];
+  videoInspect: Pick<MediaInspector, "inspectHls" | "probe">;
+  playbackTriage: PlaybackTriageService;
+  streamMonitor: HlsStreamMonitorService;
+  streamer: StreamerRuntime;
+  serveManager: StreamServeManager;
   textResult: (text: string) => TextBlock[];
   reserveToolCall: (tool: string) => { blocked: { content: TextBlock[]; details: unknown } } | null;
   reserveStreamerCall?: () => { blocked: { content: TextBlock[]; details: unknown } } | null;
@@ -45,8 +52,7 @@ export function createVideoPiTools(params: {
       const args = (rawParams ?? {}) as { url: string; maxSegments?: number; timeoutMs?: number };
       const intent = params.logToolStart("video_hls_inspect", args);
       try {
-        const result = await params.tooling.videoHlsInspect({
-          sessionKey: params.sessionKey,
+        const result = await params.videoInspect.inspectHls({
           url: args.url,
           maxSegments: args.maxSegments,
           timeoutMs: args.timeoutMs,
@@ -103,8 +109,7 @@ export function createVideoPiTools(params: {
       };
       const intent = params.logToolStart("video_probe", args);
       try {
-        const result = await params.tooling.videoProbe({
-          sessionKey: params.sessionKey,
+        const result = await params.videoInspect.probe({
           input: args.input,
           timeoutMs: args.timeoutMs,
           keyframes: args.keyframes,
@@ -193,18 +198,8 @@ export function createVideoPiTools(params: {
         streamUrl?: string;
       };
       const intent = params.logToolStart("playback_analyze", args);
-      if (!params.tooling.playbackAnalyze) {
-        const reason = "playback_analyze_unavailable";
-        const details = { status: "blocked", blocked: true, reason };
-        params.logToolEnd("playback_analyze", intent, details, startedAtMs);
-        return {
-          content: params.textResult(`blocked=true\nreason=${reason}`),
-          details,
-        };
-      }
       try {
-        const result = await params.tooling.playbackAnalyze({
-          sessionKey: params.sessionKey,
+        const result = await params.playbackTriage.analyzeSession({
           player: args.player,
           logText: args.logText,
           events: args.events,
@@ -300,25 +295,31 @@ export function createVideoPiTools(params: {
         watchId?: string;
       };
       const intent = params.logToolStart("video_stream_watch", args);
-      if (!params.tooling.videoStreamWatch) {
-        const reason = "video_stream_watch_unavailable";
-        const details = { status: "blocked", blocked: true, reason };
-        params.logToolEnd("video_stream_watch", intent, details, startedAtMs);
-        return {
-          content: params.textResult(`blocked=true\nreason=${reason}`),
-          details,
-        };
-      }
       try {
-        const result = await params.tooling.videoStreamWatch({
-          action: args.action,
-          sessionKey: params.sessionKey,
-          url: args.url,
-          pollIntervalMs: args.pollIntervalMs,
-          maxPollCount: args.maxPollCount,
-          timeoutMs: args.timeoutMs,
-          watchId: args.watchId,
-        });
+        const result = (() => {
+          if (args.action === "start") {
+            if (!args.url) return { ok: false, action: args.action, watchId: undefined };
+            const id = params.streamMonitor.startWatch({
+              sessionKey: params.sessionKey,
+              url: args.url,
+              pollIntervalMs: args.pollIntervalMs,
+              maxPollCount: args.maxPollCount,
+              timeoutMs: args.timeoutMs,
+            });
+            return { ok: true, action: args.action, watchId: id, status: params.streamMonitor.getStatus(id) ?? undefined };
+          }
+          if (args.action === "stop") {
+            if (!args.watchId) return { ok: false, action: args.action };
+            const stopped = params.streamMonitor.stopWatch(args.watchId);
+            return { ok: stopped, action: args.action, stopped, status: params.streamMonitor.getStatus(args.watchId) ?? undefined };
+          }
+          if (args.action === "status") {
+            if (!args.watchId) return { ok: false, action: args.action };
+            const status = params.streamMonitor.getStatus(args.watchId);
+            return { ok: status !== null, action: args.action, watchId: args.watchId, status: status ?? undefined };
+          }
+          return { ok: true, action: "list", watches: params.streamMonitor.listWatches() };
+        })();
         const textLines = [
           `ok=${result.ok}`,
           `action=${result.action}`,
@@ -381,7 +382,12 @@ export function createVideoPiTools(params: {
       const startedAtMs = Date.now();
       const intent = params.logToolStart("stream_list", {});
       try {
-        const list = await params.tooling.streamList();
+        const origins = await params.streamer.listOrigins();
+        const list = origins.map((s) => ({
+          ...s,
+          serving: params.serveManager.isServing(s.id),
+          servingUrl: null,
+        }));
         const text = [
           `count=${list.length}`,
           ...list.map(
@@ -439,13 +445,20 @@ export function createVideoPiTools(params: {
       };
       const intent = params.logToolStart("stream_clone", args);
       try {
-        const result = await params.tooling.streamClone({
-          sessionKey: params.sessionKey,
-          url: args.url,
-          originId: args.originId,
-          durationSeconds: args.durationSeconds,
-          allVariants: args.allVariants,
-        });
+        const isDash = args.url.trim().toLowerCase().includes(".mpd");
+        const result = isDash
+          ? await params.streamer.cloneDash({
+              url: args.url,
+              originId: args.originId,
+              durationSeconds: args.durationSeconds,
+              allVariants: args.allVariants,
+            })
+          : await params.streamer.cloneHls({
+              url: args.url,
+              originId: args.originId,
+              durationSeconds: args.durationSeconds,
+              allVariants: args.allVariants,
+            });
         const text = `ok=true\nid=${result.id}`;
         params.logToolEnd("stream_clone", intent, result, startedAtMs);
         return { content: params.textResult(text), details: result };
@@ -480,10 +493,7 @@ export function createVideoPiTools(params: {
       const args = (rawParams ?? {}) as { originId: string };
       const intent = params.logToolStart("stream_serve", args);
       try {
-        const result = await params.tooling.streamServe({
-          sessionKey: params.sessionKey,
-          originId: args.originId,
-        });
+        const result = await params.serveManager.serve(args.originId);
         const text = `ok=true\nplaybackUrl=${result.playbackUrl}`;
         params.logToolEnd("stream_serve", intent, result, startedAtMs);
         return { content: params.textResult(text), details: result };
@@ -518,10 +528,7 @@ export function createVideoPiTools(params: {
       const args = (rawParams ?? {}) as { originId: string };
       const intent = params.logToolStart("stream_stop", args);
       try {
-        await params.tooling.streamStop({
-          sessionKey: params.sessionKey,
-          originId: args.originId,
-        });
+        await params.serveManager.stop(args.originId);
         params.logToolEnd("stream_stop", intent, { stopped: true }, startedAtMs);
         return { content: params.textResult("ok=true\nstopped=true"), details: { stopped: true } };
       } catch (error) {

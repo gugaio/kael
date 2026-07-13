@@ -1,5 +1,5 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineToolingInterface } from "../../agents/types.js";
+import type { MemoryService } from "../../memory/service.js";
 
 type TextBlock = {
   type: "text";
@@ -7,7 +7,7 @@ type TextBlock = {
 };
 
 export function createMemoryPiTools(params: {
-  tooling: EngineToolingInterface["memory"];
+  memory: MemoryService;
   textResult: (text: string) => TextBlock[];
   logToolStart: (tool: string, rawParams: unknown) => string;
   logToolEnd: (
@@ -37,10 +37,7 @@ export function createMemoryPiTools(params: {
       const args = (rawParams ?? {}) as { query: string; maxResults?: number };
       const intent = params.logToolStart("memory_search", args);
       try {
-        const results = await params.tooling.memorySearch({
-          query: args.query,
-          maxResults: args.maxResults,
-        });
+        const results = await params.memory.search(args.query, args.maxResults);
         const text =
           results.length === 0
             ? "results=0"
@@ -94,8 +91,8 @@ export function createMemoryPiTools(params: {
       const args = (rawParams ?? {}) as { path: string; from?: number; lines?: number };
       const intent = params.logToolStart("memory_get", args);
       try {
-        const result = await params.tooling.memoryGet({
-          path: args.path,
+        const result = await params.memory.get({
+          relPath: args.path,
           from: args.from,
           lines: args.lines,
         });
@@ -136,7 +133,7 @@ export function createMemoryPiTools(params: {
       const args = (rawParams ?? {}) as { content: string; target?: "daily" | "long_term" };
       const intent = params.logToolStart("memory_write", args);
       try {
-        const saved = await params.tooling.memoryWrite({
+        const saved = await params.memory.write({
           content: args.content,
           target: args.target,
         });

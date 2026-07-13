@@ -5,7 +5,7 @@ import {
   formatBrowserToolText,
   isBrowserInteractionAction,
 } from "../../runtime/browser/index.js";
-import type { EngineToolingInterface } from "../../agents/types.js";
+import type { BrowserRuntime } from "../../runtime/browser/index.js";
 
 type TextBlock = {
   type: "text";
@@ -14,7 +14,7 @@ type TextBlock = {
 
 export function createBrowserPiTool(params: {
   sessionKey: string;
-  tooling: EngineToolingInterface["browser"];
+  browser: BrowserRuntime;
   textResult: (text: string) => TextBlock[];
   reserveBrowserCall: (actionRaw: string) => { blocked: { content: TextBlock[]; details: unknown } } | null;
   logToolStart: (tool: string, rawParams: unknown) => string;
@@ -68,7 +68,7 @@ export function createBrowserPiTool(params: {
         timeoutMs?: number;
       };
       const intent = params.logToolStart("browser", args);
-      const result = await params.tooling.browserCommand({
+      const result = await params.browser.command({
         sessionKey: params.sessionKey,
         action: args.action,
         targetId: args.targetId,

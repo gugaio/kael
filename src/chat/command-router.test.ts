@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { CommandRouter } from "./command-router.js";
-import type { AgentEngine, EngineToolingInterface } from "../agents/types.js";
+import type { AgentEngine } from "../agents/types.js";
+import type { AgentRuntime } from "../runtime/agent-runtime.js";
 
-function createTooling(): EngineToolingInterface {
+function createTooling(): AgentRuntime {
   return {
     video: {
       startTranscode: async () => ({ id: "j1" } as never),
@@ -36,7 +37,7 @@ function createTooling(): EngineToolingInterface {
     jobs: {
       listJobs: () => [],
       getJob: () => null,
-      getJobLog: async ({ jobId }) => ({ jobId, found: false }),
+      getJobLog: async ({ jobId }: any) => ({ jobId, found: false }),
     },
     system: {
       execCommand: async () => ({
@@ -61,7 +62,7 @@ function createTooling(): EngineToolingInterface {
     },
     edge: {
       edgeList: () => [],
-      edgeCall: async ({ capability }) => ({ ok: false, taskId: "t1", capability, error: "unused" }),
+      edgeCall: async ({ capability }: any) => ({ ok: false, taskId: "t1", capability, error: "unused" }),
       youboraMetricsGet: async () => ({ ok: true, taskId: "yb1", capability: "youbora.metrics.get", output: {} }),
       youboraRawdataGet: async () => ({ ok: true, taskId: "yb2", capability: "youbora.rawdata.get", output: {} }),
       youboraEventsGet: async () => ({ ok: true, taskId: "yb3", capability: "youbora.events.get", output: {} }),
@@ -70,20 +71,6 @@ function createTooling(): EngineToolingInterface {
       memorySearch: async () => [],
       memoryGet: async () => ({ path: "MEMORY.md", text: "", startLine: 1, endLine: 1 }),
       memoryWrite: async () => ({ path: "memory/2026-01-01.md" }),
-    },
-    projects: {
-      projectSearch: async () => [],
-      projectGetDocument: async () => null,
-      projectUpsertDocument: async () => ({
-        project: "proj",
-        path: "PROJECT.md",
-        title: "Project Overview",
-        description: "Visao geral",
-        tags: [],
-        content: "# proj",
-        updatedAt: new Date().toISOString(),
-      }),
-      projectListDocuments: async () => [],
     },
     workspace: {
       workspaceSearch: async () => [],
@@ -109,7 +96,7 @@ function createTooling(): EngineToolingInterface {
       }),
     },
     browser: {
-      browserCommand: async ({ action }) => ({
+      browserCommand: async ({ action }: any) => ({
         ok: false,
         action,
         status: "failed",
@@ -175,7 +162,7 @@ function createTooling(): EngineToolingInterface {
       planExecuteNext: async () => ({ ok: false, reason: "no_next_step", message: "none" }),
       planReconcile: async () => ({ scannedPlans: 0, updatedPlans: 0, updatedSteps: 0 }),
     },
-  };
+  } as unknown as AgentRuntime;
 }
 
 describe("CommandRouter", () => {
@@ -187,7 +174,7 @@ describe("CommandRouter", () => {
     const result = await router.tryRoute({
       sessionKey: "main",
       message: "/jobs",
-      tooling: createTooling(),
+      runtime: createTooling(),
       allowOperationalShortcuts: false,
     });
 
@@ -203,7 +190,7 @@ describe("CommandRouter", () => {
     const result = await router.tryRoute({
       sessionKey: "main",
       message: "listar jobs",
-      tooling: createTooling(),
+      runtime: createTooling(),
       allowOperationalShortcuts: true,
     });
 
@@ -220,7 +207,7 @@ describe("CommandRouter", () => {
       sessionKey: "main",
       message: "/jobs",
       requestId: "req-1",
-      tooling: createTooling(),
+      runtime: createTooling(),
       allowOperationalShortcuts: true,
     });
 

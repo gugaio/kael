@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { SimpleCommandEngine } from "./simple-engine.js";
 import type { EngineBrowserTooling, EngineSystemTooling, EngineTurnInput, EngineToolingInterface } from "./types.js";
+import type { AgentRuntime } from "../runtime/agent-runtime.js";
 
 function createTooling(
   execImpl?: EngineSystemTooling["execCommand"],
@@ -90,20 +91,6 @@ function createTooling(
       memorySearch: async () => [],
       memoryGet: async () => ({ path: "MEMORY.md", text: "", startLine: 1, endLine: 1 }),
       memoryWrite: async () => ({ path: "memory/2026-01-01.md" }),
-    },
-    projects: {
-      projectSearch: async () => [],
-      projectGetDocument: async () => null,
-      projectUpsertDocument: async () => ({
-        project: "proj",
-        path: "PROJECT.md",
-        title: "Project Overview",
-        description: "Visao geral",
-        tags: [],
-        content: "# proj",
-        updatedAt: new Date().toISOString(),
-      }),
-      projectListDocuments: async () => [],
     },
     workspace: {
       workspaceSearch: async () => [],
@@ -200,11 +187,42 @@ function createTooling(
   };
 }
 
-function makeInput(message: string, tooling: EngineToolingInterface): EngineTurnInput {
+function makeInput(message: string, runtime: EngineToolingInterface): EngineTurnInput {
   return {
     sessionKey: "main",
     message,
-    tooling,
+    runtime: {
+      videoJobs: {
+        startTranscode: runtime.video.startTranscode,
+        startConvertHls: runtime.video.startConvertHls,
+        startCaptureStream: runtime.video.startCaptureStream,
+        startPlayVlc: runtime.video.startPlayVlc,
+      },
+      videoInspect: {
+        inspectHls: (input: any) => runtime.video.videoHlsInspect({ sessionKey: "main", ...input }),
+        probe: (input: any) => runtime.video.videoProbe({ sessionKey: "main", ...input }),
+      },
+      browser: {
+        command: runtime.browser.browserCommand,
+        getRuntimeTelemetrySnapshot: runtime.browser.browserRuntimeTelemetry,
+      },
+      edge: {
+        listCapabilities: () => runtime.edge.edgeList(),
+        dispatchTask: ({ capability, input }: any) => {
+          const payload = input ?? {};
+          if (capability === "youbora.metrics.get") {
+            return runtime.edge.youboraMetricsGet(payload);
+          }
+          if (capability === "youbora.rawdata.get") {
+            return runtime.edge.youboraRawdataGet(payload);
+          }
+          if (capability === "youbora.events.get") {
+            return runtime.edge.youboraEventsGet(payload);
+          }
+          return runtime.edge.edgeCall({ capability, input });
+        },
+      },
+    } as unknown as AgentRuntime,
     contextMessages: [],
   };
 }

@@ -1,13 +1,14 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { buildPiTools } from "../tools/pi/index.js";
-import type { EngineOutputArtifact, EngineToolingInterface } from "./types.js";
+import type { AgentRuntime } from "../runtime/agent-runtime.js";
+import type { EngineOutputArtifact } from "./types.js";
 import type { ToolLoopGuard } from "./tool-loop-guard.js";
 import { createToolBudget } from "./pi-tools-budget.js";
 import { createToolTelemetry, formatSession, textResult } from "./pi-tools-telemetry.js";
 
 export function createPiTools(params: {
   sessionKey: string;
-  tooling: EngineToolingInterface;
+  runtime: AgentRuntime;
   turnSignal?: AbortSignal;
   loopGuard?: ToolLoopGuard;
   trace?: {
@@ -59,7 +60,7 @@ export function createPiTools(params: {
   const _tools = buildPiTools({
     system: {
       sessionKey: params.sessionKey,
-      tooling: params.tooling.system,
+      shell: params.runtime.shell,
       loopGuard: params.loopGuard,
       textResult,
       formatSession,
@@ -72,7 +73,11 @@ export function createPiTools(params: {
     },
     video: {
       sessionKey: params.sessionKey,
-      tooling: params.tooling.video,
+      videoInspect: params.runtime.videoInspect,
+      playbackTriage: params.runtime.playbackTriage,
+      streamMonitor: params.runtime.streamMonitor,
+      streamer: params.runtime.streamer,
+      serveManager: params.runtime.serveManager,
       textResult,
       reserveToolCall: budget.reserveToolCall,
       reserveStreamerCall: budget.reserveStreamerCall,
@@ -81,22 +86,15 @@ export function createPiTools(params: {
         telemetry.logToolEnd(tool, intent, result, startedAtMs, summary),
     },
     jobs: {
-      tooling: params.tooling.jobs,
+      jobs: params.runtime.jobs,
       textResult,
       reserveToolCall: budget.reserveToolCall,
       logToolStart: telemetry.logToolStart,
       logToolEnd: (tool, intent, result, startedAtMs, summary) =>
         telemetry.logToolEnd(tool, intent, result, startedAtMs, summary),
     },
-    projects: {
-      tooling: params.tooling.projects,
-      textResult,
-      logToolStart: telemetry.logToolStart,
-      logToolEnd: (tool, intent, result, startedAtMs, summary) =>
-        telemetry.logToolEnd(tool, intent, result, startedAtMs, summary),
-    },
     edge: {
-      tooling: params.tooling.edge,
+      edge: params.runtime.edge,
       textResult,
       makeBlockedResult: budget.makeBlockedResult,
       reserveEdgeCall: budget.reserveEdgeCall,
@@ -106,7 +104,7 @@ export function createPiTools(params: {
     },
     mcp: {
       sessionKey: params.sessionKey,
-      tooling: params.tooling.mcp,
+      mcp: params.runtime.mcp,
       loopGuard: params.loopGuard,
       textResult,
       makeBlockedResult: budget.makeBlockedResult,
@@ -116,19 +114,19 @@ export function createPiTools(params: {
         telemetry.logToolEnd(tool, intent, result, startedAtMs, summary),
     },
     memory: {
-      tooling: params.tooling.memory,
+      memory: params.runtime.memory,
       textResult,
       logToolStart: telemetry.logToolStart,
       logToolEnd: (tool, intent, result, startedAtMs, summary) =>
         telemetry.logToolEnd(tool, intent, result, startedAtMs, summary),
     },
     workspace: {
-      tooling: params.tooling.workspace,
+      workspace: params.runtime.workspace,
       textResult,
     },
     web: {
       sessionKey: params.sessionKey,
-      tooling: params.tooling.web,
+      research: params.runtime.research,
       turnSignal: params.turnSignal,
       loopGuard: params.loopGuard,
       textResult,
@@ -140,7 +138,7 @@ export function createPiTools(params: {
     },
     browser: {
       sessionKey: params.sessionKey,
-      tooling: params.tooling.browser,
+      browser: params.runtime.browser,
       textResult,
       reserveBrowserCall: budget.reserveBrowserCall,
       logToolStart: telemetry.logToolStart,
@@ -149,12 +147,14 @@ export function createPiTools(params: {
     },
     plans: {
       sessionKey: params.sessionKey,
-      tooling: params.tooling.plans,
+      planner: params.runtime.planner,
+      jobs: params.runtime.jobs,
+      shell: params.runtime.shell,
       textResult,
     },
     image: {
       sessionKey: params.sessionKey,
-      tooling: params.tooling.image,
+      imageGenerator: params.runtime.imageGenerator,
       textResult,
       makeBlockedResult: budget.makeBlockedResult,
       reserveImageCall: budget.reserveImageCall,
@@ -172,7 +172,6 @@ export function createPiTools(params: {
     ...streamerTools
   ] = _tools.video;
   const [jobsListTool, jobsGetTool, jobsLogTailTool] = _tools.jobs;
-  const [projectSearchTool, projectGetDocumentTool, projectUpsertDocumentTool, projectListDocumentsTool] = _tools.projects;
   const [
     edgeListTool,
     edgeCallTool,
@@ -207,10 +206,6 @@ export function createPiTools(params: {
     jobsListTool,
     jobsGetTool,
     jobsLogTailTool,
-    projectSearchTool,
-    projectGetDocumentTool,
-    projectUpsertDocumentTool,
-    projectListDocumentsTool,
     edgeListTool,
     edgeCallTool,
     youboraMetricsGetTool,

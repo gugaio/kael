@@ -1,19 +1,15 @@
-import type { EngineInboundAttachment, EngineOutputArtifact, EngineToolingInterface } from "../agents/types.js";
+import type { EngineInboundAttachment, EngineOutputArtifact } from "../agents/types.js";
 import { normalizePiError } from "../agents/pi-errors.js";
-import type { MemoryService } from "../memory/service.js";
 import type { SessionStore } from "../session/store.js";
-import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
 import type { SessionMessage } from "../types.js";
 import { kaelLogger } from "../infra/logger.js";
 import { TurnOrchestrator } from "./turn-orchestrator.js";
 import { MemoryOrchestrator } from "../memory/orchestrator.js";
 import { CommandRouter } from "./command-router.js";
 import { ChatRoutingTelemetry, type ChatRoutingTelemetrySnapshot } from "./routing-telemetry.js";
-import { createChatOnlyTooling } from "./tooling-factory.js";
+import type { AgentRuntime } from "../runtime/agent-runtime.js";
 import type { MediaRuntimeTelemetry, MediaUnderstandingService } from "../media/service.js";
 import type { BrowserRuntimeTelemetry } from "../runtime/browser/index.js";
-import type { ProjectContextService } from "../projects/service.js";
-import { ProjectPromptContextBuilder } from "../projects/prompt-context.js";
 import { SkillService, type SkillsRuntimeTelemetry } from "../skills/service.js";
 
 function shouldResetSessionOnEngineError(error: unknown): boolean {
@@ -83,28 +79,21 @@ type PreLlmDeterministicRouteResult =
   | { pipeline: PipelineState };
 
 export class ChatService {
-  private readonly tooling: EngineToolingInterface;
-  private readonly chatOnlyTooling: EngineToolingInterface;
+  private readonly runtime: AgentRuntime;
   private readonly memoryOrchestrator: MemoryOrchestrator;
   private readonly commandRouter = new CommandRouter();
   private readonly routingTelemetry = new ChatRoutingTelemetry();
   private readonly skills: SkillService;
-  private readonly projectPromptContext: ProjectPromptContextBuilder;
 
   constructor(
     private readonly sessions: SessionStore,
-    private readonly shell: ShellRuntime,
     private readonly orchestrator: TurnOrchestrator,
     private readonly media: MediaUnderstandingService,
-    memory: MemoryService,
-    tooling: EngineToolingInterface,
-    projects: ProjectContextService,
+    runtime: AgentRuntime,
     skills: SkillService,
   ) {
-    this.memoryOrchestrator = new MemoryOrchestrator(this.sessions, memory, this.orchestrator);
-    this.tooling = tooling;
-    this.chatOnlyTooling = createChatOnlyTooling(tooling);
-    this.projectPromptContext = new ProjectPromptContextBuilder(projects);
+    this.runtime = runtime;
+    this.memoryOrchestrator = new MemoryOrchestrator(this.sessions, runtime.memory, this.orchestrator);
     this.skills = skills;
   }
 
@@ -115,7 +104,7 @@ export class ChatService {
     source?: "api" | "discord" | "email" | "unknown";
     requestId?: string;
   }): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string; artifacts: EngineOutputArtifact[] }> {
-    return this.handleMessageInternal(input, this.tooling, { allowOperationalShortcuts: true });
+    return this.handleMessageInternal(input, this.runtime, { allowOperationalShortcuts: true });
   }
 
   async handleMessageChatOnly(input: {
@@ -125,7 +114,7 @@ export class ChatService {
     source?: "api" | "discord" | "email" | "unknown";
     requestId?: string;
   }): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string; artifacts: EngineOutputArtifact[] }> {
-    return this.handleMessageInternal(input, this.chatOnlyTooling, { allowOperationalShortcuts: false });
+    return this.handleMessageInternal(input, this.runtime, { allowOperationalShortcuts: false });
   }
 
   getRoutingTelemetrySnapshot(): ChatRoutingTelemetrySnapshot {
@@ -145,7 +134,7 @@ export class ChatService {
   }
 
   getBrowserRuntimeTelemetrySnapshot(): BrowserRuntimeTelemetry {
-    return this.tooling.browser.browserRuntimeTelemetry();
+    return this.runtime.browser.getRuntimeTelemetrySnapshot();
   }
 
   getSkillsRuntimeTelemetrySnapshot(): SkillsRuntimeTelemetry {
@@ -154,22 +143,22 @@ export class ChatService {
 
   private async handleMessageInternal(
     input: HandleMessageInput,
-    tooling: EngineToolingInterface,
+    runtime: AgentRuntime,
     opts: { allowOperationalShortcuts: boolean },
   ): Promise<ChatReplyEnvelope> {
     const userMessage = appendAttachmentSummaryToMessage(input.message, input.attachments);
     let user = await this.sessions.appendMessage(input.sessionKey, "user", userMessage);
 
     try {
-      const deterministicRoute = await this.tryDeterministicRoute(input, tooling, opts, user);
+      const deterministicRoute = await this.tryDeterministicRoute(input, runtime, opts, user);
       if ("reply" in deterministicRoute) {
         return deterministicRoute.reply;
       }
 
       const llmMessage = await this.prepareLlmMessageStage(input, deterministicRoute.pipeline);
-      return this.runLlmTurnStage(input, tooling, user, llmMessage);
+      return this.runLlmTurnStage(input, runtime, user, llmMessage);
     } catch (error) {
-      return this.handlePipelineError(input, tooling, userMessage, user, error);
+      return this.handlePipelineError(input, runtime, userMessage, user, error);
     }
   }
 
@@ -180,7 +169,7 @@ export class ChatService {
   private async handleCompactCommand(input: {
     sessionKey: string;
     currentMessage: string;
-    tooling: EngineToolingInterface;
+    runtime: AgentRuntime;
     requestId?: string;
   }): Promise<{ reply: string }> {
     const { flush, promote, compaction } = await this.memoryOrchestrator.runManualCompact(input);
@@ -205,7 +194,7 @@ export class ChatService {
 
   private async tryDeterministicRoute(
     input: HandleMessageInput,
-    tooling: EngineToolingInterface,
+    runtime: AgentRuntime,
     opts: { allowOperationalShortcuts: boolean },
     user: SessionMessage,
   ): Promise<PreLlmDeterministicRouteResult> {
@@ -215,12 +204,12 @@ export class ChatService {
     }
     const pipeline = manualSkillResult;
 
-    const compactReply = await this.tryCompactStage(input, tooling, user);
+    const compactReply = await this.tryCompactStage(input, runtime, user);
     if (compactReply) {
       return { reply: compactReply };
     }
 
-    const fastPathReply = await this.tryOperationalFastPathStage(input, tooling, opts, user, pipeline);
+    const fastPathReply = await this.tryOperationalFastPathStage(input, runtime, opts, user, pipeline);
     if (fastPathReply) {
       return { reply: fastPathReply };
     }
@@ -271,7 +260,7 @@ export class ChatService {
 
   private async tryCompactStage(
     input: HandleMessageInput,
-    tooling: EngineToolingInterface,
+    runtime: AgentRuntime,
     user: SessionMessage,
   ): Promise<ChatReplyEnvelope | null> {
     if (!this.memoryOrchestrator.isCompactCommand(input.message)) {
@@ -286,7 +275,7 @@ export class ChatService {
     const result = await this.handleCompactCommand({
       sessionKey: input.sessionKey,
       currentMessage: input.message,
-      tooling,
+      runtime,
       requestId: input.requestId,
     });
     const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", result.reply);
@@ -300,7 +289,7 @@ export class ChatService {
 
   private async tryOperationalFastPathStage(
     input: HandleMessageInput,
-    tooling: EngineToolingInterface,
+    runtime: AgentRuntime,
     opts: { allowOperationalShortcuts: boolean },
     user: SessionMessage,
     pipeline: PipelineState,
@@ -312,7 +301,7 @@ export class ChatService {
       sessionKey: input.sessionKey,
       message: input.message,
       requestId: input.requestId,
-      tooling,
+      runtime,
       allowOperationalShortcuts: opts.allowOperationalShortcuts,
     });
     if (!commandRoute.handled) {
@@ -334,10 +323,7 @@ export class ChatService {
   }
 
   private async prepareLlmMessageStage(input: HandleMessageInput, pipeline: PipelineState): Promise<string> {
-    const projectHint = this.projectPromptContext.extractMention(input.message);
-    let llmInputMessage = projectHint && !pipeline.skillManualApplied
-      ? projectHint.cleanedMessage || pipeline.llmInputMessage
-      : pipeline.llmInputMessage;
+    let llmInputMessage = pipeline.llmInputMessage;
     if (!pipeline.skillManualApplied) {
       const preparedSkillTurn = await this.skills.prepareTurnMessage(llmInputMessage, {
         sessionKey: input.sessionKey,
@@ -350,16 +336,6 @@ export class ChatService {
           skillName: preparedSkillTurn.autoAppliedSkillName,
         });
       }
-    }
-
-    if (projectHint) {
-      llmInputMessage = await this.projectPromptContext.appendMentionedProjectContext({
-        sessionKey: input.sessionKey,
-        requestId: input.requestId,
-        originalMessage: input.message,
-        message: llmInputMessage,
-        projectHint,
-      });
     }
 
     const mediaPreprocess = await this.media.preprocess({
@@ -381,14 +357,14 @@ export class ChatService {
 
   private async runLlmTurnStage(
     input: HandleMessageInput,
-    tooling: EngineToolingInterface,
+    runtime: AgentRuntime,
     user: SessionMessage,
     llmMessage: string,
   ): Promise<ChatReplyEnvelope> {
     await this.memoryOrchestrator.runAutoCompactionWithMemoryFlushIfNeeded({
       sessionKey: input.sessionKey,
       currentMessage: llmMessage,
-      tooling,
+      runtime,
       requestId: input.requestId,
     });
     this.routingTelemetry.record("llm_turn");
@@ -402,7 +378,7 @@ export class ChatService {
       message: llmMessage,
       attachments: input.attachments,
       requestId: input.requestId,
-      tooling,
+      runtime,
     });
     const reply = turn.reply;
     const artifacts = turn.artifacts ?? [];
@@ -417,7 +393,7 @@ export class ChatService {
 
   private async handlePipelineError(
     input: HandleMessageInput,
-    tooling: EngineToolingInterface,
+    runtime: AgentRuntime,
     storedUserMessage: string,
     user: SessionMessage,
     error: unknown,
@@ -429,7 +405,7 @@ export class ChatService {
         .split("\n")
         .find((line) => !line.includes("partial_web_evidence:"))
         ?.trim();
-      const sessions = await this.shell.process({
+      const sessions = await runtime.shell.process({
         sessionKey: input.sessionKey,
         action: "list",
       });
@@ -469,7 +445,7 @@ export class ChatService {
       message: input.message,
       attachments: input.attachments,
       requestId: input.requestId,
-      tooling,
+      runtime,
     });
     const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", turn.reply);
 

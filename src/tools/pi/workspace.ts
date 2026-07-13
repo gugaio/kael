@@ -1,5 +1,5 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineToolingInterface } from "../../agents/types.js";
+import type { WorkspaceInspector } from "../../workspace/inspector.js";
 
 type TextBlock = {
   type: "text";
@@ -7,7 +7,7 @@ type TextBlock = {
 };
 
 export function createWorkspacePiTools(params: {
-  tooling: EngineToolingInterface["workspace"];
+  workspace: WorkspaceInspector;
   textResult: (text: string) => TextBlock[];
 }): AgentTool[] {
   const workspaceSearchTool: AgentTool = {
@@ -26,7 +26,7 @@ export function createWorkspacePiTools(params: {
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
       const args = (rawParams ?? {}) as { query: string; maxResults?: number };
-      const hits = await params.tooling.workspaceSearch({
+      const hits = await params.workspace.search({
         query: args.query,
         maxResults: args.maxResults,
       });
@@ -60,8 +60,8 @@ export function createWorkspacePiTools(params: {
     } as unknown as AgentTool["parameters"],
     execute: async (_toolCallId, rawParams) => {
       const args = (rawParams ?? {}) as { path: string; from?: number; lines?: number };
-      const result = await params.tooling.workspaceRead({
-        path: args.path,
+      const result = await params.workspace.read({
+        relPath: args.path,
         from: args.from,
         lines: args.lines,
       });

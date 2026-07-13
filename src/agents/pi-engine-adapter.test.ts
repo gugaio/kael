@@ -30,7 +30,7 @@ describe("buildPrompt", () => {
     const prompt = buildPrompt({
       sessionKey: "s1",
       message: "Qual e meu time?",
-      tooling: {} as never,
+      runtime: {} as never,
       contextMessages: [],
     });
 
@@ -44,7 +44,7 @@ describe("buildPrompt", () => {
     const prompt = buildPrompt({
       sessionKey: "s1",
       message: "Lembra qual e minha preferencia de time?",
-      tooling: {} as never,
+      runtime: {} as never,
       contextMessages: [{ role: "user", content: "oi", createdAt: "2026-03-03T00:00:00.000Z" }],
     });
 
@@ -57,7 +57,7 @@ describe("buildPrompt", () => {
     const prompt = buildPrompt({
       sessionKey: "s1",
       message: "Me traga os destaques de hoje do site infomoney.com.br",
-      tooling: {} as never,
+      runtime: {} as never,
       contextMessages: [],
     });
 

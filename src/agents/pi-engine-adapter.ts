@@ -370,7 +370,7 @@ export class PiEngineAdapter implements AgentEngine {
         thinkingLevel: "low",
         tools: createPiTools({
           sessionKey: input.sessionKey,
-          tooling: input.tooling,
+          runtime: input.runtime,
           turnSignal: abortController.signal,
           loopGuard: this.loopGuard,
           trace: {

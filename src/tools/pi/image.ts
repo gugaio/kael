@@ -1,5 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineOutputArtifact, EngineToolingInterface } from "../../agents/types.js";
+import type { EngineOutputArtifact } from "../../agents/types.js";
+import type { ImageGeneratorService } from "../../media/image-generator.js";
 
 type TextBlock = {
   type: "text";
@@ -8,7 +9,7 @@ type TextBlock = {
 
 export function createImagePiTool(params: {
   sessionKey: string;
-  tooling: EngineToolingInterface["image"];
+  imageGenerator: ImageGeneratorService;
   textResult: (text: string) => TextBlock[];
   makeBlockedResult: (params: {
     reason: string;
@@ -54,18 +55,8 @@ export function createImagePiTool(params: {
         size?: "1024x1024" | "1536x1024" | "1024x1536";
       };
       const intent = params.logToolStart("image_generate", args);
-      if (!params.tooling.imageGenerate) {
-        const reason = "image_generate_unavailable";
-        const details = params.makeBlockedResult({ reason }).details;
-        params.logToolEnd("image_generate", intent, details, startedAtMs);
-        return {
-          content: params.textResult(`blocked=true\nreason=${reason}`),
-          details,
-        };
-      }
       try {
-        const artifact = await params.tooling.imageGenerate({
-          sessionKey: params.sessionKey,
+        const artifact = await params.imageGenerator.generate({
           prompt: args.prompt,
           size: args.size,
         });

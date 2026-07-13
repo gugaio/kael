@@ -37,21 +37,31 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
-### 2026-07-13 - PI tools movidas para src/tools/pi
+### 2026-07-13 - PI tools em src/tools/pi e runtime direto
 
 Resumo:
 - Movidos os wrappers/specs `AgentTool` do PI de `src/agents/tool-specs` para `src/tools/pi`.
-- `src/agents/pi-tools.ts` e `src/agents/pi-tools-budget.ts` agora consomem o catalogo pelo novo namespace.
+- Removido o adapter central `src/chat/tooling-factory.ts`; `ChatService`, `TurnOrchestrator`, `SimpleCommandEngine` e `PiEngineAdapter` agora propagam `AgentRuntime` com serviços/runtimes reais.
+- Removido o conceito de `chatOnlyRuntime`; `handleMessageChatOnly` reutiliza o mesmo `AgentRuntime` e apenas desativa atalhos operacionais por rota.
+- As PI tools chamam dependencias locais diretas (`shell`, `jobs`, `videoInspect`, `edge`, `mcp`, `planner`, etc.) em vez de `EngineToolingInterface`.
+- Removida a feature de `project space` do core ativo: endpoints `/projects/*`, `ProjectContextService`, tools PI `project_*`, injecao `@project` e skill `project-writer`.
 - Atualizada a arquitetura da fase 22 para apontar `video_stream_watch` no novo caminho.
+- Atualizada a fase 18 para registrar que o escopo por projeto saiu do runtime atual.
 
 Arquivos-chave:
+- `src/runtime/agent-runtime.ts`
 - `src/tools/pi/index.ts`
 - `src/agents/pi-tools.ts`
-- `src/agents/pi-tools-budget.ts`
+- `src/chat/service.ts`
+- `src/chat/turn-orchestrator.ts`
+- `src/agents/simple-engine-commands.ts`
+- `src/api/server.ts`
+- `docs/api.md`
+- `docs/architecture/phases/phase-18.md`
 - `docs/architecture/phases/phase-22.md`
 
 Checklist de validacao:
-- [x] `npx vitest run src/tools/pi/index.test.ts src/agents/pi-tools.test.ts`
+- [x] `npx vitest run src/tools/pi/index.test.ts src/agents/pi-tools.test.ts src/agents/simple-engine.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts src/skills/service.test.ts`
 - [ ] `npm run check` (falha pre-existente/nao relacionada: `src/app.ts` espera `StreamerService.loadOrigin`, ausente no pacote VHS atual)
 
 Pendencias:

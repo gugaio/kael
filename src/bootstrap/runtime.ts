@@ -13,7 +13,6 @@ import { HlsStreamMonitorService } from "../vhs/watch-registry.js";
 import { MediaArtifactsService } from "../media/artifacts.js";
 import { ProviderBackedMediaGenerationService } from "../media/generation.js";
 import { MemoryService } from "../memory/service.js";
-import { ProjectContextService } from "../projects/service.js";
 import { WorkspaceInspector } from "../workspace/inspector.js";
 import { BrowserRuntimeService, type BrowserRuntime } from "../runtime/browser/index.js";
 import { DisabledSearchProvider, TavilySearchProvider } from "../research/provider.js";
@@ -116,10 +115,6 @@ export async function createMemoryRuntime(config: KaelConfig): Promise<MemorySer
   });
   await memory.init();
   return memory;
-}
-
-export function createProjectContextRuntime(config: KaelConfig): ProjectContextService {
-  return new ProjectContextService(config.shell.workspaceRoot);
 }
 
 export function createWorkspaceRuntime(config: KaelConfig): WorkspaceInspector {

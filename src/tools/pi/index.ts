@@ -5,12 +5,10 @@ import { createJobsPiTools } from "./jobs.js";
 import { createMcpPiTools } from "./mcp.js";
 import { createMemoryPiTools } from "./memory.js";
 import { createPlanPiTools } from "./plans.js";
-import { createProjectsPiTools } from "./projects.js";
 import { createSystemPiTools } from "./system.js";
 import { createVideoPiTools } from "./video.js";
 import { createWebPiTools } from "./web.js";
 import { createWorkspacePiTools } from "./workspace.js";
-import type { EngineToolingInterface } from "../../agents/types.js";
 
 export {
   createBrowserPiTool,
@@ -20,7 +18,6 @@ export {
   createMcpPiTools,
   createMemoryPiTools,
   createPlanPiTools,
-  createProjectsPiTools,
   createSystemPiTools,
   createVideoPiTools,
   createWebPiTools,
@@ -31,7 +28,6 @@ export function buildPiTools(params: {
   system: Parameters<typeof createSystemPiTools>[0];
   video: Parameters<typeof createVideoPiTools>[0];
   jobs: Parameters<typeof createJobsPiTools>[0];
-  projects: Parameters<typeof createProjectsPiTools>[0];
   edge: Parameters<typeof createEdgePiTools>[0];
   mcp: Parameters<typeof createMcpPiTools>[0];
   memory: Parameters<typeof createMemoryPiTools>[0];
@@ -45,7 +41,6 @@ export function buildPiTools(params: {
     system: createSystemPiTools(params.system),
     video: createVideoPiTools(params.video),
     jobs: createJobsPiTools(params.jobs),
-    projects: createProjectsPiTools(params.projects),
     edge: createEdgePiTools(params.edge),
     mcp: createMcpPiTools(params.mcp),
     memory: createMemoryPiTools(params.memory),
@@ -56,5 +51,3 @@ export function buildPiTools(params: {
     image: createImagePiTool(params.image),
   };
 }
-
-export type PiNamespaceTooling = EngineToolingInterface;

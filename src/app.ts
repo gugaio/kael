@@ -10,7 +10,6 @@ import {
   createMcpRuntime,
   createMemoryRuntime,
   createPlannerRuntime,
-  createProjectContextRuntime,
   createResearchRuntime,
   createShellRuntime,
   createVideoRuntime,
@@ -20,7 +19,6 @@ import { createEngine } from "./agents/factory.js";
 import { JobService } from "./jobs/service.js";
 import { JobStore } from "./jobs/store.js";
 import { MemoryService } from "./memory/service.js";
-import { ProjectContextService } from "./projects/service.js";
 import { PlannerService } from "./planner/service.js";
 import { ResearchService } from "./research/service.js";
 import { SessionStore } from "./session/store.js";
@@ -30,7 +28,6 @@ import { GmailPop3Provider } from "./email/gmail-pop3-provider.js";
 import { GmailSmtpSender } from "./email/gmail-smtp-sender.js";
 import { FileEmailIngestDedupeStore } from "./email/ingest-dedupe-store.js";
 import { ChatService } from "./chat/service.js";
-import { createChatTooling } from "./chat/tooling-factory.js";
 import { TurnOrchestrator } from "./chat/turn-orchestrator.js";
 import type { ShellRuntime } from "./tools/system/shell-tool-service.js";
 import type { StreamWatchParams, StreamWatchStatus } from "./vhs/types.js";
@@ -62,7 +59,6 @@ export type KaelApp = {
   jobs: JobService;
   videoJobs: VideoJobs;
   memory: MemoryService;
-  projects: ProjectContextService;
   planner: PlannerService;
   research: ResearchService;
   chat: ChatService;
@@ -120,7 +116,6 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   const mcp = await createMcpRuntime(config);
   const edge = new EdgeRuntime();
   const memory = await createMemoryRuntime(config);
-  const projects = createProjectContextRuntime(config);
   const workspace = createWorkspaceRuntime(config);
   const browserRuntime = createBrowserRuntime(config);
   const research = createResearchRuntime(config);
@@ -135,34 +130,30 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     maxContextChars: config.context.maxChars,
   });
   const { mediaUnderstanding, imageGenerator, videoGeneration } = createMediaRuntime(config, mediaArtifacts);
-  const tooling = createChatTooling({
+  const runtime = {
     jobs,
     videoJobs,
-    shellRuntime: shell,
-    mcpRuntime: mcp,
-    edgeRuntime: edge,
+    shell,
+    mcp,
+    edge,
     videoInspect,
     memory,
-    projects,
     workspace,
     research,
     planner,
     playbackTriage: playback,
     streamMonitor,
-    browserRuntime,
+    browser: browserRuntime,
     imageGenerator,
     videoGeneration,
     streamer,
     serveManager,
-  });
+  };
   const chat = new ChatService(
     sessions,
-    shell,
     orchestrator,
     mediaUnderstanding,
-    memory,
-    tooling,
-    projects,
+    runtime,
     new SkillService(config.shell.workspaceRoot),
   );
   const heartbeat = new HeartbeatRunner(jobs, sessions);
@@ -283,7 +274,6 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     jobs,
     videoJobs,
     memory,
-    projects,
     planner,
     research,
     chat,

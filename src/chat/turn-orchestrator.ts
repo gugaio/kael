@@ -1,5 +1,6 @@
-import type { AgentEngine, EngineToolingInterface, EngineTurnInput, EngineTurnOutput } from "../agents/types.js";
+import type { AgentEngine, EngineTurnInput, EngineTurnOutput } from "../agents/types.js";
 import { kaelLogger } from "../infra/logger.js";
+import type { AgentRuntime } from "../runtime/agent-runtime.js";
 import type { SessionStore } from "../session/store.js";
 import type { SessionMessage } from "../types.js";
 
@@ -13,7 +14,7 @@ type OrchestratedTurnInput = {
   message: string;
   attachments?: EngineTurnInput["attachments"];
   requestId?: string;
-  tooling: EngineToolingInterface;
+  runtime: AgentRuntime;
 };
 
 type UtilityTurnInput = {
@@ -21,7 +22,7 @@ type UtilityTurnInput = {
   message: string;
   attachments?: EngineTurnInput["attachments"];
   requestId?: string;
-  tooling: EngineToolingInterface;
+  runtime: AgentRuntime;
   excludeCurrentMessage?: string | null;
 };
 
@@ -88,7 +89,7 @@ export class TurnOrchestrator {
       attachments: input.attachments,
       requestId: input.requestId,
       contextMessages,
-      tooling: input.tooling,
+      runtime: input.runtime,
     });
   }
 
@@ -113,7 +114,7 @@ export class TurnOrchestrator {
       attachments: input.attachments,
       requestId: input.requestId,
       contextMessages,
-      tooling: input.tooling,
+      runtime: input.runtime,
     });
   }
 

@@ -15,7 +15,7 @@ describe("createPiNamespaceTools", () => {
     const registry = buildPiTools({
       system: {
         sessionKey: "s1",
-        tooling: {} as never,
+        shell: {} as never,
         textResult,
         formatSession: () => "session=s1",
         makeBlockedResult,
@@ -26,27 +26,25 @@ describe("createPiNamespaceTools", () => {
       },
       video: {
         sessionKey: "s1",
-        tooling: {} as never,
+        videoInspect: {} as never,
+        playbackTriage: {} as never,
+        streamMonitor: {} as never,
+        streamer: {} as never,
+        serveManager: {} as never,
         textResult,
         reserveToolCall: () => null,
         logToolStart,
         logToolEnd,
       },
       jobs: {
-        tooling: {} as never,
+        jobs: {} as never,
         textResult,
         reserveToolCall: () => null,
         logToolStart,
         logToolEnd,
       },
-      projects: {
-        tooling: {} as never,
-        textResult,
-        logToolStart,
-        logToolEnd,
-      },
       edge: {
-        tooling: {} as never,
+        edge: {} as never,
         textResult,
         makeBlockedResult,
         reserveEdgeCall: reserveNone,
@@ -55,7 +53,7 @@ describe("createPiNamespaceTools", () => {
       },
       mcp: {
         sessionKey: "s1",
-        tooling: {} as never,
+        mcp: {} as never,
         textResult,
         makeBlockedResult,
         reserveMcpCall: reserveNone,
@@ -63,18 +61,18 @@ describe("createPiNamespaceTools", () => {
         logToolEnd,
       },
       memory: {
-        tooling: {} as never,
+        memory: {} as never,
         textResult,
         logToolStart,
         logToolEnd,
       },
       workspace: {
-        tooling: {} as never,
+        workspace: {} as never,
         textResult,
       },
       web: {
         sessionKey: "s1",
-        tooling: {} as never,
+        research: {} as never,
         textResult,
         makeBlockedResult,
         reserveWebCall: () => null,
@@ -83,7 +81,7 @@ describe("createPiNamespaceTools", () => {
       },
       browser: {
         sessionKey: "s1",
-        tooling: {} as never,
+        browser: {} as never,
         textResult,
         reserveBrowserCall: () => null,
         logToolStart,
@@ -91,12 +89,14 @@ describe("createPiNamespaceTools", () => {
       },
       plans: {
         sessionKey: "s1",
-        tooling: {} as never,
+        planner: {} as never,
+        jobs: {} as never,
+        shell: {} as never,
         textResult,
       },
       image: {
         sessionKey: "s1",
-        tooling: {} as never,
+        imageGenerator: {} as never,
         textResult,
         makeBlockedResult,
         reserveImageCall: reserveNone,
@@ -117,12 +117,6 @@ describe("createPiNamespaceTools", () => {
       "stream_stop",
     ]);
     expect(registry.jobs.map((tool) => tool.name)).toEqual(["jobs_list", "jobs_get", "jobs_log_tail"]);
-    expect(registry.projects.map((tool) => tool.name)).toEqual([
-      "project_search",
-      "project_get_document",
-      "project_upsert_document",
-      "project_list_documents",
-    ]);
     expect(registry.edge.map((tool) => tool.name)).toEqual([
       "edge_list",
       "edge_call",

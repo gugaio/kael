@@ -269,3 +269,14 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
   - consolidar secoes sobrepostas;
   - normalizar headings e preservar contexto correto.
 - Os exemplos da skill foram expandidos para cobrir consolidacao de secoes existentes em vez de append cego.
+
+## Entregas implementadas (incremento 18.15)
+
+- O `project space` foi removido do core ativo por nao estar em uso no fluxo atual.
+- Superficies removidas:
+  - endpoints `/projects/*`;
+  - `ProjectContextService`;
+  - injecao de contexto via `@project`;
+  - PI tools `project_*`;
+  - skill `.kael/skills/project-writer`.
+- A decisao simplifica o runtime atual para manter apenas `AgentRuntime`; uma futura retomada de escopo por projeto deve entrar como filtro/politica sobre o runtime existente, nao como camada paralela.

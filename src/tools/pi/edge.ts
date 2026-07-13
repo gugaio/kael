@@ -1,5 +1,5 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineToolingInterface } from "../../agents/types.js";
+import type { EdgeRuntime } from "../../edge/runtime.js";
 
 type TextBlock = {
   type: "text";
@@ -15,7 +15,7 @@ function stringifyCompact(value: unknown): string {
 }
 
 export function createEdgePiTools(params: {
-  tooling: EngineToolingInterface["edge"];
+  edge: EdgeRuntime;
   textResult: (text: string) => TextBlock[];
   makeBlockedResult: (params: {
     reason: string;
@@ -48,7 +48,10 @@ export function createEdgePiTools(params: {
       const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as { clientId?: string; capability?: string };
       const intent = params.logToolStart("edge_list", args);
-      const items = params.tooling.edgeList({ clientId: args.clientId, capability: args.capability });
+      const items = params.edge
+        .listCapabilities()
+        .filter((item) => (args.clientId ? item.clientId === args.clientId : true))
+        .filter((item) => (args.capability ? item.name === args.capability : true));
       const text = [`ok=true`, `count=${items.length}`, items.length > 0 ? `items:\n${stringifyCompact(items)}` : ""]
         .filter(Boolean)
         .join("\n");
@@ -104,7 +107,7 @@ export function createEdgePiTools(params: {
           return blockedResult;
         }
       }
-      const result = await params.tooling.edgeCall({
+      const result = await params.edge.dispatchTask({
         capability: args.capability,
         input,
         clientId: args.clientId,
@@ -194,13 +197,9 @@ export function createEdgePiTools(params: {
         ...(filters !== undefined ? { filters } : {}),
       };
 
-      const result = await params.tooling.youboraMetricsGet({
-        fromDate: args.fromDate,
-        toDate: args.toDate,
-        metrics: args.metrics,
-        type: args.type,
-        granularity: args.granularity,
-        filters,
+      const result = await params.edge.dispatchTask({
+        capability: "youbora.metrics.get",
+        input,
         clientId: args.clientId,
         timeoutMs: args.timeoutMs,
       });
@@ -280,11 +279,14 @@ export function createEdgePiTools(params: {
           return blockedResult;
         }
       }
-      const result = await params.tooling.youboraRawdataGet({
-        fromDate: args.fromDate,
-        toDate: args.toDate,
-        type: args.type,
-        filters,
+      const result = await params.edge.dispatchTask({
+        capability: "youbora.rawdata.get",
+        input: {
+          fromDate: args.fromDate,
+          ...(args.toDate ? { toDate: args.toDate } : {}),
+          ...(args.type ? { type: args.type } : {}),
+          ...(filters !== undefined ? { filters } : {}),
+        },
         clientId: args.clientId,
         timeoutMs: args.timeoutMs,
       });
@@ -361,11 +363,14 @@ export function createEdgePiTools(params: {
           return blockedResult;
         }
       }
-      const result = await params.tooling.youboraEventsGet({
-        fromDate: args.fromDate,
-        toDate: args.toDate,
-        type: args.type,
-        filters,
+      const result = await params.edge.dispatchTask({
+        capability: "youbora.events.get",
+        input: {
+          fromDate: args.fromDate,
+          ...(args.toDate ? { toDate: args.toDate } : {}),
+          ...(args.type ? { type: args.type } : {}),
+          ...(filters !== undefined ? { filters } : {}),
+        },
         clientId: args.clientId,
         timeoutMs: args.timeoutMs,
       });
