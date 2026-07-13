@@ -79,7 +79,6 @@ Nota: o comando `discord-bot` roda em modo chat-only, sem scheduler/email pollin
 - `transcode`
 - `convert_hls`
 - `capture_stream`
-- `probe_media`
 
 ### Shell no modo PI
 

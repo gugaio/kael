@@ -201,7 +201,6 @@ function makeFakeApp(): KaelApp {
       startTranscode: async () => ({ id: "j1" }),
       startConvertHls: async () => ({ id: "j2" }),
       startCaptureStream: async () => ({ id: "j3" }),
-      startProbeMedia: async () => ({ id: "j4" }),
       cancelJob: async (jobId: string) => ({
         job: { id: jobId, status: "canceled" },
         canceled: true,
@@ -719,7 +718,7 @@ function makeFakeApp(): KaelApp {
     },
     streamer: {
       listOrigins: async () => [],
-      inspectOrigin: async () => {
+      loadOrigin: async () => {
         throw new Error("streamer inspect not implemented in fake app");
       },
       probeOrigin: async () => {

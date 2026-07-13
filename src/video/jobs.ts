@@ -92,26 +92,6 @@ export function createVideoJobs({ jobs, options }: VideoJobDeps) {
       });
     },
 
-    async startProbeMedia(params: { sessionKey: string; inputPath: string }) {
-      await inputPath(params.inputPath, "inputPath");
-      return enqueue({
-        sessionKey: params.sessionKey,
-        command: "ffprobe",
-        input: params.inputPath,
-        args: ["-v", "error", "-show_entries", "format=duration,size,bit_rate:stream=index,codec_name,codec_type,width,height,avg_frame_rate", "-of", "json", params.inputPath],
-      });
-    },
-
-    async startProbeUrl(params: { sessionKey: string; streamUrl: string }) {
-      validateStreamUrl(params.streamUrl);
-      return enqueue({
-        sessionKey: params.sessionKey,
-        command: "ffprobe",
-        input: params.streamUrl,
-        args: ["-v", "error", "-show_entries", "format=duration,size,bit_rate:stream=index,codec_name,codec_type,width,height,avg_frame_rate", "-of", "json", params.streamUrl],
-      });
-    },
-
     async startPlayVlc(params: { sessionKey: string; input: string }) {
       const input = params.input.trim();
       if (!input) throw new Error("input is required");

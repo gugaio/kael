@@ -78,7 +78,6 @@ export function createChatTooling(executors: ChatToolingExecutors): EngineToolin
       startTranscode: (params) => executors.videoJobs.startTranscode(params),
       startConvertHls: (params) => executors.videoJobs.startConvertHls(params),
       startCaptureStream: (params) => executors.videoJobs.startCaptureStream(params),
-      startProbeMedia: (params) => executors.videoJobs.startProbeMedia(params),
       startPlayVlc: (params) => executors.videoJobs.startPlayVlc(params),
       videoHlsInspect: async ({ url, maxSegments, timeoutMs }) =>
         executors.videoInspect.inspectHls({ url, maxSegments, timeoutMs }),
@@ -337,9 +336,6 @@ export function createChatOnlyTooling(tooling: EngineToolingInterface): EngineTo
       },
       startCaptureStream: async () => {
         throw new Error("chat-only mode: capture_stream disabled");
-      },
-      startProbeMedia: async () => {
-        throw new Error("chat-only mode: probe_media job disabled");
       },
       startPlayVlc: async () => {
         throw new Error("chat-only mode: play_vlc job disabled");

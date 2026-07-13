@@ -33,10 +33,6 @@ export type EngineVideoTooling = {
     outputPath: string;
     durationSeconds?: number;
   }) => Promise<JobRecord>;
-  startProbeMedia: (params: {
-    sessionKey: string;
-    inputPath: string;
-  }) => Promise<JobRecord>;
   startPlayVlc?: (params: {
     sessionKey: string;
     input: string;

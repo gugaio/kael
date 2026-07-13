@@ -37,7 +37,6 @@ function createTooling(overrides: ToolingOverrides = {}): EngineToolingInterface
       startTranscode: async () => ({ id: "job-1" } as never),
       startConvertHls: async () => ({ id: "job-2" } as never),
       startCaptureStream: async () => ({ id: "job-3" } as never),
-      startProbeMedia: async () => ({ id: "job-4" } as never),
       startPlayVlc: async () => ({ id: "job-5" } as never),
       videoHlsInspect: async () => ({
         ok: true,
