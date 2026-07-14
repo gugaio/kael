@@ -7,6 +7,7 @@ import { useLiveEvents } from "../lib/live-events";
 const navItems = [
   { to: "/", label: "Ops" },
   { to: "/chat", label: "Chat" },
+  { to: "/streams/watch", label: "Watch" },
   { to: "/streams", label: "Streams" },
   { to: "/plans", label: "Plans" },
   { to: "/jobs", label: "Jobs" },
@@ -55,6 +56,7 @@ export function AppShell(props: { children: ReactNode }): JSX.Element {
               <NavLink
                 key={item.to}
                 to={item.to}
+                end={item.to === "/" || item.to === "/streams"}
                 className={({ isActive }) =>
                   [
                     "flex items-center justify-between rounded-2xl border px-4 py-3 text-sm font-medium transition",

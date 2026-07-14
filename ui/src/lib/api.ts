@@ -552,6 +552,97 @@ export type StreamFault = {
   createdAt: string;
 };
 
+export type StreamWatchEvent = {
+  code: string;
+  severity: string;
+  summary: string;
+  evidence: string[];
+  detectedAt: string;
+};
+
+export type StreamWatchChunk = {
+  id: string;
+  phase: "queued" | "downloading" | "downloaded" | "analyzing" | "analyzed" | "failed";
+  variantIndex: number;
+  variantCount: number;
+  segmentIndex: number;
+  segmentCount: number;
+  originalSegmentIndex?: number;
+  url?: string;
+  localUri?: string;
+  startedAt?: string;
+  downloadedAt?: string;
+  analyzedAt?: string;
+  bytes?: number;
+  durationSeconds?: number;
+  streamType?: "video" | "audio" | "subtitle" | "data" | "unknown";
+  codecName?: string;
+  streamSelector?: string;
+  actualDurationSeconds?: number;
+  durationDeltaSeconds?: number;
+  continuityStatus?: string;
+  keyframeCount?: number;
+  startsWithKeyframe?: boolean;
+  firstPtsTime?: number;
+  lastPtsTime?: number;
+  firstDtsTime?: number;
+  lastDtsTime?: number;
+  avStartPtsDeltaSeconds?: number;
+  avEndPtsDeltaSeconds?: number;
+  avBoundaryDeltaSeconds?: number;
+  avBoundaryStatus?: "ok" | "gap" | "overlap" | "reset" | "unknown";
+  streams?: StreamWatchChunkStream[];
+  errors: string[];
+};
+
+export type StreamWatchChunkStream = {
+  streamSelector: string;
+  streamType?: "video" | "audio" | "subtitle" | "data" | "unknown";
+  codecName?: string;
+  actualDurationSeconds?: number;
+  durationDeltaSeconds?: number;
+  firstPtsTime?: number;
+  lastPtsTime?: number;
+  firstDtsTime?: number;
+  lastDtsTime?: number;
+  lastSampleDurationSeconds?: number;
+  previousPtsDeltaSeconds?: number;
+  previousBoundaryStatus?: "ok" | "gap" | "overlap" | "reset" | "unknown";
+  sampleCount?: number;
+  keyframeCount?: number;
+  startsWithKeyframe?: boolean;
+  maxKeyframeGapSeconds?: number;
+  errors: string[];
+};
+
+export type StreamWatch = {
+  id: string;
+  sessionKey: string;
+  url: string;
+  profile: "manifest" | "chunks" | "full";
+  mode: "auto" | "vod" | "live";
+  inputType: "unknown" | "vod" | "live";
+  state: "running" | "completed" | "failed" | "stopped";
+  startedAt: string;
+  completedAt?: string;
+  expiresAt?: string;
+  lastPollAt: string | null;
+  pollCount: number;
+  errorCount: number;
+  downloadedSegmentCount: number;
+  analyzedSegmentCount: number;
+  totalSegmentCount?: number;
+  currentChunk?: StreamWatchChunk;
+  recentChunks: StreamWatchChunk[];
+  originId?: string;
+  report?: {
+    jsonPath?: string;
+    htmlPath?: string;
+  };
+  events: StreamWatchEvent[];
+  running: boolean;
+};
+
 export type StreamAnalysisEntry = {
   kind: "variant" | "rendition";
   mediaIndex: number;
@@ -670,6 +761,97 @@ const StreamFaultSchema: z.ZodType<StreamFault> = z.object({
   segmentIndex: z.number(),
   description: z.string(),
   createdAt: z.string(),
+});
+
+const StreamWatchEventSchema: z.ZodType<StreamWatchEvent> = z.object({
+  code: z.string(),
+  severity: z.string(),
+  summary: z.string(),
+  evidence: z.array(z.string()),
+  detectedAt: z.string(),
+});
+
+const StreamWatchChunkStreamSchema: z.ZodType<StreamWatchChunkStream> = z.object({
+  streamSelector: z.string(),
+  streamType: z.enum(["video", "audio", "subtitle", "data", "unknown"]).optional(),
+  codecName: z.string().optional(),
+  actualDurationSeconds: z.number().optional(),
+  durationDeltaSeconds: z.number().optional(),
+  firstPtsTime: z.number().optional(),
+  lastPtsTime: z.number().optional(),
+  firstDtsTime: z.number().optional(),
+  lastDtsTime: z.number().optional(),
+  lastSampleDurationSeconds: z.number().optional(),
+  previousPtsDeltaSeconds: z.number().optional(),
+  previousBoundaryStatus: z.enum(["ok", "gap", "overlap", "reset", "unknown"]).optional(),
+  sampleCount: z.number().optional(),
+  keyframeCount: z.number().optional(),
+  startsWithKeyframe: z.boolean().optional(),
+  maxKeyframeGapSeconds: z.number().optional(),
+  errors: z.array(z.string()),
+});
+
+const StreamWatchChunkSchema: z.ZodType<StreamWatchChunk> = z.object({
+  id: z.string(),
+  phase: z.enum(["queued", "downloading", "downloaded", "analyzing", "analyzed", "failed"]),
+  variantIndex: z.number(),
+  variantCount: z.number(),
+  segmentIndex: z.number(),
+  segmentCount: z.number(),
+  originalSegmentIndex: z.number().optional(),
+  url: z.string().optional(),
+  localUri: z.string().optional(),
+  startedAt: z.string().optional(),
+  downloadedAt: z.string().optional(),
+  analyzedAt: z.string().optional(),
+  bytes: z.number().optional(),
+  durationSeconds: z.number().optional(),
+  streamType: z.enum(["video", "audio", "subtitle", "data", "unknown"]).optional(),
+  codecName: z.string().optional(),
+  streamSelector: z.string().optional(),
+  actualDurationSeconds: z.number().optional(),
+  durationDeltaSeconds: z.number().optional(),
+  continuityStatus: z.string().optional(),
+  keyframeCount: z.number().optional(),
+  startsWithKeyframe: z.boolean().optional(),
+  firstPtsTime: z.number().optional(),
+  lastPtsTime: z.number().optional(),
+  firstDtsTime: z.number().optional(),
+  lastDtsTime: z.number().optional(),
+  avStartPtsDeltaSeconds: z.number().optional(),
+  avEndPtsDeltaSeconds: z.number().optional(),
+  avBoundaryDeltaSeconds: z.number().optional(),
+  avBoundaryStatus: z.enum(["ok", "gap", "overlap", "reset", "unknown"]).optional(),
+  streams: z.array(StreamWatchChunkStreamSchema).optional(),
+  errors: z.array(z.string()),
+});
+
+const StreamWatchSchema: z.ZodType<StreamWatch> = z.object({
+  id: z.string(),
+  sessionKey: z.string(),
+  url: z.string(),
+  profile: z.enum(["manifest", "chunks", "full"]),
+  mode: z.enum(["auto", "vod", "live"]),
+  inputType: z.enum(["unknown", "vod", "live"]),
+  state: z.enum(["running", "completed", "failed", "stopped"]),
+  startedAt: z.string(),
+  completedAt: z.string().optional(),
+  expiresAt: z.string().optional(),
+  lastPollAt: z.string().nullable(),
+  pollCount: z.number(),
+  errorCount: z.number(),
+  downloadedSegmentCount: z.number(),
+  analyzedSegmentCount: z.number(),
+  totalSegmentCount: z.number().optional(),
+  currentChunk: StreamWatchChunkSchema.optional(),
+  recentChunks: z.array(StreamWatchChunkSchema),
+  originId: z.string().optional(),
+  report: z.object({
+    jsonPath: z.string().optional(),
+    htmlPath: z.string().optional(),
+  }).optional(),
+  events: z.array(StreamWatchEventSchema),
+  running: z.boolean(),
 });
 
 const StreamSchema: z.ZodType<StreamItem> = z.object({
@@ -839,6 +1021,56 @@ export async function stopStream(originId: string): Promise<void> {
 export async function deleteStream(originId: string): Promise<void> {
   const response = await fetch(`/api/streams/${encodeURIComponent(originId)}`, { method: "DELETE" });
   const schema = z.object({ ok: z.boolean() });
+  await parseJson(response, schema);
+}
+
+export async function getStreamWatches(): Promise<StreamWatch[]> {
+  const response = await fetch("/api/streams/watch");
+  const schema = z.object({ ok: z.boolean(), watches: z.array(StreamWatchSchema) });
+  const data = await parseJson(response, schema);
+  return data.watches;
+}
+
+export async function getStreamWatch(watchId: string): Promise<StreamWatch> {
+  const response = await fetch(`/api/streams/watch/${encodeURIComponent(watchId)}`);
+  const schema = z.object({ ok: z.boolean(), status: StreamWatchSchema });
+  const data = await parseJson(response, schema);
+  return data.status;
+}
+
+export async function createStreamWatch(params: {
+  url: string;
+  sessionKey?: string;
+  profile?: "manifest" | "chunks" | "full";
+  mode?: "auto" | "vod" | "live";
+  pollIntervalMs?: number;
+  maxDurationMs?: number;
+  retentionHours?: number;
+  timeoutMs?: number;
+  variantSelector?: string;
+  allVariants?: boolean;
+}): Promise<StreamWatch> {
+  const response = await fetch("/api/streams/watch", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const schema = z.object({ ok: z.boolean(), watchId: z.string(), status: StreamWatchSchema.nullable() });
+  const data = await parseJson(response, schema);
+  if (!data.status) throw new Error(`Watch ${data.watchId} was created but status was unavailable`);
+  return data.status;
+}
+
+export async function stopStreamWatch(watchId: string): Promise<StreamWatch | null> {
+  const response = await fetch(`/api/streams/watch/${encodeURIComponent(watchId)}/stop`, { method: "POST" });
+  const schema = z.object({ ok: z.boolean(), stopped: z.boolean(), status: StreamWatchSchema.nullable() });
+  const data = await parseJson(response, schema);
+  return data.status;
+}
+
+export async function deleteStreamWatch(watchId: string): Promise<void> {
+  const response = await fetch(`/api/streams/watch/${encodeURIComponent(watchId)}`, { method: "DELETE" });
+  const schema = z.object({ ok: z.boolean(), removed: z.boolean() });
   await parseJson(response, schema);
 }
 

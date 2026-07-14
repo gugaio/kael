@@ -42,6 +42,9 @@ O foco inicial e operacional:
   seu contrato de tools/API atual.
 - A capability chama-se `streamer`, nao `mock`, porque a fronteira representa
   operacao real de streams, nao apenas fixture falsa.
+- O monitor live incremental de chunks tambem vive no VHS: `HlsWatchService`
+  suporta `profile=chunks/full` com `mode=live`, baixando segmentos novos por
+  polling de manifesto e analisando cada arquivo com `MediaInspector.probe`.
 - O subdomínio determinístico de mídia foi removido de `src/capabilities/video`.
   O Kael importa a API pública de `@gugaio/vhs`; `MediaInspector` é o primitivo
   de parsing/fetch de HLS e DASH e `StreamerService` é dono dos origins.

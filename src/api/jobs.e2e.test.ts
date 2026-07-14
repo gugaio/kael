@@ -407,6 +407,7 @@ async function createJobsServer(params: {
     streamMonitor: {
       startWatch: () => "watch-stub",
       stopWatch: () => true,
+      removeWatch: async () => true,
       getStatus: () => null,
       listWatches: () => [],
       stopAll: () => {},

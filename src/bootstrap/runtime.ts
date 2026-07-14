@@ -58,7 +58,12 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
   const videoInspect = vhs.inspect;
   const mediaArtifacts = new MediaArtifactsService(path.join(config.dataDir, "media", "artifacts"));
   await mediaArtifacts.init();
-  const streamMonitor = new HlsStreamMonitorService(vhs.watch);
+  const streamMonitor = new HlsStreamMonitorService(
+    vhs.watch,
+    vhs.stream,
+    path.join(config.dataDir, "stream-watch"),
+  );
+  await streamMonitor.init();
   const streamer = vhs.stream;
   return {
     jobs,

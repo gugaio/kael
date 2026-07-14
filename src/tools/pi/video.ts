@@ -244,8 +244,9 @@ export function createVideoPiTools(params: {
     name: "video_stream_watch",
     label: "Video Stream Watch",
     description:
-      "Inicia, para ou consulta uma sessao de monitoramento continuo de stream HLS. " +
-      "Quando action=start, o Kael passa a fazer polling periodico do manifesto e detecta automaticamente: " +
+      "Inicia, para, remove ou consulta uma sessao de monitoramento continuo de stream HLS. " +
+      "Use profile=manifest para polling leve; profile=chunks/full para baixar uma janela, analisar chunks e gerar report. " +
+      "Quando profile=manifest, o Kael passa a fazer polling periodico do manifesto e detecta automaticamente: " +
       "descontinuidades (#EXT-X-DISCONTINUITY), gaps de mediaSequence, manifest congelado (stale), " +
       "anomalias de duracao de segmento e desaparecimento de rendisoes de audio. " +
       "Use action=status para consultar eventos detectados e action=stop para encerrar a sessao.",
@@ -254,8 +255,18 @@ export function createVideoPiTools(params: {
       properties: {
         action: {
           type: "string",
-          enum: ["start", "stop", "status", "list"],
-          description: "Acao a executar: start=inicia monitoramento, stop=encerra, status=consulta eventos, list=lista sessoes",
+          enum: ["start", "stop", "status", "list", "delete"],
+          description: "Acao a executar: start=inicia monitoramento, stop=encerra, status=consulta eventos, list=lista sessoes, delete=remove artefatos",
+        },
+        profile: {
+          type: "string",
+          enum: ["manifest", "chunks", "full"],
+          description: "Intensidade do watch. manifest=leve, chunks=baixa/análise janela, full=análise mais ampla. Padrao: manifest.",
+        },
+        mode: {
+          type: "string",
+          enum: ["auto", "vod", "live"],
+          description: "Tipo esperado da URL. live usa maxDurationMs como janela alvo. Padrao: auto.",
         },
         url: {
           type: "string",
@@ -273,9 +284,25 @@ export function createVideoPiTools(params: {
           type: "number",
           description: "Timeout de fetch por poll em ms. Padrao: 15000.",
         },
+        maxDurationMs: {
+          type: "number",
+          description: "Duracao maxima da janela para profile=chunks/full, especialmente live. Padrao: 3600000.",
+        },
+        retentionHours: {
+          type: "number",
+          description: "Horas ate cleanup dos artefatos do watch. Padrao: 24.",
+        },
+        variantSelector: {
+          type: "string",
+          description: "Variant para master playlist: aac-highest, aac-lowest, highest, lowest ou indice zero-based.",
+        },
+        allVariants: {
+          type: "boolean",
+          description: "Baixar/analisar todas as variants. Cuidado: pode consumir muita rede/disco.",
+        },
         watchId: {
           type: "string",
-          description: "ID da sessao de monitoramento. Obrigatorio para action=stop e action=status.",
+          description: "ID da sessao de monitoramento. Obrigatorio para action=stop, status e delete.",
         },
       },
       required: ["action"],
@@ -288,24 +315,45 @@ export function createVideoPiTools(params: {
       }
       const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as {
-        action: "start" | "stop" | "status" | "list";
+        action: "start" | "stop" | "status" | "list" | "delete";
         url?: string;
+        profile?: "manifest" | "chunks" | "full";
+        mode?: "auto" | "vod" | "live";
         pollIntervalMs?: number;
         maxPollCount?: number;
         timeoutMs?: number;
+        maxDurationMs?: number;
+        retentionHours?: number;
+        variantSelector?: string;
+        allVariants?: boolean;
         watchId?: string;
       };
       const intent = params.logToolStart("video_stream_watch", args);
       try {
-        const result = (() => {
+        type WatchToolResult = {
+          ok: boolean;
+          action: typeof args.action;
+          watchId?: string;
+          stopped?: boolean;
+          removed?: boolean;
+          status?: ReturnType<typeof params.streamMonitor.getStatus> extends infer T ? NonNullable<T> : never;
+          watches?: ReturnType<typeof params.streamMonitor.listWatches>;
+        };
+        const result: WatchToolResult | Promise<WatchToolResult> = (() => {
           if (args.action === "start") {
             if (!args.url) return { ok: false, action: args.action, watchId: undefined };
             const id = params.streamMonitor.startWatch({
               sessionKey: params.sessionKey,
               url: args.url,
+              profile: args.profile,
+              mode: args.mode,
               pollIntervalMs: args.pollIntervalMs,
               maxPollCount: args.maxPollCount,
               timeoutMs: args.timeoutMs,
+              maxDurationMs: args.maxDurationMs,
+              retentionHours: args.retentionHours,
+              variantSelector: args.variantSelector,
+              allVariants: args.allVariants,
             });
             return { ok: true, action: args.action, watchId: id, status: params.streamMonitor.getStatus(id) ?? undefined };
           }
@@ -319,23 +367,39 @@ export function createVideoPiTools(params: {
             const status = params.streamMonitor.getStatus(args.watchId);
             return { ok: status !== null, action: args.action, watchId: args.watchId, status: status ?? undefined };
           }
+          if (args.action === "delete") {
+            if (!args.watchId) return { ok: false, action: args.action };
+            return params.streamMonitor.removeWatch(args.watchId).then((removed): WatchToolResult => ({
+              ok: removed,
+              action: args.action,
+              watchId: args.watchId,
+              removed,
+            }));
+          }
           return { ok: true, action: "list", watches: params.streamMonitor.listWatches() };
         })();
+        const awaitedResult = await result;
         const textLines = [
-          `ok=${result.ok}`,
-          `action=${result.action}`,
+          `ok=${awaitedResult.ok}`,
+          `action=${awaitedResult.action}`,
         ];
-        if (result.watchId) textLines.push(`watchId=${result.watchId}`);
-        if (result.stopped !== undefined) textLines.push(`stopped=${result.stopped}`);
-        if (result.status) {
-          const s = result.status;
+        if (awaitedResult.watchId) textLines.push(`watchId=${awaitedResult.watchId}`);
+        if (awaitedResult.stopped !== undefined) textLines.push(`stopped=${awaitedResult.stopped}`);
+        if (awaitedResult.removed !== undefined) textLines.push(`removed=${awaitedResult.removed}`);
+        if (awaitedResult.status) {
+          const s = awaitedResult.status;
           textLines.push(
+            `profile=${s.profile}`,
+            `state=${s.state}`,
             `running=${s.running}`,
             `pollCount=${s.pollCount}`,
             `errorCount=${s.errorCount}`,
+            `downloadedSegments=${s.downloadedSegmentCount}`,
+            `analyzedSegments=${s.analyzedSegmentCount}`,
             `events=${s.events.length}`,
             `lastPollAt=${s.lastPollAt ?? "never"}`,
           );
+          if (s.report?.jsonPath) textLines.push("report=available");
           if (s.events.length > 0) {
             textLines.push("detectedEvents:");
             for (const ev of s.events.slice(-10)) {
@@ -343,14 +407,14 @@ export function createVideoPiTools(params: {
             }
           }
         }
-        if (result.watches) {
-          textLines.push(`sessions=${result.watches.length}`);
-          for (const w of result.watches) {
-            textLines.push(`- id=${w.id} running=${w.running} polls=${w.pollCount} events=${w.events.length} url=${w.url}`);
+        if (awaitedResult.watches) {
+          textLines.push(`sessions=${awaitedResult.watches.length}`);
+          for (const w of awaitedResult.watches) {
+            textLines.push(`- id=${w.id} profile=${w.profile} state=${w.state} running=${w.running} downloaded=${w.downloadedSegmentCount} analyzed=${w.analyzedSegmentCount} events=${w.events.length} url=${w.url}`);
           }
         }
-        params.logToolEnd("video_stream_watch", intent, result, startedAtMs);
-        return { content: params.textResult(textLines.join("\n")), details: result };
+        params.logToolEnd("video_stream_watch", intent, awaitedResult, startedAtMs);
+        return { content: params.textResult(textLines.join("\n")), details: awaitedResult };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const details = { status: "failed", blocked: false, reason: "video_stream_watch_failed", error: message };

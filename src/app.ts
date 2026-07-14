@@ -70,6 +70,7 @@ export type KaelApp = {
   streamMonitor: {
     startWatch(params: StreamWatchParams): string;
     stopWatch(id: string): boolean;
+    removeWatch(id: string): Promise<boolean>;
     getStatus(id: string): StreamWatchStatus | null;
     listWatches(): StreamWatchStatus[];
     stopAll(): void;

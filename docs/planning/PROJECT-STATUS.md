@@ -37,6 +37,50 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-07-14 - Stream watch com perfis, tool e UI
+
+Resumo:
+- `POST /streams/watch` passou a aceitar `profile=manifest|chunks|full`, `mode`, janela máxima, retenção, variant selector e `allVariants`.
+- `profile=manifest` preserva o watch leve de manifesto; `chunks/full` criam uma sessão persistida, clonam uma janela HLS local, analisam chunks com VHS/ffprobe e geram report JSON/HTML.
+- Adicionados `POST /streams/watch/:id/stop`, `GET /streams/watch/:id/report`, `GET /streams/watch/:id/report.html` e `DELETE /streams/watch/:id` para remoção de artefatos.
+- A tool PI `video_stream_watch` agora cria/lista/consulta/para/remove watches nos novos perfis.
+- Criadas as páginas `/streams/watch` e `/streams/watch/:watchId` para criar, acompanhar, parar, remover e abrir report de watches.
+- Corrigido o progresso de `chunks/full`: eventos de clone agora atualizam `lastPollAt`, total de segmentos, downloads e retries durante a execução; `full` não ativa mais `allVariants` por padrão.
+- O status de watch passou a expor `currentChunk` e `recentChunks`; a página de detalhe renderiza apenas os últimos 5 chunks com fase, bytes, durações, codec, stream selector, continuidade, keyframes e erros, evitando duplicar o chunk atual.
+- Movido o live incremental para o VHS: `HlsWatchService` agora suporta `profile=chunks/full` com `mode=live`, faz polling do manifesto por até a janela configurada, baixa só segmentos novos, roda `probe` por chunk e atualiza `currentChunk`/`recentChunks` em runtime. O Kael delega live para `vhs.watch`.
+- Adicionado alias `StreamerService.inspectOrigin()` no VHS para preservar o contrato consumido pelo Kael.
+- Corrigido o mapeamento de codec no live watch: o VHS agora seleciona o stream correspondente ao selector (`v:0`) em vez de usar `streams[0]`, evitando mostrar codec AAC como se fosse vídeo; `streamType` foi exposto no status/UI.
+- Live watch agora probeia elementary streams de vídeo e áudio por chunk (`v:0` e `a:0`) e expõe `streams[]` com type, codec, PTS/DTS inicial/final, samples, duração, keyframes e erros; a UI renderiza esses detalhes dentro do card de chunk.
+- Adicionados deltas operacionais: `avStartPtsDeltaSeconds`/`avEndPtsDeltaSeconds` para lipsync por chunk e `previousPtsDeltaSeconds`/`previousBoundaryStatus` por stream para detectar gap/overlap/reset contra o chunk anterior.
+- Adicionado `avBoundaryDeltaSeconds`/`avBoundaryStatus` por chunk, comparando o delta de borda do áudio contra o delta de borda do vídeo para detectar lipsync drift entre chunks.
+- Recalibrada a regra `media_sequence_gap` no VHS: agora o avanço de `MEDIA-SEQUENCE` é comparado contra `elapsed/targetDuration` com tolerância mínima/proporcional, evitando falsos positivos em polls longos como 21 segmentos em ~65s ou 56 segmentos em ~176s.
+
+Arquivos-chave:
+- `src/vhs/watch-registry.ts`
+- `src/vhs/types.ts`
+- `src/api/routes/stream-watch.ts`
+- `src/tools/pi/video.ts`
+- `ui/src/pages/StreamWatchPage.tsx`
+- `ui/src/pages/StreamWatchDetailPage.tsx`
+- `ui/src/lib/api.ts`
+- `docs/api.md`
+- `docs/architecture/phases/phase-22.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm --prefix ui run check`
+- [x] `npx vitest run src/api/server.test.ts src/agents/pi-tools.test.ts`
+- [x] `npm --prefix ui run build`
+- [x] `npm --prefix ../vhs run build`
+- [x] `npm --prefix ../vhs test -- test/stream.test.ts test/watch.test.ts`
+- [x] `npm --prefix ../vhs test -- test/watch-rules.test.ts test/watch.test.ts`
+
+Pendencias:
+- Persistir/recarregar sessões live incrementais do VHS após restart, mantendo `seenSegments` e histórico recente.
+
+Proximo passo recomendado:
+- Adicionar report final agregado para sessões live incrementais, além dos cards runtime.
+
 ### 2026-07-13 - PI tools em src/tools/pi e runtime direto
 
 Resumo:

@@ -585,6 +585,7 @@ function makeFakeApp(): KaelApp {
     streamMonitor: {
       startWatch: () => "watch-stub",
       stopWatch: () => true,
+      removeWatch: async () => true,
       getStatus: () => null,
       listWatches: () => [],
       stopAll: () => {},
@@ -790,6 +791,64 @@ describe("API integration", () => {
       removed: { id: "origin-a", rootDir: "/tmp/origin-a", removed: true },
     });
     expect(calls).toEqual(["stop:origin-a", "remove:origin-a"]);
+    await server.close();
+  });
+
+  it("starts, stops and removes stream watch sessions through API", async () => {
+    const app = makeFakeApp();
+    const status = {
+      id: "watch-stub",
+      sessionKey: "main",
+      url: "https://example.com/index.m3u8",
+      profile: "chunks" as const,
+      mode: "live" as const,
+      inputType: "unknown" as const,
+      state: "running" as const,
+      startedAt: "2026-07-14T00:00:00.000Z",
+      lastPollAt: null,
+      pollCount: 0,
+      errorCount: 0,
+      downloadedSegmentCount: 0,
+      analyzedSegmentCount: 0,
+      recentChunks: [],
+      events: [],
+      running: true,
+    };
+    app.streamMonitor.startWatch = (params) => {
+      expect(params.profile).toBe("chunks");
+      expect(params.mode).toBe("live");
+      return "watch-stub";
+    };
+    app.streamMonitor.getStatus = () => status;
+    app.streamMonitor.listWatches = () => [status];
+    app.streamMonitor.removeWatch = async () => true;
+    const server = createApiServer(app);
+
+    const start = await server.inject({
+      method: "POST",
+      url: "/streams/watch",
+      payload: {
+        url: "https://example.com/index.m3u8",
+        profile: "chunks",
+        mode: "live",
+        maxDurationMs: 3_600_000,
+        retentionHours: 24,
+      },
+    });
+    expect(start.statusCode).toBe(200);
+    expect(start.json()).toMatchObject({ ok: true, watchId: "watch-stub", status: { profile: "chunks" } });
+
+    const list = await server.inject({ method: "GET", url: "/streams/watch" });
+    expect(list.statusCode).toBe(200);
+    expect(list.json().watches).toHaveLength(1);
+
+    const stop = await server.inject({ method: "POST", url: "/streams/watch/watch-stub/stop" });
+    expect(stop.statusCode).toBe(200);
+    expect(stop.json()).toMatchObject({ ok: true, stopped: true });
+
+    const removed = await server.inject({ method: "DELETE", url: "/streams/watch/watch-stub" });
+    expect(removed.statusCode).toBe(200);
+    expect(removed.json()).toEqual({ ok: true, removed: true });
     await server.close();
   });
 

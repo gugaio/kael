@@ -97,7 +97,18 @@ export function StreamsPage(): JSX.Element {
 
   return (
     <div className="space-y-4">
-      <Panel title="Clone New Stream">
+      <Panel
+        title="Clone New Stream"
+        right={(
+          <button
+            type="button"
+            onClick={() => navigate("/streams/watch")}
+            className="rounded-xl border border-kael-border bg-white px-3 py-1.5 text-xs font-medium text-kael-text hover:bg-kael-panel"
+          >
+            Watch URL
+          </button>
+        )}
+      >
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-0 flex-[2]">
             <label className="block text-xs text-kael-muted mb-1">HLS URL</label>

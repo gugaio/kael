@@ -16,7 +16,7 @@ identificar anomalias sem precisar de player ou client de vídeo.
 | Categoria | Código | Como detectar | Fase |
 |-----------|--------|---------------|------|
 | Discontinuidade inserida | `discontinuity_inserted` | Novo `#EXT-X-DISCONTINUITY` ou salto em `EXT-X-DISCONTINUITY-SEQUENCE` | 22.0 |
-| Gap de mediaSequence | `media_sequence_gap` | Salto maior que o esperado entre polls | 22.0 |
+| Gap de mediaSequence | `media_sequence_gap` | Avanço acima de `elapsed/targetDuration`, com tolerância mínima/proporcional | 22.0 |
 | Manifest congelado (stale) | `stale_manifest` | mediaSequence não avançou após 2x targetDuration | 22.0 |
 | Duração de segmento anômala | `segment_duration_anomaly` | Segmento < 30% ou > 150% do targetDuration | 22.0 |
 | Gap de áudio (rendição) | `audio_rendition_gap` | Rendição de áudio não declarada ou URI faltando | 22.0 |
@@ -36,6 +36,17 @@ identificar anomalias sem precisar de player ou client de vídeo.
 - Kael mantém somente `HlsStreamMonitorService`, um adaptador fino que associa
   uma watch à `sessionKey` do agente.
 - A API expõe `/streams/watch` como namespace dedicado, separado de `/jobs`.
+- A partir de 22.1, `/streams/watch` aceita perfis:
+  - `manifest`: watch leve original, em memória, com polling de manifesto.
+  - `chunks`: para live, o VHS faz polling incremental, baixa apenas segmentos novos e analisa cada chunk com ffprobe durante a janela de watch; para VOD/janela finita, o Kael ainda usa clone/analyze como compatibilidade.
+  - `full`: variante mais pesada de `chunks`, com amostragem maior de playlists; `allVariants` continua explícito para evitar custo alto por padrão.
+- Perfis `chunks`/`full` gravam metadados em `stream-watch/<watchId>/`, report JSON/HTML e `expiresAt`
+  para cleanup padrão em 24h.
+- O status de `chunks`/`full` expõe `currentChunk` e `recentChunks`; a runtime UI mostra os últimos 5 chunks com fase, bytes, duração, codec, continuidade, keyframes e erros, evitando duplicar o chunk atual.
+- Cada chunk pode conter `streams[]` com probes separados por elementary stream (`v:0`, `a:0`), incluindo codec/type, PTS/DTS inicial/final, samples, duração e keyframes quando aplicável.
+- O watch calcula deltas de lipsync (`audio PTS - video PTS`) por chunk, deltas de boundary por stream contra o chunk anterior (`previousPtsDeltaSeconds` + `ok|gap|overlap|reset|unknown`) e o delta agregado de borda A/V (`avBoundaryDeltaSeconds`) para detectar drift de lipsync entre chunks.
+- A regra `media_sequence_gap` compara o avanço do `MEDIA-SEQUENCE` contra `elapsed/targetDuration`; assim polls atrasados normais, como 21 segmentos em ~65s com `targetDuration=3.2`, não viram falso gap.
+- A UI expõe `/streams/watch` para criação/listagem e `/streams/watch/:watchId` para acompanhamento com cards runtime.
 
 ## Estrutura de arquivos (22.0)
 
@@ -52,6 +63,10 @@ src/api/routes/
 
 src/tools/pi/
   video.ts                    # + tool video_stream_watch
+
+ui/src/pages/
+  StreamWatchPage.tsx         # criação/listagem de watches
+  StreamWatchDetailPage.tsx   # status, eventos e report
 ```
 
 ## Nota de runtime (2026-07-13)
@@ -120,7 +135,7 @@ type StreamWatchStatus = {
 
 ## Proximos incrementos
 
-1. **22.1**: Detecção de regressão de ladder ABR entre polls (variantes removidas, bandwidth dropping).
+1. Persistir/recarregar sessões live incrementais do VHS após restart, preservando `seenSegments` e últimos chunks.
 2. **22.2**: Amostragem de segmento via ffprobe para lipsync drift e keyframe irregularity.
 3. **22.3**: Integração com planner — criar steps automáticos de investigação quando evento de severidade `error` é detectado.
 4. **22.4**: Skill dedicada `stream-quality-advisor` com heurísticas de diagnóstico por tipo de problema.

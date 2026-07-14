@@ -83,6 +83,9 @@ flowchart TD
             API --> StreamWatchPOST[POST /streams/watch]
             API --> StreamWatchGET[GET /streams/watch]
             API --> StreamWatchId[GET /streams/watch/:id]
+            API --> StreamWatchStop[POST /streams/watch/:id/stop]
+            API --> StreamWatchReport[GET /streams/watch/:id/report]
+            API --> StreamWatchHtml[GET /streams/watch/:id/report.html]
             API --> StreamWatchDEL[DELETE /streams/watch/:id]
         end
 
@@ -218,10 +221,13 @@ Exemplo resumido de item em `GET /jobs`:
 ### Stream Watch (Quality Monitor)
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | /streams/watch | Start a new HLS stream watch session |
-| GET | /streams/watch | List all active watch sessions |
-| GET | /streams/watch/:id | Get status and events for a watch session |
-| DELETE | /streams/watch/:id | Stop a watch session |
+| POST | /streams/watch | Start a new HLS stream watch session. Body: `{ url, sessionKey?, profile?, mode?, pollIntervalMs?, maxPollCount?, timeoutMs?, maxDurationMs?, retentionHours?, variantSelector?, allVariants? }`; `profile` is `manifest`, `chunks`, or `full` |
+| GET | /streams/watch | List active and persisted watch sessions |
+| GET | /streams/watch/:id | Get status, events, current chunk and recent chunk progress for a watch session |
+| POST | /streams/watch/:id/stop | Stop a watch session |
+| GET | /streams/watch/:id/report | Get the generated JSON report for chunk/full watches |
+| GET | /streams/watch/:id/report.html | Get the generated HTML report for chunk/full watches |
+| DELETE | /streams/watch/:id | Remove a watch session and persisted artifacts |
 
 ### Schedules (Automation)
 | Method | Path | Description |
