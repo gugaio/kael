@@ -85,6 +85,10 @@ export function createApiServer(app: KaelApp): FastifyInstance {
 
   server.setErrorHandler((error, request, reply) => {
     const apiError = asApiError(error);
+    const cause = apiError.cause ?? error;
+    const causeMessage = cause instanceof Error ? cause.message : cause != null ? String(cause) : undefined;
+    const causeStack = cause instanceof Error ? cause.stack : undefined;
+    const causeName = cause instanceof Error ? cause.name : undefined;
     kaelLogger.error("api.request.error", {
       requestId: request.id,
       method: request.method,
@@ -92,6 +96,10 @@ export function createApiServer(app: KaelApp): FastifyInstance {
       status: apiError.status,
       code: apiError.code,
       message: apiError.message,
+      // Real underlying failure (lost before): surfaced for 5xx debugging.
+      causeName: causeName ?? null,
+      causeMessage: causeMessage ?? null,
+      stack: causeStack ?? null,
     });
     sendApiError(reply, request, apiError);
   });

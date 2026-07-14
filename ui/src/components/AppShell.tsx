@@ -5,7 +5,7 @@ import { approveExecApproval, denyExecApproval, getExecApprovals } from "../lib/
 import { useLiveEvents } from "../lib/live-events";
 
 const navItems = [
-  { to: "/", label: "Ops" },
+  { to: "/", label: "Home" },
   { to: "/chat", label: "Chat" },
   { to: "/streams", label: "Streams" },
   { to: "/plans", label: "Plans" },
@@ -84,17 +84,7 @@ export function AppShell(props: { children: ReactNode }): JSX.Element {
         </aside>
 
         <div className="mt-4 min-w-0 space-y-4 lg:mt-0 lg:flex lg:min-h-[calc(100vh-40px)] lg:flex-col lg:pl-[304px]">
-          <header className="rounded-[32px] border border-kael-border bg-kael-panel px-5 py-5 shadow-glow">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.26em] text-kael-muted">Workspace</p>
-                <h2 className="mt-2 text-3xl font-bold tracking-tight text-kael-text">{activeNav.label}</h2>
-                <p className="mt-2 max-w-2xl text-sm text-kael-muted">
-                  Navegacao lateral persistente e area principal dedicada ao contexto ativo da operacao.
-                </p>
-              </div>
-            </div>
-          </header>
+
 
           <main className="min-w-0 lg:flex-1 lg:min-h-0">{props.children}</main>
         </div>
