@@ -33,7 +33,7 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
         idempotencyKey,
         signature: stableStringify({ sessionKey, inputPath, outputPath, args }),
         execute: async () => {
-          const job = await app.videoJobs.startTranscode({
+          const job = await app.ffmpeg.startTranscode({
             sessionKey,
             inputPath,
             outputPath,
@@ -76,7 +76,7 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
         idempotencyKey,
         signature: stableStringify({ sessionKey, input }),
         execute: async () => {
-          const job = await app.videoJobs.startPlayVlc({ sessionKey, input });
+          const job = await app.ffmpeg.startPlayVlc({ sessionKey, input });
           return { ok: true, job };
         },
       });
@@ -118,7 +118,7 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
         idempotencyKey,
         signature: stableStringify({ sessionKey, inputPath, outputPlaylistPath, segmentTime }),
         execute: async () => {
-          const job = await app.videoJobs.startConvertHls({
+          const job = await app.ffmpeg.startConvertHls({
             sessionKey,
             inputPath,
             outputPlaylistPath,
@@ -165,7 +165,7 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
         idempotencyKey,
         signature: stableStringify({ sessionKey, streamUrl, outputPath, durationSeconds }),
         execute: async () => {
-          const job = await app.videoJobs.startCaptureStream({
+          const job = await app.ffmpeg.startCaptureStream({
             sessionKey,
             streamUrl,
             outputPath,

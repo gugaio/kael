@@ -48,8 +48,8 @@ sequenceDiagram
         MemOrch-->>Chat: {compacted, flushed}
         Chat->>Session: appendMessage()<br/>(role: assistant, status)
         Chat-->>API: {userMessage, assistantMessage, reply}
-    else Mensagem livre ou chat-only?
-        Chat->>Chat: handleMessageInternal(runtime, {allowOperationalShortcuts})
+    else Mensagem livre ou atalhos operacionais desativados?
+        Chat->>Chat: handleMessageInternal({allowOperationalShortcuts})
 
         Note over Chat: Pré-processamento multimodal
         alt Anexos presentes e media habilitado?
@@ -159,7 +159,7 @@ sequenceDiagram
 ### 2. Roteamento (CommandRouter)
 - **Slash commands** → Fast-path via SimpleCommandEngine (determinístico)
 - **Comando especial `/compact`** → MemoryOrchestrator (flush + compactação)
-- **Mensagem livre ou chat-only** → Fluxo completo com PI Engine
+- **Mensagem livre ou atalhos operacionais desativados** → Fluxo completo com PI Engine
 
 ### 3. Pré-processamento Multimodal
 **Se anexos presentes e media habilitado:**

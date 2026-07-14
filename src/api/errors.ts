@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { VideoJobValidationError } from "../video/safety.js";
+import { FfmpegJobValidationError } from "../ffmpeg/safety.js";
 
 export type ApiErrorCode =
   | "BAD_REQUEST"
@@ -41,7 +41,7 @@ export function asApiError(error: unknown): ApiError {
   if (error instanceof ApiError) {
     return error;
   }
-  if (error instanceof VideoJobValidationError) {
+  if (error instanceof FfmpegJobValidationError) {
     return new ApiError(400, "BAD_REQUEST", error.message);
   }
   const message = error instanceof Error ? error.message : String(error);

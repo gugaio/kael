@@ -12,7 +12,7 @@ import { EdgeRuntime } from "../edge/runtime.js";
 import { JobService } from "../jobs/service.js";
 import { LocalProcessSupervisor } from "../process/supervisor.js";
 import { JobStore } from "../jobs/store.js";
-import { createVideoJobs } from "../video/jobs.js";
+import { createFfmpegJobs } from "../ffmpeg/jobs.js";
 import type { ProcessRunner } from "../tools/system/process-runner.js";
 
 function sleep(ms: number): Promise<void> {
@@ -61,7 +61,7 @@ async function createJobsServer(params: {
     jobTimeoutMs: params.jobTimeoutMs ?? 60_000,
     killGraceMs: 10,
   });
-  const videoJobs = createVideoJobs({
+  const ffmpeg = createFfmpegJobs({
     jobs,
     options: { safePathsEnabled: true, allowedPaths: [params.root], maxJobArgs: 24 },
   });
@@ -181,7 +181,7 @@ async function createJobsServer(params: {
       countSessions: async () => 0,
     } as unknown as KaelApp["sessions"],
     jobs,
-    videoJobs,
+    ffmpeg,
     planner: {
       list: () => [],
       get: () => null,
@@ -413,7 +413,7 @@ async function createJobsServer(params: {
     },
     streamer: {
       listOrigins: async () => [],
-      loadOrigin: async () => {
+      inspectOrigin: async () => {
         throw new Error("streamer inspect not implemented in fake app");
       },
       probeOrigin: async () => {

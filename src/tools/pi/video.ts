@@ -3,6 +3,7 @@ import type { MediaInspector, PlaybackTriageService } from "@gugaio/vhs";
 import type { StreamerRuntime } from "../../runtime/agent-runtime.js";
 import type { StreamServeManager } from "../../video/serve-manager.js";
 import type { HlsStreamMonitorService } from "../../vhs/watch-registry.js";
+import { runStreamChunkCommand } from "../../ffmpeg/chunk-command.js";
 
 type TextBlock = {
   type: "text";
@@ -395,11 +396,193 @@ export function createVideoPiTools(params: {
               `- ${s.id} | serving=${s.serving}${s.servingUrl ? ` url=${s.servingUrl}` : ""} | duration=${s.cumulativeDurationSeconds}s | segments=${s.segmentCount} | variants=${s.variantCount} | source=${s.sourceUrl}`,
           ),
         ].join("\n");
-        params.logToolEnd("stream_list", intent, { count: list.length }, startedAtMs);
+        params.logToolEnd("stream_list", intent, { status: "completed", resultCount: list.length }, startedAtMs);
         return { content: params.textResult(text), details: list };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        params.logToolEnd("stream_list", intent, { error: message }, startedAtMs);
+        params.logToolEnd("stream_list", intent, { status: "failed", error: message }, startedAtMs);
+        return { content: params.textResult(`ok=false\nerror=${message}`), details: { error: message } };
+      }
+    },
+  };
+
+  const streamInspectTool: AgentTool = {
+    name: "stream_inspect",
+    label: "Stream Inspect",
+    description:
+      "Inspeciona um origin clonado pelo streamer/VHS. Use quando precisar ver chunks/segments, manifest local, variants, renditions, duracao ou paths do origin. " +
+      "Equivale ao endpoint GET /streams/:originId e evita procurar arquivos com exec/find.",
+    parameters: {
+      type: "object",
+      properties: {
+        originId: { type: "string", description: "ID do origin clonado" },
+        maxSegments: {
+          type: "number",
+          description: "Numero maximo de chunks/segments a listar no texto. Padrao: 20.",
+        },
+      },
+      required: ["originId"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const blocked = reserveStreamer("stream_inspect");
+      if (blocked) {
+        return blocked.blocked;
+      }
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as { originId: string; maxSegments?: number };
+      const maxSegments = Math.max(1, Math.min(100, Math.floor(args.maxSegments ?? 20)));
+      const intent = params.logToolStart("stream_inspect", args);
+      try {
+        const origin = await params.streamer.inspectOrigin(args.originId);
+        const segments = origin.segments.slice(0, maxSegments);
+        const text = [
+          `ok=true`,
+          `id=${origin.id}`,
+          `protocol=${origin.protocol ?? "hls"}`,
+          `manifestPath=${origin.manifestPath}`,
+          `playbackPath=${origin.playbackPath}`,
+          `duration=${origin.cumulativeDurationSeconds}s`,
+          `segments=${origin.segmentCount}`,
+          `variants=${origin.variantCount}`,
+          `renditions=${origin.renditionCount}`,
+          `bytes=${origin.bytes}`,
+          `chunksListed=${segments.length}/${origin.segmentCount}`,
+          ...segments.map((segment, index) =>
+            [
+              `- chunk[${index}]`,
+              `originalIndex=${segment.originalIndex}`,
+              `localUri=${segment.localUri}`,
+              `duration=${segment.duration ?? "n/a"}`,
+              `bytes=${segment.bytes}`,
+              `source=${segment.sourceUrl}`,
+            ].join(" | "),
+          ),
+        ].join("\n");
+        params.logToolEnd(
+          "stream_inspect",
+          intent,
+          { status: "completed", originId: origin.id, segmentCount: origin.segmentCount },
+          startedAtMs,
+          `stream_inspect id=${origin.id} segments=${origin.segmentCount}`,
+        );
+        return { content: params.textResult(text), details: origin };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        params.logToolEnd("stream_inspect", intent, { status: "failed", error: message }, startedAtMs);
+        return { content: params.textResult(`ok=false\nerror=${message}`), details: { error: message } };
+      }
+    },
+  };
+
+  const streamChunkExecTool: AgentTool = {
+    name: "stream_chunk_exec",
+    label: "Stream Chunk Exec",
+    description:
+      "Executa ffprobe ou ffmpeg contra um chunk/segment clonado, resolvendo o path por originId + targetKind + targetIndex + segmentIndex. " +
+      "Use para frames, GOP, keyframes, timestamps, pacotes, extracao de frame ou qualquer analise livre de media. " +
+      "Nao use exec/find para descobrir path do chunk. Passe args livres como array, usando placeholders: {chunk}=arquivo do chunk, {out}=arquivo temporario de saida, {outDir}=diretorio temporario, {originRoot}=root do origin.",
+    parameters: {
+      type: "object",
+      properties: {
+        originId: { type: "string", description: "ID do origin clonado" },
+        targetKind: {
+          type: "string",
+          enum: ["variant", "rendition", "flat"],
+          description: "Colecao onde buscar o chunk. Padrao: variant.",
+        },
+        targetIndex: {
+          type: "number",
+          description: "Indice da variant/rendition. Padrao: 0.",
+        },
+        segmentIndex: {
+          type: "number",
+          description: "Indice zero-based do chunk/segment dentro do target.",
+        },
+        binary: {
+          type: "string",
+          enum: ["ffprobe", "ffmpeg"],
+          description: "Binario a executar sem shell.",
+        },
+        args: {
+          type: "array",
+          description:
+            "Argumentos livres do ffprobe/ffmpeg. Use {chunk} onde entraria o path do chunk e {out}/{outDir} para outputs temporarios.",
+          items: { type: "string" },
+        },
+        timeoutMs: { type: "number", description: "Timeout em ms. Padrao: 120000." },
+        maxOutputChars: { type: "number", description: "Limite de stdout/stderr retido. Padrao: 120000." },
+      },
+      required: ["originId", "segmentIndex", "binary", "args"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const blocked = reserveStreamer("stream_chunk_exec");
+      if (blocked) {
+        return blocked.blocked;
+      }
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as {
+        originId: string;
+        targetKind?: "variant" | "rendition" | "flat";
+        targetIndex?: number;
+        segmentIndex: number;
+        binary: "ffprobe" | "ffmpeg";
+        args: string[];
+        timeoutMs?: number;
+        maxOutputChars?: number;
+      };
+      const intent = params.logToolStart("stream_chunk_exec", args);
+      try {
+        const origin = await params.streamer.inspectOrigin(args.originId);
+        const result = await runStreamChunkCommand({
+          origin,
+          targetKind: args.targetKind,
+          targetIndex: args.targetIndex,
+          segmentIndex: args.segmentIndex,
+          binary: args.binary,
+          args: args.args,
+          timeoutMs: args.timeoutMs,
+          maxOutputChars: args.maxOutputChars,
+        });
+        const stdout = result.stdout.trim();
+        const stderr = result.stderr.trim();
+        const text = [
+          `ok=${result.ok}`,
+          `binary=${result.binary}`,
+          `exitCode=${result.exitCode ?? "null"}`,
+          `timedOut=${result.timedOut}`,
+          `durationMs=${result.durationMs}`,
+          `originId=${result.originId}`,
+          `target=${result.targetKind}[${result.targetIndex}]`,
+          `segmentIndex=${result.segmentIndex}`,
+          `chunkPath=${result.chunkPath}`,
+          `chunkLocalUri=${result.chunk.localUri}`,
+          `chunkOriginalIndex=${result.chunk.originalIndex}`,
+          `chunkDuration=${result.chunk.duration ?? "n/a"}`,
+          `outDir=${result.outDir}`,
+          `outPath=${result.outPath}`,
+          `outputFiles=${result.outputFiles.length}`,
+          ...(result.error ? [`error=${result.error}`] : []),
+          ...(stdout ? [`stdout:\n${stdout}`] : []),
+          ...(stderr ? [`stderr:\n${stderr}`] : []),
+        ].join("\n");
+        params.logToolEnd(
+          "stream_chunk_exec",
+          intent,
+          {
+            status: result.ok ? "completed" : "failed",
+            originId: result.originId,
+            exitCode: result.exitCode,
+            timedOut: result.timedOut,
+          },
+          startedAtMs,
+          `stream_chunk_exec ${result.binary} ok=${result.ok} exitCode=${result.exitCode ?? "null"}`,
+        );
+        return { content: params.textResult(text), details: result };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        params.logToolEnd("stream_chunk_exec", intent, { status: "failed", error: message }, startedAtMs);
         return { content: params.textResult(`ok=false\nerror=${message}`), details: { error: message } };
       }
     },
@@ -545,6 +728,8 @@ export function createVideoPiTools(params: {
     playbackAnalyzeTool,
     videoStreamWatchTool,
     streamListTool,
+    streamInspectTool,
+    streamChunkExecTool,
     streamCloneTool,
     streamServeTool,
     streamStopTool,

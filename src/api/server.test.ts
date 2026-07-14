@@ -163,7 +163,7 @@ function makeFakeApp(): KaelApp {
         canceled: true,
       }),
     } as unknown as KaelApp["jobs"],
-    videoJobs: {} as KaelApp["videoJobs"],
+    ffmpeg: {} as KaelApp["ffmpeg"],
     planner: {
       list: () => [],
       get: () => null,
@@ -591,7 +591,7 @@ function makeFakeApp(): KaelApp {
     },
     streamer: {
       listOrigins: async () => [],
-      loadOrigin: async () => {
+      inspectOrigin: async () => {
         throw new Error("streamer inspect not implemented in fake app");
       },
       probeOrigin: async () => {

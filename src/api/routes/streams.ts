@@ -22,7 +22,7 @@ export function registerStreamRoutes(server: FastifyInstance, deps: ApiRouteDeps
   server.get<{
     Params: { originId: string };
   }>("/streams/:originId", async (request) => {
-    const origin = await app.streamer.loadOrigin(request.params.originId);
+    const origin = await app.streamer.inspectOrigin(request.params.originId);
     const active = app.serveManager.listServing().find((s) => s.originId === request.params.originId);
     return {
       ok: true,

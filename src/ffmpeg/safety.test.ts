@@ -3,20 +3,20 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  VideoJobValidationError,
+  FfmpegJobValidationError,
   validateExistingInputPath,
   validateOutputPath,
   validateStreamUrl,
   validateUserArgs,
 } from "./safety.js";
 
-describe("video safety", () => {
+describe("ffmpeg safety", () => {
   it("rejects args with blocked options", () => {
-    expect(() => validateUserArgs(["-i", "input.mp4"], 24)).toThrow(VideoJobValidationError);
+    expect(() => validateUserArgs(["-i", "input.mp4"], 24)).toThrow(FfmpegJobValidationError);
   });
 
   it("rejects stream URL with unsupported protocol", () => {
-    expect(() => validateStreamUrl("file:///tmp/video.mp4")).toThrow(VideoJobValidationError);
+    expect(() => validateStreamUrl("file:///tmp/video.mp4")).toThrow(FfmpegJobValidationError);
   });
 
   it("rejects output path outside allowed roots when enabled", () => {
@@ -27,7 +27,7 @@ describe("video safety", () => {
         safePathsEnabled: true,
         allowedRoots: ["/tmp/kael-safe"],
       }),
-    ).toThrow(VideoJobValidationError);
+    ).toThrow(FfmpegJobValidationError);
   });
 
   it("accepts existing local input inside allowed roots", async () => {

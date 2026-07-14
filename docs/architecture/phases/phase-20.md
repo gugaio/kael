@@ -14,17 +14,18 @@ inteligencia de video, capaz de:
 
 ## Decisao arquitetural
 
-- Manter `video` como capability raiz.
-- Manter no Kael somente os subservicos que dependem de contexto de agente:
-  - `jobs/ProcessJobService`
-  - `video/jobs/createVideoJobs`
+- `@gugaio/vhs` e a superficie `streamer` sao o dominio estruturado de video/stream no core.
+- `ffmpeg` fica como capability operacional de baixo nivel para casos que o VHS nao cobre.
+- Manter no Kael somente os subservicos que dependem de contexto de agente ou execucao local:
+  - `jobs/JobService`
+  - `ffmpeg/createFfmpegJobs`
   - `VideoGenerationService`
-  - `VideoArtifactsService`
+  - `MediaArtifactsService`
 - Inspect, auditoria/diff de manifestos e triagem de playback vivem em
   `@gugaio/vhs`, como API determinística reutilizável por qualquer agente.
 - Quando o problema for analise semantica de configuracao de player (por exemplo `hls.js`), preferir skill especializada com base oficial curada em vez de heuristica hardcoded no core.
-- O lifecycle de processos fica em `jobs/ProcessJobService`; vídeo apenas valida
-  entradas e constrói comandos para esse executor genérico.
+- O lifecycle de processos fica em `jobs/JobService`; `ffmpeg` apenas valida
+  entradas e constroi comandos para esse executor generico.
 - Tratar players como adapters de ingest/normalizacao, nao como capabilities do core.
 - Tratar providers de geracao como adapters plugaveis, nao como contratos centrais.
 - O parser de logs e a triagem deterministica de playback vivem no VHS

@@ -192,7 +192,7 @@ function makeInput(message: string, runtime: EngineToolingInterface): EngineTurn
     sessionKey: "main",
     message,
     runtime: {
-      videoJobs: {
+      ffmpeg: {
         startTranscode: runtime.video.startTranscode,
         startConvertHls: runtime.video.startConvertHls,
         startCaptureStream: runtime.video.startCaptureStream,

@@ -318,12 +318,13 @@ export class DiscordChatOnlyBot {
     try {
       const attachments = await this.extractInboundAttachments(msg, sessionKey);
       await this.safeSendTyping(msg.channel_id, sessionKey);
-      const turn = await this.app.chat.handleMessageChatOnly({
+      const turn = await this.app.chat.handleMessage({
         sessionKey,
         message: content,
         attachments,
         source: "discord",
         requestId: `discord:${msg.id}`,
+        allowOperationalShortcuts: false,
       });
       for (const chunk of splitDiscordMessage(turn.reply)) {
         await this.sendChannelMessage(msg.channel_id, chunk, msg.id);

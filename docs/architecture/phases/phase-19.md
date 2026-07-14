@@ -110,6 +110,21 @@ dedicadas no runtime PI e skill operacional no workspace.
   - distribuicao por transport
   - ultimo erro / ultima chamada
 
+## Entregas implementadas (incremento 19.2)
+
+- Timeout do PI nao aciona mais fallback silencioso para `SimpleCommandEngine` em modo `hybrid`.
+- Motivo: timeout apos chamadas de tool e um erro operacional do turno; ele deve ser reportado ao usuario pelo `ChatService`, com contexto de execucoes recentes, em vez de virar resposta generica do simple engine.
+- Budget padrao de tools PI aumentado:
+  - total: 24;
+  - exec: 12;
+  - streamer: 12;
+  - web_fetch: 8;
+  - web_search: 5;
+  - web_research: 3;
+  - MCP/Edge: 6;
+  - browser: 12;
+  - browser_interaction: 8.
+
 ## Pendencias da fase
 
 1. CLI dedicada para operar registry/approvals MCP sem depender da API.

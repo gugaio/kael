@@ -865,7 +865,7 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
     systemPrompt: soulPrompt.prompt,
     systemPromptSource: soulPrompt.source,
     apiKey,
-    model: process.env.KAEL_PI_MODEL?.trim() || globalConfig?.defaults.pi.model || "gpt-4o-mini",
+    model: process.env.KAEL_PI_MODEL?.trim() || globalConfig?.defaults.pi.model || "gpt-5.5",
     timeoutMs,
     retry: {
       attempts: retryAttempts,

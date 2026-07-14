@@ -8,7 +8,7 @@ import { LocalProcessRunner } from "../tools/system/process-runner.js";
 import { ShellToolService } from "../tools/system/shell-tool-service.js";
 import { McpBridgeService } from "../tools/mcp/mcp-bridge-service.js";
 import { createVhs, type Vhs } from "@gugaio/vhs";
-import { createVideoJobs, type VideoJobs } from "../video/jobs.js";
+import { createFfmpegJobs, type FfmpegJobs } from "../ffmpeg/jobs.js";
 import { HlsStreamMonitorService } from "../vhs/watch-registry.js";
 import { MediaArtifactsService } from "../media/artifacts.js";
 import { ProviderBackedMediaGenerationService } from "../media/generation.js";
@@ -32,7 +32,7 @@ import {
 
 export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore): Promise<{
   jobs: JobService;
-  videoJobs: VideoJobs;
+  ffmpeg: FfmpegJobs;
   videoInspect: Vhs["inspect"];
   mediaArtifacts: MediaArtifactsService;
   streamMonitor: HlsStreamMonitorService;
@@ -46,7 +46,7 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
     jobTimeoutMs: config.execution.jobTimeoutMs,
     killGraceMs: config.execution.killGraceMs,
   });
-  const videoJobs = createVideoJobs({
+  const ffmpeg = createFfmpegJobs({
     jobs,
     options: {
       safePathsEnabled: config.execution.safePathsEnabled,
@@ -62,7 +62,7 @@ export async function createVideoRuntime(config: KaelConfig, jobStore: JobStore)
   const streamer = vhs.stream;
   return {
     jobs,
-    videoJobs,
+    ffmpeg,
     videoInspect,
     mediaArtifacts,
     streamMonitor,

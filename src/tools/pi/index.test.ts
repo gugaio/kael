@@ -112,6 +112,8 @@ describe("createPiNamespaceTools", () => {
       "playback_analyze",
       "video_stream_watch",
       "stream_list",
+      "stream_inspect",
+      "stream_chunk_exec",
       "stream_clone",
       "stream_serve",
       "stream_stop",

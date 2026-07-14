@@ -31,12 +31,13 @@ import { ChatService } from "./chat/service.js";
 import { TurnOrchestrator } from "./chat/turn-orchestrator.js";
 import type { ShellRuntime } from "./tools/system/shell-tool-service.js";
 import type { StreamWatchParams, StreamWatchStatus } from "./vhs/types.js";
-import type { VideoJobs } from "./video/jobs.js";
-import { createVideoPlannerHandlers } from "./video/planner-handlers.js";
+import type { FfmpegJobs } from "./ffmpeg/jobs.js";
+import { createFfmpegPlannerHandlers } from "./ffmpeg/planner-handlers.js";
 import { StreamServeManager } from "./video/serve-manager.js";
 import { SkillService } from "./skills/service.js";
 import type { McpRuntime } from "./tools/mcp/mcp-bridge-service.js";
 import { EdgeRuntime } from "./edge/runtime.js";
+import type { AgentRuntime } from "./runtime/agent-runtime.js";
 import type {
   StreamerAnalyzeOptions,
   StreamerCloneInput,
@@ -57,7 +58,7 @@ export type KaelApp = {
   config: KaelConfig;
   sessions: SessionStore;
   jobs: JobService;
-  videoJobs: VideoJobs;
+  ffmpeg: FfmpegJobs;
   memory: MemoryService;
   planner: PlannerService;
   research: ResearchService;
@@ -75,7 +76,7 @@ export type KaelApp = {
   };
   streamer: {
     listOrigins(): Promise<StreamerOriginSummary[]>;
-    loadOrigin(originId: string): Promise<StreamerCloneResult>;
+    inspectOrigin(originId: string): Promise<StreamerCloneResult>;
     probeOrigin(originId: string, options?: StreamerProbeOptions): Promise<StreamerOriginProbeReport>;
     analyzeOrigin(originId: string, options?: StreamerAnalyzeOptions): Promise<StreamerOriginAnalysisReport>;
     mutateOrigin(input: StreamerMutateInput): Promise<StreamerMutateResult>;
@@ -106,7 +107,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   await sessions.init();
   await jobStore.init();
 
-  const { jobs, videoJobs, videoInspect, mediaArtifacts, streamMonitor, streamer, playback } =
+  const { jobs, ffmpeg, videoInspect, mediaArtifacts, streamMonitor, streamer, playback } =
     await createVideoRuntime(config, jobStore);
   const serveManager = new StreamServeManager(
     (originId, opts) => streamer.serveOrigin(originId, opts),
@@ -120,8 +121,8 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   const browserRuntime = createBrowserRuntime(config);
   const research = createResearchRuntime(config);
   const planner = await createPlannerRuntime(config);
-  const videoHandlers = createVideoPlannerHandlers(videoJobs);
-  for (const [kind, handler] of Object.entries(videoHandlers)) {
+  const ffmpegHandlers = createFfmpegPlannerHandlers(ffmpeg);
+  for (const [kind, handler] of Object.entries(ffmpegHandlers)) {
     planner.registerActionHandler(kind, handler);
   }
   const engine = createEngine(config);
@@ -130,9 +131,14 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     maxContextChars: config.context.maxChars,
   });
   const { mediaUnderstanding, imageGenerator, videoGeneration } = createMediaRuntime(config, mediaArtifacts);
-  const runtime = {
+  const skills = new SkillService(config.shell.workspaceRoot);
+  const runtime: AgentRuntime = {
+    sessions,
+    orchestrator,
+    media: mediaUnderstanding,
+    skills,
     jobs,
-    videoJobs,
+    ffmpeg,
     shell,
     mcp,
     edge,
@@ -149,13 +155,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     streamer,
     serveManager,
   };
-  const chat = new ChatService(
-    sessions,
-    orchestrator,
-    mediaUnderstanding,
-    runtime,
-    new SkillService(config.shell.workspaceRoot),
-  );
+  const chat = new ChatService(runtime);
   const heartbeat = new HeartbeatRunner(jobs, sessions);
   let emailIngest: EmailIngestService | null = null;
   if (enableEmailPolling && config.email.enabled && config.email.provider === "gmail_pop3") {
@@ -272,7 +272,7 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
     config,
     sessions,
     jobs,
-    videoJobs,
+    ffmpeg,
     memory,
     planner,
     research,

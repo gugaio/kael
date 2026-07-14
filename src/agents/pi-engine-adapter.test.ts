@@ -65,4 +65,17 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("prefira web_research");
     expect(prompt).toContain("Se qualquer tool retornar blocked=true");
   });
+
+  it("prioriza tools de streamer para perguntas sobre origins locais", () => {
+    const prompt = buildPrompt({
+      sessionKey: "s1",
+      message: "onde esta o origin osoutros no streamer?",
+      runtime: {} as never,
+      contextMessages: [],
+    });
+
+    expect(prompt).toContain("Pergunta sobre streams/origins locais detectada.");
+    expect(prompt).toContain("use stream_list");
+    expect(prompt).toContain("Nao vasculhe `.kael-data`, `.kael` ou diretorios `origins` com exec");
+  });
 });

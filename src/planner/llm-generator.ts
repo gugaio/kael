@@ -205,9 +205,6 @@ export class LlmPlanGenerator {
         thinkingLevel: "low",
         tools: [],
         messages: [],
-        isStreaming: false,
-        streamMessage: null,
-        pendingToolCalls: new Set(),
       },
       getApiKey: (provider: string) => {
         if (!this.cfg.apiKey) {

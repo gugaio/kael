@@ -1,10 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-export class VideoJobValidationError extends Error {
+export class FfmpegJobValidationError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "VideoJobValidationError";
+    this.name = "FfmpegJobValidationError";
   }
 }
 
@@ -14,10 +14,10 @@ function hasControlChars(value: string): boolean {
 
 function assertSafeToken(label: string, value: string): void {
   if (!value.trim()) {
-    throw new VideoJobValidationError(`${label} cannot be empty`);
+    throw new FfmpegJobValidationError(`${label} cannot be empty`);
   }
   if (hasControlChars(value)) {
-    throw new VideoJobValidationError(`${label} contains control characters`);
+    throw new FfmpegJobValidationError(`${label} contains control characters`);
   }
 }
 
@@ -30,7 +30,7 @@ function assertPathAllowedByRoots(filePath: string, allowedRoots: string[]): voi
   const resolved = path.resolve(filePath);
   const allowed = allowedRoots.some((root) => isPathInside(path.resolve(root), resolved));
   if (!allowed) {
-    throw new VideoJobValidationError(
+    throw new FfmpegJobValidationError(
       `path outside allowed roots: ${filePath}. Configure KAEL_ALLOWED_PATHS if needed`,
     );
   }
@@ -44,7 +44,7 @@ export async function validateExistingInputPath(params: {
 }): Promise<void> {
   assertSafeToken(params.label, params.value);
   if (params.value.includes("://")) {
-    throw new VideoJobValidationError(`${params.label} must be a local file path`);
+    throw new FfmpegJobValidationError(`${params.label} must be a local file path`);
   }
   if (params.safePathsEnabled) {
     assertPathAllowedByRoots(params.value, params.allowedRoots);
@@ -52,7 +52,7 @@ export async function validateExistingInputPath(params: {
   try {
     await fs.access(path.resolve(params.value));
   } catch {
-    throw new VideoJobValidationError(`${params.label} file does not exist: ${params.value}`);
+    throw new FfmpegJobValidationError(`${params.label} file does not exist: ${params.value}`);
   }
 }
 
@@ -64,7 +64,7 @@ export function validateOutputPath(params: {
 }): void {
   assertSafeToken(params.label, params.value);
   if (params.value.includes("://")) {
-    throw new VideoJobValidationError(`${params.label} must be a local file path`);
+    throw new FfmpegJobValidationError(`${params.label} must be a local file path`);
   }
   if (params.safePathsEnabled) {
     assertPathAllowedByRoots(params.value, params.allowedRoots);
@@ -77,11 +77,11 @@ export function validateStreamUrl(value: string): void {
   try {
     parsed = new URL(value);
   } catch {
-    throw new VideoJobValidationError("streamUrl must be a valid URL");
+    throw new FfmpegJobValidationError("streamUrl must be a valid URL");
   }
   const allowedProtocols = new Set(["http:", "https:", "rtsp:", "rtmp:", "udp:"]);
   if (!allowedProtocols.has(parsed.protocol)) {
-    throw new VideoJobValidationError(`streamUrl protocol not allowed: ${parsed.protocol}`);
+    throw new FfmpegJobValidationError(`streamUrl protocol not allowed: ${parsed.protocol}`);
   }
 }
 
@@ -90,7 +90,7 @@ export function validateUserArgs(args: string[] | undefined, maxArgs: number): s
     return [];
   }
   if (args.length > maxArgs) {
-    throw new VideoJobValidationError(`args limit exceeded: max ${String(maxArgs)}`);
+    throw new FfmpegJobValidationError(`args limit exceeded: max ${String(maxArgs)}`);
   }
   for (const token of args) {
     assertSafeToken("arg", token);
@@ -98,7 +98,7 @@ export function validateUserArgs(args: string[] | undefined, maxArgs: number): s
 
   const blocked = new Set(["-i", "-y"]);
   if (args.some((token) => blocked.has(token.trim()))) {
-    throw new VideoJobValidationError("args contain blocked options (-i or -y)");
+    throw new FfmpegJobValidationError("args contain blocked options (-i or -y)");
   }
   return args;
 }

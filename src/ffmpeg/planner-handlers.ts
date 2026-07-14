@@ -1,12 +1,12 @@
 import type { ActionHandler } from "../planner/action-registry.js";
-import type { VideoJobs } from "./jobs.js";
+import type { FfmpegJobs } from "./jobs.js";
 
-export function createVideoPlannerHandlers(videoJobs: VideoJobs): Record<string, ActionHandler> {
+export function createFfmpegPlannerHandlers(ffmpeg: FfmpegJobs): Record<string, ActionHandler> {
   return {
     capture: {
       requiredInputs: ["streamUrl", "outputPath"],
       execute: async ({ sessionKey, inputs }) => {
-        const job = await videoJobs.startCaptureStream({
+        const job = await ffmpeg.startCaptureStream({
           sessionKey,
           streamUrl: inputs.streamUrl ?? "",
           outputPath: inputs.outputPath ?? "",
@@ -26,7 +26,7 @@ export function createVideoPlannerHandlers(videoJobs: VideoJobs): Record<string,
     transcode: {
       requiredInputs: ["inputPath", "outputPath"],
       execute: async ({ sessionKey, inputs }) => {
-        const job = await videoJobs.startTranscode({
+        const job = await ffmpeg.startTranscode({
           sessionKey,
           inputPath: inputs.inputPath ?? "",
           outputPath: inputs.outputPath ?? "",
@@ -46,7 +46,7 @@ export function createVideoPlannerHandlers(videoJobs: VideoJobs): Record<string,
     hls: {
       requiredInputs: ["inputPath", "outputPlaylistPath"],
       execute: async ({ sessionKey, inputs }) => {
-        const job = await videoJobs.startConvertHls({
+        const job = await ffmpeg.startConvertHls({
           sessionKey,
           inputPath: inputs.inputPath ?? "",
           outputPlaylistPath: inputs.outputPlaylistPath ?? "",

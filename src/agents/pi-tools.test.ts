@@ -1,3 +1,6 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { createPiTools } from "./pi-tools.js";
 import type { AgentRuntime } from "../runtime/agent-runtime.js";
@@ -202,7 +205,7 @@ function createTooling(overrides: ToolingOverrides = {}): AgentRuntime {
     },
   };
   return {
-    videoJobs: {
+    ffmpeg: {
       startTranscode: tooling.video.startTranscode,
       startConvertHls: tooling.video.startConvertHls,
       startCaptureStream: tooling.video.startCaptureStream,
@@ -227,6 +230,9 @@ function createTooling(overrides: ToolingOverrides = {}): AgentRuntime {
     },
     streamer: {
       listOrigins: async () => [],
+      inspectOrigin: async () => {
+        throw new Error("not used");
+      },
       cloneHls: (input: any) => tooling.video.streamClone({ sessionKey: "test", ...input }),
       cloneDash: (input: any) => tooling.video.streamClone({ sessionKey: "test", ...input }),
     },
@@ -450,6 +456,150 @@ describe("createPiTools playback_analyze", () => {
     expect(text).toContain("ok=false");
     expect(text).toContain("playback_analyze_failed");
     expect(text).toContain("playback_analyze_unavailable");
+  });
+});
+
+describe("createPiTools stream_inspect", () => {
+  it("usa inspectOrigin para listar chunks do origin", async () => {
+    const inspectOrigin = vi.fn(async () => ({
+      id: "osoutros",
+      schemaVersion: 1,
+      protocol: "hls" as const,
+      sourceUrl: "https://example.com/master.m3u8",
+      selectedUrl: "https://example.com/media.m3u8",
+      finalUrl: "https://example.com/media.m3u8",
+      rootDir: "/tmp/osoutros",
+      manifestPath: "/tmp/osoutros/index.m3u8",
+      playbackPath: "/streams/osoutros/index.m3u8",
+      requestedDurationSeconds: 60,
+      cumulativeDurationSeconds: 8,
+      reachedTargetDuration: false,
+      targetDuration: 4,
+      segmentCount: 2,
+      variantCount: 1,
+      renditionCount: 0,
+      bytes: 3000,
+      allVariants: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      variants: [],
+      renditions: [],
+      segments: [
+        {
+          originalIndex: 10,
+          sourceUri: "seg-10.ts",
+          sourceUrl: "https://example.com/seg-10.ts",
+          localUri: "segments/00000-seg-10.ts",
+          duration: 4,
+          bytes: 1000,
+        },
+        {
+          originalIndex: 11,
+          sourceUri: "seg-11.ts",
+          sourceUrl: "https://example.com/seg-11.ts",
+          localUri: "segments/00001-seg-11.ts",
+          duration: 4,
+          bytes: 2000,
+        },
+      ],
+    }));
+    const runtime = createTooling({});
+    runtime.streamer.inspectOrigin = inspectOrigin as never;
+    const tools = createPiTools({
+      sessionKey: "s-stream",
+      runtime,
+    });
+    const tool = tools.find((item) => item.name === "stream_inspect");
+    expect(tool).toBeTruthy();
+
+    const result = await tool!.execute("tc-stream", { originId: "osoutros" });
+    const text = String((result.content?.[0] as { text?: unknown })?.text ?? "");
+
+    expect(inspectOrigin).toHaveBeenCalledWith("osoutros");
+    expect(text).toContain("ok=true");
+    expect(text).toContain("segments=2");
+    expect(text).toContain("chunksListed=2/2");
+    expect(text).toContain("originalIndex=10");
+    expect(text).toContain("localUri=segments/00000-seg-10.ts");
+  });
+
+  it("usa stream_chunk_exec para executar ffprobe com placeholder do chunk", async () => {
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "kael-stream-tool-test-"));
+    const variantDir = path.join(rootDir, "variants", "000-1920x1080");
+    const segmentDir = path.join(variantDir, "segments");
+    await fs.mkdir(segmentDir, { recursive: true });
+    await fs.writeFile(path.join(segmentDir, "00000-test.ts"), "dummy", "utf-8");
+    const inspectOrigin = vi.fn(async () => ({
+      id: "osoutros",
+      schemaVersion: 1,
+      protocol: "hls" as const,
+      sourceUrl: "https://example.com/master.m3u8",
+      selectedUrl: "https://example.com/media.m3u8",
+      finalUrl: "https://example.com/media.m3u8",
+      rootDir,
+      manifestPath: path.join(rootDir, "index.m3u8"),
+      playbackPath: "/streams/osoutros/index.m3u8",
+      requestedDurationSeconds: 60,
+      cumulativeDurationSeconds: 4,
+      reachedTargetDuration: false,
+      targetDuration: 4,
+      segmentCount: 1,
+      variantCount: 1,
+      renditionCount: 0,
+      bytes: 5,
+      allVariants: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      renditions: [],
+      segments: [],
+      variants: [
+        {
+          sourceUri: "media.m3u8",
+          sourceUrl: "https://example.com/media.m3u8",
+          finalUrl: "https://example.com/media.m3u8",
+          localUri: "variants/000-1920x1080/index.m3u8",
+          manifestPath: path.join(variantDir, "index.m3u8"),
+          targetDuration: 4,
+          segmentCount: 1,
+          cumulativeDurationSeconds: 4,
+          reachedTargetDuration: false,
+          bytes: 5,
+          maps: [],
+          segments: [
+            {
+              originalIndex: 10,
+              sourceUri: "seg-10.ts",
+              sourceUrl: "https://example.com/seg-10.ts",
+              localUri: "segments/00000-test.ts",
+              duration: 4,
+              bytes: 5,
+            },
+          ],
+        },
+      ],
+    }));
+    const runtime = createTooling({});
+    runtime.streamer.inspectOrigin = inspectOrigin as never;
+    const tools = createPiTools({
+      sessionKey: "s-stream",
+      runtime,
+    });
+    const tool = tools.find((item) => item.name === "stream_chunk_exec");
+    expect(tool).toBeTruthy();
+
+    const result = await tool!.execute("tc-stream", {
+      originId: "osoutros",
+      targetKind: "variant",
+      targetIndex: 0,
+      segmentIndex: 0,
+      binary: "ffprobe",
+      args: ["-version", "{chunk}"],
+    });
+    const text = String((result.content?.[0] as { text?: unknown })?.text ?? "");
+
+    expect(inspectOrigin).toHaveBeenCalledWith("osoutros");
+    expect(text).toContain("ok=true");
+    expect(text).toContain("binary=ffprobe");
+    expect(text).toContain("chunkLocalUri=segments/00000-test.ts");
+    expect(text).toContain("ffprobe version");
   });
 });
 

@@ -141,7 +141,7 @@ async function handleYouboraCommand(
   return formatEdgeReply(result);
 }
 
-async function handleVideoJobCommand(
+async function handleFfmpegCommand(
   input: EngineTurnInput,
   parsed: ParsedCommand,
   runtime: AgentRuntime,
@@ -152,7 +152,7 @@ async function handleVideoJobCommand(
     }
 
     const [inputPath, outputPath] = parsed.args;
-    const job = await runtime.videoJobs.startTranscode({
+    const job = await runtime.ffmpeg.startTranscode({
       sessionKey: input.sessionKey,
       inputPath,
       outputPath,
@@ -166,7 +166,7 @@ async function handleVideoJobCommand(
     }
 
     const [inputPath, outputPlaylistPath, segmentRaw] = parsed.args;
-    const job = await runtime.videoJobs.startConvertHls({
+    const job = await runtime.ffmpeg.startConvertHls({
       sessionKey: input.sessionKey,
       inputPath,
       outputPlaylistPath,
@@ -181,7 +181,7 @@ async function handleVideoJobCommand(
     }
 
     const [streamUrl, outputPath, durationRaw] = parsed.args;
-    const job = await runtime.videoJobs.startCaptureStream({
+    const job = await runtime.ffmpeg.startCaptureStream({
       sessionKey: input.sessionKey,
       streamUrl,
       outputPath,
@@ -209,11 +209,11 @@ async function handleVideoJobCommand(
     if (!inputTarget) {
       return { reply: "Uso: /vlc <input|url>" };
     }
-    if (!runtime.videoJobs.startPlayVlc) {
+    if (!runtime.ffmpeg.startPlayVlc) {
       return { reply: "Tool de VLC indisponivel neste modo." };
     }
 
-    const job = await runtime.videoJobs.startPlayVlc({
+    const job = await runtime.ffmpeg.startPlayVlc({
       sessionKey: input.sessionKey,
       input: inputTarget,
     });
@@ -365,9 +365,9 @@ export async function runSimpleCommand(input: EngineTurnInput): Promise<EngineTu
     return handleYouboraCommand(parsed, input.runtime);
   }
 
-  const videoReply = await handleVideoJobCommand(input, parsed, input.runtime);
-  if (videoReply) {
-    return videoReply;
+  const ffmpegReply = await handleFfmpegCommand(input, parsed, input.runtime);
+  if (ffmpegReply) {
+    return ffmpegReply;
   }
 
   const browserReply = await handleBrowserCommand(input, parsed, input.runtime);
