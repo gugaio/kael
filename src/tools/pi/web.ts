@@ -1,6 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineToolingInterface } from "../types.js";
-import type { ToolLoopGuard } from "../tool-loop-guard.js";
+import type { ToolLoopGuard } from "../../agents/tool-loop-guard.js";
+import type { ResearchService } from "../../research/service.js";
 
 type TextBlock = {
   type: "text";
@@ -51,7 +51,7 @@ function summarizeWebResearch(result: {
 
 export function createWebPiTools(params: {
   sessionKey: string;
-  tooling: EngineToolingInterface["web"];
+  research: ResearchService;
   turnSignal?: AbortSignal;
   loopGuard?: ToolLoopGuard;
   textResult: (text: string) => TextBlock[];
@@ -117,7 +117,7 @@ export function createWebPiTools(params: {
         params.logToolEnd("web_search", intent, blockedResult.details, startedAtMs);
         return blockedResult;
       }
-      const result = await params.tooling.webSearch({
+      const result = await params.research.search({
         sessionKey: params.sessionKey,
         query: args.query,
         maxResults: args.maxResults,
@@ -192,7 +192,7 @@ export function createWebPiTools(params: {
         params.logToolEnd("web_fetch", intent, blockedResult.details, startedAtMs);
         return blockedResult;
       }
-      const result = await params.tooling.webFetch({
+      const result = await params.research.fetchUrl({
         sessionKey: params.sessionKey,
         url: args.url,
         maxChars: args.maxChars,
@@ -279,7 +279,7 @@ export function createWebPiTools(params: {
         params.logToolEnd("web_research", intent, blockedResult.details, startedAtMs);
         return blockedResult;
       }
-      const result = await params.tooling.webResearch({
+      const result = await params.research.research({
         sessionKey: params.sessionKey,
         query: args.query,
         maxResults: args.maxResults,

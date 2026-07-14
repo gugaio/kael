@@ -188,7 +188,7 @@ Referencia completa: `docs/api.md`
 - `KAEL_API_AUTH_TOKEN` (quando definido, exige `Authorization: Bearer <token>` em toda a API)
 - `KAEL_ENGINE_MODE` (`simple`, `pi`, `hybrid`)
 - `KAEL_PI_API_KEY` (obrigatoria em `pi|hybrid`)
-- `KAEL_PI_MODEL` (default `gpt-4o-mini`)
+- `KAEL_PI_MODEL` (default `gpt-5.5`)
 - `KAEL_RESEARCH_ENABLED` (`true|false`)
 - `KAEL_RESEARCH_API_KEY` (obrigatoria quando research habilitado)
 - `KAEL_EMAIL_ENABLED` (`true|false`)

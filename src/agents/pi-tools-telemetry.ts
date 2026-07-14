@@ -41,10 +41,6 @@ export function inferToolIntent(tool: string, rawParams: unknown): string {
   if (tool === "memory_search") return "memory:search";
   if (tool === "memory_get") return "memory:get";
   if (tool === "memory_write") return "memory:write";
-  if (tool === "project_search") return "projects:search";
-  if (tool === "project_get_document") return "projects:get_document";
-  if (tool === "project_upsert_document") return "projects:upsert_document";
-  if (tool === "project_list_documents") return "projects:list_documents";
   if (tool === "process") {
     const action =
       rawParams && typeof rawParams === "object"

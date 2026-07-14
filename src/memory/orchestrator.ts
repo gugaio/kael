@@ -1,6 +1,6 @@
 import { kaelLogger } from "../infra/logger.js";
 import type { SessionStore } from "../session/store.js";
-import type { EngineToolingInterface } from "../agents/types.js";
+import type { AgentRuntime } from "../runtime/agent-runtime.js";
 import type { MemoryService } from "./service.js";
 import type { TurnOrchestrator } from "../chat/turn-orchestrator.js";
 import {
@@ -26,7 +26,7 @@ type LongTermPromoteResult = {
 type OrchestratorParams = {
   sessionKey: string;
   currentMessage: string;
-  tooling: EngineToolingInterface;
+  runtime: AgentRuntime;
   requestId?: string;
 };
 
@@ -137,7 +137,7 @@ export class MemoryOrchestrator {
         sessionKey: params.sessionKey,
         message: buildMemoryFlushPrompt(),
         requestId: params.requestId ? `${params.requestId}:compact-flush` : undefined,
-        tooling: params.tooling,
+        runtime: params.runtime,
         excludeCurrentMessage: params.currentMessage,
       });
     } catch (error) {
@@ -179,7 +179,7 @@ export class MemoryOrchestrator {
         sessionKey: params.sessionKey,
         message: buildLongTermPromotionPrompt(),
         requestId: params.requestId ? `${params.requestId}:compact-promote` : undefined,
-        tooling: params.tooling,
+        runtime: params.runtime,
         excludeCurrentMessage: params.currentMessage,
       });
     } catch (error) {

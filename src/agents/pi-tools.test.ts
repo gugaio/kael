@@ -1,5 +1,9 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { createPiTools } from "./pi-tools.js";
+import type { AgentRuntime } from "../runtime/agent-runtime.js";
 import type {
   EngineBrowserTooling,
   EngineEdgeTooling,
@@ -8,7 +12,6 @@ import type {
   EngineMcpTooling,
   EngineMemoryTooling,
   EnginePlansTooling,
-  EngineProjectsTooling,
   EngineSystemTooling,
   EngineToolingInterface,
   EngineVideoTooling,
@@ -19,7 +22,6 @@ import type {
 type ToolingOverrides = {
   video?: Partial<EngineVideoTooling>;
   jobs?: Partial<EngineJobsTooling>;
-  projects?: Partial<EngineProjectsTooling>;
   system?: Partial<EngineSystemTooling>;
   mcp?: Partial<EngineMcpTooling>;
   edge?: Partial<EngineEdgeTooling>;
@@ -31,8 +33,8 @@ type ToolingOverrides = {
   plans?: Partial<EnginePlansTooling>;
 };
 
-function createTooling(overrides: ToolingOverrides = {}): EngineToolingInterface {
-  return {
+function createTooling(overrides: ToolingOverrides = {}): AgentRuntime {
+  const tooling: EngineToolingInterface = {
     video: {
       startTranscode: async () => ({ id: "job-1" } as never),
       startConvertHls: async () => ({ id: "job-2" } as never),
@@ -68,21 +70,6 @@ function createTooling(overrides: ToolingOverrides = {}): EngineToolingInterface
       getJob: () => null,
       getJobLog: async ({ jobId }) => ({ jobId, found: false }),
       ...overrides.jobs,
-    },
-    projects: {
-      projectSearch: async () => [],
-      projectGetDocument: async () => null,
-      projectUpsertDocument: async () => ({
-        project: "proj",
-        path: "PROJECT.md",
-        title: "Project Overview",
-        description: "Visao geral",
-        tags: [],
-        content: "# proj",
-        updatedAt: new Date().toISOString(),
-      }),
-      projectListDocuments: async () => [],
-      ...overrides.projects,
     },
     system: {
       execCommand: async () => ({
@@ -217,13 +204,148 @@ function createTooling(overrides: ToolingOverrides = {}): EngineToolingInterface
       ...overrides.plans,
     },
   };
+  return {
+    ffmpeg: {
+      startTranscode: tooling.video.startTranscode,
+      startConvertHls: tooling.video.startConvertHls,
+      startCaptureStream: tooling.video.startCaptureStream,
+      startPlayVlc: tooling.video.startPlayVlc,
+    },
+    videoInspect: {
+      inspectHls: (input: any) => tooling.video.videoHlsInspect({ sessionKey: "test", ...input }),
+      probe: (input: any) => tooling.video.videoProbe({ sessionKey: "test", ...input }),
+    },
+    playbackTriage: {
+      analyzeSession: (input: any) => {
+        if (!tooling.video.playbackAnalyze) throw new Error("playback_analyze_unavailable");
+        return tooling.video.playbackAnalyze({ sessionKey: "test", ...input });
+      },
+    },
+    streamMonitor: {
+      startWatch: () => "watch-1",
+      stopWatch: () => true,
+      getStatus: () => null,
+      listWatches: () => [],
+      stopAll: () => {},
+    },
+    streamer: {
+      listOrigins: async () => [],
+      inspectOrigin: async () => {
+        throw new Error("not used");
+      },
+      cloneHls: (input: any) => tooling.video.streamClone({ sessionKey: "test", ...input }),
+      cloneDash: (input: any) => tooling.video.streamClone({ sessionKey: "test", ...input }),
+    },
+    serveManager: {
+      serve: (originId: any) => tooling.video.streamServe({ sessionKey: "test", originId }),
+      stop: async (originId: any) => {
+        await tooling.video.streamStop({ sessionKey: "test", originId });
+        return true;
+      },
+      isServing: () => false,
+    },
+    jobs: {
+      listJobs: () => tooling.jobs.listJobs(),
+      getJob: (jobId: any) => tooling.jobs.getJob({ jobId }),
+      getJobLog: async (jobId: any) => {
+        const result = await tooling.jobs.getJobLog({ jobId });
+        return result.found ? result.log ?? "" : null;
+      },
+    },
+    shell: {
+      exec: tooling.system.execCommand,
+      process: tooling.system.processCommand,
+      listApprovals: async () => [],
+      resolveApproval: async () => ({ ok: false, reason: "not_found" } as never),
+    },
+    mcp: {
+      list: tooling.mcp.mcpList,
+      call: tooling.mcp.mcpCall,
+    },
+    edge: {
+      listCapabilities: () => tooling.edge.edgeList(),
+      dispatchTask: ({ capability, input, clientId, timeoutMs }: any) => {
+        if (capability === "youbora.metrics.get") {
+          const payload = (input ?? {}) as { fromDate?: string; toDate?: string; metrics?: string; type?: string; granularity?: string; filters?: unknown };
+          return tooling.edge.youboraMetricsGet({
+            fromDate: payload.fromDate ?? "last24hours",
+            toDate: payload.toDate,
+            metrics: payload.metrics,
+            type: payload.type,
+            granularity: payload.granularity,
+            filters: payload.filters,
+            clientId,
+            timeoutMs,
+          });
+        }
+        if (capability === "youbora.rawdata.get") {
+          const payload = (input ?? {}) as { fromDate?: string; toDate?: string; type?: string; filters?: unknown };
+          return tooling.edge.youboraRawdataGet({
+            fromDate: payload.fromDate ?? "last24hours",
+            toDate: payload.toDate,
+            type: payload.type,
+            filters: payload.filters,
+            clientId,
+            timeoutMs,
+          });
+        }
+        if (capability === "youbora.events.get") {
+          const payload = (input ?? {}) as { fromDate?: string; toDate?: string; type?: string; filters?: unknown };
+          return tooling.edge.youboraEventsGet({
+            fromDate: payload.fromDate ?? "last24hours",
+            toDate: payload.toDate,
+            type: payload.type,
+            filters: payload.filters,
+            clientId,
+            timeoutMs,
+          });
+        }
+        return tooling.edge.edgeCall({ capability, input, clientId, timeoutMs });
+      },
+    },
+    memory: {
+      search: (query: any, maxResults: any) => tooling.memory.memorySearch({ query, maxResults }),
+      get: ({ relPath, from, lines }: any) => tooling.memory.memoryGet({ path: relPath, from, lines }),
+      write: tooling.memory.memoryWrite,
+    },
+    workspace: {
+      search: tooling.workspace.workspaceSearch,
+      read: ({ relPath, from, lines }: any) => tooling.workspace.workspaceRead({ path: relPath, from, lines }),
+    },
+    research: {
+      search: tooling.web.webSearch,
+      fetchUrl: tooling.web.webFetch,
+      research: tooling.web.webResearch,
+    },
+    browser: {
+      command: tooling.browser.browserCommand,
+      getRuntimeTelemetrySnapshot: tooling.browser.browserRuntimeTelemetry,
+    },
+    imageGenerator: {
+      generate: async ({ prompt, size }: any) => {
+        if (!tooling.image.imageGenerate) throw new Error("image_generate_unavailable");
+        return tooling.image.imageGenerate({ sessionKey: "test", prompt, size });
+      },
+    },
+    videoGeneration: {} as never,
+    planner: {
+      create: tooling.plans.planCreate,
+      generate: tooling.plans.planGenerate,
+      list: tooling.plans.planList,
+      get: (planId: any) => tooling.plans.planGet({ planId }),
+      updateStep: tooling.plans.planUpdateStep,
+      nextAction: (planId: any) => tooling.plans.planNextAction({ planId }),
+      executeNext: tooling.plans.planExecuteNext,
+      reconcile: tooling.plans.planReconcile,
+    },
+  } as unknown as AgentRuntime;
 }
 
 describe("createPiTools image_generate", () => {
   it("returns failed result instead of throwing when generation errors", async () => {
     const tools = createPiTools({
       sessionKey: "s1",
-      tooling: createTooling({
+      runtime: createTooling({
         image: {
           imageGenerate: async () => {
             throw new Error("image backend timeout");
@@ -250,7 +372,7 @@ describe("createPiTools image_generate", () => {
     }));
     const tools = createPiTools({
       sessionKey: "s1",
-      tooling: createTooling({
+      runtime: createTooling({
         image: {
           imageGenerate,
         },
@@ -276,7 +398,7 @@ describe("createPiTools playback_analyze", () => {
   it("exposes playback_analyze and supports raw log text", async () => {
     const tools = createPiTools({
       sessionKey: "s-playback",
-      tooling: createTooling({
+      runtime: createTooling({
         video: {
           playbackAnalyze: async ({ player, logText }) => ({
             ok: false,
@@ -318,10 +440,10 @@ describe("createPiTools playback_analyze", () => {
     expect(text).toContain("fatal_error");
   });
 
-  it("returns blocked result when playback tool is unavailable", async () => {
+  it("returns failed result when playback runtime errors", async () => {
     const tools = createPiTools({
       sessionKey: "s-playback-missing",
-      tooling: createTooling({}),
+      runtime: createTooling({}),
     });
     const tool = tools.find((item) => item.name === "playback_analyze");
     expect(tool).toBeTruthy();
@@ -331,8 +453,153 @@ describe("createPiTools playback_analyze", () => {
       logText: "fatal error",
     });
     const text = String((result.content?.[0] as { text?: unknown })?.text ?? "");
-    expect(text).toContain("blocked=true");
+    expect(text).toContain("ok=false");
+    expect(text).toContain("playback_analyze_failed");
     expect(text).toContain("playback_analyze_unavailable");
+  });
+});
+
+describe("createPiTools stream_inspect", () => {
+  it("usa inspectOrigin para listar chunks do origin", async () => {
+    const inspectOrigin = vi.fn(async () => ({
+      id: "osoutros",
+      schemaVersion: 1,
+      protocol: "hls" as const,
+      sourceUrl: "https://example.com/master.m3u8",
+      selectedUrl: "https://example.com/media.m3u8",
+      finalUrl: "https://example.com/media.m3u8",
+      rootDir: "/tmp/osoutros",
+      manifestPath: "/tmp/osoutros/index.m3u8",
+      playbackPath: "/streams/osoutros/index.m3u8",
+      requestedDurationSeconds: 60,
+      cumulativeDurationSeconds: 8,
+      reachedTargetDuration: false,
+      targetDuration: 4,
+      segmentCount: 2,
+      variantCount: 1,
+      renditionCount: 0,
+      bytes: 3000,
+      allVariants: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      variants: [],
+      renditions: [],
+      segments: [
+        {
+          originalIndex: 10,
+          sourceUri: "seg-10.ts",
+          sourceUrl: "https://example.com/seg-10.ts",
+          localUri: "segments/00000-seg-10.ts",
+          duration: 4,
+          bytes: 1000,
+        },
+        {
+          originalIndex: 11,
+          sourceUri: "seg-11.ts",
+          sourceUrl: "https://example.com/seg-11.ts",
+          localUri: "segments/00001-seg-11.ts",
+          duration: 4,
+          bytes: 2000,
+        },
+      ],
+    }));
+    const runtime = createTooling({});
+    runtime.streamer.inspectOrigin = inspectOrigin as never;
+    const tools = createPiTools({
+      sessionKey: "s-stream",
+      runtime,
+    });
+    const tool = tools.find((item) => item.name === "stream_inspect");
+    expect(tool).toBeTruthy();
+
+    const result = await tool!.execute("tc-stream", { originId: "osoutros" });
+    const text = String((result.content?.[0] as { text?: unknown })?.text ?? "");
+
+    expect(inspectOrigin).toHaveBeenCalledWith("osoutros");
+    expect(text).toContain("ok=true");
+    expect(text).toContain("segments=2");
+    expect(text).toContain("chunksListed=2/2");
+    expect(text).toContain("originalIndex=10");
+    expect(text).toContain("localUri=segments/00000-seg-10.ts");
+  });
+
+  it("usa stream_chunk_exec para executar ffprobe com placeholder do chunk", async () => {
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "kael-stream-tool-test-"));
+    const variantDir = path.join(rootDir, "variants", "000-1920x1080");
+    const segmentDir = path.join(variantDir, "segments");
+    await fs.mkdir(segmentDir, { recursive: true });
+    await fs.writeFile(path.join(segmentDir, "00000-test.ts"), "dummy", "utf-8");
+    const inspectOrigin = vi.fn(async () => ({
+      id: "osoutros",
+      schemaVersion: 1,
+      protocol: "hls" as const,
+      sourceUrl: "https://example.com/master.m3u8",
+      selectedUrl: "https://example.com/media.m3u8",
+      finalUrl: "https://example.com/media.m3u8",
+      rootDir,
+      manifestPath: path.join(rootDir, "index.m3u8"),
+      playbackPath: "/streams/osoutros/index.m3u8",
+      requestedDurationSeconds: 60,
+      cumulativeDurationSeconds: 4,
+      reachedTargetDuration: false,
+      targetDuration: 4,
+      segmentCount: 1,
+      variantCount: 1,
+      renditionCount: 0,
+      bytes: 5,
+      allVariants: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      renditions: [],
+      segments: [],
+      variants: [
+        {
+          sourceUri: "media.m3u8",
+          sourceUrl: "https://example.com/media.m3u8",
+          finalUrl: "https://example.com/media.m3u8",
+          localUri: "variants/000-1920x1080/index.m3u8",
+          manifestPath: path.join(variantDir, "index.m3u8"),
+          targetDuration: 4,
+          segmentCount: 1,
+          cumulativeDurationSeconds: 4,
+          reachedTargetDuration: false,
+          bytes: 5,
+          maps: [],
+          segments: [
+            {
+              originalIndex: 10,
+              sourceUri: "seg-10.ts",
+              sourceUrl: "https://example.com/seg-10.ts",
+              localUri: "segments/00000-test.ts",
+              duration: 4,
+              bytes: 5,
+            },
+          ],
+        },
+      ],
+    }));
+    const runtime = createTooling({});
+    runtime.streamer.inspectOrigin = inspectOrigin as never;
+    const tools = createPiTools({
+      sessionKey: "s-stream",
+      runtime,
+    });
+    const tool = tools.find((item) => item.name === "stream_chunk_exec");
+    expect(tool).toBeTruthy();
+
+    const result = await tool!.execute("tc-stream", {
+      originId: "osoutros",
+      targetKind: "variant",
+      targetIndex: 0,
+      segmentIndex: 0,
+      binary: "ffprobe",
+      args: ["-version", "{chunk}"],
+    });
+    const text = String((result.content?.[0] as { text?: unknown })?.text ?? "");
+
+    expect(inspectOrigin).toHaveBeenCalledWith("osoutros");
+    expect(text).toContain("ok=true");
+    expect(text).toContain("binary=ffprobe");
+    expect(text).toContain("chunkLocalUri=segments/00000-test.ts");
+    expect(text).toContain("ffprobe version");
   });
 });
 
@@ -340,7 +607,7 @@ describe("createPiTools browser budget", () => {
   it("bloqueia segunda chamada de browser quando maxBrowserCalls=1", async () => {
     const tools = createPiTools({
       sessionKey: "s-browser",
-      tooling: createTooling({
+      runtime: createTooling({
         browser: {
           browserCommand: async ({ action }) => ({
             ok: true,
@@ -374,7 +641,7 @@ describe("createPiTools jobs/plans state tools", () => {
   it("exposes jobs_list and jobs_get using tooling state methods", async () => {
     const tools = createPiTools({
       sessionKey: "s-jobs",
-      tooling: createTooling({
+      runtime: createTooling({
         jobs: {
           listJobs: () => [
             {
@@ -420,7 +687,7 @@ describe("createPiTools jobs/plans state tools", () => {
   it("exposes plan_get and returns not found when plan is absent", async () => {
     const tools = createPiTools({
       sessionKey: "s-plan",
-      tooling: createTooling({
+      runtime: createTooling({
         plans: {
           planGet: () => null,
         },
@@ -439,7 +706,7 @@ describe("createPiTools edge tools", () => {
   it("exposes edge_list and edge_call using tooling state methods", async () => {
     const tools = createPiTools({
       sessionKey: "s-edge",
-      tooling: createTooling({
+      runtime: createTooling({
         edge: {
           edgeList: () => [
             {
@@ -488,7 +755,7 @@ describe("createPiTools edge tools", () => {
   it("blocks edge_call when edge turn budget is exhausted", async () => {
     const tools = createPiTools({
       sessionKey: "s-edge-budget",
-      tooling: createTooling({
+      runtime: createTooling({
         edge: {
           edgeCall: async () => ({
             ok: true,
@@ -528,7 +795,7 @@ describe("createPiTools edge tools", () => {
     }));
     const tools = createPiTools({
       sessionKey: "s-youbora",
-      tooling: createTooling({
+      runtime: createTooling({
         edge: {
           youboraMetricsGet,
         },
@@ -573,7 +840,7 @@ describe("createPiTools edge tools", () => {
     }));
     const tools = createPiTools({
       sessionKey: "s-youbora-raw",
-      tooling: createTooling({
+      runtime: createTooling({
         edge: {
           youboraRawdataGet,
         },
@@ -612,7 +879,7 @@ describe("createPiTools edge tools", () => {
     }));
     const tools = createPiTools({
       sessionKey: "s-youbora-events",
-      tooling: createTooling({
+      runtime: createTooling({
         edge: {
           youboraEventsGet,
         },
@@ -644,7 +911,7 @@ describe("createPiTools mcp tools", () => {
   it("exposes mcp_list and mcp_call using tooling state methods", async () => {
     const tools = createPiTools({
       sessionKey: "s-mcp",
-      tooling: createTooling({
+      runtime: createTooling({
         mcp: {
           mcpList: async () => ({
             ok: true,
@@ -685,7 +952,7 @@ describe("createPiTools mcp tools", () => {
   it("blocks mcp calls when turn budget is exhausted", async () => {
     const tools = createPiTools({
       sessionKey: "s-mcp-budget",
-      tooling: createTooling({
+      runtime: createTooling({
         mcp: {
           mcpList: async () => ({
             ok: true,

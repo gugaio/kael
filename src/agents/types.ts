@@ -13,6 +13,7 @@ import type {
 } from "../vhs/types.js";
 import type { McpCallResult, McpListResult } from "../tools/mcp/mcp-bridge-service.js";
 import type { EdgeCallResult, EdgeCapabilitySummary } from "../edge/runtime.js";
+import type { AgentRuntime } from "../runtime/agent-runtime.js";
 
 export type EngineVideoTooling = {
   startTranscode: (params: {
@@ -366,63 +367,6 @@ export type EngineMemoryTooling = {
   }) => Promise<{ path: string }>;
 };
 
-export type EngineProjectsTooling = {
-  projectSearch: (params: {
-    query: string;
-    project?: string;
-    maxResults?: number;
-  }) => Promise<
-    Array<{
-      project: string;
-      path: string;
-      title: string;
-      description: string;
-      tags: string[];
-      updatedAt: string;
-      score: number;
-      snippet: string;
-    }>
-  >;
-  projectGetDocument: (params: {
-    project: string;
-    path?: string;
-  }) => Promise<{
-    project: string;
-    path: string;
-    title: string;
-    description: string;
-    tags: string[];
-    content: string;
-    updatedAt: string;
-  } | null>;
-  projectUpsertDocument: (params: {
-    project: string;
-    path?: string;
-    title?: string;
-    description?: string;
-    tags?: string[];
-    content: string;
-    mode?: "replace" | "append";
-  }) => Promise<{
-    project: string;
-    path: string;
-    title: string;
-    description: string;
-    tags: string[];
-    content: string;
-    updatedAt: string;
-  }>;
-  projectListDocuments: (params: { project: string }) => Promise<
-    Array<{
-      path: string;
-      title: string;
-      description: string;
-      tags: string[];
-      updatedAt: string;
-    }>
-  >;
-};
-
 export type EngineWorkspaceTooling = {
   workspaceSearch: (params: {
     query: string;
@@ -659,7 +603,6 @@ export type EngineToolingInterface = {
   mcp: EngineMcpTooling;
   edge: EngineEdgeTooling;
   memory: EngineMemoryTooling;
-  projects: EngineProjectsTooling;
   workspace: EngineWorkspaceTooling;
   web: EngineWebTooling;
   browser: EngineBrowserTooling;
@@ -677,7 +620,7 @@ export type EngineTurnInput = {
     content: string;
     createdAt: string;
   }>;
-  tooling: EngineToolingInterface;
+  runtime: AgentRuntime;
 };
 
 export type EngineInboundAttachment = {

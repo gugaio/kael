@@ -254,13 +254,13 @@ describe('classifyHttpError', () => {
 });
 
 describe('shouldFallbackOnPiError', () => {
-  it('deve retornar true para timeout', () => {
+  it('deve retornar false para timeout', () => {
     const error = new PiEngineError({
       message: 'timeout',
       code: 'timeout',
       retryable: true,
     });
-    expect(shouldFallbackOnPiError(error)).toBe(true);
+    expect(shouldFallbackOnPiError(error)).toBe(false);
   });
 
   it('deve retornar true para rate_limit', () => {
@@ -279,6 +279,15 @@ describe('shouldFallbackOnPiError', () => {
       retryable: true,
     });
     expect(shouldFallbackOnPiError(error)).toBe(true);
+  });
+
+  it('nao deve esconder configuracao invalida de provider/modelo', () => {
+    const error = new PiEngineError({
+      message: 'Model not found for provider=openai model=gpt-5.5',
+      code: 'provider_unavailable',
+      retryable: false,
+    });
+    expect(shouldFallbackOnPiError(error)).toBe(false);
   });
 
   it('deve retornar true para network', () => {
@@ -324,7 +333,7 @@ describe('shouldFallbackOnPiError', () => {
 
   it('deve normalizar DOMException AbortError antes de decidir', () => {
     const error = new DOMException('Aborted', 'AbortError');
-    expect(shouldFallbackOnPiError(error)).toBe(true);
+    expect(shouldFallbackOnPiError(error)).toBe(false);
   });
 
   it('deve normalizar TypeError antes de decidir', () => {

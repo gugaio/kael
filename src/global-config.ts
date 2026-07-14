@@ -154,7 +154,7 @@ export function buildDefaultGlobalConfig(kaelHome: string): KaelGlobalConfig {
       },
       pi: {
         provider: "openai",
-        model: "gpt-4o-mini",
+        model: "gpt-5.5",
         timeoutMs: 45000,
         retry: {
           attempts: 3,

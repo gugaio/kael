@@ -9,7 +9,7 @@ import { JobStore } from "./store.js";
 import { JobService } from "./service.js";
 import { LocalProcessSupervisor } from "../process/supervisor.js";
 import type { ProcessRunner } from "../tools/system/process-runner.js";
-import { createVideoJobs } from "../video/jobs.js";
+import { createFfmpegJobs } from "../ffmpeg/jobs.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -65,7 +65,7 @@ function createTestJobs(store: JobStore, runner: ProcessRunner, jobTimeoutMs = 6
   });
   return {
     jobs,
-    video: createVideoJobs({
+    ffmpeg: createFfmpegJobs({
       jobs,
       options: { safePathsEnabled: false, allowedPaths: [], maxJobArgs: 24 },
     }),
@@ -81,7 +81,7 @@ describe("JobService runtime controls", () => {
     const store = new JobStore(root);
     await store.init();
     const runner = new FakeRunner();
-    const { video: service } = createTestJobs(store, runner, 60_000, 100);
+    const { ffmpeg: service } = createTestJobs(store, runner, 60_000, 100);
 
     const first = await service.startTranscode({
       sessionKey: "s1",
@@ -117,7 +117,7 @@ describe("JobService runtime controls", () => {
     const store = new JobStore(root);
     await store.init();
     const runner = new FakeRunner();
-    const { video: service } = createTestJobs(store, runner, 20);
+    const { ffmpeg: service } = createTestJobs(store, runner, 20);
 
     const job = await service.startTranscode({
       sessionKey: "s1",
@@ -144,7 +144,7 @@ describe("JobService runtime controls", () => {
     const store = new JobStore(root);
     await store.init();
     const runner = new FakeRunner();
-    const { jobs, video: service } = createTestJobs(store, runner);
+    const { jobs, ffmpeg: service } = createTestJobs(store, runner);
 
     const running = await service.startTranscode({
       sessionKey: "s1",
@@ -179,7 +179,7 @@ describe("JobService runtime controls", () => {
     const store = new JobStore(root);
     await store.init();
     const runner = new FakeRunner();
-    const { jobs, video: service } = createTestJobs(store, runner);
+    const { jobs, ffmpeg: service } = createTestJobs(store, runner);
 
     const running = await service.startTranscode({
       sessionKey: "s1",

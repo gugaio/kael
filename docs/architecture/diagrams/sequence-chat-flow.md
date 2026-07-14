@@ -16,7 +16,8 @@ sequenceDiagram
     participant Session as SessionStore<br/>src/session/store.ts
     participant Engine as PiEngineAdapter<br/>src/agents/pi-engine-adapter.ts
     participant PiSDK as PI Agent SDK
-    participant Tooling as EngineToolingNamespaces
+    participant PiTools as PI Tool Adapters
+    participant Runtime as Shared Runtimes
     participant VideoJob as ProcessJobService
     participant Memory as MemoryService
 
@@ -47,8 +48,8 @@ sequenceDiagram
         MemOrch-->>Chat: {compacted, flushed}
         Chat->>Session: appendMessage()<br/>(role: assistant, status)
         Chat-->>API: {userMessage, assistantMessage, reply}
-    else Mensagem livre ou chat-only?
-        Chat->>Chat: handleMessageInternal(tooling, {allowOperationalShortcuts})
+    else Mensagem livre ou atalhos operacionais desativados?
+        Chat->>Chat: handleMessageInternal({allowOperationalShortcuts})
 
         Note over Chat: Pré-processamento multimodal
         alt Anexos presentes e media habilitado?
@@ -75,7 +76,7 @@ sequenceDiagram
         Memory-->>MemOrch: ok
         MemOrch-->>Chat: ok
 
-        Chat->>TurnOrch: runTurn()<br/>{sessionKey, messageWithMediaContext, tooling, attachments?}
+        Chat->>TurnOrch: runTurn()<br/>{sessionKey, messageWithMediaContext, runtime, attachments?}
 
         Note over TurnOrch: Gestão de contexto
         TurnOrch->>Session: getRecentMessages(maxMessages)
@@ -89,39 +90,39 @@ sequenceDiagram
             TurnOrch->>Session: appendCompactionMarker()
         end
 
-        TurnOrch->>Engine: runTurn()<br/>{sessionKey, message, contextMessages, tooling, attachments, requestId}
+        TurnOrch->>Engine: runTurn()<br/>{sessionKey, message, contextMessages, runtime, attachments, requestId}
 
         Note over Engine: PI SDK turn execution
         Engine->>PiSDK: runAgent()<br/>{systemPrompt, messages, tools}
 
         loop Tool calling loop
             PiSDK-->>Engine: toolCall<br/>{name, args}
-            Engine->>Tooling: Executar tool no namespace correto
+            Engine->>PiTools: Executar adapter da tool
 
             alt Tool é exec/process?
                 Engine->>ShellToolService: exec/process
                 ShellToolService->>Supervisor: start/poll/kill
                 Supervisor-->>ShellToolService: {ok, session}
-                ShellToolService-->>Tooling: {id, command, status, output, failureCode}
+                ShellToolService-->>PiTools: {id, command, status, output, failureCode}
             else Tool é memory_search?
                 Engine->>Memory: search(query, maxResults)
-                Memory-->>Tooling: [{path, snippet, score}, ...]
+                Memory-->>PiTools: [{path, snippet, score}, ...]
             else Tool é web_search/web_fetch/web_research?
                 Engine->>ResearchService: search/fetch/research
                 ResearchService->>Tavily: search API
                 Tavily-->>ResearchService: {results, summary, sources}
-                ResearchService-->>Tooling: {summary, evidence, confidence}
+                ResearchService-->>PiTools: {summary, evidence, confidence}
             else Tool é video (transcode/HLS/capture/probe)?
                 Engine->>VideoJob: enqueue ffmpeg/ffprobe job
-                VideoJob-->>Tooling: {id, status, command, input, output}
+                VideoJob-->>PiTools: {id, status, command, input, output}
             else Tool é image_generate?
                 Engine->>ImageGenerator: generate(prompt, size)
                 ImageGenerator->>OpenAI: /images/generations
                 OpenAI-->>ImageGenerator: {image: base64, mimeType}
-                ImageGenerator-->>Tooling: {kind: image, dataBase64, mimeType, fileName}
+                ImageGenerator-->>PiTools: {kind: image, dataBase64, mimeType, fileName}
             end
 
-            Tooling-->>Engine: toolResult
+            PiTools-->>Engine: toolResult
             Engine->>PiSDK: returnToolResult()
         end
 
@@ -158,7 +159,7 @@ sequenceDiagram
 ### 2. Roteamento (CommandRouter)
 - **Slash commands** → Fast-path via SimpleCommandEngine (determinístico)
 - **Comando especial `/compact`** → MemoryOrchestrator (flush + compactação)
-- **Mensagem livre ou chat-only** → Fluxo completo com PI Engine
+- **Mensagem livre ou atalhos operacionais desativados** → Fluxo completo com PI Engine
 
 ### 3. Pré-processamento Multimodal
 **Se anexos presentes e media habilitado:**

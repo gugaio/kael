@@ -1,20 +1,14 @@
-import type { EngineInboundAttachment, EngineOutputArtifact, EngineToolingInterface } from "../agents/types.js";
+import type { EngineInboundAttachment, EngineOutputArtifact } from "../agents/types.js";
 import { normalizePiError } from "../agents/pi-errors.js";
-import type { MemoryService } from "../memory/service.js";
-import type { SessionStore } from "../session/store.js";
-import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
 import type { SessionMessage } from "../types.js";
 import { kaelLogger } from "../infra/logger.js";
-import { TurnOrchestrator } from "./turn-orchestrator.js";
 import { MemoryOrchestrator } from "../memory/orchestrator.js";
 import { CommandRouter } from "./command-router.js";
 import { ChatRoutingTelemetry, type ChatRoutingTelemetrySnapshot } from "./routing-telemetry.js";
-import { createChatOnlyTooling } from "./tooling-factory.js";
-import type { MediaRuntimeTelemetry, MediaUnderstandingService } from "../media/service.js";
+import type { AgentRuntime } from "../runtime/agent-runtime.js";
+import type { MediaRuntimeTelemetry } from "../media/service.js";
 import type { BrowserRuntimeTelemetry } from "../runtime/browser/index.js";
-import type { ProjectContextService } from "../projects/service.js";
-import { ProjectPromptContextBuilder } from "../projects/prompt-context.js";
-import { SkillService, type SkillsRuntimeTelemetry } from "../skills/service.js";
+import type { SkillsRuntimeTelemetry } from "../skills/service.js";
 
 function shouldResetSessionOnEngineError(error: unknown): boolean {
   const normalized = normalizePiError(error);
@@ -63,6 +57,7 @@ type HandleMessageInput = {
   attachments?: EngineInboundAttachment[];
   source?: "api" | "discord" | "email" | "unknown";
   requestId?: string;
+  allowOperationalShortcuts?: boolean;
 };
 
 type ChatReplyEnvelope = {
@@ -83,29 +78,16 @@ type PreLlmDeterministicRouteResult =
   | { pipeline: PipelineState };
 
 export class ChatService {
-  private readonly tooling: EngineToolingInterface;
-  private readonly chatOnlyTooling: EngineToolingInterface;
   private readonly memoryOrchestrator: MemoryOrchestrator;
   private readonly commandRouter = new CommandRouter();
   private readonly routingTelemetry = new ChatRoutingTelemetry();
-  private readonly skills: SkillService;
-  private readonly projectPromptContext: ProjectPromptContextBuilder;
 
-  constructor(
-    private readonly sessions: SessionStore,
-    private readonly shell: ShellRuntime,
-    private readonly orchestrator: TurnOrchestrator,
-    private readonly media: MediaUnderstandingService,
-    memory: MemoryService,
-    tooling: EngineToolingInterface,
-    projects: ProjectContextService,
-    skills: SkillService,
-  ) {
-    this.memoryOrchestrator = new MemoryOrchestrator(this.sessions, memory, this.orchestrator);
-    this.tooling = tooling;
-    this.chatOnlyTooling = createChatOnlyTooling(tooling);
-    this.projectPromptContext = new ProjectPromptContextBuilder(projects);
-    this.skills = skills;
+  constructor(private readonly runtime: AgentRuntime) {
+    this.memoryOrchestrator = new MemoryOrchestrator(
+      runtime.sessions,
+      runtime.memory,
+      runtime.orchestrator,
+    );
   }
 
   async handleMessage(input: {
@@ -114,18 +96,11 @@ export class ChatService {
     attachments?: EngineInboundAttachment[];
     source?: "api" | "discord" | "email" | "unknown";
     requestId?: string;
+    allowOperationalShortcuts?: boolean;
   }): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string; artifacts: EngineOutputArtifact[] }> {
-    return this.handleMessageInternal(input, this.tooling, { allowOperationalShortcuts: true });
-  }
-
-  async handleMessageChatOnly(input: {
-    sessionKey: string;
-    message: string;
-    attachments?: EngineInboundAttachment[];
-    source?: "api" | "discord" | "email" | "unknown";
-    requestId?: string;
-  }): Promise<{ user: SessionMessage; assistant: SessionMessage; reply: string; artifacts: EngineOutputArtifact[] }> {
-    return this.handleMessageInternal(input, this.chatOnlyTooling, { allowOperationalShortcuts: false });
+    return this.handleMessageInternal(input, {
+      allowOperationalShortcuts: input.allowOperationalShortcuts ?? true,
+    });
   }
 
   getRoutingTelemetrySnapshot(): ChatRoutingTelemetrySnapshot {
@@ -137,50 +112,49 @@ export class ChatService {
     toolCallsByName: Record<string, number>;
     blockedCallsByTool: Record<string, number>;
   } {
-    return this.orchestrator.getEngineRuntimeTelemetrySnapshot();
+    return this.runtime.orchestrator.getEngineRuntimeTelemetrySnapshot();
   }
 
   getMediaRuntimeTelemetrySnapshot(): MediaRuntimeTelemetry {
-    return this.media.getRuntimeTelemetrySnapshot();
+    return this.runtime.media.getRuntimeTelemetrySnapshot();
   }
 
   getBrowserRuntimeTelemetrySnapshot(): BrowserRuntimeTelemetry {
-    return this.tooling.browser.browserRuntimeTelemetry();
+    return this.runtime.browser.getRuntimeTelemetrySnapshot();
   }
 
   getSkillsRuntimeTelemetrySnapshot(): SkillsRuntimeTelemetry {
-    return this.skills.getRuntimeTelemetrySnapshot();
+    return this.runtime.skills.getRuntimeTelemetrySnapshot();
   }
 
   private async handleMessageInternal(
     input: HandleMessageInput,
-    tooling: EngineToolingInterface,
     opts: { allowOperationalShortcuts: boolean },
   ): Promise<ChatReplyEnvelope> {
     const userMessage = appendAttachmentSummaryToMessage(input.message, input.attachments);
-    let user = await this.sessions.appendMessage(input.sessionKey, "user", userMessage);
+    let user = await this.runtime.sessions.appendMessage(input.sessionKey, "user", userMessage);
 
     try {
-      const deterministicRoute = await this.tryDeterministicRoute(input, tooling, opts, user);
+      const deterministicRoute = await this.tryDeterministicRoute(input, opts, user);
       if ("reply" in deterministicRoute) {
         return deterministicRoute.reply;
       }
 
-      const llmMessage = await this.prepareLlmMessageStage(input, deterministicRoute.pipeline);
-      return this.runLlmTurnStage(input, tooling, user, llmMessage);
+      const llmMessage = await this.preProcessMessage(input, deterministicRoute.pipeline);
+      return this.runTurn(input, user, llmMessage);
     } catch (error) {
-      return this.handlePipelineError(input, tooling, userMessage, user, error);
+      return this.handlePipelineError(input, userMessage, user, error);
     }
   }
 
   async getHistory(sessionKey: string, limit = 50): Promise<SessionMessage[]> {
-    return this.sessions.getMessages(sessionKey, limit);
+    return this.runtime.sessions.getMessages(sessionKey, limit);
   }
 
   private async handleCompactCommand(input: {
     sessionKey: string;
     currentMessage: string;
-    tooling: EngineToolingInterface;
+    runtime: AgentRuntime;
     requestId?: string;
   }): Promise<{ reply: string }> {
     const { flush, promote, compaction } = await this.memoryOrchestrator.runManualCompact(input);
@@ -205,7 +179,6 @@ export class ChatService {
 
   private async tryDeterministicRoute(
     input: HandleMessageInput,
-    tooling: EngineToolingInterface,
     opts: { allowOperationalShortcuts: boolean },
     user: SessionMessage,
   ): Promise<PreLlmDeterministicRouteResult> {
@@ -215,12 +188,12 @@ export class ChatService {
     }
     const pipeline = manualSkillResult;
 
-    const compactReply = await this.tryCompactStage(input, tooling, user);
+    const compactReply = await this.tryCompactStage(input, user);
     if (compactReply) {
       return { reply: compactReply };
     }
 
-    const fastPathReply = await this.tryOperationalFastPathStage(input, tooling, opts, user, pipeline);
+    const fastPathReply = await this.tryOperationalFastPathStage(input, opts, user, pipeline);
     if (fastPathReply) {
       return { reply: fastPathReply };
     }
@@ -232,7 +205,7 @@ export class ChatService {
     input: HandleMessageInput,
     user: SessionMessage,
   ): Promise<PipelineState | ChatReplyEnvelope> {
-    const skillInvocation = await this.skills.resolveManualInvocation(input.message);
+    const skillInvocation = await this.runtime.skills.resolveManualInvocation(input.message);
     if (!skillInvocation.matched) {
       return {
         llmInputMessage: input.message,
@@ -249,7 +222,7 @@ export class ChatService {
         reason: "skill_manual_blocked",
         skillName: skillInvocation.skillName,
       });
-      const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", skillInvocation.reply);
+      const assistant = await this.runtime.sessions.appendMessage(input.sessionKey, "assistant", skillInvocation.reply);
       return {
         user,
         assistant,
@@ -271,7 +244,6 @@ export class ChatService {
 
   private async tryCompactStage(
     input: HandleMessageInput,
-    tooling: EngineToolingInterface,
     user: SessionMessage,
   ): Promise<ChatReplyEnvelope | null> {
     if (!this.memoryOrchestrator.isCompactCommand(input.message)) {
@@ -286,10 +258,10 @@ export class ChatService {
     const result = await this.handleCompactCommand({
       sessionKey: input.sessionKey,
       currentMessage: input.message,
-      tooling,
+      runtime: this.runtime,
       requestId: input.requestId,
     });
-    const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", result.reply);
+    const assistant = await this.runtime.sessions.appendMessage(input.sessionKey, "assistant", result.reply);
     return {
       user,
       assistant,
@@ -300,7 +272,6 @@ export class ChatService {
 
   private async tryOperationalFastPathStage(
     input: HandleMessageInput,
-    tooling: EngineToolingInterface,
     opts: { allowOperationalShortcuts: boolean },
     user: SessionMessage,
     pipeline: PipelineState,
@@ -312,7 +283,7 @@ export class ChatService {
       sessionKey: input.sessionKey,
       message: input.message,
       requestId: input.requestId,
-      tooling,
+      runtime: this.runtime,
       allowOperationalShortcuts: opts.allowOperationalShortcuts,
     });
     if (!commandRoute.handled) {
@@ -324,7 +295,7 @@ export class ChatService {
       sessionKey: input.sessionKey,
       requestId: input.requestId ?? null,
     });
-    const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", commandRoute.reply);
+    const assistant = await this.runtime.sessions.appendMessage(input.sessionKey, "assistant", commandRoute.reply);
     return {
       user,
       assistant,
@@ -333,13 +304,10 @@ export class ChatService {
     };
   }
 
-  private async prepareLlmMessageStage(input: HandleMessageInput, pipeline: PipelineState): Promise<string> {
-    const projectHint = this.projectPromptContext.extractMention(input.message);
-    let llmInputMessage = projectHint && !pipeline.skillManualApplied
-      ? projectHint.cleanedMessage || pipeline.llmInputMessage
-      : pipeline.llmInputMessage;
+  private async preProcessMessage(input: HandleMessageInput, pipeline: PipelineState): Promise<string> {
+    let llmInputMessage = pipeline.llmInputMessage;
     if (!pipeline.skillManualApplied) {
-      const preparedSkillTurn = await this.skills.prepareTurnMessage(llmInputMessage, {
+      const preparedSkillTurn = await this.runtime.skills.prepareTurnMessage(llmInputMessage, {
         sessionKey: input.sessionKey,
       });
       llmInputMessage = preparedSkillTurn.promptMessage;
@@ -352,17 +320,7 @@ export class ChatService {
       }
     }
 
-    if (projectHint) {
-      llmInputMessage = await this.projectPromptContext.appendMentionedProjectContext({
-        sessionKey: input.sessionKey,
-        requestId: input.requestId,
-        originalMessage: input.message,
-        message: llmInputMessage,
-        projectHint,
-      });
-    }
-
-    const mediaPreprocess = await this.media.preprocess({
+    const mediaPreprocess = await this.runtime.media.preprocess({
       sessionKey: input.sessionKey,
       message: llmInputMessage,
       attachments: input.attachments,
@@ -379,16 +337,15 @@ export class ChatService {
     return mediaPreprocess.message;
   }
 
-  private async runLlmTurnStage(
+  private async runTurn(
     input: HandleMessageInput,
-    tooling: EngineToolingInterface,
     user: SessionMessage,
     llmMessage: string,
   ): Promise<ChatReplyEnvelope> {
     await this.memoryOrchestrator.runAutoCompactionWithMemoryFlushIfNeeded({
       sessionKey: input.sessionKey,
       currentMessage: llmMessage,
-      tooling,
+      runtime: this.runtime,
       requestId: input.requestId,
     });
     this.routingTelemetry.record("llm_turn");
@@ -397,16 +354,16 @@ export class ChatService {
       sessionKey: input.sessionKey,
       requestId: input.requestId ?? null,
     });
-    const turn = await this.orchestrator.runConversationTurn({
+    const turn = await this.runtime.orchestrator.runConversationTurn({
       sessionKey: input.sessionKey,
       message: llmMessage,
       attachments: input.attachments,
       requestId: input.requestId,
-      tooling,
+      runtime: this.runtime,
     });
     const reply = turn.reply;
     const artifacts = turn.artifacts ?? [];
-    const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", reply);
+    const assistant = await this.runtime.sessions.appendMessage(input.sessionKey, "assistant", reply);
     return {
       user,
       assistant,
@@ -417,7 +374,6 @@ export class ChatService {
 
   private async handlePipelineError(
     input: HandleMessageInput,
-    tooling: EngineToolingInterface,
     storedUserMessage: string,
     user: SessionMessage,
     error: unknown,
@@ -429,7 +385,7 @@ export class ChatService {
         .split("\n")
         .find((line) => !line.includes("partial_web_evidence:"))
         ?.trim();
-      const sessions = await this.shell.process({
+      const sessions = await this.runtime.shell.process({
         sessionKey: input.sessionKey,
         action: "list",
       });
@@ -449,7 +405,7 @@ export class ChatService {
       ]
         .filter(Boolean)
         .join("\n");
-      const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", reply);
+      const assistant = await this.runtime.sessions.appendMessage(input.sessionKey, "assistant", reply);
       return {
         user,
         assistant,
@@ -462,16 +418,16 @@ export class ChatService {
       throw error;
     }
 
-    await this.sessions.resetSession(input.sessionKey);
-    const resetUser = await this.sessions.appendMessage(input.sessionKey, "user", storedUserMessage);
-    const turn = await this.orchestrator.runConversationTurn({
+    await this.runtime.sessions.resetSession(input.sessionKey);
+    const resetUser = await this.runtime.sessions.appendMessage(input.sessionKey, "user", storedUserMessage);
+    const turn = await this.runtime.orchestrator.runConversationTurn({
       sessionKey: input.sessionKey,
       message: input.message,
       attachments: input.attachments,
       requestId: input.requestId,
-      tooling,
+      runtime: this.runtime,
     });
-    const assistant = await this.sessions.appendMessage(input.sessionKey, "assistant", turn.reply);
+    const assistant = await this.runtime.sessions.appendMessage(input.sessionKey, "assistant", turn.reply);
 
     return {
       user: resetUser,

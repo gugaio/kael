@@ -152,9 +152,8 @@ export function classifyHttpError(statusCode: number, detail: string): PiEngineE
 export function shouldFallbackOnPiError(error: unknown): boolean {
   const normalized = normalizePiError(error);
   return (
-    normalized.code === "timeout" ||
     normalized.code === "rate_limit" ||
-    normalized.code === "provider_unavailable" ||
+    (normalized.code === "provider_unavailable" && normalized.retryable) ||
     normalized.code === "network"
   );
 }

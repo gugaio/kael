@@ -1,6 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { formatJobDetailsText, formatJobLogText, formatJobsListText } from "../../jobs/tooling.js";
-import type { EngineToolingInterface } from "../types.js";
+import { buildJobLogTailResult, formatJobDetailsText, formatJobLogText, formatJobsListText, selectJobs } from "../../jobs/tooling.js";
+import type { JobService } from "../../jobs/service.js";
 
 type TextBlock = {
   type: "text";
@@ -8,7 +8,7 @@ type TextBlock = {
 };
 
 export function createJobsPiTools(params: {
-  tooling: EngineToolingInterface["jobs"];
+  jobs: JobService;
   textResult: (text: string) => TextBlock[];
   reserveToolCall: (tool: string) => { blocked: { content: TextBlock[]; details: unknown } } | null;
   logToolStart: (tool: string, rawParams: unknown) => string;
@@ -46,7 +46,7 @@ export function createJobsPiTools(params: {
         limit?: number;
       };
       const intent = params.logToolStart("jobs_list", args);
-      const jobs = params.tooling.listJobs({
+      const jobs = selectJobs(params.jobs.listJobs(), {
         sessionKey: args.sessionKey,
         status: args.status,
         limit: args.limit,
@@ -86,7 +86,7 @@ export function createJobsPiTools(params: {
       const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as { jobId: string };
       const intent = params.logToolStart("jobs_get", args);
-      const job = params.tooling.getJob({ jobId: args.jobId });
+      const job = params.jobs.getJob(args.jobId);
       if (!job) {
         const details = { status: "not_found", jobId: args.jobId };
         params.logToolEnd("jobs_get", intent, details, startedAtMs);
@@ -126,8 +126,10 @@ export function createJobsPiTools(params: {
       const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as { jobId: string; tailChars?: number };
       const intent = params.logToolStart("jobs_log_tail", args);
-      const result = await params.tooling.getJobLog({
+      const log = await params.jobs.getJobLog(args.jobId);
+      const result = buildJobLogTailResult({
         jobId: args.jobId,
+        text: log,
         tailChars: args.tailChars,
       });
       if (!result.found) {

@@ -39,6 +39,7 @@ export function registerChatAndLiveRoutes(server: FastifyInstance, deps: ApiRout
         schedules: {
           total: schedules.length,
           enabled: schedules.filter((schedule) => schedule.enabled).length,
+          disabled: schedules.filter((schedule) => !schedule.enabled).length,
         },
         runtimeJobs,
         chatRouting,

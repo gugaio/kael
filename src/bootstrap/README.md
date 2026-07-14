@@ -38,18 +38,18 @@ determinísticas fornecidas por `@gugaio/vhs`.
 | Campo | Tipo | Responsabilidade |
 |-------|------|------------------|
 | `jobs` | `JobService` | Fila e lifecycle genérico de jobs (usa `ProcessSupervisor`) |
-| `videoJobs` | `createVideoJobs()` | Validação e comandos ffmpeg/ffprobe/VLC |
+| `ffmpeg` | `createFfmpegJobs()` | Validação e comandos ffmpeg/VLC de baixo nível |
 | `videoInspect` | `MediaInspector` (VHS) | Probe/inspeção de mídia e HLS |
 | `mediaArtifacts` | `MediaArtifactsService` | Persistência de artifacts de imagem/vídeo |
 
 **Cadeia de dependencias:**
 ```
-LocalProcessRunner -> ProcessSupervisor -> JobService <- createVideoJobs
+LocalProcessRunner -> ProcessSupervisor -> JobService <- createFfmpegJobs
 MediaArtifactsService (init cria diretorio)
 ```
 
 ```typescript
-const { jobs, videoInspect } = await createVideoRuntime(config, jobStore);
+const { jobs, ffmpeg, videoInspect, streamer } = await createVideoRuntime(config, jobStore);
 ```
 
 ### `createShellRuntime(config)`

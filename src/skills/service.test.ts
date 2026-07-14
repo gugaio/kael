@@ -252,28 +252,6 @@ Use a base oficial do hls.js para responder.`,
     expect(result.promptMessage).toContain("[skill_instructions]");
   });
 
-  it("auto-invoca skill de project writer quando a mensagem pede para salvar achados de projeto", async () => {
-    const root = await createWorkspace();
-    await writeSkill(
-      root,
-      "project-writer",
-      `---
-name: project-writer
-description: Use quando for preciso salvar, curar ou atualizar conhecimento do projeto no Kael depois de analise de codigo, incluindo arquivos, evidencias, confidence e kind da nota.
----
-Depois da analise, escreva isso no project space do projeto.`,
-    );
-    const skills = new SkillService(root, undefined, { autoSkillMinScore: 2, autoSkillMaxPerTurn: 1 });
-
-    const result = await skills.prepareTurnMessage(
-      "analisei o fluxo do parametro x no iOS, agora salva esse achado na knowledge base do projeto",
-    );
-
-    expect(result.autoAppliedSkillName).toBe("project-writer");
-    expect(result.promptMessage).toContain("name: project-writer");
-    expect(result.promptMessage).toContain("[skill_instructions]");
-  });
-
   it("respeita budget configuravel do catalogo", async () => {
     const root = await createWorkspace();
     await writeSkill(

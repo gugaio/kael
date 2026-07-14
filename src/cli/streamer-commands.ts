@@ -297,7 +297,7 @@ async function resolveStreamerOriginId(
 async function commandStreamerInspect(originId: string): Promise<void> {
   const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
   const resolvedOriginId = await resolveStreamerOriginId(app.streamer, originId);
-  const origin: StreamerCloneResult = await app.streamer.loadOrigin(resolvedOriginId);
+  const origin: StreamerCloneResult = await app.streamer.inspectOrigin(resolvedOriginId);
   const selectedVariant = origin.selectedVariant
     ? `${origin.selectedVariant.resolution ?? "unknown"} @ ${origin.selectedVariant.bandwidth ?? "n/a"}bps`
     : "media playlist direta ou ladder completa";
@@ -360,7 +360,7 @@ async function commandStreamerInspect(originId: string): Promise<void> {
 async function commandStreamerProbe(originId: string | undefined): Promise<void> {
   const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
   const resolvedOriginId = await resolveStreamerOriginId(app.streamer, originId);
-  const origin: StreamerCloneResult = await app.streamer.loadOrigin(resolvedOriginId);
+  const origin: StreamerCloneResult = await app.streamer.inspectOrigin(resolvedOriginId);
   const diagnostic = diagnoseStreamerClone(origin);
   const fileProbe = await buildStreamerFileProbe(origin);
   const ffprobeReport = await app.streamer.probeOrigin(resolvedOriginId);
@@ -392,7 +392,7 @@ async function commandStreamerAnalyze(originId: string | undefined, options: Str
 
   console.log(formatStreamerAnalyzeReport(report).join("\n"));
   if (options.html) {
-    const origin = await app.streamer.loadOrigin(resolvedOriginId);
+    const origin = await app.streamer.inspectOrigin(resolvedOriginId);
     const outputPath = options.output?.trim()
       ? path.resolve(options.output.trim())
       : path.join(origin.rootDir, "analysis.html");

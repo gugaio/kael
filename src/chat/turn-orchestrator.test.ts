@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AgentEngine, EngineToolingInterface, EngineTurnInput, EngineTurnOutput } from "../agents/types.js";
+import type { AgentEngine, EngineTurnInput, EngineTurnOutput } from "../agents/types.js";
+import type { AgentRuntime } from "../runtime/agent-runtime.js";
 import type { SessionMessage } from "../types.js";
 import { TurnOrchestrator } from "./turn-orchestrator.js";
 
@@ -13,7 +14,7 @@ function createMessage(role: SessionMessage["role"], content: string, idx: numbe
   };
 }
 
-function createToolingStub(): EngineToolingInterface {
+function createToolingStub(): AgentRuntime {
   return {
     video: {
       startTranscode: async () => {
@@ -55,7 +56,7 @@ function createToolingStub(): EngineToolingInterface {
     jobs: {
       listJobs: () => [],
       getJob: () => null,
-      getJobLog: async ({ jobId }) => ({ jobId, found: false }),
+      getJobLog: async ({ jobId }: any) => ({ jobId, found: false }),
     },
     system: {
       execCommand: async () => ({
@@ -86,7 +87,7 @@ function createToolingStub(): EngineToolingInterface {
     },
     edge: {
       edgeList: () => [],
-      edgeCall: async ({ capability }) => ({ ok: false, taskId: "t1", capability, error: "unused" }),
+      edgeCall: async ({ capability }: any) => ({ ok: false, taskId: "t1", capability, error: "unused" }),
       youboraMetricsGet: async () => ({ ok: true, taskId: "yb1", capability: "youbora.metrics.get", output: {} }),
       youboraRawdataGet: async () => ({ ok: true, taskId: "yb2", capability: "youbora.rawdata.get", output: {} }),
       youboraEventsGet: async () => ({ ok: true, taskId: "yb3", capability: "youbora.events.get", output: {} }),
@@ -100,20 +101,6 @@ function createToolingStub(): EngineToolingInterface {
         endLine: 1,
       }),
       memoryWrite: async () => ({ path: "memory/2000-01-01.md" }),
-    },
-    projects: {
-      projectSearch: async () => [],
-      projectGetDocument: async () => null,
-      projectUpsertDocument: async () => ({
-        project: "proj",
-        path: "PROJECT.md",
-        title: "Project Overview",
-        description: "Visao geral",
-        tags: [],
-        content: "# proj",
-        updatedAt: new Date().toISOString(),
-      }),
-      projectListDocuments: async () => [],
     },
     workspace: {
       workspaceSearch: async () => [],
@@ -144,7 +131,7 @@ function createToolingStub(): EngineToolingInterface {
       }),
     },
     browser: {
-      browserCommand: async ({ action }) => ({
+      browserCommand: async ({ action }: any) => ({
         ok: false,
         action,
         status: "failed",
@@ -226,7 +213,7 @@ function createToolingStub(): EngineToolingInterface {
       planExecuteNext: async () => ({ ok: false, reason: "no_next_step", message: "none" }),
       planReconcile: async () => ({ scannedPlans: 0, updatedPlans: 0, updatedSteps: 0 }),
     },
-  };
+  } as unknown as AgentRuntime;
 }
 
 describe("TurnOrchestrator compaction", () => {
@@ -357,7 +344,7 @@ describe("TurnOrchestrator compaction", () => {
     await orchestrator.runConversationTurn({
       sessionKey: "s1",
       message: "mensagem atual",
-      tooling: createToolingStub(),
+      runtime: createToolingStub(),
     });
 
     // run() nao deve chamar appendMessage (compaction e feita externamente)

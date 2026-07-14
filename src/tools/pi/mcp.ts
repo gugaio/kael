@@ -1,6 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { EngineToolingInterface } from "../types.js";
-import type { ToolLoopGuard } from "../tool-loop-guard.js";
+import type { ToolLoopGuard } from "../../agents/tool-loop-guard.js";
+import type { McpRuntime } from "../mcp/mcp-bridge-service.js";
 
 type TextBlock = {
   type: "text";
@@ -17,7 +17,7 @@ function stringifyCompact(value: unknown): string {
 
 export function createMcpPiTools(params: {
   sessionKey: string;
-  tooling: EngineToolingInterface["mcp"];
+  mcp: McpRuntime;
   loopGuard?: ToolLoopGuard;
   textResult: (text: string) => TextBlock[];
   makeBlockedResult: (params: {
@@ -70,7 +70,7 @@ export function createMcpPiTools(params: {
         params.logToolEnd("mcp_list", intent, blockedResult.details, startedAtMs);
         return blockedResult;
       }
-      const result = await params.tooling.mcpList({
+      const result = await params.mcp.list({
         sessionKey: params.sessionKey,
         server: args.server,
         schema: args.schema,
@@ -152,7 +152,7 @@ export function createMcpPiTools(params: {
         params.logToolEnd("mcp_call", intent, blockedResult.details, startedAtMs);
         return blockedResult;
       }
-      const result = await params.tooling.mcpCall({
+      const result = await params.mcp.call({
         sessionKey: params.sessionKey,
         target: args.target,
         argumentsJson: args.argumentsJson,

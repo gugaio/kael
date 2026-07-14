@@ -1,4 +1,4 @@
-import { isInteractionActionRaw } from "./tool-specs/browser.js";
+import { isInteractionActionRaw } from "../tools/pi/browser.js";
 import { textResult } from "./pi-tools-telemetry.js";
 
 type BlockedToolResult = {
@@ -61,16 +61,16 @@ export function createToolBudget(params: {
   let browserInteractionCalls = 0;
   let imageGenerateCalls = 0;
 
-  const maxToolCalls = Math.max(1, Math.floor(params.budget?.maxToolCalls ?? 12));
-  const maxExecCalls = Math.max(1, Math.floor(params.budget?.maxExecCalls ?? 6));
-  const maxStreamerCalls = Math.max(1, Math.floor(params.budget?.maxStreamerCalls ?? 8));
-  const maxWebFetchCalls = Math.max(1, Math.floor(params.budget?.maxWebFetchCalls ?? 5));
-  const maxWebSearchCalls = Math.max(1, Math.floor(params.budget?.maxWebSearchCalls ?? 3));
-  const maxWebResearchCalls = Math.max(1, Math.floor(params.budget?.maxWebResearchCalls ?? 2));
-  const maxMcpCalls = Math.max(1, Math.floor(params.budget?.maxMcpCalls ?? 4));
-  const maxEdgeCalls = Math.max(1, Math.floor(params.budget?.maxEdgeCalls ?? 4));
-  const maxBrowserCalls = Math.max(1, Math.floor(params.budget?.maxBrowserCalls ?? 8));
-  const maxBrowserInteractionCalls = Math.max(1, Math.floor(params.budget?.maxBrowserInteractionCalls ?? 6));
+  const maxToolCalls = Math.max(1, Math.floor(params.budget?.maxToolCalls ?? 24));
+  const maxExecCalls = Math.max(1, Math.floor(params.budget?.maxExecCalls ?? 12));
+  const maxStreamerCalls = Math.max(1, Math.floor(params.budget?.maxStreamerCalls ?? 12));
+  const maxWebFetchCalls = Math.max(1, Math.floor(params.budget?.maxWebFetchCalls ?? 8));
+  const maxWebSearchCalls = Math.max(1, Math.floor(params.budget?.maxWebSearchCalls ?? 5));
+  const maxWebResearchCalls = Math.max(1, Math.floor(params.budget?.maxWebResearchCalls ?? 3));
+  const maxMcpCalls = Math.max(1, Math.floor(params.budget?.maxMcpCalls ?? 6));
+  const maxEdgeCalls = Math.max(1, Math.floor(params.budget?.maxEdgeCalls ?? 6));
+  const maxBrowserCalls = Math.max(1, Math.floor(params.budget?.maxBrowserCalls ?? 12));
+  const maxBrowserInteractionCalls = Math.max(1, Math.floor(params.budget?.maxBrowserInteractionCalls ?? 8));
   const maxImageGenerateCalls = 1;
 
   const blockByBudget = (paramsInput: {

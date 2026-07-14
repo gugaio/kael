@@ -7,19 +7,19 @@ import {
   validateUserArgs,
 } from "./safety.js";
 
-type VideoJobOptions = {
+type FfmpegJobOptions = {
   safePathsEnabled: boolean;
   allowedPaths: string[];
   maxJobArgs: number;
 };
 
-type VideoJobDeps = {
+type FfmpegJobDeps = {
   jobs: JobService;
-  options: VideoJobOptions;
+  options: FfmpegJobOptions;
 };
 
-/** Video command builders. Process lifecycle belongs to ProcessSupervisor. */
-export function createVideoJobs({ jobs, options }: VideoJobDeps) {
+/** FFmpeg/VLC command builders. Process lifecycle belongs to ProcessSupervisor. */
+export function createFfmpegJobs({ jobs, options }: FfmpegJobDeps) {
   const inputPath = (value: string, label: string) => validateExistingInputPath({
     value,
     label,
@@ -102,4 +102,4 @@ export function createVideoJobs({ jobs, options }: VideoJobDeps) {
   };
 }
 
-export type VideoJobs = ReturnType<typeof createVideoJobs>;
+export type FfmpegJobs = ReturnType<typeof createFfmpegJobs>;

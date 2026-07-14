@@ -9,7 +9,6 @@ import type { RequestWithStart } from "./route-deps.js";
 import { registerChatAndLiveRoutes } from "./routes/chat-live.js";
 import { registerJobAndScheduleRoutes } from "./routes/jobs-schedules.js";
 import { registerPlanRoutes } from "./routes/plans.js";
-import { registerProjectRoutes } from "./routes/projects.js";
 import { registerRuntimeAdminRoutes } from "./routes/runtime-admin.js";
 import { registerStreamRoutes } from "./routes/streams.js";
 import { registerStreamWatchRoutes } from "./routes/stream-watch.js";
@@ -112,7 +111,6 @@ export function createApiServer(app: KaelApp): FastifyInstance {
 
   registerChatAndLiveRoutes(server, deps);
   registerPlanRoutes(server, deps);
-  registerProjectRoutes(server, deps);
   registerRuntimeAdminRoutes(server, deps);
   registerJobAndScheduleRoutes(server, deps);
   registerStreamRoutes(server, deps);

@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-07-11**
+Ultima atualizacao: **2026-07-13**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -37,6 +37,111 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-07-13 - PI tools em src/tools/pi e runtime direto
+
+Resumo:
+- Movidos os wrappers/specs `AgentTool` do PI de `src/agents/tool-specs` para `src/tools/pi`.
+- Removido o adapter central `src/chat/tooling-factory.ts`; `ChatService`, `TurnOrchestrator`, `SimpleCommandEngine` e `PiEngineAdapter` agora propagam `AgentRuntime` com serviços/runtimes reais.
+- Removido o conceito de `chatOnlyRuntime` e o metodo `handleMessageChatOnly`; `handleMessage` usa o mesmo `AgentRuntime` e aceita `allowOperationalShortcuts` quando uma rota precisa desativar atalhos operacionais.
+- As PI tools chamam dependencias locais diretas (`shell`, `jobs`, `videoInspect`, `edge`, `mcp`, `planner`, etc.) em vez de `EngineToolingInterface`.
+- `ChatService` agora recebe apenas `AgentRuntime`; `sessions`, `orchestrator`, `media` e `skills` passaram a fazer parte do runtime unico.
+- Removida a feature de `project space` do core ativo: endpoints `/projects/*`, `ProjectContextService`, tools PI `project_*`, injecao `@project` e skill `project-writer`.
+- Alinhado o contrato do streamer com o VHS publicado: usos de `loadOrigin` foram trocados por `inspectOrigin`.
+- Renomeada a capability operacional `videoJobs` para `ffmpeg`: `src/video/jobs.ts` e `src/video/safety.ts` foram movidos para `src/ffmpeg`, mantendo `JobService` como infraestrutura generica.
+- Endpoints `/jobs/transcode`, `/jobs/hls`, `/jobs/capture` e `/jobs/vlc` continuam por compatibilidade, agora delegando para `app.ffmpeg`.
+- Timeout do PI deixou de acionar fallback silencioso para `SimpleCommandEngine` em modo `hybrid`; o erro agora chega ao `ChatService` para resposta de timeout com contexto.
+- Budget padrao de tools PI aumentado para reduzir falso positivo em inspecoes longas: total 24, exec 12, streamer 12, web_fetch 8, web_search 5, web_research 3, MCP/Edge 6, browser 12/interacao 8.
+- Prompt do PI passou a detectar perguntas sobre streams/origins locais e priorizar `stream_list`/tools VHS antes de vasculhar `.kael-data` via `exec`.
+- Telemetria de `stream_list` agora registra `status=completed|failed` e `resultCount`, evitando logs com `status=unknown` em chamadas bem-sucedidas.
+- Adicionada PI tool `stream_inspect`, equivalente ao detalhe de `GET /streams/:originId`, para expor chunks/segments de origins clonados sem recorrer a `exec/find`.
+- Adicionada PI tool `stream_chunk_exec`, que resolve chunk por `originId + targetKind + targetIndex + segmentIndex` e executa `ffprobe`/`ffmpeg` com args livres via `spawn` sem shell, usando placeholders `{chunk}`, `{out}`, `{outDir}` e `{originRoot}`.
+- Dependencias PI atualizadas de `@mariozechner/*@0.50.7` para `0.73.1`, habilitando resolucao local de `gpt-5.5`; configuracao invalida de modelo deixou de cair em fallback silencioso no modo `hybrid`.
+- Atualizada a arquitetura da fase 22 para apontar `video_stream_watch` no novo caminho.
+- Atualizada a fase 18 para registrar que o escopo por projeto saiu do runtime atual.
+
+Arquivos-chave:
+- `src/runtime/agent-runtime.ts`
+- `src/tools/pi/index.ts`
+- `src/agents/pi-tools.ts`
+- `src/agents/pi-tools-budget.ts`
+- `src/agents/pi-engine-adapter.ts`
+- `src/agents/pi-engine-prompt.ts`
+- `src/agents/pi-errors.ts`
+- `src/config.ts`
+- `src/global-config.ts`
+- `src/runtime/agent-runtime.ts`
+- `src/tools/pi/video.ts`
+- `src/ffmpeg/chunk-command.ts`
+- `.env.example`
+- `README.md`
+- `src/chat/service.ts`
+- `src/chat/turn-orchestrator.ts`
+- `src/agents/simple-engine-commands.ts`
+- `src/ffmpeg/jobs.ts`
+- `src/ffmpeg/safety.ts`
+- `src/ffmpeg/planner-handlers.ts`
+- `src/api/routes/streams.ts`
+- `src/api/routes/jobs-schedules.ts`
+- `src/cli/streamer-commands.ts`
+- `src/api/server.ts`
+- `docs/api.md`
+- `docs/architecture/phases/phase-18.md`
+- `docs/architecture/phases/phase-22.md`
+
+Checklist de validacao:
+- [x] `npx vitest run src/tools/pi/index.test.ts src/agents/pi-tools.test.ts src/agents/simple-engine.test.ts src/chat/command-router.test.ts src/chat/turn-orchestrator.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts src/skills/service.test.ts`
+- [x] `npm run build`
+- [x] `npx vitest run src/api/server.test.ts src/api/jobs.e2e.test.ts`
+- [x] `npx vitest run src/ffmpeg/safety.test.ts src/jobs/service.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts src/chat/command-router.test.ts src/agents/simple-engine.test.ts src/agents/pi-tools.test.ts`
+- [x] `npx vitest run src/agents/pi-errors.test.ts src/agents/pi-tools.test.ts src/api/server.test.ts`
+- [x] `npx vitest run src/agents/pi-engine-adapter.test.ts src/agents/pi-tools.test.ts src/tools/pi/index.test.ts`
+- [x] `npx vitest run src/config.test.ts`
+- [x] `npx vitest run src/agents/pi-tools.test.ts src/tools/pi/index.test.ts src/agents/pi-engine-adapter.test.ts src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- Nenhuma pendencia aberta nesta simplificacao.
+
+Proximo passo recomendado:
+- Ao criar novas tools para o PI, adicionar o wrapper em `src/tools/pi` e manter `src/agents` focado em orquestracao do engine.
+
+### 2026-07-04 - Stream details: análise por chunk e elementary streams
+
+Resumo:
+- O VHS agora emite entradas separadas de análise para elementary streams em variants muxadas, com `streamSelector` (`v:0`/`a:0`) e `sourceKind=variant_muxed`.
+- A análise de variant muxada tenta áudio como stream opcional e descarta a entrada quando o container não expõe `a:0`, evitando falso erro em video-only.
+- A extração de codec/sample rate/channels passou a usar o stream selecionado pelo `streamSelector`, não o primeiro stream do container.
+- A página `Stream Details` ganhou ação `Analyze selected chunk`, usando `startSegment` + `segmentCount=1`.
+- O painel lateral de chunk agora renderiza múltiplas entradas ffprobe para o mesmo segmento, incluindo vídeo e áudio quando presentes.
+- Corrigido fallback de erro do analyze: falhas pontuais de `ffprobe`/arquivo local agora retornam entrada `ok=false` em `entries`, em vez de derrubar a rota com HTTP 500.
+- A UI agora mostra `details.cause` em erros da API quando ainda houver falha 500 externa ao probe.
+- Corrigida a chamada do `MediaInspector.probe` no VHS para preservar o receiver (`this`); a falha real era `Cannot read properties of undefined (reading 'maxProbeTimeoutMs')` ao chamar `analyzeOrigin`.
+- Validado diretamente contra o origin local `osoutros` em `/home/gugaime/.kael/data/streamer`: `startSegment=0` retornou video H.264, duas renditions AAC e legenda WebVTT sem falhas.
+
+Arquivos-chave:
+- `../vhs/src/stream/analysis.ts`
+- `../vhs/src/stream/analysis-model.ts`
+- `../vhs/src/stream/analysis-probe.ts`
+- `../vhs/src/stream/analysis-rules.ts`
+- `../vhs/test/stream.test.ts`
+- `../vhs/SKILL.md`
+- `ui/src/lib/api.ts`
+- `ui/src/pages/StreamDetailsPage.tsx`
+- `docs/architecture/phases/phase-23.md`
+
+Checklist de validacao:
+- [x] `npm --prefix ../vhs run build`
+- [x] `npm --prefix ../vhs run check`
+- [x] `npm --prefix ../vhs test -- test/stream.test.ts`
+- [x] `npm --prefix ui run check`
+- [x] `npm --prefix ui run build`
+- [x] `npm run check`
+- [x] `npx vitest run src/api/server.test.ts`
+
+Pendencias:
+- Nenhuma conhecida.
+
+Proximo passo recomendado:
+- Usar o fluxo diário em stream real para confirmar se a UI mostra `v:0` e `a:0` nos chunks `.ts` muxados e ajustar thresholds de A/V se aparecerem falsos positivos.
 ### 2026-07-11 - Remove probe/inspect como job
 
 Resumo:

@@ -82,6 +82,9 @@ O foco inicial e operacional:
 - `streamer analyze --full` percorre todos os segmentos das playlists
   consideradas e calcula continuidade de timestamps de audio entre chunks
   consecutivos, emitindo `audio_timestamp_discontinuity` para gaps/overlaps.
+- `streamer analyze` separa elementary streams em variants muxadas quando o
+  container expõe audio e video no mesmo chunk, emitindo entradas distintas com
+  `streamSelector` (`v:0`/`a:0`) e `sourceKind=variant_muxed`.
 - `streamer analyze --html` gera um relatorio estatico em
   `analysis.html`, com resumo, issues, discontinuities de audio, media summary
   e tabela por chunk. O HTML e derivado do mesmo JSON do `analyze`.

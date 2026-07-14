@@ -1,6 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { ToolLoopGuard } from "../tool-loop-guard.js";
-import type { EngineToolingInterface } from "../types.js";
+import type { ToolLoopGuard } from "../../agents/tool-loop-guard.js";
+import type { ShellRuntime } from "../system/shell-tool-service.js";
 
 type TextBlock = {
   type: "text";
@@ -9,7 +9,7 @@ type TextBlock = {
 
 export function createSystemPiTools(params: {
   sessionKey: string;
-  tooling: EngineToolingInterface["system"];
+  shell: ShellRuntime;
   loopGuard?: ToolLoopGuard;
   textResult: (text: string) => TextBlock[];
   formatSession: (session: {
@@ -90,7 +90,7 @@ export function createSystemPiTools(params: {
         return blockedResult;
       }
 
-      const session = await params.tooling.execCommand({
+      const session = await params.shell.exec({
         sessionKey: params.sessionKey,
         command: args.command,
         cwd: args.cwd,
@@ -164,7 +164,7 @@ export function createSystemPiTools(params: {
         params.logToolEnd("process", intent, blockedResult.details, startedAtMs);
         return blockedResult;
       }
-      const result = await params.tooling.processCommand({
+      const result = await params.shell.process({
         sessionKey: params.sessionKey,
         action: args.action,
         sessionId: args.sessionId,

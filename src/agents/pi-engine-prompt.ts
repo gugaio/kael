@@ -124,9 +124,43 @@ function buildRuntimeStateInstruction(): string[] {
   ];
 }
 
+function isStreamerStateQuestion(message: string): boolean {
+  const text = message.toLowerCase();
+  const triggers = [
+    "stream",
+    "streamer",
+    "origin",
+    "origem",
+    "origins",
+    "clonado",
+    "clone",
+    "playbackurl",
+    "playback url",
+    "servir",
+    "serve",
+  ];
+  return triggers.some((token) => text.includes(token));
+}
+
+function buildStreamerStateInstruction(): string[] {
+  return [
+    "Pergunta sobre streams/origins locais detectada.",
+    "Priorize as tools estruturadas de streamer/VHS antes de shell/exec:",
+    "1) Para descobrir origins clonados, use stream_list.",
+    "2) Para ver chunks/segments de um origin, use stream_inspect com o originId; nao use find/grep/ls para isso.",
+    "3) Para analisar frames, GOP, keyframes, pict_type, timestamps ou pacotes de um chunk, use stream_chunk_exec com ffprobe/ffmpeg e placeholder {chunk}.",
+    "4) Para criar/servir streams, use stream_clone e stream_serve.",
+    "5) Nao vasculhe `.kael-data`, `.kael` ou diretorios `origins` com exec antes de tentar stream_list/stream_inspect/stream_chunk_exec.",
+    "6) Use exec apenas se as tools estruturadas nao responderem a pergunta.",
+    "7) Se usar exec, use apenas flags ASCII comuns (ex: `ls -la`) e nao repita comandos que falharam por typo/opcao invalida.",
+    "",
+  ];
+}
+
 export function buildPrompt(input: EngineTurnInput): string {
   const context = input.contextMessages ?? [];
   const needsMemoryRecall = isMemoryRecallQuestion(input.message);
+  const needsStreamerState = isStreamerStateQuestion(input.message);
   if (context.length === 0) {
     const leadingInstructions: string[] = [];
     if (needsMemoryRecall) {
@@ -141,6 +175,9 @@ export function buildPrompt(input: EngineTurnInput): string {
     }
     if (isRuntimeStateQuestion(input.message)) {
       leadingInstructions.push(...buildRuntimeStateInstruction());
+    }
+    if (needsStreamerState) {
+      leadingInstructions.push(...buildStreamerStateInstruction());
     }
     leadingInstructions.push(...buildWebToolingDisciplineInstruction());
     if (leadingInstructions.length === 0) {
@@ -166,6 +203,7 @@ export function buildPrompt(input: EngineTurnInput): string {
         ]
       : []),
     ...(isRuntimeStateQuestion(input.message) ? buildRuntimeStateInstruction() : []),
+    ...(needsStreamerState ? buildStreamerStateInstruction() : []),
     ...buildWebToolingDisciplineInstruction(),
     ...(needsMemoryRecall ? buildMemoryRecallInstruction(input.message) : []),
     "Instrucao critica: responda a MENSAGEM ATUAL do usuario. Nao continue tarefas antigas sem pedido explicito.",
