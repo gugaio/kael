@@ -37,6 +37,29 @@ Proximo passo recomendado:
 
 ## Registro de Atualizacoes por Commit
 
+### 2026-07-15 - Reconciliador de planos fora do server
+
+Resumo:
+- Extraida a reconciliacao on-demand de planos de `src/api/server.ts` para `ApiPlanReconciler`.
+- `server.ts` voltou a focar em Fastify, hooks, erro padronizado e registro de rotas.
+- `ApiPlanReconciler` reutiliza `createPlannerReconcileContext`, evitando duplicar callbacks `getJob`/`pollExec`.
+- `ApiRouteDeps` passou a usar o tipo compartilhado `ReconcilePlansNowParams`.
+
+Arquivos-chave:
+- `src/api/services/plan-reconciler.ts`
+- `src/api/server.ts`
+- `src/api/route-deps.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/api/server.test.ts src/api/jobs.e2e.test.ts`
+
+Pendencias:
+- Nenhuma pendencia conhecida.
+
+Proximo passo recomendado:
+- Se a reconciliacao do scheduler crescer, considerar reaproveitar a mesma classe ou um servico comum fora de `api`.
+
 ### 2026-07-15 - KaelApp contem AgentContext sem espelhar capacidades
 
 Resumo:
