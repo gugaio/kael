@@ -26,6 +26,7 @@ export type ExecFailureCode =
   | "allowlist_miss"
   | "syntax_error"
   | "command_not_found"
+  | "command_not_executable"
   | "process_error"
   | "timeout_overall"
   | "timeout_no_output"
@@ -52,11 +53,13 @@ export type ExecCommandParams = {
   cwd?: string;
   timeoutMs?: number;
   background?: boolean;
+  /** Milissegundos a aguardar antes de fazer background automático. */
+  yieldMs?: number;
   security?: ExecSecurity;
   ask?: ExecAsk;
 };
 
-export type ProcessAction = "list" | "poll" | "kill" | "log" | "remove";
+export type ProcessAction = "list" | "poll" | "kill" | "log" | "remove" | "write";
 
 export type ProcessCommandParams = {
   sessionKey: string;
@@ -64,6 +67,10 @@ export type ProcessCommandParams = {
   sessionId?: string;
   offset?: number;
   limit?: number;
+  /** Dados a escrever no stdin do processo (action=write). */
+  data?: string;
+  /** Fecha o stdin após escrever (action=write). */
+  eof?: boolean;
 };
 
 export type ProcessCommandResult = {
@@ -82,7 +89,13 @@ export interface ShellRuntime {
     status?: "pending" | "approved" | "denied" | "expired" | "open";
     limit?: number;
   }): Promise<ExecApprovalEntry[]>;
-  resolveApproval(approvalId: string, decision: "approved" | "denied"): Promise<ExecApprovalEntry | null>;
+  resolveApproval(
+    approvalId: string,
+    decision: "approved" | "denied",
+    opts?: { allowAlways?: boolean },
+  ): Promise<ExecApprovalEntry | null>;
+  /** Cancela todos os processos em background de uma sessionKey. */
+  cancelBySessionKey(sessionKey: string): void;
 }
 
 type ShellToolConfig = {
@@ -92,6 +105,10 @@ type ShellToolConfig = {
   maxTimeoutMs: number;
   maxOutputChars: number;
   approvalWaitMs: number;
+  /** Milissegundos entre SIGTERM e SIGKILL ao encerrar processos. */
+  killGraceMs: number;
+  /** Milissegundos a aguardar antes de fazer background automático (0 = desligado). */
+  defaultYieldMs: number;
   security: ExecSecurity;
   ask: ExecAsk;
   allowlist: string[];
@@ -120,6 +137,7 @@ export class ShellToolService implements ShellRuntime {
     this.supervisor = new ShellProcessSupervisor(this.runner, {
       maxOutputChars: cfg.maxOutputChars,
       noOutputTimeoutMs: cfg.noOutputTimeoutMs,
+      killGraceMs: cfg.killGraceMs,
     });
     this.approvals = new ExecApprovalStore(cfg.approvalsPath, {
       security: cfg.security,
@@ -142,8 +160,13 @@ export class ShellToolService implements ShellRuntime {
   async resolveApproval(
     approvalId: string,
     decision: "approved" | "denied",
+    opts?: { allowAlways?: boolean },
   ): Promise<ExecApprovalEntry | null> {
-    return this.approvals.resolveApproval(approvalId, decision);
+    return this.approvals.resolveApproval(approvalId, decision, opts);
+  }
+
+  cancelBySessionKey(sessionKey: string): void {
+    this.supervisor.cancelBySessionKey(sessionKey);
   }
 
   async exec(params: ExecCommandParams): Promise<ExecSession> {
@@ -287,11 +310,11 @@ export class ShellToolService implements ShellRuntime {
       if (params.background) {
         return started;
       }
-      const completion = this.supervisor.getCompletion(started.id);
-      if (!completion) {
-        return started;
-      }
-      return completion;
+      return this.awaitWithYield(
+        started,
+        this.supervisor.getCompletion(started.id),
+        this.resolveYieldMs(params.yieldMs),
+      );
     }
 
     const session = this.supervisor.startProcess({
@@ -307,12 +330,11 @@ export class ShellToolService implements ShellRuntime {
       return session;
     }
 
-    const completion = this.supervisor.getCompletion(session.id);
-    if (!completion) {
-      return session;
-    }
-
-    return completion;
+    return this.awaitWithYield(
+      session,
+      this.supervisor.getCompletion(session.id),
+      this.resolveYieldMs(params.yieldMs),
+    );
   }
 
   async process(params: ProcessCommandParams): Promise<ProcessCommandResult> {
@@ -409,6 +431,40 @@ export class ShellToolService implements ShellRuntime {
       return "comando usa 'python', mas este ambiente nao possui 'python'. Use 'python3'.";
     }
     return "comando usa 'python', mas este ambiente nao possui 'python'.";
+  }
+
+  private resolveYieldMs(requested?: number): number {
+    if (typeof requested === "number") {
+      return Math.max(0, Math.floor(requested));
+    }
+    return this.cfg.defaultYieldMs;
+  }
+
+  private awaitWithYield(
+    session: ExecSession,
+    completion: Promise<ExecSession> | null,
+    yieldMs: number,
+  ): Promise<ExecSession> {
+    if (!completion) {
+      return Promise.resolve(session);
+    }
+    if (yieldMs === 0) {
+      return completion;
+    }
+    return new Promise<ExecSession>((resolve) => {
+      let done = false;
+      const finish = (s: ExecSession): void => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve(s);
+      };
+      const timer = setTimeout(() => {
+        finish(session);
+      }, yieldMs);
+      timer.unref();
+      void completion.then(finish).catch(() => finish(session));
+    });
   }
 
   private looksLikeCommandNotFound(code: number | null, outputTail: string): boolean {

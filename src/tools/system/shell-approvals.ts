@@ -60,6 +60,39 @@ const UNSUPPORTED_ALLOWLIST_PATTERNS: Array<{ pattern: RegExp; reason: string }>
   { pattern: /\r|\n/, reason: "multiline nao e permitido em allowlist" },
 ];
 
+/**
+ * Detecta padrões de ofuscação comuns em comandos shell.
+ * Retorna descrição do problema ou null se nada for detectado.
+ */
+export function detectObfuscation(command: string): string | null {
+  const lower = command.toLowerCase();
+
+  // Decode-and-execute: base64 -d | bash/sh
+  if (
+    /base64\s+(-d|--decode).*\|\s*(ba?sh?)\b/.test(lower) ||
+    /\|\s*base64\s+(-d|--decode)\s*\|\s*(ba?sh?)\b/.test(lower)
+  ) {
+    return "decode-and-execute via base64|shell detectado";
+  }
+
+  // Decode-and-execute: xxd -r ou od piped to shell
+  if (/\|\s*(xxd\s+-r|od\b).*\|\s*(ba?sh?)\b/.test(lower)) {
+    return "decode-and-execute via xxd/od|shell detectado";
+  }
+
+  // eval como comando (inicio de segmento ou após pipe)
+  if (/^\s*eval\b/.test(lower) || /\|\s*eval\b/.test(lower)) {
+    return "uso de eval detectado";
+  }
+
+  // Ofuscação por aspas no nome do binário shell: ba"sh", 'ba'sh, b"a"sh
+  if (/\b(ba?["']s?h?["']|["']ba?sh?["']|b["']a["']sh)\b/i.test(command)) {
+    return "ofuscacao de binario shell por aspas detectada";
+  }
+
+  return null;
+}
+
 function normalizeAllowlist(allowlist: string[]): string[] {
   return Array.from(
     new Set(
@@ -232,7 +265,11 @@ export class ExecApprovalStore {
     return sortByCreatedDesc(filtered).slice(0, limit);
   }
 
-  async resolveApproval(approvalId: string, decision: "approved" | "denied"): Promise<ExecApprovalEntry | null> {
+  async resolveApproval(
+    approvalId: string,
+    decision: "approved" | "denied",
+    opts?: { allowAlways?: boolean },
+  ): Promise<ExecApprovalEntry | null> {
     return this.withLock(async () => {
       const current = await this.readCurrentUnlocked();
       const idx = current.pending.findIndex((entry) => entry.id === approvalId);
@@ -253,8 +290,20 @@ export class ExecApprovalStore {
 
       const nextEntries = [...current.pending];
       nextEntries[idx] = decided;
+
+      // Se aprovado com allowAlways, persiste os bins do comando na allowlist.
+      let nextAllowlist = current.allowlist;
+      if (decision === "approved" && opts?.allowAlways) {
+        const analysis = analyzeAllowlistCommand(target.command);
+        if (analysis.ok && analysis.bins.length > 0) {
+          const merged = normalizeAllowlist([...current.allowlist, ...analysis.bins]);
+          nextAllowlist = merged;
+        }
+      }
+
       await this.writeCurrentUnlocked({
         ...current,
+        allowlist: nextAllowlist,
         pending: nextEntries.slice(-MAX_APPROVAL_HISTORY),
         updatedAt: new Date().toISOString(),
       });
@@ -312,12 +361,22 @@ export class ExecApprovalStore {
       const current = await this.readCurrentUnlocked();
       const security = params.securityOverride ?? current.security;
       const ask = params.askOverride ?? current.ask;
-      const allowlistAnalysis = analyzeAllowlistCommand(params.command);
-      const bins = allowlistAnalysis.ok ? allowlistAnalysis.bins : [];
 
       if (security === "deny") {
         return { status: "denied", reason: "Exec bloqueado: security=deny" };
       }
+
+      // Obfuscação é bloqueada independentemente de security level.
+      const obfuscationReason = detectObfuscation(params.command);
+      if (obfuscationReason) {
+        return {
+          status: "denied",
+          reason: `Comando bloqueado: ${obfuscationReason}`,
+        };
+      }
+
+      const allowlistAnalysis = analyzeAllowlistCommand(params.command);
+      const bins = allowlistAnalysis.ok ? allowlistAnalysis.bins : [];
 
       const allowedByAllowlist =
         security === "full" ||

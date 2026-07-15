@@ -39,14 +39,18 @@ export function createSystemPiTools(params: {
     name: "exec",
     label: "Exec",
     description:
-      "Executa comando shell local. Suporta background, timeout, policy de seguranca e aprovacao. Para encerrar sessoes iniciadas por exec, prefira a tool process com action=kill.",
+      "Executa comando shell local. Suporta background, yieldMs (auto-background após N ms), timeout, policy de seguranca e aprovacao. Para encerrar sessoes iniciadas por exec, prefira a tool process com action=kill.",
     parameters: {
       type: "object",
       properties: {
         command: { type: "string", description: "Comando shell a executar" },
         cwd: { type: "string", description: "Diretorio relativo ao workspace" },
         timeoutMs: { type: "number", description: "Timeout em milissegundos" },
-        background: { type: "boolean", description: "Executa em background" },
+        background: { type: "boolean", description: "Executa em background imediatamente" },
+        yieldMs: {
+          type: "number",
+          description: "Milissegundos a aguardar antes de fazer background automatico e retornar status running",
+        },
         security: {
           type: "string",
           enum: ["deny", "allowlist", "full"],
@@ -72,6 +76,7 @@ export function createSystemPiTools(params: {
         cwd?: string;
         timeoutMs?: number;
         background?: boolean;
+        yieldMs?: number;
         security?: "deny" | "allowlist" | "full";
         ask?: "off" | "on-miss" | "always";
       };
@@ -96,6 +101,7 @@ export function createSystemPiTools(params: {
         cwd: args.cwd,
         timeoutMs: args.timeoutMs,
         background: args.background,
+        yieldMs: args.yieldMs,
         security: args.security,
         ask: args.ask,
       });
@@ -119,21 +125,23 @@ export function createSystemPiTools(params: {
     name: "process",
     label: "Process",
     description:
-      "Gerencia sessoes de execucao shell. Acoes: list, poll, log, kill e remove.",
+      "Gerencia sessoes de execucao shell. Acoes: list, poll, log, write (escreve no stdin), kill e remove.",
     parameters: {
       type: "object",
       properties: {
         action: {
           type: "string",
-          enum: ["list", "poll", "log", "kill", "remove"],
+          enum: ["list", "poll", "log", "write", "kill", "remove"],
           description: "Acao da sessao",
         },
         sessionId: {
           type: "string",
-          description: "ID da sessao para poll/log/kill/remove",
+          description: "ID da sessao para poll/log/write/kill/remove",
         },
         offset: { type: "number", description: "Offset de leitura para action=log" },
         limit: { type: "number", description: "Limite de caracteres para action=log" },
+        data: { type: "string", description: "Dados a escrever no stdin (action=write)" },
+        eof: { type: "boolean", description: "Fecha stdin apos escrever (action=write)" },
       },
       required: ["action"],
       additionalProperties: false,
@@ -145,10 +153,12 @@ export function createSystemPiTools(params: {
       }
       const startedAtMs = Date.now();
       const args = (rawParams ?? {}) as {
-        action: "list" | "poll" | "log" | "kill" | "remove";
+        action: "list" | "poll" | "log" | "write" | "kill" | "remove";
         sessionId?: string;
         offset?: number;
         limit?: number;
+        data?: string;
+        eof?: boolean;
       };
       const intent = params.logToolStart("process", args);
       const decision = params.loopGuard?.beforeCall({
@@ -170,6 +180,8 @@ export function createSystemPiTools(params: {
         sessionId: args.sessionId,
         offset: args.offset,
         limit: args.limit,
+        data: args.data,
+        eof: args.eof,
       });
       params.loopGuard?.afterCall({
         sessionKey: params.sessionKey,

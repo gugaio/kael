@@ -21,6 +21,8 @@ async function bootstrapShellRuntime(config: KaelConfig): Promise<ShellToolServi
     maxTimeoutMs: config.shell.maxTimeoutMs,
     maxOutputChars: config.shell.maxOutputChars,
     approvalWaitMs: config.shell.approvalWaitMs,
+    killGraceMs: config.shell.killGraceMs,
+    defaultYieldMs: config.shell.defaultYieldMs,
     security: config.shell.security,
     ask: config.shell.ask,
     allowlist: config.shell.allowlist,

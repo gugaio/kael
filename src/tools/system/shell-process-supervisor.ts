@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { kaelLogger } from "../../infra/logger.js";
+import { killProcessTree } from "./kill-tree.js";
 import type { LocalProcessRunner } from "./process-runner.js";
 import type { ExecSession, ProcessCommandParams, ProcessCommandResult } from "./shell-tool-service.js";
 
 type ActiveProcess = {
   session: ExecSession;
+  sessionKey: string;
   killRequested: boolean;
   process: ReturnType<LocalProcessRunner["spawn"]>["process"];
   completion: Promise<ExecSession>;
@@ -13,6 +15,8 @@ type ActiveProcess = {
 type SupervisorConfig = {
   maxOutputChars: number;
   noOutputTimeoutMs: number;
+  /** Milissegundos de espera entre SIGTERM e SIGKILL ao encerrar processos. */
+  killGraceMs: number;
 };
 
 type StartProcessParams = {
@@ -174,11 +178,15 @@ export class ShellProcessSupervisor {
           failureCode:
             code === 0
               ? "none"
-              : params.looksLikeCommandNotFound(code, session.outputTail)
-                ? "command_not_found"
-                : child.process.signalCode
-                  ? "signal"
-                  : "non_zero_exit",
+              : code === 126
+                ? "command_not_executable"
+                : code === 127
+                  ? "command_not_found"
+                  : child.process.signalCode
+                    ? "signal"
+                    : params.looksLikeCommandNotFound(code, session.outputTail)
+                      ? "command_not_found"
+                      : "non_zero_exit",
           outputTail: session.outputTail,
         });
       });
@@ -192,12 +200,12 @@ export class ShellProcessSupervisor {
           `\n[timeout] processo excedeu ${params.timeoutMs}ms\n`,
           this.cfg.maxOutputChars,
         );
-        child.process.kill("SIGTERM");
-        setTimeout(() => {
-          if (!child.process.killed) {
-            child.process.kill("SIGKILL");
-          }
-        }, 1500);
+        const timeoutPid = child.process.pid;
+        if (timeoutPid) {
+          killProcessTree(timeoutPid, { graceMs: this.cfg.killGraceMs });
+        } else {
+          child.process.kill("SIGTERM");
+        }
       }, params.timeoutMs);
 
       noOutputTimeoutHandle = setInterval(() => {
@@ -216,12 +224,18 @@ export class ShellProcessSupervisor {
           `\n[timeout] processo sem output por ${this.cfg.noOutputTimeoutMs}ms\n`,
           this.cfg.maxOutputChars,
         );
-        child.process.kill("SIGTERM");
+        const noOutputPid = child.process.pid;
+        if (noOutputPid) {
+          killProcessTree(noOutputPid, { graceMs: this.cfg.killGraceMs });
+        } else {
+          child.process.kill("SIGTERM");
+        }
       }, Math.min(this.cfg.noOutputTimeoutMs, 2_000));
     });
 
     active = {
       session,
+      sessionKey: params.sessionKey,
       killRequested: false,
       process: child.process,
       completion,
@@ -233,6 +247,30 @@ export class ShellProcessSupervisor {
 
   getCompletion(sessionId: string): Promise<ExecSession> | null {
     return this.active.get(sessionId)?.completion ?? null;
+  }
+
+  /**
+   * Cancela todos os processos ativos de uma sessionKey.
+   * Usado ao encerrar uma sessão para limpar processos em background.
+   */
+  cancelBySessionKey(sessionKey: string): void {
+    for (const [id, ap] of this.active.entries()) {
+      if (ap.sessionKey !== sessionKey || ap.killRequested) {
+        continue;
+      }
+      ap.killRequested = true;
+      const pid = ap.process.pid;
+      if (pid) {
+        killProcessTree(pid, { graceMs: this.cfg.killGraceMs });
+      } else {
+        ap.process.kill("SIGTERM");
+      }
+      kaelLogger.info("shell.process.cancel_by_session_key", {
+        sessionKey,
+        sessionId: id,
+        command: ap.session.command,
+      });
+    }
   }
 
   async processCommand(params: ProcessCommandParams): Promise<ProcessCommandResult> {
@@ -289,7 +327,12 @@ export class ShellProcessSupervisor {
       const activeSession = this.active.get(params.sessionId);
       if (activeSession) {
         activeSession.killRequested = true;
-        activeSession.process.kill("SIGTERM");
+        const removePid = activeSession.process.pid;
+        if (removePid) {
+          killProcessTree(removePid, { graceMs: this.cfg.killGraceMs });
+        } else {
+          activeSession.process.kill("SIGTERM");
+        }
       }
       this.removedSessions.add(params.sessionId);
       this.active.delete(params.sessionId);
@@ -299,6 +342,31 @@ export class ShellProcessSupervisor {
         action: "remove",
         message: `session ${params.sessionId} removida`,
       };
+    }
+
+    if (params.action === "write") {
+      if (!params.data && !params.eof) {
+        return { ok: false, action: "write", message: "data ou eof obrigatorio para write" };
+      }
+      const writeActive = this.active.get(params.sessionId);
+      if (!writeActive) {
+        return { ok: false, action: "write", session, message: `session ${params.sessionId} nao esta em execucao` };
+      }
+      const stdin = writeActive.process.stdin;
+      if (!stdin || stdin.destroyed) {
+        return { ok: false, action: "write", session, message: "stdin do processo nao disponivel" };
+      }
+      try {
+        if (params.data) {
+          stdin.write(params.data);
+        }
+        if (params.eof) {
+          stdin.end();
+        }
+        return { ok: true, action: "write", session, message: "dados escritos no stdin" };
+      } catch (err) {
+        return { ok: false, action: "write", session, message: `erro ao escrever no stdin: ${String(err)}` };
+      }
     }
 
     const active = this.active.get(params.sessionId);
@@ -312,7 +380,12 @@ export class ShellProcessSupervisor {
     }
 
     active.killRequested = true;
-    active.process.kill("SIGTERM");
+    const killPid = active.process.pid;
+    if (killPid) {
+      killProcessTree(killPid, { graceMs: this.cfg.killGraceMs });
+    } else {
+      active.process.kill("SIGTERM");
+    }
 
     kaelLogger.warn("shell.process.kill_requested", {
       sessionKey: params.sessionKey,
