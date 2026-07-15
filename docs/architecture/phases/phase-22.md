@@ -54,10 +54,13 @@ src/tools/pi/
   video.ts                    # + tool video_stream_watch
 ```
 
-## Nota de runtime (2026-07-13)
+## Nota de contexto/runtimes (2026-07-15)
 
-- O core ativo usa um unico `AgentRuntime` como objeto de composicao para o chat e para as tools PI.
-- `ChatService` recebe apenas `AgentRuntime`; dependencias como `sessions`, `orchestrator`, `media` e `skills` vivem dentro desse runtime.
+- O core ativo usa um unico `AgentContext` como objeto de composicao para o chat e para as tools PI.
+- `KaelApp` expoe esse contexto em `app.agent`, sem duplicar capacidades como `jobs`, `shell`, `streamer` e `planner` no topo.
+- `AgentContext` e agrupado por dominio: `core`, `runtimes`, `services`, `video` e `generation`.
+- `ChatService` recebe apenas `AgentContext`; dependencias como `sessions`, `orchestrator`, `media` e `skills` vivem dentro desse contexto.
+- `Runtime` fica reservado para componentes que gerenciam execucao ativa/ciclo de vida (`shell`, `edge`, `browser`, `mcp`).
 - A separacao entre chat com atalhos operacionais e chat sem atalhos fica por politica de chamada (`allowOperationalShortcuts`), nao por runtime ou metodo paralelo.
 
 ## Fluxo de dados (22.0)

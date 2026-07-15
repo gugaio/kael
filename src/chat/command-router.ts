@@ -1,12 +1,12 @@
 import type { AgentEngine } from "../agents/types.js";
 import { isSlashCommand, SimpleCommandEngine } from "../agents/simple-engine.js";
-import type { AgentRuntime } from "../runtime/agent-runtime.js";
+import type { AgentContext } from "../agents/context.js";
 
 export type CommandRouterInput = {
   sessionKey: string;
   message: string;
   requestId?: string;
-  runtime: AgentRuntime;
+  context: AgentContext;
   allowOperationalShortcuts: boolean;
 };
 
@@ -26,7 +26,7 @@ export class CommandRouter {
       sessionKey: input.sessionKey,
       message: input.message,
       requestId: input.requestId,
-      runtime: input.runtime,
+      context: input.context,
     });
     return {
       handled: true,

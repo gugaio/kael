@@ -15,6 +15,48 @@ import { JobStore } from "../jobs/store.js";
 import { createFfmpegJobs } from "../ffmpeg/jobs.js";
 import type { ProcessRunner } from "../tools/system/process-runner.js";
 
+function withAgentContext(legacy: Record<string, unknown>): KaelApp {
+  return {
+    config: legacy.config as KaelApp["config"],
+    agent: {
+      core: {
+        sessions: legacy.sessions as KaelApp["agent"]["core"]["sessions"],
+        orchestrator: {} as KaelApp["agent"]["core"]["orchestrator"],
+      },
+      runtimes: {
+        shell: legacy.shell as KaelApp["agent"]["runtimes"]["shell"],
+        mcp: legacy.mcp as KaelApp["agent"]["runtimes"]["mcp"],
+        edge: legacy.edge as KaelApp["agent"]["runtimes"]["edge"],
+        browser: {} as KaelApp["agent"]["runtimes"]["browser"],
+      },
+      services: {
+        memory: legacy.memory as KaelApp["agent"]["services"]["memory"],
+        workspace: {} as KaelApp["agent"]["services"]["workspace"],
+        research: legacy.research as KaelApp["agent"]["services"]["research"],
+        planner: legacy.planner as KaelApp["agent"]["services"]["planner"],
+        skills: {} as KaelApp["agent"]["services"]["skills"],
+        media: {} as KaelApp["agent"]["services"]["media"],
+      },
+      video: {
+        jobs: legacy.jobs as KaelApp["agent"]["video"]["jobs"],
+        ffmpeg: legacy.ffmpeg as KaelApp["agent"]["video"]["ffmpeg"],
+        inspect: {} as KaelApp["agent"]["video"]["inspect"],
+        playbackTriage: {} as KaelApp["agent"]["video"]["playbackTriage"],
+        streamMonitor: legacy.streamMonitor as KaelApp["agent"]["video"]["streamMonitor"],
+        streamer: legacy.streamer as KaelApp["agent"]["video"]["streamer"],
+        serveManager: legacy.serveManager as KaelApp["agent"]["video"]["serveManager"],
+      },
+      generation: {
+        image: {} as KaelApp["agent"]["generation"]["image"],
+        video: {} as KaelApp["agent"]["generation"]["video"],
+      },
+    },
+    chat: legacy.chat as KaelApp["chat"],
+    automation: legacy.automation as KaelApp["automation"],
+    ...(legacy.emailIngest ? { emailIngest: legacy.emailIngest as KaelApp["emailIngest"] } : {}),
+  };
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -66,7 +108,7 @@ async function createJobsServer(params: {
     options: { safePathsEnabled: true, allowedPaths: [params.root], maxJobArgs: 24 },
   });
 
-  const app: KaelApp = {
+  const legacy = {
     config: {
       host: "127.0.0.1",
       port: 3210,
@@ -179,7 +221,7 @@ async function createJobsServer(params: {
     },
     sessions: {
       countSessions: async () => 0,
-    } as unknown as KaelApp["sessions"],
+    } as unknown as KaelApp["agent"]["core"]["sessions"],
     jobs,
     ffmpeg,
     planner: {
@@ -243,9 +285,9 @@ async function createJobsServer(params: {
         updatedAt: new Date().toISOString(),
         steps: [],
       }),
-    } as unknown as KaelApp["planner"],
-    research: {} as KaelApp["research"],
-    memory: {} as KaelApp["memory"],
+    } as unknown as KaelApp["agent"]["services"]["planner"],
+    research: {} as KaelApp["agent"]["services"]["research"],
+    memory: {} as KaelApp["agent"]["services"]["memory"],
     chat: {
       handleMessage: async () => ({
         reply: "ok",
@@ -351,7 +393,7 @@ async function createJobsServer(params: {
     shell: {
       listApprovals: async () => [],
       resolveApproval: async () => null,
-    } as unknown as KaelApp["shell"],
+    } as unknown as KaelApp["agent"]["runtimes"]["shell"],
     mcp: {
       init: async () => {},
       list: async () => ({ ok: true, command: "mcporter list", schema: false, format: "json", items: [] }),
@@ -402,7 +444,7 @@ async function createJobsServer(params: {
         lastError: null,
         lastCallAt: null,
       }),
-    } as unknown as KaelApp["mcp"],
+    } as unknown as KaelApp["agent"]["runtimes"]["mcp"],
     edge: new EdgeRuntime(),
     streamMonitor: {
       startWatch: () => "watch-stub",
@@ -448,10 +490,10 @@ async function createJobsServer(params: {
       listServing: () => [],
       isServing: () => false,
       stopAll: async () => {},
-    } as unknown as KaelApp["serveManager"],
+    } as unknown as KaelApp["agent"]["video"]["serveManager"],
   };
 
-  return { server: createApiServer(app), jobs };
+  return { server: createApiServer(withAgentContext(legacy)), jobs };
 }
 
 async function getJobStatus(server: ReturnType<typeof createApiServer>, jobId: string): Promise<string> {

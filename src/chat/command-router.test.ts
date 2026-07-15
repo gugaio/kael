@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { CommandRouter } from "./command-router.js";
 import type { AgentEngine } from "../agents/types.js";
-import type { AgentRuntime } from "../runtime/agent-runtime.js";
+import type { AgentContext } from "../agents/context.js";
 
-function createTooling(): AgentRuntime {
+function createTooling(): AgentContext {
   return {
     video: {
       startTranscode: async () => ({ id: "j1" } as never),
@@ -162,7 +162,7 @@ function createTooling(): AgentRuntime {
       planExecuteNext: async () => ({ ok: false, reason: "no_next_step", message: "none" }),
       planReconcile: async () => ({ scannedPlans: 0, updatedPlans: 0, updatedSteps: 0 }),
     },
-  } as unknown as AgentRuntime;
+  } as unknown as AgentContext;
 }
 
 describe("CommandRouter", () => {
@@ -174,7 +174,7 @@ describe("CommandRouter", () => {
     const result = await router.tryRoute({
       sessionKey: "main",
       message: "/jobs",
-      runtime: createTooling(),
+      context: createTooling(),
       allowOperationalShortcuts: false,
     });
 
@@ -190,7 +190,7 @@ describe("CommandRouter", () => {
     const result = await router.tryRoute({
       sessionKey: "main",
       message: "listar jobs",
-      runtime: createTooling(),
+      context: createTooling(),
       allowOperationalShortcuts: true,
     });
 
@@ -207,7 +207,7 @@ describe("CommandRouter", () => {
       sessionKey: "main",
       message: "/jobs",
       requestId: "req-1",
-      runtime: createTooling(),
+      context: createTooling(),
       allowOperationalShortcuts: true,
     });
 

@@ -1,6 +1,6 @@
 import { BROWSER_ACTIONS, formatBrowserReplyText } from "../runtime/browser/index.js";
 import { selectJobs } from "../jobs/tooling.js";
-import type { AgentRuntime } from "../runtime/agent-runtime.js";
+import type { AgentContext } from "./context.js";
 import type { EngineTurnInput, EngineTurnOutput } from "./types.js";
 
 type ParsedCommand = {
@@ -46,8 +46,8 @@ function helpReply(): EngineTurnOutput {
   };
 }
 
-function listJobsReply(runtime: AgentRuntime): EngineTurnOutput {
-  const jobs = selectJobs(runtime.jobs.listJobs(), { limit: 8 });
+function listJobsReply(context: AgentContext): EngineTurnOutput {
+  const jobs = selectJobs(context.video.jobs.listJobs(), { limit: 8 });
   if (jobs.length === 0) {
     return { reply: "Nenhum job encontrado." };
   }
@@ -84,7 +84,7 @@ function formatEdgeReply(result: {
 
 async function handleYouboraCommand(
   parsed: ParsedCommand,
-  runtime: AgentRuntime,
+  context: AgentContext,
 ): Promise<EngineTurnOutput> {
   const [firstArg, ...restArgs] = parsed.args;
   const mode = ["metrics", "rawdata", "events"].includes(firstArg ?? "") ? firstArg : "metrics";
@@ -102,7 +102,7 @@ async function handleYouboraCommand(
   if (mode === "metrics") {
     const [fromDate, second, third, fourth, fifth] = args;
     const hasToDate = looksLikeYouboraBoundary(second);
-    const result = await runtime.edge.dispatchTask({
+    const result = await context.runtimes.edge.dispatchTask({
       capability: "youbora.metrics.get",
       input: {
         fromDate,
@@ -129,7 +129,7 @@ async function handleYouboraCommand(
     }
   }
 
-  const result = await runtime.edge.dispatchTask({
+  const result = await context.runtimes.edge.dispatchTask({
     capability: mode === "rawdata" ? "youbora.rawdata.get" : "youbora.events.get",
     input: {
       fromDate,
@@ -144,7 +144,7 @@ async function handleYouboraCommand(
 async function handleFfmpegCommand(
   input: EngineTurnInput,
   parsed: ParsedCommand,
-  runtime: AgentRuntime,
+  context: AgentContext,
 ): Promise<EngineTurnOutput | null> {
   if (parsed.name === "/transcode") {
     if (parsed.args.length < 2) {
@@ -152,7 +152,7 @@ async function handleFfmpegCommand(
     }
 
     const [inputPath, outputPath] = parsed.args;
-    const job = await runtime.ffmpeg.startTranscode({
+    const job = await context.video.ffmpeg.startTranscode({
       sessionKey: input.sessionKey,
       inputPath,
       outputPath,
@@ -166,7 +166,7 @@ async function handleFfmpegCommand(
     }
 
     const [inputPath, outputPlaylistPath, segmentRaw] = parsed.args;
-    const job = await runtime.ffmpeg.startConvertHls({
+    const job = await context.video.ffmpeg.startConvertHls({
       sessionKey: input.sessionKey,
       inputPath,
       outputPlaylistPath,
@@ -181,7 +181,7 @@ async function handleFfmpegCommand(
     }
 
     const [streamUrl, outputPath, durationRaw] = parsed.args;
-    const job = await runtime.ffmpeg.startCaptureStream({
+    const job = await context.video.ffmpeg.startCaptureStream({
       sessionKey: input.sessionKey,
       streamUrl,
       outputPath,
@@ -196,7 +196,7 @@ async function handleFfmpegCommand(
     }
 
     const [inputPath] = parsed.args;
-    const result = await runtime.videoInspect.probe({
+    const result = await context.video.inspect.probe({
       input: inputPath,
     });
     const streams = Array.isArray(result.streams) ? result.streams.length : 0;
@@ -209,11 +209,11 @@ async function handleFfmpegCommand(
     if (!inputTarget) {
       return { reply: "Uso: /vlc <input|url>" };
     }
-    if (!runtime.ffmpeg.startPlayVlc) {
+    if (!context.video.ffmpeg.startPlayVlc) {
       return { reply: "Tool de VLC indisponivel neste modo." };
     }
 
-    const job = await runtime.ffmpeg.startPlayVlc({
+    const job = await context.video.ffmpeg.startPlayVlc({
       sessionKey: input.sessionKey,
       input: inputTarget,
     });
@@ -234,10 +234,10 @@ function parseTimeout(timeoutRaw: string | undefined): number | undefined {
 async function handleBrowserCommand(
   input: EngineTurnInput,
   parsed: ParsedCommand,
-  runtime: AgentRuntime,
+  context: AgentContext,
 ): Promise<EngineTurnOutput | null> {
   if (parsed.name === "/browser-start") {
-    const result = await runtime.browser.command({
+    const result = await context.runtimes.browser.command({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.start,
     });
@@ -249,7 +249,7 @@ async function handleBrowserCommand(
     if (!url) {
       return { reply: "Uso: /browser-open <url>" };
     }
-    const result = await runtime.browser.command({
+    const result = await context.runtimes.browser.command({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.open,
       url,
@@ -258,7 +258,7 @@ async function handleBrowserCommand(
   }
 
   if (parsed.name === "/browser-snapshot") {
-    const result = await runtime.browser.command({
+    const result = await context.runtimes.browser.command({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.snapshotText,
     });
@@ -266,7 +266,7 @@ async function handleBrowserCommand(
   }
 
   if (parsed.name === "/browser-shot" || parsed.name === "/browser-screenshot") {
-    const result = await runtime.browser.command({
+    const result = await context.runtimes.browser.command({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.screenshot,
     });
@@ -278,7 +278,7 @@ async function handleBrowserCommand(
     if (!selector) {
       return { reply: "Uso: /browser-click <selector>" };
     }
-    const result = await runtime.browser.command({
+    const result = await context.runtimes.browser.command({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.click,
       selector,
@@ -296,7 +296,7 @@ async function handleBrowserCommand(
     if (!text) {
       return { reply: "Uso: /browser-type <selector> <texto>" };
     }
-    const result = await runtime.browser.command({
+    const result = await context.runtimes.browser.command({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.type,
       selector,
@@ -310,7 +310,7 @@ async function handleBrowserCommand(
     if (!key) {
       return { reply: "Uso: /browser-press <tecla> [selector]" };
     }
-    const result = await runtime.browser.command({
+    const result = await context.runtimes.browser.command({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.press,
       key,
@@ -324,7 +324,7 @@ async function handleBrowserCommand(
     if (!selector) {
       return { reply: "Uso: /browser-wait <selector> [timeoutMs]" };
     }
-    const result = await runtime.browser.command({
+    const result = await context.runtimes.browser.command({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.waitFor,
       selector,
@@ -334,7 +334,7 @@ async function handleBrowserCommand(
   }
 
   if (parsed.name === "/browser-close") {
-    const result = await runtime.browser.command({
+    const result = await context.runtimes.browser.command({
       sessionKey: input.sessionKey,
       action: BROWSER_ACTIONS.close,
     });
@@ -358,19 +358,19 @@ export async function runSimpleCommand(input: EngineTurnInput): Promise<EngineTu
   }
 
   if (parsed.name === "/jobs") {
-    return listJobsReply(input.runtime);
+    return listJobsReply(input.context);
   }
 
   if (parsed.name === "/youbora") {
-    return handleYouboraCommand(parsed, input.runtime);
+    return handleYouboraCommand(parsed, input.context);
   }
 
-  const ffmpegReply = await handleFfmpegCommand(input, parsed, input.runtime);
+  const ffmpegReply = await handleFfmpegCommand(input, parsed, input.context);
   if (ffmpegReply) {
     return ffmpegReply;
   }
 
-  const browserReply = await handleBrowserCommand(input, parsed, input.runtime);
+  const browserReply = await handleBrowserCommand(input, parsed, input.context);
   if (browserReply) {
     return browserReply;
   }

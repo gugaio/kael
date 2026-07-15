@@ -6,6 +6,48 @@ import type { SchedulerJob } from "../automation/scheduler/persistent-scheduler.
 import { EdgeRuntime } from "../edge/runtime.js";
 import { createApiServer } from "./server.js";
 
+function withAgentContext(legacy: Record<string, unknown>): KaelApp {
+  return {
+    config: legacy.config as KaelApp["config"],
+    agent: {
+      core: {
+        sessions: legacy.sessions as KaelApp["agent"]["core"]["sessions"],
+        orchestrator: {} as KaelApp["agent"]["core"]["orchestrator"],
+      },
+      runtimes: {
+        shell: legacy.shell as KaelApp["agent"]["runtimes"]["shell"],
+        mcp: legacy.mcp as KaelApp["agent"]["runtimes"]["mcp"],
+        edge: legacy.edge as KaelApp["agent"]["runtimes"]["edge"],
+        browser: {} as KaelApp["agent"]["runtimes"]["browser"],
+      },
+      services: {
+        memory: legacy.memory as KaelApp["agent"]["services"]["memory"],
+        workspace: {} as KaelApp["agent"]["services"]["workspace"],
+        research: legacy.research as KaelApp["agent"]["services"]["research"],
+        planner: legacy.planner as KaelApp["agent"]["services"]["planner"],
+        skills: {} as KaelApp["agent"]["services"]["skills"],
+        media: {} as KaelApp["agent"]["services"]["media"],
+      },
+      video: {
+        jobs: legacy.jobs as KaelApp["agent"]["video"]["jobs"],
+        ffmpeg: legacy.ffmpeg as KaelApp["agent"]["video"]["ffmpeg"],
+        inspect: {} as KaelApp["agent"]["video"]["inspect"],
+        playbackTriage: {} as KaelApp["agent"]["video"]["playbackTriage"],
+        streamMonitor: legacy.streamMonitor as KaelApp["agent"]["video"]["streamMonitor"],
+        streamer: legacy.streamer as KaelApp["agent"]["video"]["streamer"],
+        serveManager: legacy.serveManager as KaelApp["agent"]["video"]["serveManager"],
+      },
+      generation: {
+        image: {} as KaelApp["agent"]["generation"]["image"],
+        video: {} as KaelApp["agent"]["generation"]["video"],
+      },
+    },
+    chat: legacy.chat as KaelApp["chat"],
+    automation: legacy.automation as KaelApp["automation"],
+    ...(legacy.emailIngest ? { emailIngest: legacy.emailIngest as KaelApp["emailIngest"] } : {}),
+  };
+}
+
 function makeFakeApp(): KaelApp {
   const schedules = new Map<string, SchedulerJob>();
   let chatCallCount = 0;
@@ -25,7 +67,7 @@ function makeFakeApp(): KaelApp {
     nextRunAt: new Date(Date.now() + 30_000).toISOString(),
   });
 
-  return {
+  const legacy = {
     config: {
       host: "127.0.0.1",
       port: 3210,
@@ -138,7 +180,7 @@ function makeFakeApp(): KaelApp {
     },
     sessions: {
       countSessions: async () => 2,
-    } as unknown as KaelApp["sessions"],
+    } as unknown as KaelApp["agent"]["core"]["sessions"],
     jobs: {
       listJobs: () => [],
       getStatusCounts: () => ({
@@ -162,8 +204,8 @@ function makeFakeApp(): KaelApp {
         job: { id: jobId, status: "canceled" },
         canceled: true,
       }),
-    } as unknown as KaelApp["jobs"],
-    ffmpeg: {} as KaelApp["ffmpeg"],
+    } as unknown as KaelApp["agent"]["video"]["jobs"],
+    ffmpeg: {} as KaelApp["agent"]["video"]["ffmpeg"],
     planner: {
       list: () => [],
       get: () => null,
@@ -271,9 +313,9 @@ function makeFakeApp(): KaelApp {
           },
         ],
       }),
-    } as unknown as KaelApp["planner"],
-    research: {} as KaelApp["research"],
-    memory: {} as KaelApp["memory"],
+    } as unknown as KaelApp["agent"]["services"]["planner"],
+    research: {} as KaelApp["agent"]["services"]["research"],
+    memory: {} as KaelApp["agent"]["services"]["memory"],
     chat: {
       handleMessage: async ({
         sessionKey,
@@ -478,7 +520,7 @@ function makeFakeApp(): KaelApp {
     shell: {
       listApprovals: async () => [],
       resolveApproval: async () => null,
-    } as unknown as KaelApp["shell"],
+    } as unknown as KaelApp["agent"]["runtimes"]["shell"],
     mcp: {
       init: async () => {},
       list: async () => ({ ok: true, command: "mcporter list", schema: false, format: "json", items: [] }),
@@ -569,7 +611,7 @@ function makeFakeApp(): KaelApp {
         lastError: "mcp_approval_required:mcp-ap-1",
         lastCallAt: new Date().toISOString(),
       }),
-    } as unknown as KaelApp["mcp"],
+    } as unknown as KaelApp["agent"]["runtimes"]["mcp"],
     emailIngest: {
       getRuntimeTelemetrySnapshot: () => ({
         polls: 4,
@@ -626,8 +668,9 @@ function makeFakeApp(): KaelApp {
       listServing: () => [],
       isServing: () => false,
       stopAll: async () => {},
-    } as unknown as KaelApp["serveManager"],
+    } as unknown as KaelApp["agent"]["video"]["serveManager"],
   };
+  return withAgentContext(legacy);
 }
 
 describe("API integration", () => {
@@ -748,7 +791,7 @@ describe("API integration", () => {
   it("deletes a cloned stream origin and stops active serving first", async () => {
     const app = makeFakeApp();
     const calls: string[] = [];
-    app.streamer.listOrigins = async () => [
+    app.agent.video.streamer.listOrigins = async () => [
       {
         id: "origin-a",
         schemaVersion: 2,
@@ -769,11 +812,11 @@ describe("API integration", () => {
         allVariants: false,
       },
     ];
-    app.serveManager.stop = async (originId: string) => {
+    app.agent.video.serveManager.stop = async (originId: string) => {
       calls.push(`stop:${originId}`);
       return true;
     };
-    app.streamer.removeOrigin = async (originId: string) => {
+    app.agent.video.streamer.removeOrigin = async (originId: string) => {
       calls.push(`remove:${originId}`);
       return { id: originId, rootDir: "/tmp/origin-a", removed: true };
     };
@@ -795,7 +838,7 @@ describe("API integration", () => {
 
   it("probes and analyzes cloned streams through API", async () => {
     const app = makeFakeApp();
-    app.streamer.probeOrigin = async (originId, options) => ({
+    app.agent.video.streamer.probeOrigin = async (originId, options) => ({
       originId,
       ok: true,
       sampledMediaPlaylists: options?.maxMediaPlaylists ?? 1,
@@ -804,7 +847,7 @@ describe("API integration", () => {
       failedCount: 0,
       entries: [],
     });
-    app.streamer.analyzeOrigin = async (originId, options) => ({
+    app.agent.video.streamer.analyzeOrigin = async (originId, options) => ({
       originId,
       ok: true,
       sampledMediaPlaylists: 1,
@@ -850,7 +893,7 @@ describe("API integration", () => {
   it("starts cloned stream serving with requested host", async () => {
     const app = makeFakeApp();
     let requestedHost: string | undefined;
-    app.streamer.listOrigins = async () => [
+    app.agent.video.streamer.listOrigins = async () => [
       {
         id: "origin-a",
         schemaVersion: 2,
@@ -871,7 +914,7 @@ describe("API integration", () => {
         allVariants: false,
       },
     ];
-    app.serveManager.serve = async (originId, options) => {
+    app.agent.video.serveManager.serve = async (originId, options) => {
       requestedHost = options?.host;
       return {
         originId,
@@ -1038,7 +1081,7 @@ describe("API integration", () => {
       }));
     });
 
-    const result = await app.edge.dispatchTask({
+    const result = await app.agent.runtimes.edge.dispatchTask({
       capability: "system.info",
       input: { verbose: true },
       timeoutMs: 500,
@@ -1211,7 +1254,7 @@ describe("API integration", () => {
 
   it("lists and resolves exec approvals through API", async () => {
     const app = makeFakeApp();
-    app.shell = {
+    app.agent.runtimes.shell = {
       listApprovals: async () => [
         {
           id: "a1",
@@ -1231,7 +1274,7 @@ describe("API integration", () => {
         status: decision,
         decidedAt: new Date().toISOString(),
       }),
-    } as unknown as KaelApp["shell"];
+    } as unknown as KaelApp["agent"]["runtimes"]["shell"];
     const server = createApiServer(app);
 
     const listed = await server.inject({

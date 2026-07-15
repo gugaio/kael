@@ -265,7 +265,7 @@ function createStreamerProgressLogger(): (event: StreamerCloneProgressEvent) => 
 
 async function commandStreamerList(): Promise<void> {
   const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
-  const origins = await app.streamer.listOrigins();
+  const origins = await app.agent.video.streamer.listOrigins();
 
   if (origins.length === 0) {
     console.log("Nenhum origin streamer encontrado.");
@@ -296,8 +296,8 @@ async function resolveStreamerOriginId(
 
 async function commandStreamerInspect(originId: string): Promise<void> {
   const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
-  const resolvedOriginId = await resolveStreamerOriginId(app.streamer, originId);
-  const origin: StreamerCloneResult = await app.streamer.inspectOrigin(resolvedOriginId);
+  const resolvedOriginId = await resolveStreamerOriginId(app.agent.video.streamer, originId);
+  const origin: StreamerCloneResult = await app.agent.video.streamer.inspectOrigin(resolvedOriginId);
   const selectedVariant = origin.selectedVariant
     ? `${origin.selectedVariant.resolution ?? "unknown"} @ ${origin.selectedVariant.bandwidth ?? "n/a"}bps`
     : "media playlist direta ou ladder completa";
@@ -359,24 +359,24 @@ async function commandStreamerInspect(originId: string): Promise<void> {
 
 async function commandStreamerProbe(originId: string | undefined): Promise<void> {
   const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
-  const resolvedOriginId = await resolveStreamerOriginId(app.streamer, originId);
-  const origin: StreamerCloneResult = await app.streamer.inspectOrigin(resolvedOriginId);
+  const resolvedOriginId = await resolveStreamerOriginId(app.agent.video.streamer, originId);
+  const origin: StreamerCloneResult = await app.agent.video.streamer.inspectOrigin(resolvedOriginId);
   const diagnostic = diagnoseStreamerClone(origin);
   const fileProbe = await buildStreamerFileProbe(origin);
-  const ffprobeReport = await app.streamer.probeOrigin(resolvedOriginId);
+  const ffprobeReport = await app.agent.video.streamer.probeOrigin(resolvedOriginId);
 
   console.log(formatStreamerProbeReport(origin, diagnostic, fileProbe, ffprobeReport).join("\n"));
 }
 
 async function commandStreamerAnalyze(originId: string | undefined, options: StreamerAnalyzeOptions): Promise<void> {
   const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
-  const resolvedOriginId = await resolveStreamerOriginId(app.streamer, originId);
+  const resolvedOriginId = await resolveStreamerOriginId(app.agent.video.streamer, originId);
   const timeoutMs = optionalNumber(options.timeoutMs, "--timeout-ms");
   const maxMediaPlaylists = optionalNumber(options.maxMediaPlaylists, "--max-media-playlists");
   const maxSegmentsPerPlaylist = optionalNumber(options.maxSegmentsPerPlaylist, "--max-segments-per-playlist");
   const startSegment = optionalNumber(options.startSegment, "--start-segment");
   const segmentCount = optionalNumber(options.segmentCount, "--segment-count");
-  const report = await app.streamer.analyzeOrigin(resolvedOriginId, {
+  const report = await app.agent.video.streamer.analyzeOrigin(resolvedOriginId, {
     ...(Number.isFinite(timeoutMs) ? { timeoutMs } : {}),
     ...(Number.isFinite(maxMediaPlaylists) ? { maxMediaPlaylists } : {}),
     ...(Number.isFinite(maxSegmentsPerPlaylist) ? { maxSegmentsPerPlaylist } : {}),
@@ -392,7 +392,7 @@ async function commandStreamerAnalyze(originId: string | undefined, options: Str
 
   console.log(formatStreamerAnalyzeReport(report).join("\n"));
   if (options.html) {
-    const origin = await app.streamer.inspectOrigin(resolvedOriginId);
+    const origin = await app.agent.video.streamer.inspectOrigin(resolvedOriginId);
     const outputPath = options.output?.trim()
       ? path.resolve(options.output.trim())
       : path.join(origin.rootDir, "analysis.html");
@@ -404,7 +404,7 @@ async function commandStreamerAnalyze(originId: string | undefined, options: Str
 
 async function commandStreamerMutate(originId: string | undefined, options: StreamerMutateOptions): Promise<void> {
   const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
-  const resolvedOriginId = await resolveStreamerOriginId(app.streamer, originId);
+  const resolvedOriginId = await resolveStreamerOriginId(app.agent.video.streamer, originId);
   const fault = (options.fault?.trim() || "discontinuity").toLowerCase();
   if (fault !== "discontinuity" && fault !== "segment-swap") {
     throw new Error("faults suportadas nesta fase: discontinuity, segment-swap");
@@ -431,7 +431,7 @@ async function commandStreamerMutate(originId: string | undefined, options: Stre
   }
   const donorTargetIndex = optionalNumber(options.withTargetIndex, "--with-target-index");
   const donorSegmentIndex = optionalNumber(options.withSegment, "--with-segment");
-  const result = await app.streamer.mutateOrigin({
+  const result = await app.agent.video.streamer.mutateOrigin({
     originId: resolvedOriginId,
     fault: fault as "discontinuity" | "segment-swap",
     targetKind: target as StreamerFaultTargetKind,
@@ -469,7 +469,7 @@ async function commandStreamerRemove(originId: string, options: StreamerRemoveOp
   }
 
   const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
-  const result = await app.streamer.removeOrigin(originId);
+  const result = await app.agent.video.streamer.removeOrigin(originId);
   console.log(`${highlight("streamer origin removed")}: ${result.id}`);
   console.log(`root=${result.rootDir}`);
 }
@@ -513,10 +513,10 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
     ...(Number.isFinite(maxSegments) ? { maxSegments } : {}),
     ...(options.id?.trim() ? { originId: options.id.trim() } : {}),
     onProgress: logProgress,
-  } satisfies Parameters<typeof app.streamer.cloneHls>[0];
+  } satisfies Parameters<typeof app.agent.video.streamer.cloneHls>[0];
   const result = format === "dash"
-    ? await app.streamer.cloneDash(cloneInput)
-    : await app.streamer.cloneHls(cloneInput);
+    ? await app.agent.video.streamer.cloneDash(cloneInput)
+    : await app.agent.video.streamer.cloneHls(cloneInput);
 
   const variantText = result.allVariants
     ? `all variants (${result.variantCount})`
@@ -525,7 +525,7 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
     : "media playlist direta";
   const diagnostic = diagnoseStreamerClone(result);
   const fileProbe = await buildStreamerFileProbe(result);
-  const ffprobeReport = await app.streamer.probeOrigin(result.id);
+  const ffprobeReport = await app.agent.video.streamer.probeOrigin(result.id);
 
   console.log(
     [
@@ -559,7 +559,7 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
   }
 
   if (options.live) {
-    const handle = await app.streamer.serveLiveOrigin(result.id, {
+    const handle = await app.agent.video.streamer.serveLiveOrigin(result.id, {
       host: options.host?.trim() || "127.0.0.1",
       ...(Number.isFinite(port) ? { port } : {}),
       ...(Number.isFinite(windowSize) ? { windowSize } : {}),
@@ -572,7 +572,7 @@ async function commandStreamerClone(url: string, options: StreamerCloneOptions):
     return;
   }
 
-  const handle = await app.streamer.serveOrigin(result.id, {
+  const handle = await app.agent.video.streamer.serveOrigin(result.id, {
     host: options.host?.trim() || "127.0.0.1",
     ...(Number.isFinite(port) ? { port } : {}),
   });
@@ -601,11 +601,11 @@ function resolveStreamerCloneFormat(url: string, rawFormat: string | undefined):
 
 async function commandStreamerLive(originId: string | undefined, options: StreamerLiveOptions): Promise<void> {
   const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
-  const resolvedOriginId = await resolveStreamerOriginId(app.streamer, originId);
+  const resolvedOriginId = await resolveStreamerOriginId(app.agent.video.streamer, originId);
   const port = optionalNumber(options.port, "--port");
   const windowSize = optionalNumber(options.windowSize, "--window-size");
   const initialMediaSequence = optionalNumber(options.initialMediaSequence, "--initial-media-sequence");
-  const handle = await app.streamer.serveLiveOrigin(resolvedOriginId, {
+  const handle = await app.agent.video.streamer.serveLiveOrigin(resolvedOriginId, {
     host: options.host?.trim() || "127.0.0.1",
     ...(Number.isFinite(port) ? { port } : {}),
     ...(Number.isFinite(windowSize) ? { windowSize } : {}),
@@ -619,9 +619,9 @@ async function commandStreamerLive(originId: string | undefined, options: Stream
 
 async function commandStreamerServe(originId: string | undefined, options: StreamerServeOptions): Promise<void> {
   const app = await createKaelApp({ startAutomation: false, enableEmailPolling: false });
-  const resolvedOriginId = await resolveStreamerOriginId(app.streamer, originId);
+  const resolvedOriginId = await resolveStreamerOriginId(app.agent.video.streamer, originId);
   const port = optionalNumber(options.port, "--port");
-  const handle = await app.streamer.serveOrigin(resolvedOriginId, {
+  const handle = await app.agent.video.streamer.serveOrigin(resolvedOriginId, {
     host: options.host?.trim() || "127.0.0.1",
     ...(Number.isFinite(port) ? { port } : {}),
   });

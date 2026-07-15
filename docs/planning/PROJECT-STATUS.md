@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-07-13**
+Ultima atualizacao: **2026-07-15**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,76 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-07-15 - KaelApp contem AgentContext sem espelhar capacidades
+
+Resumo:
+- `KaelApp` deixou de expor capacidades operacionais no topo (`jobs`, `shell`, `mcp`, `edge`, `streamer`, `serveManager`, etc.) e agora expõe o contexto do agente em `app.agent`.
+- `AgentContext` foi agrupado por domínio: `core`, `runtimes`, `services`, `video` e `generation`.
+- O contrato de turno do engine passou de `runtime: AgentContext` para `context: AgentContext`.
+- Call sites de API/CLI/live-state/admin foram migrados para `app.agent.*`.
+- Os fakes de teste foram atualizados para montar `KaelApp` como app + `agent`, em vez de depender do shape antigo plano.
+
+Arquivos-chave:
+- `src/app.ts`
+- `src/agents/context.ts`
+- `src/agents/types.ts`
+- `src/chat/service.ts`
+- `src/agents/pi-tools.ts`
+- `src/api/routes/*`
+- `src/api/live-state.ts`
+- `src/api/edge-ws.ts`
+- `src/cli/streamer-commands.ts`
+- `src/bootstrap/README.md`
+- `docs/architecture/phases/phase-22.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/api/server.test.ts src/api/jobs.e2e.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts src/agents/simple-engine.test.ts src/agents/pi-tools.test.ts src/tools/pi/index.test.ts`
+
+Pendencias:
+- Nenhuma pendencia conhecida.
+
+Proximo passo recomendado:
+- Manter novas capacidades sob `AgentContext` e expor no topo de `KaelApp` apenas superficies de aplicacao/lifecycle.
+
+### 2026-07-14 - Bootstrap modular e AgentContext
+
+Resumo:
+- `AgentRuntime` foi renomeado para `AgentContext` e movido para `src/agents/context.ts`, deixando `Runtime` reservado para componentes com execucao ativa/ciclo de vida.
+- `createKaelApp()` foi reduzido para coordenar fases explicitas em `src/bootstrap/modules`: `core`, `video`, `agent-core`, `services`, `media`, `chat` e `automation`.
+- `JobService` passou para o modulo `core` como infraestrutura generica; `video` monta apenas ffmpeg/VHS/monitor/artifacts/serve manager.
+- `services` monta fachadas puras (`memory`, `workspace`, `research`, `planner`, `skills`) e registra handlers ffmpeg no planner.
+- `chat` monta engine, orchestrator, `AgentContext` e `ChatService`; `automation` concentra heartbeat, scheduler e email ingress.
+- O adapter de streamer preserva o contrato interno `inspectOrigin`, delegando para `loadOrigin` no VHS atual.
+- `PlannerExecuteRuntime`/`PlannerReconcileRuntime` foram renomeados para `PlannerExecutionContext`/`PlannerReconcileContext`.
+
+Arquivos-chave:
+- `src/app.ts`
+- `src/agents/context.ts`
+- `src/bootstrap/modules/core.ts`
+- `src/bootstrap/modules/video.ts`
+- `src/bootstrap/modules/agent-core.ts`
+- `src/bootstrap/modules/services.ts`
+- `src/bootstrap/modules/media.ts`
+- `src/bootstrap/modules/chat.ts`
+- `src/bootstrap/modules/automation.ts`
+- `src/planner/execution-context.ts`
+- `src/tools/pi/plans.ts`
+- `src/api/routes/plans.ts`
+- `src/bootstrap/README.md`
+- `docs/architecture/phases/phase-18.md`
+- `docs/architecture/phases/phase-22.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/api/server.test.ts src/api/jobs.e2e.test.ts src/chat/turn-orchestrator.test.ts src/chat/command-router.test.ts src/agents/simple-engine.test.ts src/agents/pi-tools.test.ts src/tools/pi/index.test.ts`
+
+Pendencias:
+- Nenhuma pendencia conhecida na refatoracao estrutural.
+
+Proximo passo recomendado:
+- Ao adicionar novas dependencias do agente, escolher entre `agent-core` (runtime real), `services` (fachada de dominio), `media` ou `video`, e expor ao PI via `AgentContext` apenas quando necessario.
 
 ### 2026-07-13 - PI tools em src/tools/pi e runtime direto
 
@@ -344,8 +414,8 @@ Resumo:
 - Criado `src/planner/action-registry.ts` com `ActionRegistry` e `ActionHandler` type
 - Video-specific actions (probe, capture, transcode, hls) removidas do if/else chain do `executeNext`
 - Criado `src/video/planner-handlers.ts` que registra handlers de video no planner
-- `PlannerExecuteRuntime` simplificado: nao tem mais callbacks de video (`startProbeMedia`, `startCaptureStream`, `startTranscode`, `startConvertHls`)
-- `createPlannerExecuteRuntime` nao depende mais de `VideoJobs`
+- `PlannerExecutionContext` simplificado: nao tem mais callbacks de video (`startProbeMedia`, `startCaptureStream`, `startTranscode`, `startConvertHls`)
+- `createPlannerExecutionContext` nao depende mais de `VideoJobs`
 - Handler usa `requiredInputs` proprio validado em tempo de execucao
 - Controles built-in (`exec`, `wait_execution`, `cancel_execution`) permanecem no planner
 - `deriveStepFromTitle` mantem heuristica de titulo->kind (conveniencia, nao acoplamento)
@@ -354,7 +424,7 @@ Arquivos-chave:
 - `src/planner/action-registry.ts` (novo)
 - `src/video/planner-handlers.ts` (novo)
 - `src/planner/service.ts`
-- `src/planner/runtime.ts`
+- `src/planner/execution-context.ts`
 - `src/app.ts`
 - `src/chat/tooling-factory.ts`
 - `src/planner/service.test.ts`
@@ -2540,12 +2610,12 @@ Proximo passo recomendado:
 ### 2026-03-12 - Refactor Fase 17: runtime compartilhado do planner entre API e chat
 
 Resumo:
-- Extraido modulo compartilhado `src/planner/runtime.ts` para montar os runtimes de `executeNext` e `reconcile`.
+- Extraido modulo compartilhado `src/planner/execution-context.ts` para montar os runtimes de `executeNext` e `reconcile`.
 - Removida duplicacao de wiring entre `src/api/server.ts` e `src/chat/tooling-factory.ts`.
 - Mantido o contrato desacoplado do planner: `PlannerService` continua recebendo runtime minimo injetado, sem depender de `KaelApp`.
 
 Arquivos-chave:
-- `src/planner/runtime.ts`
+- `src/planner/execution-context.ts`
 - `src/api/server.ts`
 - `src/chat/tooling-factory.ts`
 

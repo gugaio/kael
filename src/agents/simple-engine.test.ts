@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { SimpleCommandEngine } from "./simple-engine.js";
 import type { EngineBrowserTooling, EngineSystemTooling, EngineTurnInput, EngineToolingInterface } from "./types.js";
-import type { AgentRuntime } from "../runtime/agent-runtime.js";
+import type { AgentContext } from "./context.js";
 
 function createTooling(
   execImpl?: EngineSystemTooling["execCommand"],
@@ -187,42 +187,69 @@ function createTooling(
   };
 }
 
-function makeInput(message: string, runtime: EngineToolingInterface): EngineTurnInput {
+function makeInput(message: string, tooling: EngineToolingInterface): EngineTurnInput {
   return {
     sessionKey: "main",
     message,
-    runtime: {
-      ffmpeg: {
-        startTranscode: runtime.video.startTranscode,
-        startConvertHls: runtime.video.startConvertHls,
-        startCaptureStream: runtime.video.startCaptureStream,
-        startPlayVlc: runtime.video.startPlayVlc,
+    context: {
+      core: {
+        sessions: {} as never,
+        orchestrator: {} as never,
       },
-      videoInspect: {
-        inspectHls: (input: any) => runtime.video.videoHlsInspect({ sessionKey: "main", ...input }),
-        probe: (input: any) => runtime.video.videoProbe({ sessionKey: "main", ...input }),
-      },
-      browser: {
-        command: runtime.browser.browserCommand,
-        getRuntimeTelemetrySnapshot: runtime.browser.browserRuntimeTelemetry,
-      },
-      edge: {
-        listCapabilities: () => runtime.edge.edgeList(),
-        dispatchTask: ({ capability, input }: any) => {
-          const payload = input ?? {};
-          if (capability === "youbora.metrics.get") {
-            return runtime.edge.youboraMetricsGet(payload);
-          }
-          if (capability === "youbora.rawdata.get") {
-            return runtime.edge.youboraRawdataGet(payload);
-          }
-          if (capability === "youbora.events.get") {
-            return runtime.edge.youboraEventsGet(payload);
-          }
-          return runtime.edge.edgeCall({ capability, input });
+      runtimes: {
+        shell: {} as never,
+        mcp: {} as never,
+        browser: {
+          command: tooling.browser.browserCommand,
+          getRuntimeTelemetrySnapshot: tooling.browser.browserRuntimeTelemetry,
+        } as never,
+        edge: {
+          listCapabilities: () => tooling.edge.edgeList(),
+          dispatchTask: ({ capability, input }: any) => {
+            const payload = input ?? {};
+            if (capability === "youbora.metrics.get") {
+              return tooling.edge.youboraMetricsGet(payload);
+            }
+            if (capability === "youbora.rawdata.get") {
+              return tooling.edge.youboraRawdataGet(payload);
+            }
+            if (capability === "youbora.events.get") {
+              return tooling.edge.youboraEventsGet(payload);
+            }
+            return tooling.edge.edgeCall({ capability, input });
+          },
         },
       },
-    } as unknown as AgentRuntime,
+      services: {
+        memory: {} as never,
+        workspace: {} as never,
+        research: {} as never,
+        planner: {} as never,
+        skills: {} as never,
+        media: {} as never,
+      },
+      video: {
+        jobs: {} as never,
+        ffmpeg: {
+          startTranscode: tooling.video.startTranscode,
+          startConvertHls: tooling.video.startConvertHls,
+          startCaptureStream: tooling.video.startCaptureStream,
+          startPlayVlc: tooling.video.startPlayVlc,
+        },
+        inspect: {
+          inspectHls: (input: any) => tooling.video.videoHlsInspect({ sessionKey: "main", ...input }),
+          probe: (input: any) => tooling.video.videoProbe({ sessionKey: "main", ...input }),
+        },
+        playbackTriage: {} as never,
+        streamMonitor: {} as never,
+        streamer: {} as never,
+        serveManager: {} as never,
+      },
+      generation: {
+        image: {} as never,
+        video: {} as never,
+      },
+    } as unknown as AgentContext,
     contextMessages: [],
   };
 }

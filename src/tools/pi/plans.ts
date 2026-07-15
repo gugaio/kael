@@ -1,5 +1,5 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { createPlannerExecuteRuntime, createPlannerReconcileRuntime } from "../../planner/runtime.js";
+import { createPlannerExecutionContext, createPlannerReconcileContext } from "../../planner/execution-context.js";
 import type { PlannerService } from "../../planner/service.js";
 import type { JobService } from "../../jobs/service.js";
 import type { ShellRuntime } from "../system/shell-tool-service.js";
@@ -225,7 +225,7 @@ export function createPlanPiTools(params: {
     name: "plan_execute_next",
     label: "Plan Execute Next",
     description:
-      "Executa o proximo passo pending/in_progress do plano usando runtime local (jobs/exec).",
+      "Executa o proximo passo pending/in_progress do plano usando o contexto local de jobs/exec.",
     parameters: {
       type: "object",
       properties: {
@@ -273,7 +273,7 @@ export function createPlanPiTools(params: {
       const result = await params.planner.executeNext({
         planId: args.planId,
         inputs: args.inputs,
-        runtime: createPlannerExecuteRuntime({
+        runtime: createPlannerExecutionContext({
           jobs: params.jobs,
           shell: params.shell,
         }),
@@ -312,7 +312,7 @@ export function createPlanPiTools(params: {
       const result = await params.planner.reconcile({
         planId: args.planId,
         limit: args.limit,
-        runtime: createPlannerReconcileRuntime({
+        runtime: createPlannerReconcileContext({
           jobs: params.jobs,
           shell: params.shell,
         }),

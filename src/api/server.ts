@@ -19,12 +19,12 @@ export function createApiServer(app: KaelApp): FastifyInstance {
 
   const reconcilePlansNow = async (params?: { planId?: string; limit?: number }): Promise<void> => {
     try {
-      await app.planner.reconcile({
+      await app.agent.services.planner.reconcile({
         planId: params?.planId,
         limit: params?.limit,
         runtime: {
           getJob: async (jobId: string) => {
-            const found = app.jobs.getJob(jobId);
+            const found = app.agent.video.jobs.getJob(jobId);
             if (!found) {
               return null;
             }
@@ -34,7 +34,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
             };
           },
           pollExec: async (sessionId: string) => {
-            const result = await app.shell.process({
+            const result = await app.agent.runtimes.shell.process({
               sessionKey: "planner.reconcile",
               action: "poll",
               sessionId,

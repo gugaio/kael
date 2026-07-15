@@ -34,7 +34,7 @@ export function registerEdgeWsGateway(server: FastifyInstance, app: KaelApp): vo
       try {
         const message = parseEdgeInboundMessage(rawText);
         if (message.type === "client.register") {
-          const record = app.edge.registerClient(message.payload.client, {
+          const record = app.agent.runtimes.edge.registerClient(message.payload.client, {
             send: (payload: string) => ws.send(payload),
           });
           connectionId = record.connectionId;
@@ -61,7 +61,7 @@ export function registerEdgeWsGateway(server: FastifyInstance, app: KaelApp): vo
             });
             return;
           }
-          const record = app.edge.markHeartbeat(connectionId);
+          const record = app.agent.runtimes.edge.markHeartbeat(connectionId);
           kaelLogger.info("edge.client.heartbeat", {
             connectionId,
             clientId: message.payload.clientId,
@@ -77,7 +77,7 @@ export function registerEdgeWsGateway(server: FastifyInstance, app: KaelApp): vo
           return;
         }
 
-        const resolved = app.edge.resolveTaskResult(connectionId, message.payload.result);
+        const resolved = app.agent.runtimes.edge.resolveTaskResult(connectionId, message.payload.result);
         kaelLogger.info("edge.client.task_result", {
           connectionId,
           taskId: message.payload.result.taskId,
@@ -96,7 +96,7 @@ export function registerEdgeWsGateway(server: FastifyInstance, app: KaelApp): vo
       if (!connectionId) {
         return;
       }
-      const removed = app.edge.removeClient(connectionId);
+      const removed = app.agent.runtimes.edge.removeClient(connectionId);
       kaelLogger.info("edge.client.disconnected", {
         connectionId,
         clientId: removed?.client.clientId ?? null,
