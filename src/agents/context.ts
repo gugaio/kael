@@ -29,7 +29,7 @@ import type { BrowserRuntime } from "../runtime/browser/index.js";
 import type { TurnOrchestrator } from "../chat/turn-orchestrator.js";
 import type { MediaUnderstandingService } from "../media/service.js";
 import type { McpRuntime } from "../tools/mcp/mcp-bridge-service.js";
-import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
+import type { ShellRuntime } from "../shell/service.js";
 import type { FfmpegJobs } from "../ffmpeg/jobs.js";
 import type { StreamServeManager } from "../video/serve-manager.js";
 import type { StreamWatchParams, StreamWatchStatus } from "../vhs/types.js";

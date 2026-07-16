@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import { expandHome, loadGlobalConfig } from "./global-config.js";
-import type { ExecAsk, ExecSecurity } from "./tools/system/shell-approvals.js";
+import type { ExecAsk, ExecSecurity } from "./shell/approvals.js";
 
 export type EngineMode = "simple" | "pi" | "hybrid";
 

@@ -13,7 +13,7 @@ import { JobService } from "../jobs/service.js";
 import { LocalProcessSupervisor } from "../process/supervisor.js";
 import { JobStore } from "../jobs/store.js";
 import { createFfmpegJobs } from "../ffmpeg/jobs.js";
-import type { ProcessRunner } from "../tools/system/process-runner.js";
+import type { ProcessRunner } from "../process/runner.js";
 
 function withAgentContext(legacy: Record<string, unknown>): KaelApp {
   return {

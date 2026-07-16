@@ -1,6 +1,15 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { unwrapCommand } from "./wrapper-resolution.js";
+import { validateCommandAgainstProfile } from "./safe-bin-profiles.js";
+
+type UnwrappedCommand = {
+  wrappers: unknown[];
+  command: string;
+  args: string[];
+  fullCommand: string;
+};
 
 export type ExecSecurity = "deny" | "allowlist" | "full";
 export type ExecAsk = "off" | "on-miss" | "always";
@@ -64,6 +73,22 @@ const UNSUPPORTED_ALLOWLIST_PATTERNS: Array<{ pattern: RegExp; reason: string }>
  * Detecta padrões de ofuscação comuns em comandos shell.
  * Retorna descrição do problema ou null se nada for detectado.
  */
+
+/**
+ * Analisa o comando real após desempacotar wrappers shell.
+ * Usado pela allowlist para enxergar `apt` em vez de `sudo apt`.
+ */
+export function analyzeCommandWithWrappers(input: string): {
+  unwrapped: UnwrappedCommand | null;
+  originalBins: string[];
+  unwrappedBins: string[];
+} {
+  const originalBins = extractCommandBins(input);
+  const unwrapped = unwrapCommand(input);
+  const unwrappedBins = unwrapped ? extractCommandBins(unwrapped.fullCommand) : originalBins;
+  return { unwrapped, originalBins, unwrappedBins };
+}
+
 export function detectObfuscation(command: string): string | null {
   const lower = command.toLowerCase();
 
@@ -292,9 +317,12 @@ export class ExecApprovalStore {
       nextEntries[idx] = decided;
 
       // Se aprovado com allowAlways, persiste os bins do comando na allowlist.
+      // Usa o comando desempacotado para capturar o bin real (ex: `apt` em vez de `sudo apt`).
       let nextAllowlist = current.allowlist;
       if (decision === "approved" && opts?.allowAlways) {
-        const analysis = analyzeAllowlistCommand(target.command);
+        const { unwrapped } = analyzeCommandWithWrappers(target.command);
+        const commandForBins = unwrapped?.fullCommand ?? target.command;
+        const analysis = analyzeAllowlistCommand(commandForBins);
         if (analysis.ok && analysis.bins.length > 0) {
           const merged = normalizeAllowlist([...current.allowlist, ...analysis.bins]);
           nextAllowlist = merged;
@@ -375,7 +403,11 @@ export class ExecApprovalStore {
         };
       }
 
-      const allowlistAnalysis = analyzeAllowlistCommand(params.command);
+      // Desempacota wrappers shell (sudo, timeout, nice, etc.)
+      // para allowlist enxergar o comando real em vez do wrapper.
+      const { unwrapped } = analyzeCommandWithWrappers(params.command);
+      const commandForAnalysis = unwrapped?.fullCommand ?? params.command;
+      const allowlistAnalysis = analyzeAllowlistCommand(commandForAnalysis);
       const bins = allowlistAnalysis.ok ? allowlistAnalysis.bins : [];
 
       const allowedByAllowlist =
@@ -390,6 +422,14 @@ export class ExecApprovalStore {
           : "comando requer aprovacao por politica ask";
 
       if (allowedByAllowlist && ask !== "always") {
+        // Valida contra perfil de segurança do binário
+        const profileResult = validateCommandAgainstProfile(params.command);
+        if (!profileResult.ok) {
+          return {
+            status: "denied",
+            reason: `Perfil de segurança bloqueou: ${profileResult.reason}`,
+          };
+        }
         return null;
       }
 

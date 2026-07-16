@@ -1,8 +1,8 @@
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { ShellProcessSupervisor } from "./shell-process-supervisor.js";
-import type { LocalProcessRunner } from "./process-runner.js";
+import { ShellProcessSupervisor } from "./supervisor.js";
+import type { LocalProcessRunner } from "../process/runner.js";
 
 class FakeChildProcess extends EventEmitter {
   readonly stdout = new PassThrough();

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { ExecApprovalStore, detectObfuscation, extractCommandBins } from "./shell-approvals.js";
+import { ExecApprovalStore, detectObfuscation, extractCommandBins } from "./approvals.js";
 
 const tempDirs: string[] = [];
 

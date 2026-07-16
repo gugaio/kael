@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { JobStore } from "./store.js";
 import { JobService } from "./service.js";
 import { LocalProcessSupervisor } from "../process/supervisor.js";
-import type { ProcessRunner } from "../tools/system/process-runner.js";
+import type { ProcessRunner } from "../process/runner.js";
 import { createFfmpegJobs } from "../ffmpeg/jobs.js";
 
 function sleep(ms: number): Promise<void> {

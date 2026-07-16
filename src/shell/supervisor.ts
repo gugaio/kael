@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { kaelLogger } from "../../infra/logger.js";
-import { killProcessTree } from "./kill-tree.js";
-import type { LocalProcessRunner } from "./process-runner.js";
-import type { ExecSession, ProcessCommandParams, ProcessCommandResult } from "./shell-tool-service.js";
+import { kaelLogger } from "../infra/logger.js";
+import { killProcessTree } from "../process/kill-tree.js";
+import { getGlobalChildProcessBridge } from "../process/child-process-bridge.js";
+import type { ProcessCheckpointStore } from "../process/checkpoint.js";
+import type { LocalProcessRunner } from "../process/runner.js";
+import type { ExecSession, ProcessCommandParams, ProcessCommandResult } from "./service.js";
 
 type ActiveProcess = {
   session: ExecSession;
@@ -17,6 +19,8 @@ type SupervisorConfig = {
   noOutputTimeoutMs: number;
   /** Milissegundos de espera entre SIGTERM e SIGKILL ao encerrar processos. */
   killGraceMs: number;
+  /** Store de checkpoint para resiliência a restart (opcional). */
+  checkpoint?: ProcessCheckpointStore;
 };
 
 type StartProcessParams = {
@@ -29,12 +33,23 @@ type StartProcessParams = {
   existingSession?: ExecSession;
 };
 
+/**
+ * Append with head+tail truncation.
+ * Preserva head (40%) + tail (60%) com marcador de truncamento,
+ * em vez de manter apenas o tail.
+ */
 function appendWithCap(current: string, chunk: string, maxChars: number): string {
   const next = current + chunk;
   if (next.length <= maxChars) {
     return next;
   }
-  return next.slice(next.length - maxChars);
+  const headRatio = 0.4;
+  const headLen = Math.floor(maxChars * headRatio);
+  const tailLen = maxChars - headLen;
+  const truncated = next.length - maxChars;
+  const head = next.slice(0, headLen);
+  const tail = next.slice(next.length - tailLen);
+  return `${head}\n... (${truncated} caracteres truncados) ...\n${tail}`;
 }
 
 function tailSnippet(value: string, maxChars = 280): string {
@@ -104,6 +119,13 @@ export class ShellProcessSupervisor {
           clearInterval(noOutputTimeoutHandle);
         }
         const endedAt = new Date().toISOString();
+        // Remove do rastreio de sinais e checkpoint ao finalizar
+        const finishPid = active?.process?.pid;
+        if (finishPid) {
+          getGlobalChildProcessBridge().untrack(finishPid);
+          this.cfg.checkpoint?.untrack(finishPid).catch(() => {});
+        }
+
         const finalSession: ExecSession = {
           ...session,
           ...next,
@@ -242,6 +264,21 @@ export class ShellProcessSupervisor {
     };
 
     this.active.set(session.id, active);
+
+    // Rastreia PID no bridge de sinais para shutdown limpo
+    const childPid = child.process.pid;
+    if (childPid) {
+      getGlobalChildProcessBridge().track(childPid, params.sessionKey, "shell");
+      // Checkpoint de resiliência
+      this.cfg.checkpoint?.track({
+        pid: childPid,
+        kind: "shell",
+        sessionKey: params.sessionKey,
+        command: params.command,
+        startedAt: session.startedAt,
+      }).catch(() => {});
+    }
+
     return session;
   }
 

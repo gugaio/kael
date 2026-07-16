@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import type { ChildProcessByStdio } from "node:child_process";
 import type { Readable, Writable } from "node:stream";
-import { sanitizeHostEnv } from "./host-env-security.js";
+import { sanitizeHostEnv } from "../security/host-env-security.js";
 
 export type SpawnOptions = {
   cwd?: string;

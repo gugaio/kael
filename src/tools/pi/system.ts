@@ -1,6 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { ToolLoopGuard } from "../../agents/tool-loop-guard.js";
-import type { ShellRuntime } from "../system/shell-tool-service.js";
+import type { ShellRuntime } from "../../shell/service.js";
 
 type TextBlock = {
   type: "text";

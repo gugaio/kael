@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { ShellToolService } from "./shell-tool-service.js";
+import { ShellToolService } from "./service.js";
 
 const tempDirs: string[] = [];
 
@@ -183,7 +183,7 @@ describe("ShellToolService", () => {
     expect(writeResult.ok).toBe(true);
 
     // Aguarda o processo concluir após receber o input
-    const completion = await new Promise<import("./shell-tool-service.js").ExecSession>((resolve) => {
+    const completion = await new Promise<import("./service.js").ExecSession>((resolve) => {
       const check = async () => {
         const poll = await service.process({ sessionKey: "s1", action: "poll", sessionId: started.id });
         if (poll.session && poll.session.status !== "running") {

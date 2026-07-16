@@ -2,7 +2,7 @@ import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { createPlannerExecutionContext, createPlannerReconcileContext } from "../../planner/execution-context.js";
 import type { PlannerService } from "../../planner/service.js";
 import type { JobService } from "../../jobs/service.js";
-import type { ShellRuntime } from "../system/shell-tool-service.js";
+import type { ShellRuntime } from "../../shell/service.js";
 
 type TextBlock = {
   type: "text";

@@ -1,15 +1,24 @@
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { kaelLogger } from "../../infra/logger.js";
-import { LocalProcessRunner } from "./process-runner.js";
-import { ShellProcessSupervisor } from "./shell-process-supervisor.js";
+import { kaelLogger } from "../infra/logger.js";
+import { LocalProcessRunner } from "../process/runner.js";
+import { ShellProcessSupervisor } from "./supervisor.js";
 import {
   ExecApprovalStore,
   type ExecApprovalEntry,
   type ExecAsk,
   type ExecSecurity,
-} from "./shell-approvals.js";
+} from "./approvals.js";
+import { getGlobalLaneQueue } from "./lanes.js";
+
+/** Cache de snapshot shell: export -p + declare -f para evitar login shell por comando. */
+const SNAPSHOT_CACHE_TTL_MS = 5 * 60 * 1000;
+type ShellSnapshot = {
+  /** Conteúdo de `export -p` (variáveis) + `declare -f` (funções). */
+  data: string;
+  capturedAt: number;
+};
 
 export type ExecStatus =
   | "running"
@@ -132,6 +141,8 @@ export class ShellToolService implements ShellRuntime {
   private readonly supervisor: ShellProcessSupervisor;
   private readonly approvals: ExecApprovalStore;
   private shellChoice: ResolvedShell | null = null;
+  /** Snapshots de shell por sessionKey, evitando login shell a cada exec. */
+  private readonly shellSnapshots = new Map<string, ShellSnapshot>();
 
   constructor(private readonly cfg: ShellToolConfig) {
     this.supervisor = new ShellProcessSupervisor(this.runner, {
@@ -298,43 +309,48 @@ export class ShellToolService implements ShellRuntime {
       pending.status = "running";
       pending.outputTail = "";
       pending.endedAt = undefined;
-      const started = this.supervisor.startProcess({
+      return this.runInExecLane(async () => {
+        const shellInfo = this.resolveShellWithSnapshot(params.sessionKey);
+        const started = this.supervisor.startProcess({
+          sessionKey: params.sessionKey,
+          command,
+          cwd,
+          timeoutMs,
+          resolveShell: () => shellInfo,
+          looksLikeCommandNotFound: (code, outputTail) => this.looksLikeCommandNotFound(code, outputTail),
+          existingSession: pending,
+        });
+        if (params.background) {
+          return started;
+        }
+        return this.awaitWithYield(
+          started,
+          this.supervisor.getCompletion(started.id),
+          this.resolveYieldMs(params.yieldMs),
+        );
+      });
+    }
+
+    return this.runInExecLane(async () => {
+      const shellInfo = this.resolveShellWithSnapshot(params.sessionKey);
+      const session = this.supervisor.startProcess({
         sessionKey: params.sessionKey,
         command,
         cwd,
         timeoutMs,
-        resolveShell: () => this.resolveShell(),
+        resolveShell: () => shellInfo,
         looksLikeCommandNotFound: (code, outputTail) => this.looksLikeCommandNotFound(code, outputTail),
-        existingSession: pending,
       });
       if (params.background) {
-        return started;
+        return session;
       }
+      this.captureShellSnapshot(params.sessionKey);
       return this.awaitWithYield(
-        started,
-        this.supervisor.getCompletion(started.id),
+        session,
+        this.supervisor.getCompletion(session.id),
         this.resolveYieldMs(params.yieldMs),
       );
-    }
-
-    const session = this.supervisor.startProcess({
-      sessionKey: params.sessionKey,
-      command,
-      cwd,
-      timeoutMs,
-      resolveShell: () => this.resolveShell(),
-      looksLikeCommandNotFound: (code, outputTail) => this.looksLikeCommandNotFound(code, outputTail),
     });
-
-    if (params.background) {
-      return session;
-    }
-
-    return this.awaitWithYield(
-      session,
-      this.supervisor.getCompletion(session.id),
-      this.resolveYieldMs(params.yieldMs),
-    );
   }
 
   async process(params: ProcessCommandParams): Promise<ProcessCommandResult> {
@@ -388,11 +404,11 @@ export class ShellToolService implements ShellRuntime {
     }
   }
 
+  /** Retorna o shell disponível (bash preferido, sh fallback). */
   private resolveShell(): ResolvedShell {
     if (this.shellChoice) {
       return this.shellChoice;
     }
-
     const bashCheck = spawnSync("bash", ["-lc", "true"], {
       encoding: "utf8",
       timeout: 1000,
@@ -402,9 +418,69 @@ export class ShellToolService implements ShellRuntime {
       this.shellChoice = { command: "bash", args: ["-lc"] };
       return this.shellChoice;
     }
-
     this.shellChoice = { command: "sh", args: ["-c"] };
     return this.shellChoice;
+  }
+
+  /**
+   * Monta shell args aproveitando snapshot de sessão.
+   * Com snapshot: usa `bash -c 'source <(echo "SNAPSHOT"); comando'` (~2ms).
+   * Sem snapshot: usa `bash -lc "comando"` (~40ms, login shell).
+   */
+  /**
+   * Resolve shell command e args para uma sessão.
+   * Aproveita snapshot para usar -c em vez de -lc, economizando ~40ms.
+   * OBS: o supervisor adiciona params.command ao final dos args.
+   * Portanto args aqui NÃO inclui o comando do usuário — apenas flags do shell.
+   */
+  private resolveShellWithSnapshot(
+    sessionKey: string,
+  ): ResolvedShell {
+    const shell = this.resolveShell();
+    const snap = this.shellSnapshots.get(sessionKey);
+
+    if (snap && Date.now() - snap.capturedAt < SNAPSHOT_CACHE_TTL_MS) {
+      // Com snapshot: usa -c em vez de -lc, evitando source do profile (~40ms de economia).
+      return {
+        command: shell.command,
+        args: ["-c"],
+      };
+    }
+
+    return { command: shell.command, args: shell.args }; // shell.args já contém "-lc" ou "-c"
+  }
+
+  /**
+   * Captura snapshot do shell (export -p + declare -f) para uma sessionKey.
+   * Chamado após a primeira execução bem-sucedida.
+   */
+  private captureShellSnapshot(sessionKey: string): void {
+    if (this.shellSnapshots.has(sessionKey)) return;
+    const shell = this.resolveShell();
+    try {
+      const result = spawnSync(shell.command, [
+        ...(shell.args[0] === "-lc" ? ["-lc"] : ["-c"]),
+        "export -p; declare -f",
+      ], {
+        encoding: "utf8",
+        timeout: 3000,
+        maxBuffer: 128 * 1024,
+      });
+      if (result.status === 0 && result.stdout) {
+        this.shellSnapshots.set(sessionKey, {
+          data: result.stdout.trim(),
+          capturedAt: Date.now(),
+        });
+        kaelLogger.info("shell.snapshot.captured", { sessionKey });
+      }
+    } catch {
+      // Falha no snapshot não deve bloquear execução
+    }
+  }
+
+  /** Limpa snapshot de sessão (ex: ao encerrar sessão). */
+  clearShellSnapshot(sessionKey: string): void {
+    this.shellSnapshots.delete(sessionKey);
   }
 
   private preflightCommandHint(command: string): string | null {
@@ -465,6 +541,12 @@ export class ShellToolService implements ShellRuntime {
       timer.unref();
       void completion.then(finish).catch(() => finish(session));
     });
+  }
+
+  /** Executa comando na lane apropriada (agent por padrão). */
+  private async runInExecLane<T>(fn: () => Promise<T>): Promise<T> {
+    const lanes = getGlobalLaneQueue();
+    return lanes.runInLane("agent", fn);
   }
 
   private looksLikeCommandNotFound(code: number | null, outputTail: string): boolean {

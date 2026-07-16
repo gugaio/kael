@@ -3,7 +3,7 @@ import { JobService } from "../../jobs/service.js";
 import { JobStore } from "../../jobs/store.js";
 import { LocalProcessSupervisor } from "../../process/supervisor.js";
 import { SessionStore } from "../../session/store.js";
-import { LocalProcessRunner } from "../../tools/system/process-runner.js";
+import { LocalProcessRunner } from "../../process/runner.js";
 
 export type CoreModule = {
   config: KaelConfig;

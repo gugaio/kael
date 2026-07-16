@@ -4,7 +4,7 @@ import { EdgeRuntime } from "../../edge/runtime.js";
 import { resolveKaelHome } from "../../global-config.js";
 import { BrowserRuntimeService, type BrowserRuntime } from "../../runtime/browser/index.js";
 import { McpBridgeService } from "../../tools/mcp/mcp-bridge-service.js";
-import { ShellToolService } from "../../tools/system/shell-tool-service.js";
+import { ShellToolService } from "../../shell/service.js";
 
 export type AgentCoreModule = {
   shell: ShellToolService;

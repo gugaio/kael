@@ -1,5 +1,5 @@
 import type { JobService } from "../jobs/service.js";
-import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
+import type { ShellRuntime } from "../shell/service.js";
 
 export type PlannerExecutionContext = {
   execCommand: (args: {

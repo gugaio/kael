@@ -6,6 +6,9 @@ import type { JobRecord, JobStatus } from "../types.js";
 import { kaelLogger } from "../infra/logger.js";
 import type { ProcessSupervisor } from "../process/supervisor.js";
 import type { JobStore } from "./store.js";
+import { getGlobalLaneQueue } from "../shell/lanes.js";
+import { getGlobalChildProcessBridge } from "../process/child-process-bridge.js";
+import type { ProcessCheckpointStore } from "../process/checkpoint.js";
 
 export type JobInput = {
   sessionKey: string;
@@ -21,12 +24,14 @@ type JobServiceOptions = {
   maxConcurrentJobs: number;
   jobTimeoutMs: number;
   killGraceMs: number;
+  checkpoint?: ProcessCheckpointStore;
 };
 
 /** Persistent background-job runtime. Queues, persists, and delegates process execution to ProcessSupervisor. */
 export class JobService {
   private readonly queue: QueuedJob[] = [];
   private readonly activeJobs = new Map<string, ChildProcessByStdio<Writable, Readable, Readable>>();
+  private readonly jobPids = new Map<string, number>();
   private readonly canceledJobs = new Set<string>();
   private reservedSlots = 0;
 
@@ -120,15 +125,34 @@ export class JobService {
   private async execute(job: QueuedJob): Promise<void> {
     try {
       await this.store.update(job.id, { status: "running", startedAt: new Date().toISOString() });
-      const { process, result } = this.supervisor.spawn(job.command, job.args, {
-        timeoutMs: this.options.jobTimeoutMs,
-        killGraceMs: this.options.killGraceMs,
-        logPath: this.store.getLogPath(job.id),
-      });
-      this.activeJobs.set(job.id, process);
-      this.reservedSlots = Math.max(0, this.reservedSlots - 1);
+      const lanes = getGlobalLaneQueue();
+      const spawnedResult = await lanes.runInLane("media", async () => {
+        const spawned = this.supervisor.spawn(job.command, job.args, {
+          timeoutMs: this.options.jobTimeoutMs,
+          killGraceMs: this.options.killGraceMs,
+          logPath: this.store.getLogPath(job.id),
+        });
+        this.activeJobs.set(job.id, spawned.process);
+        this.reservedSlots = Math.max(0, this.reservedSlots - 1);
 
-      const outcome = await result;
+        // Rastreia PID para shutdown limpo e checkpoint
+        const pid = spawned.process.pid;
+        if (pid) {
+          this.jobPids.set(job.id, pid);
+          getGlobalChildProcessBridge().track(pid, job.sessionKey, "job");
+          this.options.checkpoint?.track({
+            pid,
+            kind: "job",
+            sessionKey: job.sessionKey,
+            jobId: job.id,
+            command: `${job.command} ${job.args.join(" ")}`,
+            startedAt: new Date().toISOString(),
+          }).catch(() => {});
+        }
+        return spawned;
+      });
+
+      const outcome = await spawnedResult.result;
       const canceled = this.wasCanceled(job.id);
 
       const error = canceled
@@ -162,6 +186,12 @@ export class JobService {
     result: { code?: number | null; canceled: boolean; error?: string },
   ): Promise<void> {
     if (!this.activeJobs.delete(job.id)) return;
+    const jobPid = this.jobPids.get(job.id);
+    if (jobPid) {
+      getGlobalChildProcessBridge().untrack(jobPid);
+      this.options.checkpoint?.untrack(jobPid).catch(() => {});
+      this.jobPids.delete(job.id);
+    }
     const status = result.canceled ? "canceled" : result.error ? "failed" : "succeeded";
     await this.store.update(job.id, {
       status,

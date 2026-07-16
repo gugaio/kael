@@ -12,7 +12,7 @@ import { GmailSmtpSender } from "../../email/gmail-smtp-sender.js";
 import type { JobService } from "../../jobs/service.js";
 import type { PlannerService } from "../../planner/service.js";
 import type { SessionStore } from "../../session/store.js";
-import type { ShellRuntime } from "../../tools/system/shell-tool-service.js";
+import type { ShellRuntime } from "../../shell/service.js";
 
 export type AutomationModule = {
   automation: AutomationService;
