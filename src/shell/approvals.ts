@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { unwrapCommand } from "./wrapper-resolution.js";
 import { validateCommandAgainstProfile } from "./safe-bin-profiles.js";
+import { analyzeCommand } from "./command-analyzer.js";
 
 type UnwrappedCommand = {
   wrappers: unknown[];
@@ -60,14 +61,6 @@ export type ExecApprovalStoreDefaults = {
 
 const DEFAULT_PENDING_TTL_MS = 10 * 60 * 1000;
 const MAX_APPROVAL_HISTORY = 300;
-const UNSUPPORTED_ALLOWLIST_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
-  { pattern: /&&|\|\|/, reason: "operadores logicos (&&, ||) nao sao permitidos em allowlist" },
-  { pattern: /[;<>()]/, reason: "encadeamento/subshell nao e permitido em allowlist" },
-  { pattern: /(^|[^\\])`/, reason: "backticks nao sao permitidos em allowlist" },
-  { pattern: /\$\(|\$\{/, reason: "substituicao de shell nao e permitida em allowlist" },
-  { pattern: /(^|[^\\])[<>]/, reason: "redirecionamento nao e permitido em allowlist" },
-  { pattern: /\r|\n/, reason: "multiline nao e permitido em allowlist" },
-];
 
 /**
  * Detecta padrões de ofuscação comuns em comandos shell.
@@ -80,19 +73,17 @@ const UNSUPPORTED_ALLOWLIST_PATTERNS: Array<{ pattern: RegExp; reason: string }>
  */
 export function analyzeCommandWithWrappers(input: string): {
   unwrapped: UnwrappedCommand | null;
-  originalBins: string[];
-  unwrappedBins: string[];
+  analysis: ReturnType<typeof analyzeCommand>;
 } {
-  const originalBins = extractCommandBins(input);
+  const analysis = analyzeCommand(input);
   const unwrapped = unwrapCommand(input);
-  const unwrappedBins = unwrapped ? extractCommandBins(unwrapped.fullCommand) : originalBins;
-  return { unwrapped, originalBins, unwrappedBins };
+  const unwrappedAnalysis = unwrapped ? analyzeCommand(unwrapped.fullCommand) : analysis;
+  return { unwrapped, analysis: unwrappedAnalysis };
 }
 
 export function detectObfuscation(command: string): string | null {
   const lower = command.toLowerCase();
 
-  // Decode-and-execute: base64 -d | bash/sh
   if (
     /base64\s+(-d|--decode).*\|\s*(ba?sh?)\b/.test(lower) ||
     /\|\s*base64\s+(-d|--decode)\s*\|\s*(ba?sh?)\b/.test(lower)
@@ -100,17 +91,14 @@ export function detectObfuscation(command: string): string | null {
     return "decode-and-execute via base64|shell detectado";
   }
 
-  // Decode-and-execute: xxd -r ou od piped to shell
   if (/\|\s*(xxd\s+-r|od\b).*\|\s*(ba?sh?)\b/.test(lower)) {
     return "decode-and-execute via xxd/od|shell detectado";
   }
 
-  // eval como comando (inicio de segmento ou após pipe)
   if (/^\s*eval\b/.test(lower) || /\|\s*eval\b/.test(lower)) {
     return "uso de eval detectado";
   }
 
-  // Ofuscação por aspas no nome do binário shell: ba"sh", 'ba'sh, b"a"sh
   if (/\b(ba?["']s?h?["']|["']ba?sh?["']|b["']a["']sh)\b/i.test(command)) {
     return "ofuscacao de binario shell por aspas detectada";
   }
@@ -199,46 +187,21 @@ function sanitizeFile(raw: unknown, defaults: ExecApprovalStoreDefaults): ExecAp
 }
 
 export function extractCommandBins(command: string): string[] {
-  const normalized = command.trim();
-  if (!normalized) {
-    return [];
-  }
-
-  const segments = normalized
-    .split(/\|/g)
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
-
-  const bins: string[] = [];
-  for (const segment of segments) {
-    const firstToken = segment.split(/\s+/)[0]?.trim();
-    if (!firstToken) {
-      continue;
-    }
-    const base = path.basename(firstToken).toLowerCase();
-    if (base) {
-      bins.push(base);
-    }
-  }
-
-  return Array.from(new Set(bins));
+  return analyzeCommand(command).bins;
 }
 
 function analyzeAllowlistCommand(command: string): { ok: true; bins: string[] } | { ok: false; reason: string } {
-  const normalized = command.trim();
-  if (!normalized) {
-    return { ok: false, reason: "comando vazio" };
+  const analysis = analyzeCommand(command);
+  if (!analysis.ok) {
+    return { ok: false, reason: analysis.reason ?? "comando nao permitido em allowlist" };
   }
-  for (const rule of UNSUPPORTED_ALLOWLIST_PATTERNS) {
-    if (rule.pattern.test(normalized)) {
-      return { ok: false, reason: rule.reason };
-    }
+  if (analysis.hasPipeToShell) {
+    return { ok: false, reason: "pipe para shell nao permitido em allowlist" };
   }
-  const bins = extractCommandBins(normalized);
-  if (bins.length === 0) {
+  if (analysis.bins.length === 0) {
     return { ok: false, reason: "nao foi possivel identificar comando executavel" };
   }
-  return { ok: true, bins };
+  return { ok: true, bins: analysis.bins };
 }
 
 function sortByCreatedDesc(entries: ExecApprovalEntry[]): ExecApprovalEntry[] {
@@ -320,9 +283,8 @@ export class ExecApprovalStore {
       // Usa o comando desempacotado para capturar o bin real (ex: `apt` em vez de `sudo apt`).
       let nextAllowlist = current.allowlist;
       if (decision === "approved" && opts?.allowAlways) {
-        const { unwrapped } = analyzeCommandWithWrappers(target.command);
-        const commandForBins = unwrapped?.fullCommand ?? target.command;
-        const analysis = analyzeAllowlistCommand(commandForBins);
+        const { analysis: cmdAnalysis } = analyzeCommandWithWrappers(target.command);
+        const analysis = analyzeAllowlistCommand(cmdAnalysis.command);
         if (analysis.ok && analysis.bins.length > 0) {
           const merged = normalizeAllowlist([...current.allowlist, ...analysis.bins]);
           nextAllowlist = merged;
@@ -405,8 +367,17 @@ export class ExecApprovalStore {
 
       // Desempacota wrappers shell (sudo, timeout, nice, etc.)
       // para allowlist enxergar o comando real em vez do wrapper.
-      const { unwrapped } = analyzeCommandWithWrappers(params.command);
-      const commandForAnalysis = unwrapped?.fullCommand ?? params.command;
+      const { analysis: cmdAnalysis } = analyzeCommandWithWrappers(params.command);
+
+      // Pipe-to-shell é bloqueado independentemente de security level
+      if (cmdAnalysis.hasPipeToShell) {
+        return {
+          status: "denied",
+          reason: "Comando bloqueado: pipe para shell detectado (ex: curl | bash)",
+        };
+      }
+
+      const commandForAnalysis = cmdAnalysis.command;
       const allowlistAnalysis = analyzeAllowlistCommand(commandForAnalysis);
       const bins = allowlistAnalysis.ok ? allowlistAnalysis.bins : [];
 
