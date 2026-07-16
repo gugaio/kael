@@ -5,8 +5,10 @@ import {
   deleteStreamWatch,
   getStreamWatch,
   stopStreamWatch,
+  type StreamWatchAbrAlignmentReport,
   type StreamWatchChunk,
   type StreamWatchChunkStream,
+  type StreamWatchManifestReport,
 } from "../lib/api";
 import { formatDate, statusTone } from "../lib/format";
 
@@ -26,6 +28,10 @@ function formatSmallSeconds(value: number | undefined): string {
   if (value === undefined) return "-";
   if (value !== 0 && Math.abs(value) < 0.001) return `${value < 0 ? "-" : ""}<0.001s`;
   return `${value.toFixed(3)}s`;
+}
+
+function formatSequenceDelta(value: number | undefined): string {
+  return value === undefined ? "-" : value.toFixed(1);
 }
 
 function formatTime(value: number | undefined): string {
@@ -126,6 +132,26 @@ export function StreamWatchDetailPage(): JSX.Element {
             </Panel>
           )}
 
+          {data.abrReports.length > 0 && (
+            <Panel title="ABR Alignment">
+              <div className="space-y-3">
+                {data.abrReports.slice().reverse().slice(0, 3).map((report) => (
+                  <AbrReportCard key={report.id} report={report} />
+                ))}
+              </div>
+            </Panel>
+          )}
+
+          {data.manifestReports.length > 0 && (
+            <Panel title="Manifest & Network">
+              <div className="grid gap-3 xl:grid-cols-3">
+                {data.manifestReports.slice().reverse().slice(0, 6).map((report) => (
+                  <ManifestReportCard key={report.id} report={report} />
+                ))}
+              </div>
+            </Panel>
+          )}
+
           <Panel title="Events">
             {data.events.length === 0 && <p className="text-sm text-kael-muted">No events detected yet.</p>}
             {data.events.length > 0 && (
@@ -154,6 +180,94 @@ export function StreamWatchDetailPage(): JSX.Element {
             )}
           </Panel>
         </>
+      )}
+    </div>
+  );
+}
+
+function ManifestReportCard(props: { report: StreamWatchManifestReport }): JSX.Element {
+  const { report } = props;
+  const tone = report.issues.some((issue) => issue.severity === "error")
+    ? "border-rose-200 bg-rose-50"
+    : report.issues.some((issue) => issue.severity === "warning")
+      ? "border-amber-200 bg-amber-50"
+      : report.network?.status === "held"
+        ? "border-sky-200 bg-sky-50"
+      : "border-emerald-200 bg-emerald-50";
+  return (
+    <div className={`min-w-0 rounded-xl border p-3 ${tone}`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="truncate text-sm font-semibold text-kael-text">{report.playlistType}</p>
+        <span className="rounded-full border border-white/80 bg-white px-2 py-0.5 text-[11px] text-kael-muted">
+          {report.network?.status ?? report.targetDurationStatus}
+        </span>
+      </div>
+      <p className="mt-1 truncate text-[11px] text-kael-muted">{report.finalUrl}</p>
+      <div className="mt-2 grid gap-1 text-xs text-kael-muted">
+        <span>HTTP: {report.network ? `${report.network.httpStatus} ${report.network.statusText}` : "-"}</span>
+        <span>headers: {report.network ? `${report.network.headerTimeMs ?? report.network.ttfbMs}ms` : "-"}</span>
+        <span>first byte: {report.network ? `${report.network.ttfbMs}ms` : "-"}</span>
+        <span>body: {report.network ? `${report.network.bodyTimeMs ?? Math.max(0, report.network.downloadTimeMs - report.network.ttfbMs)}ms` : "-"}</span>
+        <span>total: {report.network ? `${report.network.downloadTimeMs}ms` : "-"}</span>
+        <span>target: {formatSeconds(report.targetDuration)}</span>
+        <span>max segment: {formatSeconds(report.maxSegmentDuration)} status: {report.targetDurationStatus}</span>
+        <span>media seq: {report.mediaSequence ?? "-"} prev: {report.previousMediaSequence ?? "-"}</span>
+        <span>seq delta: {report.mediaSequenceDelta ?? "-"} expected: {formatSequenceDelta(report.mediaSequenceExpectedDelta)}</span>
+        <span>seq excess: {formatSequenceDelta(report.mediaSequenceExcessDelta)} status: {report.mediaSequenceStatus}</span>
+        <span>discontinuities: {report.discontinuityCount}</span>
+      </div>
+      {report.issues.length > 0 && (
+        <div className={`mt-2 space-y-1 text-xs ${report.issues.some((issue) => issue.severity === "error") ? "text-rose-700" : "text-kael-muted"}`}>
+          {report.issues.slice(0, 2).map((issue) => (
+            <p key={`${issue.code}-${issue.detectedAt}`} className="truncate">{issue.summary}</p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AbrReportCard(props: { report: StreamWatchAbrAlignmentReport }): JSX.Element {
+  const { report } = props;
+  const tone = report.status === "critical"
+    ? "border-rose-200 bg-rose-50"
+    : report.status === "warning"
+      ? "border-amber-200 bg-amber-50"
+      : "border-emerald-200 bg-emerald-50";
+  return (
+    <div className={`min-w-0 rounded-xl border p-3 ${tone}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-kael-text">Segment Sequence {report.segmentSequence}</p>
+        <span className="rounded-full border border-white/80 bg-white px-2 py-0.5 text-[11px] text-kael-muted">{report.status}</span>
+      </div>
+      <div className="mt-2 grid gap-1 text-xs text-kael-muted sm:grid-cols-3">
+        <span>profiles: {report.profilesAnalyzed}</span>
+        <span>PTS start delta: {formatSmallSeconds(report.ptsStartDeltaSeconds)}</span>
+        <span>duration delta: {formatSmallSeconds(report.durationDeltaSeconds)}</span>
+      </div>
+      <div className="mt-3 grid gap-2 xl:grid-cols-2">
+        {report.variants.map((variant) => (
+          <div key={`${variant.label}-${variant.segmentSequence}`} className="rounded-lg border border-white/80 bg-white/70 p-2 text-[11px] text-kael-muted">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="font-medium text-kael-text">{variant.label}</span>
+              <span>{variant.resolution ?? "-"} · {variant.bandwidth ? `${Math.round(variant.bandwidth / 1000)}k` : "-"}</span>
+            </div>
+            <div className="grid gap-1">
+              <span>PTS end {"<-"} start: {formatTime(variant.lastPtsTime)} {"<-"} {formatTime(variant.firstPtsTime)}</span>
+              <span>DTS end {"<-"} start: {formatTime(variant.lastDtsTime)} {"<-"} {formatTime(variant.firstDtsTime)}</span>
+              <span>duration: {formatSeconds(variant.actualDurationSeconds)}</span>
+              <span>keyframes: {variant.keyframeCount ?? "-"} starts: {variant.startsWithKeyframe === undefined ? "-" : String(variant.startsWithKeyframe)}</span>
+              <span>bytes: {formatBytes(variant.bytes)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      {report.issues.length > 0 && (
+        <div className="mt-2 space-y-1 text-xs text-rose-700">
+          {report.issues.slice(0, 3).map((issue) => (
+            <p key={`${issue.code}-${issue.detectedAt}`} className="truncate">{issue.summary}</p>
+          ))}
+        </div>
       )}
     </div>
   );

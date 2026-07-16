@@ -81,6 +81,65 @@ export type StreamWatchChunkStreamStatus = {
   errors: string[];
 };
 
+export type StreamWatchManifestReport = {
+  id: string;
+  checkedAt: string;
+  url: string;
+  finalUrl: string;
+  playlistType: "master" | "media" | "unknown";
+  targetDuration?: number;
+  maxSegmentDuration?: number;
+  targetDurationStatus: "ok" | "critical" | "unknown";
+  mediaSequence?: number;
+  previousMediaSequence?: number;
+  mediaSequenceDelta?: number;
+  mediaSequenceExpectedDelta?: number;
+  mediaSequenceExcessDelta?: number;
+  mediaSequenceStatus: "ok" | "gap" | "stale" | "unknown";
+  discontinuityCount: number;
+  network?: {
+    httpStatus: number;
+    statusText: string;
+    headerTimeMs?: number;
+    ttfbMs: number;
+    downloadTimeMs: number;
+    bodyTimeMs?: number;
+    bytes: number;
+    status: "excellent" | "held" | "warning" | "critical";
+  };
+  issues: StreamWatchEvent[];
+};
+
+export type StreamWatchAbrVariantReport = {
+  label: string;
+  url: string;
+  bandwidth?: number;
+  resolution?: string;
+  segmentSequence: number;
+  localUri?: string;
+  bytes?: number;
+  actualDurationSeconds?: number;
+  firstPtsTime?: number;
+  lastPtsTime?: number;
+  firstDtsTime?: number;
+  lastDtsTime?: number;
+  keyframeCount?: number;
+  startsWithKeyframe?: boolean;
+  errors: string[];
+};
+
+export type StreamWatchAbrAlignmentReport = {
+  id: string;
+  checkedAt: string;
+  segmentSequence: number;
+  profilesAnalyzed: number;
+  status: "ok" | "warning" | "critical";
+  ptsStartDeltaSeconds?: number;
+  durationDeltaSeconds?: number;
+  variants: StreamWatchAbrVariantReport[];
+  issues: StreamWatchEvent[];
+};
+
 export type StreamWatchStatus = {
   id: string;
   sessionKey: string;
@@ -100,6 +159,8 @@ export type StreamWatchStatus = {
   totalSegmentCount?: number;
   currentChunk?: StreamWatchChunkStatus;
   recentChunks: StreamWatchChunkStatus[];
+  manifestReports: StreamWatchManifestReport[];
+  abrReports: StreamWatchAbrAlignmentReport[];
   originId?: string;
   report?: {
     jsonPath?: string;

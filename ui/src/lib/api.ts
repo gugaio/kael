@@ -615,6 +615,65 @@ export type StreamWatchChunkStream = {
   errors: string[];
 };
 
+export type StreamWatchManifestReport = {
+  id: string;
+  checkedAt: string;
+  url: string;
+  finalUrl: string;
+  playlistType: "master" | "media" | "unknown";
+  targetDuration?: number;
+  maxSegmentDuration?: number;
+  targetDurationStatus: "ok" | "critical" | "unknown";
+  mediaSequence?: number;
+  previousMediaSequence?: number;
+  mediaSequenceDelta?: number;
+  mediaSequenceExpectedDelta?: number;
+  mediaSequenceExcessDelta?: number;
+  mediaSequenceStatus: "ok" | "gap" | "stale" | "unknown";
+  discontinuityCount: number;
+  network?: {
+    httpStatus: number;
+    statusText: string;
+    headerTimeMs?: number;
+    ttfbMs: number;
+    downloadTimeMs: number;
+    bodyTimeMs?: number;
+    bytes: number;
+    status: "excellent" | "held" | "warning" | "critical";
+  };
+  issues: StreamWatchEvent[];
+};
+
+export type StreamWatchAbrVariantReport = {
+  label: string;
+  url: string;
+  bandwidth?: number;
+  resolution?: string;
+  segmentSequence: number;
+  localUri?: string;
+  bytes?: number;
+  actualDurationSeconds?: number;
+  firstPtsTime?: number;
+  lastPtsTime?: number;
+  firstDtsTime?: number;
+  lastDtsTime?: number;
+  keyframeCount?: number;
+  startsWithKeyframe?: boolean;
+  errors: string[];
+};
+
+export type StreamWatchAbrAlignmentReport = {
+  id: string;
+  checkedAt: string;
+  segmentSequence: number;
+  profilesAnalyzed: number;
+  status: "ok" | "warning" | "critical";
+  ptsStartDeltaSeconds?: number;
+  durationDeltaSeconds?: number;
+  variants: StreamWatchAbrVariantReport[];
+  issues: StreamWatchEvent[];
+};
+
 export type StreamWatch = {
   id: string;
   sessionKey: string;
@@ -634,6 +693,8 @@ export type StreamWatch = {
   totalSegmentCount?: number;
   currentChunk?: StreamWatchChunk;
   recentChunks: StreamWatchChunk[];
+  manifestReports: StreamWatchManifestReport[];
+  abrReports: StreamWatchAbrAlignmentReport[];
   originId?: string;
   report?: {
     jsonPath?: string;
@@ -826,6 +887,65 @@ const StreamWatchChunkSchema: z.ZodType<StreamWatchChunk> = z.object({
   errors: z.array(z.string()),
 });
 
+const StreamWatchManifestReportSchema: z.ZodType<StreamWatchManifestReport> = z.object({
+  id: z.string(),
+  checkedAt: z.string(),
+  url: z.string(),
+  finalUrl: z.string(),
+  playlistType: z.enum(["master", "media", "unknown"]),
+  targetDuration: z.number().optional(),
+  maxSegmentDuration: z.number().optional(),
+  targetDurationStatus: z.enum(["ok", "critical", "unknown"]),
+  mediaSequence: z.number().optional(),
+  previousMediaSequence: z.number().optional(),
+  mediaSequenceDelta: z.number().optional(),
+  mediaSequenceExpectedDelta: z.number().optional(),
+  mediaSequenceExcessDelta: z.number().optional(),
+  mediaSequenceStatus: z.enum(["ok", "gap", "stale", "unknown"]),
+  discontinuityCount: z.number(),
+  network: z.object({
+    httpStatus: z.number(),
+    statusText: z.string(),
+    headerTimeMs: z.number().optional(),
+    ttfbMs: z.number(),
+    downloadTimeMs: z.number(),
+    bodyTimeMs: z.number().optional(),
+    bytes: z.number(),
+    status: z.enum(["excellent", "held", "warning", "critical"]),
+  }).optional(),
+  issues: z.array(StreamWatchEventSchema),
+});
+
+const StreamWatchAbrVariantReportSchema: z.ZodType<StreamWatchAbrVariantReport> = z.object({
+  label: z.string(),
+  url: z.string(),
+  bandwidth: z.number().optional(),
+  resolution: z.string().optional(),
+  segmentSequence: z.number(),
+  localUri: z.string().optional(),
+  bytes: z.number().optional(),
+  actualDurationSeconds: z.number().optional(),
+  firstPtsTime: z.number().optional(),
+  lastPtsTime: z.number().optional(),
+  firstDtsTime: z.number().optional(),
+  lastDtsTime: z.number().optional(),
+  keyframeCount: z.number().optional(),
+  startsWithKeyframe: z.boolean().optional(),
+  errors: z.array(z.string()),
+});
+
+const StreamWatchAbrAlignmentReportSchema: z.ZodType<StreamWatchAbrAlignmentReport> = z.object({
+  id: z.string(),
+  checkedAt: z.string(),
+  segmentSequence: z.number(),
+  profilesAnalyzed: z.number(),
+  status: z.enum(["ok", "warning", "critical"]),
+  ptsStartDeltaSeconds: z.number().optional(),
+  durationDeltaSeconds: z.number().optional(),
+  variants: z.array(StreamWatchAbrVariantReportSchema),
+  issues: z.array(StreamWatchEventSchema),
+});
+
 const StreamWatchSchema: z.ZodType<StreamWatch> = z.object({
   id: z.string(),
   sessionKey: z.string(),
@@ -845,6 +965,8 @@ const StreamWatchSchema: z.ZodType<StreamWatch> = z.object({
   totalSegmentCount: z.number().optional(),
   currentChunk: StreamWatchChunkSchema.optional(),
   recentChunks: z.array(StreamWatchChunkSchema),
+  manifestReports: z.array(StreamWatchManifestReportSchema),
+  abrReports: z.array(StreamWatchAbrAlignmentReportSchema),
   originId: z.string().optional(),
   report: z.object({
     jsonPath: z.string().optional(),

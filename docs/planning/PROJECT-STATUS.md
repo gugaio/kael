@@ -53,6 +53,11 @@ Resumo:
 - Live watch agora probeia elementary streams de vídeo e áudio por chunk (`v:0` e `a:0`) e expõe `streams[]` com type, codec, PTS/DTS inicial/final, samples, duração, keyframes e erros; a UI renderiza esses detalhes dentro do card de chunk.
 - Adicionados deltas operacionais: `avStartPtsDeltaSeconds`/`avEndPtsDeltaSeconds` para lipsync por chunk e `previousPtsDeltaSeconds`/`previousBoundaryStatus` por stream para detectar gap/overlap/reset contra o chunk anterior.
 - Adicionado `avBoundaryDeltaSeconds`/`avBoundaryStatus` por chunk, comparando o delta de borda do áudio contra o delta de borda do vídeo para detectar lipsync drift entre chunks.
+- Watch agora expõe `manifestReports[]` com HTTP status, tempo até headers, primeiro byte, download time, bytes, target duration, max segment duration, media sequence delta e discontinuities; a UI ganhou painel `Manifest & Network`.
+- Corrigida a semântica de rede do manifesto: o VHS passa a ler o corpo via stream para separar tempo até headers, primeiro byte e download total, evitando classificar blocking reload de live playlist como TTFB puro.
+- Adicionado status de rede `held` para manifestos live que seguram a resposta por uma janela compatível com target duration e entregam o corpo rapidamente; a UI mostra `body` e `total` separadamente.
+- Recalibrada a validação de `MEDIA-SEQUENCE` por playlist: `seq delta` agora é comparado contra `elapsed/targetDuration`, e a UI mostra delta esperado/excesso; também foi removido o registro duplicado de manifesto quando a URL inicial já é media playlist.
+- Para master playlist em `profile=full` ou `allVariants=true`, o VHS gera `abrReports[]` comparando low/high bitrate no mesmo `MEDIA-SEQUENCE`, validando PTS start <= 16ms, duração <= 5ms e início em keyframe; a UI ganhou painel `ABR Alignment`.
 - Recalibrada a regra `media_sequence_gap` no VHS: agora o avanço de `MEDIA-SEQUENCE` é comparado contra `elapsed/targetDuration` com tolerância mínima/proporcional, evitando falsos positivos em polls longos como 21 segmentos em ~65s ou 56 segmentos em ~176s.
 
 Arquivos-chave:
@@ -74,6 +79,7 @@ Checklist de validacao:
 - [x] `npm --prefix ../vhs run build`
 - [x] `npm --prefix ../vhs test -- test/stream.test.ts test/watch.test.ts`
 - [x] `npm --prefix ../vhs test -- test/watch-rules.test.ts test/watch.test.ts`
+- [x] `npm --prefix ../vhs test -- test/stream.test.ts test/watch-rules.test.ts test/watch.test.ts`
 
 Pendencias:
 - Persistir/recarregar sessões live incrementais do VHS após restart, mantendo `seenSegments` e histórico recente.

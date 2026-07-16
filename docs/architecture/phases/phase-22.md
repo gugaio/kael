@@ -45,6 +45,10 @@ identificar anomalias sem precisar de player ou client de vídeo.
 - O status de `chunks`/`full` expõe `currentChunk` e `recentChunks`; a runtime UI mostra os últimos 5 chunks com fase, bytes, duração, codec, continuidade, keyframes e erros, evitando duplicar o chunk atual.
 - Cada chunk pode conter `streams[]` com probes separados por elementary stream (`v:0`, `a:0`), incluindo codec/type, PTS/DTS inicial/final, samples, duração e keyframes quando aplicável.
 - O watch calcula deltas de lipsync (`audio PTS - video PTS`) por chunk, deltas de boundary por stream contra o chunk anterior (`previousPtsDeltaSeconds` + `ok|gap|overlap|reset|unknown`) e o delta agregado de borda A/V (`avBoundaryDeltaSeconds`) para detectar drift de lipsync entre chunks.
+- O status também expõe `manifestReports[]`, com HTTP status, tempo até headers, primeiro byte, download time, bytes, target duration, max segment duration, media sequence delta e discontinuities por playlist auditada.
+- Métricas de manifesto distinguem `bodyTimeMs` do tempo total; respostas com headers/primeiro byte altos mas corpo rápido e dentro de janela compatível com live são classificadas como `held`, não como erro crítico.
+- A validação de `MEDIA-SEQUENCE` por playlist usa o intervalo real entre leituras e `targetDuration`; avanços grandes só viram `gap` quando excedem o avanço esperado mais tolerância.
+- Em master playlists, `profile=full` ou `allVariants=true` habilita `abrReports[]`: o VHS seleciona low/high bitrate, baixa o mesmo `MEDIA-SEQUENCE` comum, probeia vídeo e valida PTS start <= 16ms, duração <= 5ms e GOP começando em keyframe.
 - A regra `media_sequence_gap` compara o avanço do `MEDIA-SEQUENCE` contra `elapsed/targetDuration`; assim polls atrasados normais, como 21 segmentos em ~65s com `targetDuration=3.2`, não viram falso gap.
 - A UI expõe `/streams/watch` para criação/listagem e `/streams/watch/:watchId` para acompanhamento com cards runtime.
 

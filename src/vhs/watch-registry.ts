@@ -96,6 +96,8 @@ export class HlsStreamMonitorService {
       downloadedSegmentCount: 0,
       analyzedSegmentCount: 0,
       recentChunks: [],
+      manifestReports: [],
+      abrReports: [],
       events: [],
       running: true,
       rootDir: path.join(this.rootDir, id),
@@ -374,6 +376,7 @@ export class HlsStreamMonitorService {
   }
 
   private toKaelStatus(status: HlsWatchStatus): StreamWatchStatus {
+    const richStatus = status as HlsWatchStatus & Pick<StreamWatchStatus, "manifestReports" | "abrReports">;
     return {
       ...status,
       sessionKey: this.sessionKeys.get(status.id) ?? "unknown",
@@ -384,6 +387,8 @@ export class HlsStreamMonitorService {
       downloadedSegmentCount: status.downloadedSegmentCount ?? 0,
       analyzedSegmentCount: status.analyzedSegmentCount ?? 0,
       recentChunks: status.recentChunks ?? [],
+      manifestReports: richStatus.manifestReports ?? [],
+      abrReports: richStatus.abrReports ?? [],
     };
   }
 
@@ -421,6 +426,8 @@ export class HlsStreamMonitorService {
           parsed.completedAt = parsed.completedAt ?? new Date().toISOString();
         }
         parsed.recentChunks ??= [];
+        parsed.manifestReports ??= [];
+        parsed.abrReports ??= [];
         parsed.rootDir = path.join(this.rootDir, entry.name);
         this.richSessions.set(parsed.id, parsed);
       } catch {

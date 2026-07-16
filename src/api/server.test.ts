@@ -811,6 +811,8 @@ describe("API integration", () => {
       downloadedSegmentCount: 0,
       analyzedSegmentCount: 0,
       recentChunks: [],
+      manifestReports: [],
+      abrReports: [],
       events: [],
       running: true,
     };
