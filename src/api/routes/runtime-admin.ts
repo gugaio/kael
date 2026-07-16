@@ -19,7 +19,7 @@ export function registerRuntimeAdminRoutes(server: FastifyInstance, deps: ApiRou
           : undefined;
       const parsedLimit = Number(request.query.limit ?? "100");
       const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 100;
-      const approvals = await app.shell.listApprovals({ status, limit });
+      const approvals = await app.agent.runtimes.shell.listApprovals({ status, limit });
       return { ok: true, approvals };
     },
   );
@@ -31,7 +31,7 @@ export function registerRuntimeAdminRoutes(server: FastifyInstance, deps: ApiRou
       if (!approvalId) {
         throw new ApiError(400, "BAD_REQUEST", "approvalId is required");
       }
-      const approval = await app.shell.resolveApproval(approvalId, "approved");
+      const approval = await app.agent.runtimes.shell.resolveApproval(approvalId, "approved");
       if (!approval) {
         throw new ApiError(404, "NOT_FOUND", "approval not found");
       }
@@ -47,7 +47,7 @@ export function registerRuntimeAdminRoutes(server: FastifyInstance, deps: ApiRou
       if (!approvalId) {
         throw new ApiError(400, "BAD_REQUEST", "approvalId is required");
       }
-      const approval = await app.shell.resolveApproval(approvalId, "denied");
+      const approval = await app.agent.runtimes.shell.resolveApproval(approvalId, "denied");
       if (!approval) {
         throw new ApiError(404, "NOT_FOUND", "approval not found");
       }
@@ -61,10 +61,10 @@ export function registerRuntimeAdminRoutes(server: FastifyInstance, deps: ApiRou
     async (request) => {
       const name = request.query.name?.trim();
       if (name) {
-        const found = await app.mcp.getServer(name);
+        const found = await app.agent.runtimes.mcp.getServer(name);
         return { ok: true, servers: found ? [found] : [] };
       }
-      const servers = await app.mcp.listServers();
+      const servers = await app.agent.runtimes.mcp.listServers();
       return { ok: true, servers };
     },
   );
@@ -91,7 +91,7 @@ export function registerRuntimeAdminRoutes(server: FastifyInstance, deps: ApiRou
     if (!target) {
       throw new ApiError(400, "BAD_REQUEST", "target is required");
     }
-    const serverEntry = await app.mcp.upsertServer({
+    const serverEntry = await app.agent.runtimes.mcp.upsertServer({
       name,
       transport,
       target,
@@ -118,7 +118,7 @@ export function registerRuntimeAdminRoutes(server: FastifyInstance, deps: ApiRou
           : undefined;
       const parsedLimit = Number(request.query.limit ?? "100");
       const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 100;
-      const approvals = await app.mcp.listApprovals({ status, limit });
+      const approvals = await app.agent.runtimes.mcp.listApprovals({ status, limit });
       return { ok: true, approvals };
     },
   );
@@ -130,7 +130,7 @@ export function registerRuntimeAdminRoutes(server: FastifyInstance, deps: ApiRou
       if (!approvalId) {
         throw new ApiError(400, "BAD_REQUEST", "approvalId is required");
       }
-      const approval = await app.mcp.resolveApproval(approvalId, "approved");
+      const approval = await app.agent.runtimes.mcp.resolveApproval(approvalId, "approved");
       if (!approval) {
         throw new ApiError(404, "NOT_FOUND", "approval not found");
       }
@@ -145,7 +145,7 @@ export function registerRuntimeAdminRoutes(server: FastifyInstance, deps: ApiRou
       if (!approvalId) {
         throw new ApiError(400, "BAD_REQUEST", "approvalId is required");
       }
-      const approval = await app.mcp.resolveApproval(approvalId, "denied");
+      const approval = await app.agent.runtimes.mcp.resolveApproval(approvalId, "denied");
       if (!approval) {
         throw new ApiError(404, "NOT_FOUND", "approval not found");
       }
@@ -156,7 +156,7 @@ export function registerRuntimeAdminRoutes(server: FastifyInstance, deps: ApiRou
   server.get<{ Querystring: { status?: string; limit?: string } }>(
     "/exec/sessions",
     async (request) => {
-      const list = await app.shell.process({
+      const list = await app.agent.runtimes.shell.process({
         sessionKey: "api.exec.sessions",
         action: "list",
       });
@@ -187,7 +187,7 @@ export function registerRuntimeAdminRoutes(server: FastifyInstance, deps: ApiRou
       const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0;
       const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : 8000;
 
-      const result = await app.shell.process({
+      const result = await app.agent.runtimes.shell.process({
         sessionKey: "api.exec.sessions",
         action: "log",
         sessionId,

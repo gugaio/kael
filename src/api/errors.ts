@@ -9,14 +9,18 @@ export type ApiErrorCode =
   | "INTERNAL_ERROR";
 
 export class ApiError extends Error {
+  readonly cause?: unknown;
+
   constructor(
     readonly status: number,
     readonly code: ApiErrorCode,
     message: string,
     readonly details?: unknown,
+    cause?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
+    this.cause = cause;
   }
 }
 
@@ -45,7 +49,13 @@ export function asApiError(error: unknown): ApiError {
     return new ApiError(400, "BAD_REQUEST", error.message);
   }
   const message = error instanceof Error ? error.message : String(error);
-  return new ApiError(500, "INTERNAL_ERROR", "Internal server error", {
-    cause: message,
-  });
+  return new ApiError(
+    500,
+    "INTERNAL_ERROR",
+    "Internal server error",
+    {
+      cause: message,
+    },
+    error,
+  );
 }

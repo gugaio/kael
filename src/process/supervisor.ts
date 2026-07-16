@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import type { ChildProcessByStdio } from "node:child_process";
 import type { Readable, Writable } from "node:stream";
-import type { ProcessRunner } from "../tools/system/process-runner.js";
+import type { ProcessRunner } from "./runner.js";
 
 export type ProcessSpawnOptions = {
   timeoutMs: number;

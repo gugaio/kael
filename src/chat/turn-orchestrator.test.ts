@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgentEngine, EngineTurnInput, EngineTurnOutput } from "../agents/types.js";
-import type { AgentRuntime } from "../runtime/agent-runtime.js";
+import type { AgentContext } from "../agents/context.js";
 import type { SessionMessage } from "../types.js";
 import { TurnOrchestrator } from "./turn-orchestrator.js";
 
@@ -14,7 +14,7 @@ function createMessage(role: SessionMessage["role"], content: string, idx: numbe
   };
 }
 
-function createToolingStub(): AgentRuntime {
+function createToolingStub(): AgentContext {
   return {
     video: {
       startTranscode: async () => {
@@ -213,7 +213,7 @@ function createToolingStub(): AgentRuntime {
       planExecuteNext: async () => ({ ok: false, reason: "no_next_step", message: "none" }),
       planReconcile: async () => ({ scannedPlans: 0, updatedPlans: 0, updatedSteps: 0 }),
     },
-  } as unknown as AgentRuntime;
+  } as unknown as AgentContext;
 }
 
 describe("TurnOrchestrator compaction", () => {
@@ -344,7 +344,7 @@ describe("TurnOrchestrator compaction", () => {
     await orchestrator.runConversationTurn({
       sessionKey: "s1",
       message: "mensagem atual",
-      runtime: createToolingStub(),
+      context: createToolingStub(),
     });
 
     // run() nao deve chamar appendMessage (compaction e feita externamente)

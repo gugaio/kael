@@ -1,8 +1,7 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { MediaInspector, PlaybackTriageService } from "@gugaio/vhs";
-import type { StreamerRuntime } from "../../runtime/agent-runtime.js";
+import type { StreamerRuntime, StreamMonitorRuntime } from "../../agents/context.js";
 import type { StreamServeManager } from "../../video/serve-manager.js";
-import type { HlsStreamMonitorService } from "../../vhs/watch-registry.js";
 import { runStreamChunkCommand } from "../../ffmpeg/chunk-command.js";
 
 type TextBlock = {
@@ -14,7 +13,7 @@ export function createVideoPiTools(params: {
   sessionKey: string;
   videoInspect: Pick<MediaInspector, "inspectHls" | "probe">;
   playbackTriage: PlaybackTriageService;
-  streamMonitor: HlsStreamMonitorService;
+  streamMonitor: StreamMonitorRuntime;
   streamer: StreamerRuntime;
   serveManager: StreamServeManager;
   textResult: (text: string) => TextBlock[];

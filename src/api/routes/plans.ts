@@ -1,12 +1,18 @@
 import type { FastifyInstance } from "fastify";
 import { ApiError } from "../errors.js";
 import type { ApiRouteDeps } from "../route-deps.js";
-import { createPlannerExecuteRuntime, createPlannerReconcileRuntime } from "../../planner/runtime.js";
+import { createPlannerExecutionContext, createPlannerReconcileContext } from "../../planner/execution-context.js";
 
 export function registerPlanRoutes(server: FastifyInstance, deps: ApiRouteDeps): void {
   const { app, reconcilePlansNow } = deps;
-  const plannerExecuteRuntime = createPlannerExecuteRuntime(app);
-  const plannerReconcileRuntime = createPlannerReconcileRuntime(app);
+  const plannerExecutionContext = createPlannerExecutionContext({
+    jobs: app.agent.video.jobs,
+    shell: app.agent.runtimes.shell,
+  });
+  const plannerReconcileContext = createPlannerReconcileContext({
+    jobs: app.agent.video.jobs,
+    shell: app.agent.runtimes.shell,
+  });
 
   server.get<{
     Querystring: {
@@ -26,7 +32,7 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ApiRouteDeps):
         : undefined;
     const parsedLimit = Number(request.query.limit ?? "50");
     const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 50;
-    const plans = app.planner.list({
+    const plans = app.agent.services.planner.list({
       sessionKey: request.query.sessionKey?.trim(),
       status,
       limit,
@@ -39,7 +45,7 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ApiRouteDeps):
     if (!planId) {
       throw new ApiError(400, "BAD_REQUEST", "planId is required");
     }
-    const plan = app.planner.get(planId);
+    const plan = app.agent.services.planner.get(planId);
     if (!plan) {
       throw new ApiError(404, "NOT_FOUND", `plan ${planId} not found`);
     }
@@ -56,7 +62,7 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ApiRouteDeps):
     const sessionKey = request.body.sessionKey?.trim() || "main";
     const title = request.body.title?.trim() || "Plano de execucao";
     const steps = Array.isArray(request.body.steps) ? request.body.steps : [];
-    const plan = await app.planner.create({ sessionKey, title, steps });
+    const plan = await app.agent.services.planner.create({ sessionKey, title, steps });
     return { ok: true, plan };
   });
 
@@ -74,7 +80,7 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ApiRouteDeps):
     }
     const maxStepsRaw = Number(request.body.maxSteps);
     const maxSteps = Number.isFinite(maxStepsRaw) && maxStepsRaw > 0 ? Math.floor(maxStepsRaw) : undefined;
-    const plan = await app.planner.generate({
+    const plan = await app.agent.services.planner.generate({
       sessionKey,
       objective,
       maxSteps,
@@ -111,7 +117,7 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ApiRouteDeps):
       throw new ApiError(400, "BAD_REQUEST", "valid step status is required");
     }
 
-    const plan = await app.planner.updateStep({
+    const plan = await app.agent.services.planner.updateStep({
       planId,
       stepIndex: Math.floor(stepIndex),
       status,
@@ -147,11 +153,11 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ApiRouteDeps):
     if (!planId) {
       throw new ApiError(400, "BAD_REQUEST", "planId is required");
     }
-    const result = await app.planner.executeNext({
+    const result = await app.agent.services.planner.executeNext({
       planId,
       sessionKey: request.body.sessionKey?.trim(),
       inputs: request.body.inputs,
-      runtime: plannerExecuteRuntime,
+      runtime: plannerExecutionContext,
     });
 
     await reconcilePlansNow({ planId, limit: 1 });
@@ -169,7 +175,7 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ApiRouteDeps):
     if (!planId) {
       throw new ApiError(400, "BAD_REQUEST", "planId is required");
     }
-    const plan = await app.planner.cancelPlan({
+    const plan = await app.agent.services.planner.cancelPlan({
       planId,
       note: request.body.note,
     });
@@ -188,10 +194,10 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ApiRouteDeps):
     const planId = request.body.planId?.trim();
     const limitRaw = Number(request.body.limit);
     const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : undefined;
-    const result = await app.planner.reconcile({
+    const result = await app.agent.services.planner.reconcile({
       planId,
       limit,
-      runtime: plannerReconcileRuntime,
+      runtime: plannerReconcileContext,
     });
     return { ok: true, ...result };
   });

@@ -1,6 +1,16 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { unwrapCommand } from "./wrapper-resolution.js";
+import { validateCommandAgainstProfile } from "./safe-bin-profiles.js";
+import { analyzeCommand } from "./command-analyzer.js";
+
+type UnwrappedCommand = {
+  wrappers: unknown[];
+  command: string;
+  args: string[];
+  fullCommand: string;
+};
 
 export type ExecSecurity = "deny" | "allowlist" | "full";
 export type ExecAsk = "off" | "on-miss" | "always";
@@ -51,14 +61,50 @@ export type ExecApprovalStoreDefaults = {
 
 const DEFAULT_PENDING_TTL_MS = 10 * 60 * 1000;
 const MAX_APPROVAL_HISTORY = 300;
-const UNSUPPORTED_ALLOWLIST_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
-  { pattern: /&&|\|\|/, reason: "operadores logicos (&&, ||) nao sao permitidos em allowlist" },
-  { pattern: /[;<>()]/, reason: "encadeamento/subshell nao e permitido em allowlist" },
-  { pattern: /(^|[^\\])`/, reason: "backticks nao sao permitidos em allowlist" },
-  { pattern: /\$\(|\$\{/, reason: "substituicao de shell nao e permitida em allowlist" },
-  { pattern: /(^|[^\\])[<>]/, reason: "redirecionamento nao e permitido em allowlist" },
-  { pattern: /\r|\n/, reason: "multiline nao e permitido em allowlist" },
-];
+
+/**
+ * Detecta padrões de ofuscação comuns em comandos shell.
+ * Retorna descrição do problema ou null se nada for detectado.
+ */
+
+/**
+ * Analisa o comando real após desempacotar wrappers shell.
+ * Usado pela allowlist para enxergar `apt` em vez de `sudo apt`.
+ */
+export function analyzeCommandWithWrappers(input: string): {
+  unwrapped: UnwrappedCommand | null;
+  analysis: ReturnType<typeof analyzeCommand>;
+} {
+  const analysis = analyzeCommand(input);
+  const unwrapped = unwrapCommand(input);
+  const unwrappedAnalysis = unwrapped ? analyzeCommand(unwrapped.fullCommand) : analysis;
+  return { unwrapped, analysis: unwrappedAnalysis };
+}
+
+export function detectObfuscation(command: string): string | null {
+  const lower = command.toLowerCase();
+
+  if (
+    /base64\s+(-d|--decode).*\|\s*(ba?sh?)\b/.test(lower) ||
+    /\|\s*base64\s+(-d|--decode)\s*\|\s*(ba?sh?)\b/.test(lower)
+  ) {
+    return "decode-and-execute via base64|shell detectado";
+  }
+
+  if (/\|\s*(xxd\s+-r|od\b).*\|\s*(ba?sh?)\b/.test(lower)) {
+    return "decode-and-execute via xxd/od|shell detectado";
+  }
+
+  if (/^\s*eval\b/.test(lower) || /\|\s*eval\b/.test(lower)) {
+    return "uso de eval detectado";
+  }
+
+  if (/\b(ba?["']s?h?["']|["']ba?sh?["']|b["']a["']sh)\b/i.test(command)) {
+    return "ofuscacao de binario shell por aspas detectada";
+  }
+
+  return null;
+}
 
 function normalizeAllowlist(allowlist: string[]): string[] {
   return Array.from(
@@ -141,46 +187,21 @@ function sanitizeFile(raw: unknown, defaults: ExecApprovalStoreDefaults): ExecAp
 }
 
 export function extractCommandBins(command: string): string[] {
-  const normalized = command.trim();
-  if (!normalized) {
-    return [];
-  }
-
-  const segments = normalized
-    .split(/\|/g)
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
-
-  const bins: string[] = [];
-  for (const segment of segments) {
-    const firstToken = segment.split(/\s+/)[0]?.trim();
-    if (!firstToken) {
-      continue;
-    }
-    const base = path.basename(firstToken).toLowerCase();
-    if (base) {
-      bins.push(base);
-    }
-  }
-
-  return Array.from(new Set(bins));
+  return analyzeCommand(command).bins;
 }
 
 function analyzeAllowlistCommand(command: string): { ok: true; bins: string[] } | { ok: false; reason: string } {
-  const normalized = command.trim();
-  if (!normalized) {
-    return { ok: false, reason: "comando vazio" };
+  const analysis = analyzeCommand(command);
+  if (!analysis.ok) {
+    return { ok: false, reason: analysis.reason ?? "comando nao permitido em allowlist" };
   }
-  for (const rule of UNSUPPORTED_ALLOWLIST_PATTERNS) {
-    if (rule.pattern.test(normalized)) {
-      return { ok: false, reason: rule.reason };
-    }
+  if (analysis.hasPipeToShell) {
+    return { ok: false, reason: "pipe para shell nao permitido em allowlist" };
   }
-  const bins = extractCommandBins(normalized);
-  if (bins.length === 0) {
+  if (analysis.bins.length === 0) {
     return { ok: false, reason: "nao foi possivel identificar comando executavel" };
   }
-  return { ok: true, bins };
+  return { ok: true, bins: analysis.bins };
 }
 
 function sortByCreatedDesc(entries: ExecApprovalEntry[]): ExecApprovalEntry[] {
@@ -232,7 +253,11 @@ export class ExecApprovalStore {
     return sortByCreatedDesc(filtered).slice(0, limit);
   }
 
-  async resolveApproval(approvalId: string, decision: "approved" | "denied"): Promise<ExecApprovalEntry | null> {
+  async resolveApproval(
+    approvalId: string,
+    decision: "approved" | "denied",
+    opts?: { allowAlways?: boolean },
+  ): Promise<ExecApprovalEntry | null> {
     return this.withLock(async () => {
       const current = await this.readCurrentUnlocked();
       const idx = current.pending.findIndex((entry) => entry.id === approvalId);
@@ -253,8 +278,22 @@ export class ExecApprovalStore {
 
       const nextEntries = [...current.pending];
       nextEntries[idx] = decided;
+
+      // Se aprovado com allowAlways, persiste os bins do comando na allowlist.
+      // Usa o comando desempacotado para capturar o bin real (ex: `apt` em vez de `sudo apt`).
+      let nextAllowlist = current.allowlist;
+      if (decision === "approved" && opts?.allowAlways) {
+        const { analysis: cmdAnalysis } = analyzeCommandWithWrappers(target.command);
+        const analysis = analyzeAllowlistCommand(cmdAnalysis.command);
+        if (analysis.ok && analysis.bins.length > 0) {
+          const merged = normalizeAllowlist([...current.allowlist, ...analysis.bins]);
+          nextAllowlist = merged;
+        }
+      }
+
       await this.writeCurrentUnlocked({
         ...current,
+        allowlist: nextAllowlist,
         pending: nextEntries.slice(-MAX_APPROVAL_HISTORY),
         updatedAt: new Date().toISOString(),
       });
@@ -312,12 +351,35 @@ export class ExecApprovalStore {
       const current = await this.readCurrentUnlocked();
       const security = params.securityOverride ?? current.security;
       const ask = params.askOverride ?? current.ask;
-      const allowlistAnalysis = analyzeAllowlistCommand(params.command);
-      const bins = allowlistAnalysis.ok ? allowlistAnalysis.bins : [];
 
       if (security === "deny") {
         return { status: "denied", reason: "Exec bloqueado: security=deny" };
       }
+
+      // Obfuscação é bloqueada independentemente de security level.
+      const obfuscationReason = detectObfuscation(params.command);
+      if (obfuscationReason) {
+        return {
+          status: "denied",
+          reason: `Comando bloqueado: ${obfuscationReason}`,
+        };
+      }
+
+      // Desempacota wrappers shell (sudo, timeout, nice, etc.)
+      // para allowlist enxergar o comando real em vez do wrapper.
+      const { analysis: cmdAnalysis } = analyzeCommandWithWrappers(params.command);
+
+      // Pipe-to-shell é bloqueado independentemente de security level
+      if (cmdAnalysis.hasPipeToShell) {
+        return {
+          status: "denied",
+          reason: "Comando bloqueado: pipe para shell detectado (ex: curl | bash)",
+        };
+      }
+
+      const commandForAnalysis = cmdAnalysis.command;
+      const allowlistAnalysis = analyzeAllowlistCommand(commandForAnalysis);
+      const bins = allowlistAnalysis.ok ? allowlistAnalysis.bins : [];
 
       const allowedByAllowlist =
         security === "full" ||
@@ -331,6 +393,14 @@ export class ExecApprovalStore {
           : "comando requer aprovacao por politica ask";
 
       if (allowedByAllowlist && ask !== "always") {
+        // Valida contra perfil de segurança do binário
+        const profileResult = validateCommandAgainstProfile(params.command);
+        if (!profileResult.ok) {
+          return {
+            status: "denied",
+            reason: `Perfil de segurança bloqueou: ${profileResult.reason}`,
+          };
+        }
         return null;
       }
 

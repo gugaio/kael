@@ -33,7 +33,7 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
         idempotencyKey,
         signature: stableStringify({ sessionKey, inputPath, outputPath, args }),
         execute: async () => {
-          const job = await app.ffmpeg.startTranscode({
+          const job = await app.agent.video.ffmpeg.startTranscode({
             sessionKey,
             inputPath,
             outputPath,
@@ -76,7 +76,7 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
         idempotencyKey,
         signature: stableStringify({ sessionKey, input }),
         execute: async () => {
-          const job = await app.ffmpeg.startPlayVlc({ sessionKey, input });
+          const job = await app.agent.video.ffmpeg.startPlayVlc({ sessionKey, input });
           return { ok: true, job };
         },
       });
@@ -118,7 +118,7 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
         idempotencyKey,
         signature: stableStringify({ sessionKey, inputPath, outputPlaylistPath, segmentTime }),
         execute: async () => {
-          const job = await app.ffmpeg.startConvertHls({
+          const job = await app.agent.video.ffmpeg.startConvertHls({
             sessionKey,
             inputPath,
             outputPlaylistPath,
@@ -165,7 +165,7 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
         idempotencyKey,
         signature: stableStringify({ sessionKey, streamUrl, outputPath, durationSeconds }),
         execute: async () => {
-          const job = await app.ffmpeg.startCaptureStream({
+          const job = await app.agent.video.ffmpeg.startCaptureStream({
             sessionKey,
             streamUrl,
             outputPath,
@@ -186,10 +186,10 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
     }
   });
 
-  server.get("/jobs", async () => ({ ok: true, jobs: app.jobs.listJobs() }));
+  server.get("/jobs", async () => ({ ok: true, jobs: app.agent.video.jobs.listJobs() }));
 
   server.get<{ Params: { jobId: string } }>("/jobs/:jobId", async (request) => {
-    const job = app.jobs.getJob(request.params.jobId);
+    const job = app.agent.video.jobs.getJob(request.params.jobId);
     if (!job) {
       throw new ApiError(404, "NOT_FOUND", "job not found");
     }
@@ -197,7 +197,7 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
   });
 
   server.get<{ Params: { jobId: string } }>("/jobs/:jobId/log", async (request) => {
-    const log = await app.jobs.getJobLog(request.params.jobId);
+    const log = await app.agent.video.jobs.getJobLog(request.params.jobId);
     if (log === null) {
       throw new ApiError(404, "NOT_FOUND", "job not found");
     }
@@ -205,7 +205,7 @@ export function registerJobAndScheduleRoutes(server: FastifyInstance, deps: ApiR
   });
 
   server.post<{ Params: { jobId: string } }>("/jobs/:jobId/cancel", async (request) => {
-    const result = await app.jobs.cancelJob(request.params.jobId);
+    const result = await app.agent.video.jobs.cancelJob(request.params.jobId);
     if (!result.job) {
       throw new ApiError(404, "NOT_FOUND", "job not found");
     }

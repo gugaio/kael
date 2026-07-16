@@ -11,16 +11,16 @@ export function registerChatAndLiveRoutes(server: FastifyInstance, deps: ApiRout
 
   server.get("/health", async () => {
     const version = process.env.npm_package_version ?? "0.1.0";
-    const sessions = await app.sessions.countSessions();
+    const sessions = await app.agent.core.sessions.countSessions();
     const schedules = app.automation.listSchedules();
-    const jobsByStatus = app.jobs.getStatusCounts();
-    const runtimeJobs = app.jobs.getRuntimeStats();
+    const jobsByStatus = app.agent.video.jobs.getStatusCounts();
+    const runtimeJobs = app.agent.video.jobs.getRuntimeStats();
     const chatRouting = app.chat.getRoutingTelemetrySnapshot();
     const engineRuntime = app.chat.getEngineRuntimeTelemetrySnapshot();
     const mediaRuntime = app.chat.getMediaRuntimeTelemetrySnapshot();
     const browserRuntime = app.chat.getBrowserRuntimeTelemetrySnapshot();
     const skillsRuntime = app.chat.getSkillsRuntimeTelemetrySnapshot();
-    const mcpRuntime = app.mcp.getRuntimeTelemetrySnapshot();
+    const mcpRuntime = app.agent.runtimes.mcp.getRuntimeTelemetrySnapshot();
     const emailIngest = app.emailIngest?.getRuntimeTelemetrySnapshot() ?? null;
 
     return {
@@ -50,7 +50,7 @@ export function registerChatAndLiveRoutes(server: FastifyInstance, deps: ApiRout
         mcpRuntime,
         emailIngest,
         edgeRuntime: {
-          connectedClients: app.edge.listClients().length,
+          connectedClients: app.agent.runtimes.edge.listClients().length,
         },
       },
     };

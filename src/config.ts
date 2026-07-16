@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import { expandHome, loadGlobalConfig } from "./global-config.js";
-import type { ExecAsk, ExecSecurity } from "./tools/system/shell-approvals.js";
+import type { ExecAsk, ExecSecurity } from "./shell/approvals.js";
 
 export type EngineMode = "simple" | "pi" | "hybrid";
 
@@ -59,6 +59,10 @@ export type KaelConfig = {
     maxTimeoutMs: number;
     maxOutputChars: number;
     approvalWaitMs: number;
+    /** Milissegundos entre SIGTERM e SIGKILL ao encerrar processos. */
+    killGraceMs: number;
+    /** Milissegundos a aguardar antes de fazer background automático (0 = desligado). */
+    defaultYieldMs: number;
     security: ExecSecurity;
     ask: ExecAsk;
     allowlist: string[];
@@ -617,6 +621,24 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       ? Math.floor(execApprovalWaitRaw)
       : defaultExecApprovalWaitMs;
 
+  const defaultExecKillGraceMs =
+    (globalConfig?.defaults.shell as { killGraceMs?: number } | undefined)?.killGraceMs ?? 3_000;
+  const execKillGraceRaw = Number(
+    process.env.KAEL_EXEC_KILL_GRACE_MS ?? String(defaultExecKillGraceMs),
+  );
+  const shellKillGraceMs =
+    Number.isFinite(execKillGraceRaw) && execKillGraceRaw >= 0
+      ? Math.floor(execKillGraceRaw)
+      : defaultExecKillGraceMs;
+
+  const defaultExecYieldMs =
+    (globalConfig?.defaults.shell as { defaultYieldMs?: number } | undefined)?.defaultYieldMs ?? 0;
+  const execYieldRaw = Number(process.env.KAEL_EXEC_YIELD_MS ?? String(defaultExecYieldMs));
+  const shellDefaultYieldMs =
+    Number.isFinite(execYieldRaw) && execYieldRaw >= 0
+      ? Math.floor(execYieldRaw)
+      : defaultExecYieldMs;
+
   const workspaceRoot = path.resolve(
     process.env.KAEL_EXEC_WORKSPACE_ROOT?.trim() || globalConfig?.defaults.shell?.workspaceRoot || cwd,
   );
@@ -908,6 +930,8 @@ export async function loadConfig(cwd = process.cwd()): Promise<KaelConfig> {
       maxTimeoutMs,
       maxOutputChars,
       approvalWaitMs,
+      killGraceMs: shellKillGraceMs,
+      defaultYieldMs: shellDefaultYieldMs,
       security,
       ask,
       allowlist,

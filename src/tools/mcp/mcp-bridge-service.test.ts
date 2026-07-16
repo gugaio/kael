@@ -5,7 +5,7 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
 import { McpBridgeService } from "./mcp-bridge-service.js";
-import type { ProcessRunner } from "../system/process-runner.js";
+import type { ProcessRunner } from "../../process/runner.js";
 
 class FakeChildProcess extends EventEmitter {
   readonly stdin = new PassThrough();

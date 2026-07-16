@@ -37,26 +37,26 @@ export async function buildLiveState(app: KaelApp): Promise<{
   signatures: Record<LiveResource, string>;
   summary: LiveSyncEvent["summary"];
 }> {
-  const jobs = app.jobs.listJobs();
-  const plans = app.planner.list({ limit: 100 });
+  const jobs = app.agent.video.jobs.listJobs();
+  const plans = app.agent.services.planner.list({ limit: 100 });
   const schedules = app.automation.listSchedules();
-  const approvals = await app.shell.listApprovals({ status: "open", limit: 100 });
-  const mcpServers = await app.mcp.listServers();
-  const mcpApprovals = await app.mcp.listApprovals({ status: "open", limit: 100 });
-  const execSessionsResult = await app.shell.process({
+  const approvals = await app.agent.runtimes.shell.listApprovals({ status: "open", limit: 100 });
+  const mcpServers = await app.agent.runtimes.mcp.listServers();
+  const mcpApprovals = await app.agent.runtimes.mcp.listApprovals({ status: "open", limit: 100 });
+  const execSessionsResult = await app.agent.runtimes.shell.process({
     sessionKey: "api.events",
     action: "list",
   });
   const execSessions = execSessionsResult.ok ? execSessionsResult.sessions ?? [] : [];
-  const sessions = await app.sessions.countSessions();
-  const jobsByStatus = app.jobs.getStatusCounts();
-  const runtimeJobs = app.jobs.getRuntimeStats();
+  const sessions = await app.agent.core.sessions.countSessions();
+  const jobsByStatus = app.agent.video.jobs.getStatusCounts();
+  const runtimeJobs = app.agent.video.jobs.getRuntimeStats();
   const chatRouting = app.chat.getRoutingTelemetrySnapshot();
   const engineRuntime = app.chat.getEngineRuntimeTelemetrySnapshot();
   const mediaRuntime = app.chat.getMediaRuntimeTelemetrySnapshot();
   const browserRuntime = app.chat.getBrowserRuntimeTelemetrySnapshot();
   const skillsRuntime = app.chat.getSkillsRuntimeTelemetrySnapshot();
-  const mcpRuntime = app.mcp.getRuntimeTelemetrySnapshot();
+  const mcpRuntime = app.agent.runtimes.mcp.getRuntimeTelemetrySnapshot();
   const emailIngest = app.emailIngest?.getRuntimeTelemetrySnapshot() ?? null;
 
   const healthSignature = stableStringify({

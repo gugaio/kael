@@ -1,148 +1,120 @@
 # Bootstrap
 
-Fabrica de runtimes do Kael. Modulo responsavel por instanciar e conectar todos os servicos do sistema a partir da configuracao centralizada (`KaelConfig`).
+Composição explícita do Kael a partir de fases pequenas. Não há loader automático:
+`createKaelApp()` chama cada módulo em ordem e passa as dependências de forma
+visível.
 
 ## Arquitetura
 
 ```
-                        KaelConfig
-                            |
-                            v
-          +-----------------------------------+
-          |       bootstrap/runtime.ts         |
-          |     (fabrica de runtimes)          |
-          +-----------------------------------+
-                            |
-      +--------+--------+---+---+--------+--------+--------+
-      |        |        |   |   |        |        |        |
-      v        v        v   v   v        v        v        v
-  +-------+ +-----+ +----+ +--+ +------+ +--------+ +----+ +------+
-  | Video | |Shell| |MCP| |Mem| |Worksp| |Browser | |Re- | |Plan- |
-  |       | |     | |    | |   | |ace   | |        | |search|ner  |
-  +---+---+ +-----+ +----+ +-+-+ +------+ +--------+ +----+ +------+
-      |                     |
-      v                     v
-  +-------+            +--------+
-  |Media  |            |KaelApp |
-  +-------+            +--------+
+KaelConfig
+   |
+   v
+bootstrap/modules/core.ts
+   |-- config
+   |-- sessions
+   `-- jobs
+        |
+        v
+bootstrap/modules/video.ts
+   |-- ffmpeg
+   |-- VHS streamer/playback/inspect
+   |-- stream monitor
+   |-- media artifacts
+   `-- serve manager
+        |
+        +--> bootstrap/modules/services.ts
+        |      |-- memory
+        |      |-- workspace
+        |      |-- research
+        |      |-- planner
+        |      `-- skills
+        |
+        +--> bootstrap/modules/agent-core.ts
+        |      |-- shell runtime
+        |      |-- MCP runtime
+        |      |-- edge runtime
+        |      `-- browser runtime
+        |
+        +--> bootstrap/modules/media.ts
+        |      |-- media understanding
+        |      |-- image generation
+        |      `-- video generation
+        |
+        +--> bootstrap/modules/chat.ts
+        |      |-- engine
+        |      |-- turn orchestrator
+        |      |-- AgentContext
+        |      `-- ChatService
+        |
+        `--> bootstrap/modules/automation.ts
+               |-- heartbeat
+               |-- scheduler
+               `-- email ingress
 ```
 
-## Funcoes de fabrica
+## Módulos
 
-### `createVideoRuntime(config, jobStore)`
+### `core.ts`
 
-Instancia a pipeline de vídeo: jobs e artefatos do Kael, mais as operações
-determinísticas fornecidas por `@gugaio/vhs`.
+Carrega `KaelConfig`, inicializa `SessionStore`, `JobStore` e `JobService`.
+`JobService` fica aqui porque é infraestrutura genérica de jobs/processos; vídeo
+apenas consome esse serviço para criar os jobs ffmpeg.
 
-**Retorno:**
-| Campo | Tipo | Responsabilidade |
-|-------|------|------------------|
-| `jobs` | `JobService` | Fila e lifecycle genérico de jobs (usa `ProcessSupervisor`) |
-| `ffmpeg` | `createFfmpegJobs()` | Validação e comandos ffmpeg/VLC de baixo nível |
-| `videoInspect` | `MediaInspector` (VHS) | Probe/inspeção de mídia e HLS |
-| `mediaArtifacts` | `MediaArtifactsService` | Persistência de artifacts de imagem/vídeo |
+### `video.ts`
 
-**Cadeia de dependencias:**
-```
-LocalProcessRunner -> ProcessSupervisor -> JobService <- createFfmpegJobs
-MediaArtifactsService (init cria diretorio)
-```
+Monta as capacidades de vídeo: `ffmpeg`, VHS (`inspect`, `stream`, `playback`),
+`HlsStreamMonitorService`, `MediaArtifactsService` e `StreamServeManager`.
 
-```typescript
-const { jobs, ffmpeg, videoInspect, streamer } = await createVideoRuntime(config, jobStore);
-```
+O módulo expõe um contrato `streamer` estável para o Kael. Quando a versão atual
+do VHS usa `loadOrigin`, o adapter preserva `inspectOrigin` como nome interno do
+Kael.
 
-### `createShellRuntime(config)`
+### `agent-core.ts`
 
-Instancia o servico de execucao de shell com sandbox e aprovacoes.
+Monta os runtimes reais, isto é, componentes com execução ativa ou lifecycle:
+`shell`, `mcp`, `edge` e `browser`.
 
-**Dependencias:** `resolveKaelHome()` para path de aprovacoes.
+### `services.ts`
 
-```typescript
-const shell = await createShellRuntime(config);
-```
+Monta fachadas de lógica de negócio: `memory`, `workspace`, `research`,
+`planner` e `skills`. Também registra os action handlers ffmpeg no planner.
 
-### `createMcpRuntime(config)`
+### `media.ts`
 
-Instancia a ponte MCP (Model Context Protocol) para integracao com ferramentas externas.
+Monta os serviços multimodais: compreensão de mídia, geração de imagem e geração
+de vídeo/artifacts, com fallback `Noop*` quando a configuração não habilita
+provider.
 
-**Dependencias:** diretorio `dataDir/mcp/` para registry e aprovacoes.
+### `chat.ts`
 
-```typescript
-const mcp = await createMcpRuntime(config);
-```
+Monta engine, `TurnOrchestrator`, `AgentContext` e `ChatService`. O
+`AgentContext` é o objeto de capacidades passado ao engine e às PI tools; ele não
+é chamado de runtime porque não gerencia lifecycle por si só. O `KaelApp` expõe
+esse contexto em `app.agent`, sem duplicar as mesmas capacidades no topo do app.
 
-### `createMemoryRuntime(config)`
+O contexto é agrupado por domínio:
 
-Instancia o servico de memoria persistente com recuperacao hibrida.
+- `core`: sessão e orquestração de turnos;
+- `runtimes`: shell, MCP, edge e browser;
+- `services`: memória, workspace, research, planner, skills e media understanding;
+- `video`: jobs, ffmpeg, inspect, streamer, stream monitor, playback e serve manager;
+- `generation`: geração de imagem e vídeo.
 
-**Dependencias:** `resolveKaelHome()/data/memory/` para storage, `HybridMemoryRetriever` para busca.
+### `automation.ts`
 
-```typescript
-const memory = await createMemoryRuntime(config);
-```
+Monta automação operacional: `HeartbeatRunner`, `PersistentScheduler` e
+`EmailIngestService` quando habilitado. Registra jobs periódicos apenas quando
+`startAutomation=true`.
 
-### `createWorkspaceRuntime(config)`
+## Convenção
 
-Instancia o inspetor de workspace para leitura e busca de arquivos.
-
-```typescript
-const workspace = createWorkspaceRuntime(config);
-```
-
-### `createBrowserRuntime(config)`
-
-Instancia o runtime de browser para automacao web via Playwright.
-
-```typescript
-const browser = createBrowserRuntime(config);
-```
-
-### `createResearchRuntime(config)`
-
-Instancia o servico de pesquisa com suporte a Tavily Search ou provider desabilitado.
-
-```typescript
-const research = createResearchRuntime(config);
-```
-
-### `createPlannerRuntime(config)`
-
-Instancia o servico de planejamento com geracao de planos via LLM.
-
-```typescript
-const planner = await createPlannerRuntime(config);
-```
-
-### `createMediaRuntime(config, videoArtifacts)`
-
-Instancia os servicos de midia: compreensao de imagem/audio, geracao de imagens e geracao de video.
-
-**Retorno:**
-| Campo | Tipo | Responsabilidade |
-|-------|------|------------------|
-| `mediaUnderstanding` | `MediaUnderstandingService` | Analise de imagem/audio via OpenAI |
-| `imageGenerator` | `ImageGeneratorService` | Geracao de imagens |
-| `videoGeneration` | `ProviderBackedMediaGenerationService` | Geração de mídia usando imageGenerator + artifacts |
-
-**Fallback:** Se `media.enabled=false` ou sem API key, usa implementacoes `Noop*`.
-
-```typescript
-const { mediaUnderstanding, imageGenerator } = createMediaRuntime(config, videoArtifacts);
-```
-
-## Integracao
-
-Todas as funcoes de fabrica sao consumidas pelo `KaelApp` para montar o runtime completo:
-
-```typescript
-const app = new KaelApp(config);
-await app.init();
-// app.engine tem acesso a todos os runtimes via tools
-```
-
-## Convencao
-
-- Cada funcao recebe `KaelConfig` e retorna o(s) servico(s) prontos para uso.
-- Funcoes assincronas (`async`) executam `init()` e garantem que diretorios/recursos existam.
-- Paths sao sempre derivados de `config.dataDir` ou `resolveKaelHome()`.
+- Use `Runtime` somente para componentes que gerenciam execução ativa ou
+  lifecycle (`ShellRuntime`, `McpRuntime`, `EdgeRuntime`, `BrowserRuntime`).
+- Use `Service` para fachadas de domínio (`MemoryService`, `ResearchService`,
+  `PlannerService`, `SkillService`).
+- Use `AgentContext` para o objeto de composição entregue ao chat/engine/tools,
+  exposto no app como `app.agent`.
+- Cada módulo exporta uma função `bootstrapXModule(config, deps)` ou equivalente.
+- Dependências entre fases são explícitas nos parâmetros; não há descoberta
+  automática nem inversão de controle escondida.

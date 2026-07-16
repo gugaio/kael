@@ -32,7 +32,7 @@ resultado e comportamento explicito em falhas.
 - Acoes de dominio (video, audio, etc.) sao registradas via `ActionRegistry`:
   - Cada handler define `requiredInputs` e `execute()`;
   - Planner core conhece apenas `exec`, `wait_execution`, `cancel_execution`.
-- `PlannerExecuteRuntime` contem apenas callbacks de infraestrutura:
+- `PlannerExecutionContext` contem apenas callbacks de infraestrutura:
   - `execCommand`, `getJob`, `pollExec`, `cancelJob`, `cancelExec`;
   - Callbacks de dominio (ex-`startProbeMedia`) foram removidos.
 - Separar claramente:

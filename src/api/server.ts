@@ -5,6 +5,7 @@ import { IdempotencyStore } from "../infra/idempotency-store.js";
 import { kaelLogger } from "../infra/logger.js";
 import { ApiError, asApiError, sendApiError } from "./errors.js";
 import { registerEdgeWsGateway } from "./edge-ws.js";
+import { ApiPlanReconciler } from "./services/plan-reconciler.js";
 import type { RequestWithStart } from "./route-deps.js";
 import { registerChatAndLiveRoutes } from "./routes/chat-live.js";
 import { registerJobAndScheduleRoutes } from "./routes/jobs-schedules.js";
@@ -16,46 +17,7 @@ import { registerStreamWatchRoutes } from "./routes/stream-watch.js";
 export function createApiServer(app: KaelApp): FastifyInstance {
   const server = Fastify({ logger: false });
   const idempotency = new IdempotencyStore(app.config.idempotency.ttlMs);
-
-  const reconcilePlansNow = async (params?: { planId?: string; limit?: number }): Promise<void> => {
-    try {
-      await app.planner.reconcile({
-        planId: params?.planId,
-        limit: params?.limit,
-        runtime: {
-          getJob: async (jobId: string) => {
-            const found = app.jobs.getJob(jobId);
-            if (!found) {
-              return null;
-            }
-            return {
-              status: found.status,
-              error: found.error,
-            };
-          },
-          pollExec: async (sessionId: string) => {
-            const result = await app.shell.process({
-              sessionKey: "planner.reconcile",
-              action: "poll",
-              sessionId,
-            });
-            if (!result.ok || !result.session) {
-              return null;
-            }
-            return {
-              status: result.session.status,
-              message: result.message,
-            };
-          },
-        },
-      });
-    } catch (error) {
-      kaelLogger.warn("planner.reconcile.on_demand_failed", {
-        planId: params?.planId ?? null,
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
-  };
+  const planReconciler = new ApiPlanReconciler(app.agent);
 
   registerEdgeWsGateway(server, app);
 
@@ -84,6 +46,10 @@ export function createApiServer(app: KaelApp): FastifyInstance {
 
   server.setErrorHandler((error, request, reply) => {
     const apiError = asApiError(error);
+    const cause = apiError.cause ?? error;
+    const causeMessage = cause instanceof Error ? cause.message : cause != null ? String(cause) : undefined;
+    const causeStack = cause instanceof Error ? cause.stack : undefined;
+    const causeName = cause instanceof Error ? cause.name : undefined;
     kaelLogger.error("api.request.error", {
       requestId: request.id,
       method: request.method,
@@ -91,6 +57,10 @@ export function createApiServer(app: KaelApp): FastifyInstance {
       status: apiError.status,
       code: apiError.code,
       message: apiError.message,
+      // Real underlying failure (lost before): surfaced for 5xx debugging.
+      causeName: causeName ?? null,
+      causeMessage: causeMessage ?? null,
+      stack: causeStack ?? null,
     });
     sendApiError(reply, request, apiError);
   });
@@ -98,7 +68,7 @@ export function createApiServer(app: KaelApp): FastifyInstance {
   const deps = {
     app,
     idempotency,
-    reconcilePlansNow,
+    reconcilePlansNow: planReconciler.reconcileNow,
   };
 
   registerChatAndLiveRoutes(server, deps);

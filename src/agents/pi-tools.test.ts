@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { createPiTools } from "./pi-tools.js";
-import type { AgentRuntime } from "../runtime/agent-runtime.js";
+import type { AgentContext } from "./context.js";
 import type {
   EngineBrowserTooling,
   EngineEdgeTooling,
@@ -33,7 +33,7 @@ type ToolingOverrides = {
   plans?: Partial<EnginePlansTooling>;
 };
 
-function createTooling(overrides: ToolingOverrides = {}): AgentRuntime {
+function createTooling(overrides: ToolingOverrides = {}): AgentContext {
   const tooling: EngineToolingInterface = {
     video: {
       startTranscode: async () => ({ id: "job-1" } as never),
@@ -204,148 +204,164 @@ function createTooling(overrides: ToolingOverrides = {}): AgentRuntime {
       ...overrides.plans,
     },
   };
+  const edge = {
+    listCapabilities: () => tooling.edge.edgeList(),
+    dispatchTask: ({ capability, input, clientId, timeoutMs }: any) => {
+      if (capability === "youbora.metrics.get") {
+        const payload = (input ?? {}) as { fromDate?: string; toDate?: string; metrics?: string; type?: string; granularity?: string; filters?: unknown };
+        return tooling.edge.youboraMetricsGet({
+          fromDate: payload.fromDate ?? "last24hours",
+          toDate: payload.toDate,
+          metrics: payload.metrics,
+          type: payload.type,
+          granularity: payload.granularity,
+          filters: payload.filters,
+          clientId,
+          timeoutMs,
+        });
+      }
+      if (capability === "youbora.rawdata.get") {
+        const payload = (input ?? {}) as { fromDate?: string; toDate?: string; type?: string; filters?: unknown };
+        return tooling.edge.youboraRawdataGet({
+          fromDate: payload.fromDate ?? "last24hours",
+          toDate: payload.toDate,
+          type: payload.type,
+          filters: payload.filters,
+          clientId,
+          timeoutMs,
+        });
+      }
+      if (capability === "youbora.events.get") {
+        const payload = (input ?? {}) as { fromDate?: string; toDate?: string; type?: string; filters?: unknown };
+        return tooling.edge.youboraEventsGet({
+          fromDate: payload.fromDate ?? "last24hours",
+          toDate: payload.toDate,
+          type: payload.type,
+          filters: payload.filters,
+          clientId,
+          timeoutMs,
+        });
+      }
+      return tooling.edge.edgeCall({ capability, input, clientId, timeoutMs });
+    },
+  };
+
   return {
-    ffmpeg: {
-      startTranscode: tooling.video.startTranscode,
-      startConvertHls: tooling.video.startConvertHls,
-      startCaptureStream: tooling.video.startCaptureStream,
-      startPlayVlc: tooling.video.startPlayVlc,
+    core: {
+      sessions: {} as never,
+      orchestrator: {} as never,
     },
-    videoInspect: {
-      inspectHls: (input: any) => tooling.video.videoHlsInspect({ sessionKey: "test", ...input }),
-      probe: (input: any) => tooling.video.videoProbe({ sessionKey: "test", ...input }),
+    runtimes: {
+      shell: {
+        exec: tooling.system.execCommand,
+        process: tooling.system.processCommand,
+        listApprovals: async () => [],
+        resolveApproval: async () => ({ ok: false, reason: "not_found" } as never),
+      } as never,
+      mcp: {
+        list: tooling.mcp.mcpList,
+        call: tooling.mcp.mcpCall,
+      } as never,
+      edge: edge as never,
+      browser: {
+        command: tooling.browser.browserCommand,
+        getRuntimeTelemetrySnapshot: tooling.browser.browserRuntimeTelemetry,
+      } as never,
     },
-    playbackTriage: {
-      analyzeSession: (input: any) => {
-        if (!tooling.video.playbackAnalyze) throw new Error("playback_analyze_unavailable");
-        return tooling.video.playbackAnalyze({ sessionKey: "test", ...input });
+    services: {
+      memory: {
+        search: (query: any, maxResults: any) => tooling.memory.memorySearch({ query, maxResults }),
+        get: ({ relPath, from, lines }: any) => tooling.memory.memoryGet({ path: relPath, from, lines }),
+        write: tooling.memory.memoryWrite,
+      } as never,
+      workspace: {
+        search: tooling.workspace.workspaceSearch,
+        read: ({ relPath, from, lines }: any) => tooling.workspace.workspaceRead({ path: relPath, from, lines }),
+      } as never,
+      research: {
+        search: tooling.web.webSearch,
+        fetchUrl: tooling.web.webFetch,
+        research: tooling.web.webResearch,
+      } as never,
+      planner: {
+        create: tooling.plans.planCreate,
+        generate: tooling.plans.planGenerate,
+        list: tooling.plans.planList,
+        get: (planId: any) => tooling.plans.planGet({ planId }),
+        updateStep: tooling.plans.planUpdateStep,
+        nextAction: (planId: any) => tooling.plans.planNextAction({ planId }),
+        executeNext: tooling.plans.planExecuteNext,
+        reconcile: tooling.plans.planReconcile,
+      } as never,
+      skills: {} as never,
+      media: {} as never,
+    },
+    video: {
+      jobs: {
+        listJobs: () => tooling.jobs.listJobs(),
+        getJob: (jobId: any) => tooling.jobs.getJob({ jobId }),
+        getJobLog: async (jobId: any) => {
+          const result = await tooling.jobs.getJobLog({ jobId });
+          return result.found ? result.log ?? "" : null;
+        },
+      } as never,
+      ffmpeg: {
+        startTranscode: tooling.video.startTranscode,
+        startConvertHls: tooling.video.startConvertHls,
+        startCaptureStream: tooling.video.startCaptureStream,
+        startPlayVlc: tooling.video.startPlayVlc,
+      } as never,
+      inspect: {
+        inspectHls: (input: any) => tooling.video.videoHlsInspect({ sessionKey: "test", ...input }),
+        probe: (input: any) => tooling.video.videoProbe({ sessionKey: "test", ...input }),
+      } as never,
+      playbackTriage: {
+        analyzeSession: (input: any) => {
+          if (!tooling.video.playbackAnalyze) throw new Error("playback_analyze_unavailable");
+          return tooling.video.playbackAnalyze({ sessionKey: "test", ...input });
+        },
+      } as never,
+      streamMonitor: {
+        startWatch: () => "watch-1",
+        stopWatch: () => true,
+        getStatus: () => null,
+        listWatches: () => [],
+        stopAll: () => {},
       },
+      streamer: {
+        listOrigins: async () => [],
+        inspectOrigin: async () => {
+          throw new Error("not used");
+        },
+        cloneHls: (input: any) => tooling.video.streamClone({ sessionKey: "test", ...input }),
+        cloneDash: (input: any) => tooling.video.streamClone({ sessionKey: "test", ...input }),
+      } as never,
+      serveManager: {
+        serve: (originId: any) => tooling.video.streamServe({ sessionKey: "test", originId }),
+        stop: async (originId: any) => {
+          await tooling.video.streamStop({ sessionKey: "test", originId });
+          return true;
+        },
+        isServing: () => false,
+      } as never,
     },
-    streamMonitor: {
-      startWatch: () => "watch-1",
-      stopWatch: () => true,
-      getStatus: () => null,
-      listWatches: () => [],
-      stopAll: () => {},
+    generation: {
+      image: {
+        generate: async ({ prompt, size }: any) => {
+          if (!tooling.image.imageGenerate) throw new Error("image_generate_unavailable");
+          return tooling.image.imageGenerate({ sessionKey: "test", prompt, size });
+        },
+      } as never,
+      video: {} as never,
     },
-    streamer: {
-      listOrigins: async () => [],
-      inspectOrigin: async () => {
-        throw new Error("not used");
-      },
-      cloneHls: (input: any) => tooling.video.streamClone({ sessionKey: "test", ...input }),
-      cloneDash: (input: any) => tooling.video.streamClone({ sessionKey: "test", ...input }),
-    },
-    serveManager: {
-      serve: (originId: any) => tooling.video.streamServe({ sessionKey: "test", originId }),
-      stop: async (originId: any) => {
-        await tooling.video.streamStop({ sessionKey: "test", originId });
-        return true;
-      },
-      isServing: () => false,
-    },
-    jobs: {
-      listJobs: () => tooling.jobs.listJobs(),
-      getJob: (jobId: any) => tooling.jobs.getJob({ jobId }),
-      getJobLog: async (jobId: any) => {
-        const result = await tooling.jobs.getJobLog({ jobId });
-        return result.found ? result.log ?? "" : null;
-      },
-    },
-    shell: {
-      exec: tooling.system.execCommand,
-      process: tooling.system.processCommand,
-      listApprovals: async () => [],
-      resolveApproval: async () => ({ ok: false, reason: "not_found" } as never),
-    },
-    mcp: {
-      list: tooling.mcp.mcpList,
-      call: tooling.mcp.mcpCall,
-    },
-    edge: {
-      listCapabilities: () => tooling.edge.edgeList(),
-      dispatchTask: ({ capability, input, clientId, timeoutMs }: any) => {
-        if (capability === "youbora.metrics.get") {
-          const payload = (input ?? {}) as { fromDate?: string; toDate?: string; metrics?: string; type?: string; granularity?: string; filters?: unknown };
-          return tooling.edge.youboraMetricsGet({
-            fromDate: payload.fromDate ?? "last24hours",
-            toDate: payload.toDate,
-            metrics: payload.metrics,
-            type: payload.type,
-            granularity: payload.granularity,
-            filters: payload.filters,
-            clientId,
-            timeoutMs,
-          });
-        }
-        if (capability === "youbora.rawdata.get") {
-          const payload = (input ?? {}) as { fromDate?: string; toDate?: string; type?: string; filters?: unknown };
-          return tooling.edge.youboraRawdataGet({
-            fromDate: payload.fromDate ?? "last24hours",
-            toDate: payload.toDate,
-            type: payload.type,
-            filters: payload.filters,
-            clientId,
-            timeoutMs,
-          });
-        }
-        if (capability === "youbora.events.get") {
-          const payload = (input ?? {}) as { fromDate?: string; toDate?: string; type?: string; filters?: unknown };
-          return tooling.edge.youboraEventsGet({
-            fromDate: payload.fromDate ?? "last24hours",
-            toDate: payload.toDate,
-            type: payload.type,
-            filters: payload.filters,
-            clientId,
-            timeoutMs,
-          });
-        }
-        return tooling.edge.edgeCall({ capability, input, clientId, timeoutMs });
-      },
-    },
-    memory: {
-      search: (query: any, maxResults: any) => tooling.memory.memorySearch({ query, maxResults }),
-      get: ({ relPath, from, lines }: any) => tooling.memory.memoryGet({ path: relPath, from, lines }),
-      write: tooling.memory.memoryWrite,
-    },
-    workspace: {
-      search: tooling.workspace.workspaceSearch,
-      read: ({ relPath, from, lines }: any) => tooling.workspace.workspaceRead({ path: relPath, from, lines }),
-    },
-    research: {
-      search: tooling.web.webSearch,
-      fetchUrl: tooling.web.webFetch,
-      research: tooling.web.webResearch,
-    },
-    browser: {
-      command: tooling.browser.browserCommand,
-      getRuntimeTelemetrySnapshot: tooling.browser.browserRuntimeTelemetry,
-    },
-    imageGenerator: {
-      generate: async ({ prompt, size }: any) => {
-        if (!tooling.image.imageGenerate) throw new Error("image_generate_unavailable");
-        return tooling.image.imageGenerate({ sessionKey: "test", prompt, size });
-      },
-    },
-    videoGeneration: {} as never,
-    planner: {
-      create: tooling.plans.planCreate,
-      generate: tooling.plans.planGenerate,
-      list: tooling.plans.planList,
-      get: (planId: any) => tooling.plans.planGet({ planId }),
-      updateStep: tooling.plans.planUpdateStep,
-      nextAction: (planId: any) => tooling.plans.planNextAction({ planId }),
-      executeNext: tooling.plans.planExecuteNext,
-      reconcile: tooling.plans.planReconcile,
-    },
-  } as unknown as AgentRuntime;
+  } satisfies AgentContext;
 }
 
 describe("createPiTools image_generate", () => {
   it("returns failed result instead of throwing when generation errors", async () => {
     const tools = createPiTools({
       sessionKey: "s1",
-      runtime: createTooling({
+      context: createTooling({
         image: {
           imageGenerate: async () => {
             throw new Error("image backend timeout");
@@ -372,7 +388,7 @@ describe("createPiTools image_generate", () => {
     }));
     const tools = createPiTools({
       sessionKey: "s1",
-      runtime: createTooling({
+      context: createTooling({
         image: {
           imageGenerate,
         },
@@ -398,7 +414,7 @@ describe("createPiTools playback_analyze", () => {
   it("exposes playback_analyze and supports raw log text", async () => {
     const tools = createPiTools({
       sessionKey: "s-playback",
-      runtime: createTooling({
+      context: createTooling({
         video: {
           playbackAnalyze: async ({ player, logText }) => ({
             ok: false,
@@ -440,10 +456,10 @@ describe("createPiTools playback_analyze", () => {
     expect(text).toContain("fatal_error");
   });
 
-  it("returns failed result when playback runtime errors", async () => {
+  it("returns failed result when playback context errors", async () => {
     const tools = createPiTools({
       sessionKey: "s-playback-missing",
-      runtime: createTooling({}),
+      context: createTooling({}),
     });
     const tool = tools.find((item) => item.name === "playback_analyze");
     expect(tool).toBeTruthy();
@@ -502,11 +518,11 @@ describe("createPiTools stream_inspect", () => {
         },
       ],
     }));
-    const runtime = createTooling({});
-    runtime.streamer.inspectOrigin = inspectOrigin as never;
+    const context = createTooling({});
+    context.video.streamer.inspectOrigin = inspectOrigin as never;
     const tools = createPiTools({
       sessionKey: "s-stream",
-      runtime,
+      context,
     });
     const tool = tools.find((item) => item.name === "stream_inspect");
     expect(tool).toBeTruthy();
@@ -576,11 +592,11 @@ describe("createPiTools stream_inspect", () => {
         },
       ],
     }));
-    const runtime = createTooling({});
-    runtime.streamer.inspectOrigin = inspectOrigin as never;
+    const context = createTooling({});
+    context.video.streamer.inspectOrigin = inspectOrigin as never;
     const tools = createPiTools({
       sessionKey: "s-stream",
-      runtime,
+      context,
     });
     const tool = tools.find((item) => item.name === "stream_chunk_exec");
     expect(tool).toBeTruthy();
@@ -607,7 +623,7 @@ describe("createPiTools browser budget", () => {
   it("bloqueia segunda chamada de browser quando maxBrowserCalls=1", async () => {
     const tools = createPiTools({
       sessionKey: "s-browser",
-      runtime: createTooling({
+      context: createTooling({
         browser: {
           browserCommand: async ({ action }) => ({
             ok: true,
@@ -641,7 +657,7 @@ describe("createPiTools jobs/plans state tools", () => {
   it("exposes jobs_list and jobs_get using tooling state methods", async () => {
     const tools = createPiTools({
       sessionKey: "s-jobs",
-      runtime: createTooling({
+      context: createTooling({
         jobs: {
           listJobs: () => [
             {
@@ -687,7 +703,7 @@ describe("createPiTools jobs/plans state tools", () => {
   it("exposes plan_get and returns not found when plan is absent", async () => {
     const tools = createPiTools({
       sessionKey: "s-plan",
-      runtime: createTooling({
+      context: createTooling({
         plans: {
           planGet: () => null,
         },
@@ -706,7 +722,7 @@ describe("createPiTools edge tools", () => {
   it("exposes edge_list and edge_call using tooling state methods", async () => {
     const tools = createPiTools({
       sessionKey: "s-edge",
-      runtime: createTooling({
+      context: createTooling({
         edge: {
           edgeList: () => [
             {
@@ -755,7 +771,7 @@ describe("createPiTools edge tools", () => {
   it("blocks edge_call when edge turn budget is exhausted", async () => {
     const tools = createPiTools({
       sessionKey: "s-edge-budget",
-      runtime: createTooling({
+      context: createTooling({
         edge: {
           edgeCall: async () => ({
             ok: true,
@@ -795,7 +811,7 @@ describe("createPiTools edge tools", () => {
     }));
     const tools = createPiTools({
       sessionKey: "s-youbora",
-      runtime: createTooling({
+      context: createTooling({
         edge: {
           youboraMetricsGet,
         },
@@ -840,7 +856,7 @@ describe("createPiTools edge tools", () => {
     }));
     const tools = createPiTools({
       sessionKey: "s-youbora-raw",
-      runtime: createTooling({
+      context: createTooling({
         edge: {
           youboraRawdataGet,
         },
@@ -879,7 +895,7 @@ describe("createPiTools edge tools", () => {
     }));
     const tools = createPiTools({
       sessionKey: "s-youbora-events",
-      runtime: createTooling({
+      context: createTooling({
         edge: {
           youboraEventsGet,
         },
@@ -911,7 +927,7 @@ describe("createPiTools mcp tools", () => {
   it("exposes mcp_list and mcp_call using tooling state methods", async () => {
     const tools = createPiTools({
       sessionKey: "s-mcp",
-      runtime: createTooling({
+      context: createTooling({
         mcp: {
           mcpList: async () => ({
             ok: true,
@@ -952,7 +968,7 @@ describe("createPiTools mcp tools", () => {
   it("blocks mcp calls when turn budget is exhausted", async () => {
     const tools = createPiTools({
       sessionKey: "s-mcp-budget",
-      runtime: createTooling({
+      context: createTooling({
         mcp: {
           mcpList: async () => ({
             ok: true,

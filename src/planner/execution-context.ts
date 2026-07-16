@@ -1,7 +1,7 @@
 import type { JobService } from "../jobs/service.js";
-import type { ShellRuntime } from "../tools/system/shell-tool-service.js";
+import type { ShellRuntime } from "../shell/service.js";
 
-export type PlannerExecuteRuntime = {
+export type PlannerExecutionContext = {
   execCommand: (args: {
     sessionKey: string;
     command: string;
@@ -22,7 +22,7 @@ export type PlannerExecuteRuntime = {
   cancelExec: (sessionId: string) => Promise<{ canceled: boolean; status?: string; message?: string }>;
 };
 
-export type PlannerReconcileRuntime = {
+export type PlannerReconcileContext = {
   getJob: (jobId: string) => Promise<{ status: string; error?: string } | null>;
   pollExec: (sessionId: string) => Promise<{ status: string; message?: string } | null>;
 };
@@ -32,10 +32,10 @@ type PlannerDeps = {
   shell: ShellRuntime;
 };
 
-export function createPlannerExecuteRuntime(
+export function createPlannerExecutionContext(
   deps: PlannerDeps,
   sessionKey = "planner.execute",
-): PlannerExecuteRuntime {
+): PlannerExecutionContext {
   return {
     execCommand: (args) =>
       deps.shell.exec({
@@ -92,10 +92,10 @@ export function createPlannerExecuteRuntime(
   };
 }
 
-export function createPlannerReconcileRuntime(
+export function createPlannerReconcileContext(
   deps: PlannerDeps,
   sessionKey = "planner.reconcile",
-): PlannerReconcileRuntime {
+): PlannerReconcileContext {
   return {
     getJob: async (jobId: string) => {
       const found = deps.jobs.getJob(jobId);

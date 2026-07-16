@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { ShellToolService } from "./shell-tool-service.js";
+import { ShellToolService } from "./service.js";
 
 const tempDirs: string[] = [];
 
@@ -22,6 +22,8 @@ async function createService(overrides?: {
     maxTimeoutMs: 20_000,
     maxOutputChars: 20_000,
     approvalWaitMs: overrides?.approvalWaitMs ?? 4_000,
+    killGraceMs: 100,
+    defaultYieldMs: 0,
     security: overrides?.security ?? "allowlist",
     ask: overrides?.ask ?? "on-miss",
     allowlist: overrides?.allowlist ?? ["ls", "cat"],
@@ -128,5 +130,72 @@ describe("ShellToolService", () => {
       sessionId: started.id,
     });
     expect(pollAfterClose.ok).toBe(false);
+  });
+
+  it("yieldMs: retorna running quando o comando ultrapassa a janela", async () => {
+    const { service } = await createService({ ask: "off", security: "full" });
+
+    const session = await service.exec({
+      sessionKey: "s1",
+      command: "sleep 5",
+      yieldMs: 80,
+    });
+
+    // O yield deve ter disparado antes do sleep terminar
+    expect(session.status).toBe("running");
+    expect(session.id).toBeTruthy();
+
+    // Limpa — mata o processo antes de encerrar o teste
+    await service.process({ sessionKey: "s1", action: "kill", sessionId: session.id });
+  });
+
+  it("yieldMs: retorna completed quando o comando termina antes da janela", async () => {
+    const { service } = await createService({ ask: "off", security: "full" });
+
+    const session = await service.exec({
+      sessionKey: "s1",
+      command: "echo done",
+      yieldMs: 3_000,
+    });
+
+    expect(session.status).toBe("completed");
+    expect(session.outputTail).toContain("done");
+  });
+
+  it("process write: envia dados ao stdin de processo em execucao", async () => {
+    const { service } = await createService({ ask: "off", security: "full" });
+
+    // Lê uma linha do stdin e faz echo
+    const started = await service.exec({
+      sessionKey: "s1",
+      command: "read line && echo received:$line",
+      background: true,
+    });
+    expect(started.status).toBe("running");
+
+    const writeResult = await service.process({
+      sessionKey: "s1",
+      action: "write",
+      sessionId: started.id,
+      data: "hello\n",
+      eof: true,
+    });
+    expect(writeResult.ok).toBe(true);
+
+    // Aguarda o processo concluir após receber o input
+    const completion = await new Promise<import("./service.js").ExecSession>((resolve) => {
+      const check = async () => {
+        const poll = await service.process({ sessionKey: "s1", action: "poll", sessionId: started.id });
+        if (poll.session && poll.session.status !== "running") {
+          resolve(poll.session);
+          return;
+        }
+        setTimeout(check, 100);
+      };
+      void check();
+    });
+
+    expect(completion.status).toBe("completed");
+    expect(completion.outputTail).toContain("received:hello");
   });
 });

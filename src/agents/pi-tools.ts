@@ -1,6 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { buildPiTools } from "../tools/pi/index.js";
-import type { AgentRuntime } from "../runtime/agent-runtime.js";
+import type { AgentContext } from "./context.js";
 import type { EngineOutputArtifact } from "./types.js";
 import type { ToolLoopGuard } from "./tool-loop-guard.js";
 import { createToolBudget } from "./pi-tools-budget.js";
@@ -8,7 +8,7 @@ import { createToolTelemetry, formatSession, textResult } from "./pi-tools-telem
 
 export function createPiTools(params: {
   sessionKey: string;
-  runtime: AgentRuntime;
+  context: AgentContext;
   turnSignal?: AbortSignal;
   loopGuard?: ToolLoopGuard;
   trace?: {
@@ -60,7 +60,7 @@ export function createPiTools(params: {
   const _tools = buildPiTools({
     system: {
       sessionKey: params.sessionKey,
-      shell: params.runtime.shell,
+      shell: params.context.runtimes.shell,
       loopGuard: params.loopGuard,
       textResult,
       formatSession,
@@ -73,11 +73,11 @@ export function createPiTools(params: {
     },
     video: {
       sessionKey: params.sessionKey,
-      videoInspect: params.runtime.videoInspect,
-      playbackTriage: params.runtime.playbackTriage,
-      streamMonitor: params.runtime.streamMonitor,
-      streamer: params.runtime.streamer,
-      serveManager: params.runtime.serveManager,
+      videoInspect: params.context.video.inspect,
+      playbackTriage: params.context.video.playbackTriage,
+      streamMonitor: params.context.video.streamMonitor,
+      streamer: params.context.video.streamer,
+      serveManager: params.context.video.serveManager,
       textResult,
       reserveToolCall: budget.reserveToolCall,
       reserveStreamerCall: budget.reserveStreamerCall,
@@ -86,7 +86,7 @@ export function createPiTools(params: {
         telemetry.logToolEnd(tool, intent, result, startedAtMs, summary),
     },
     jobs: {
-      jobs: params.runtime.jobs,
+      jobs: params.context.video.jobs,
       textResult,
       reserveToolCall: budget.reserveToolCall,
       logToolStart: telemetry.logToolStart,
@@ -94,7 +94,7 @@ export function createPiTools(params: {
         telemetry.logToolEnd(tool, intent, result, startedAtMs, summary),
     },
     edge: {
-      edge: params.runtime.edge,
+      edge: params.context.runtimes.edge,
       textResult,
       makeBlockedResult: budget.makeBlockedResult,
       reserveEdgeCall: budget.reserveEdgeCall,
@@ -104,7 +104,7 @@ export function createPiTools(params: {
     },
     mcp: {
       sessionKey: params.sessionKey,
-      mcp: params.runtime.mcp,
+      mcp: params.context.runtimes.mcp,
       loopGuard: params.loopGuard,
       textResult,
       makeBlockedResult: budget.makeBlockedResult,
@@ -114,19 +114,19 @@ export function createPiTools(params: {
         telemetry.logToolEnd(tool, intent, result, startedAtMs, summary),
     },
     memory: {
-      memory: params.runtime.memory,
+      memory: params.context.services.memory,
       textResult,
       logToolStart: telemetry.logToolStart,
       logToolEnd: (tool, intent, result, startedAtMs, summary) =>
         telemetry.logToolEnd(tool, intent, result, startedAtMs, summary),
     },
     workspace: {
-      workspace: params.runtime.workspace,
+      workspace: params.context.services.workspace,
       textResult,
     },
     web: {
       sessionKey: params.sessionKey,
-      research: params.runtime.research,
+      research: params.context.services.research,
       turnSignal: params.turnSignal,
       loopGuard: params.loopGuard,
       textResult,
@@ -138,7 +138,7 @@ export function createPiTools(params: {
     },
     browser: {
       sessionKey: params.sessionKey,
-      browser: params.runtime.browser,
+      browser: params.context.runtimes.browser,
       textResult,
       reserveBrowserCall: budget.reserveBrowserCall,
       logToolStart: telemetry.logToolStart,
@@ -147,14 +147,14 @@ export function createPiTools(params: {
     },
     plans: {
       sessionKey: params.sessionKey,
-      planner: params.runtime.planner,
-      jobs: params.runtime.jobs,
-      shell: params.runtime.shell,
+      planner: params.context.services.planner,
+      jobs: params.context.video.jobs,
+      shell: params.context.runtimes.shell,
       textResult,
     },
     image: {
       sessionKey: params.sessionKey,
-      imageGenerator: params.runtime.imageGenerator,
+      imageGenerator: params.context.generation.image,
       textResult,
       makeBlockedResult: budget.makeBlockedResult,
       reserveImageCall: budget.reserveImageCall,

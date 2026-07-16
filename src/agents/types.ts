@@ -13,7 +13,7 @@ import type {
 } from "../vhs/types.js";
 import type { McpCallResult, McpListResult } from "../tools/mcp/mcp-bridge-service.js";
 import type { EdgeCallResult, EdgeCapabilitySummary } from "../edge/runtime.js";
-import type { AgentRuntime } from "../runtime/agent-runtime.js";
+import type { AgentContext } from "./context.js";
 
 export type EngineVideoTooling = {
   startTranscode: (params: {
@@ -620,7 +620,7 @@ export type EngineTurnInput = {
     content: string;
     createdAt: string;
   }>;
-  runtime: AgentRuntime;
+  context: AgentContext;
 };
 
 export type EngineInboundAttachment = {

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { ensureDir, readJsonFile, writeJsonFile } from "../../infra/fs.js";
 import { kaelLogger } from "../../infra/logger.js";
-import { LocalProcessRunner, type ProcessRunner } from "../system/process-runner.js";
+import { LocalProcessRunner, type ProcessRunner } from "../../process/runner.js";
 
 export type McpServerTransport = "config" | "http" | "stdio";
 export type McpApprovalStatus = "pending" | "approved" | "denied" | "expired";

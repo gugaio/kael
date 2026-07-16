@@ -279,4 +279,4 @@ Metricas previstas em `/health` (`metrics.skillsRuntime`):
   - injecao de contexto via `@project`;
   - PI tools `project_*`;
   - skill `.kael/skills/project-writer`.
-- A decisao simplifica o runtime atual para manter apenas `AgentRuntime`; uma futura retomada de escopo por projeto deve entrar como filtro/politica sobre o runtime existente, nao como camada paralela.
+- A decisao simplifica o contexto atual para manter apenas `AgentContext`; uma futura retomada de escopo por projeto deve entrar como filtro/politica sobre o contexto existente, nao como camada paralela.

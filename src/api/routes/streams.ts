@@ -7,8 +7,8 @@ export function registerStreamRoutes(server: FastifyInstance, deps: ApiRouteDeps
   const { app } = deps;
 
   server.get("/streams", async () => {
-    const origins = await app.streamer.listOrigins();
-    const serving = app.serveManager.listServing();
+    const origins = await app.agent.video.streamer.listOrigins();
+    const serving = app.agent.video.serveManager.listServing();
     const servingMap = new Map(serving.map((s) => [s.originId, s]));
     const items = origins.map((o) => ({
       ...o,
@@ -22,8 +22,8 @@ export function registerStreamRoutes(server: FastifyInstance, deps: ApiRouteDeps
   server.get<{
     Params: { originId: string };
   }>("/streams/:originId", async (request) => {
-    const origin = await app.streamer.inspectOrigin(request.params.originId);
-    const active = app.serveManager.listServing().find((s) => s.originId === request.params.originId);
+    const origin = await app.agent.video.streamer.inspectOrigin(request.params.originId);
+    const active = app.agent.video.serveManager.listServing().find((s) => s.originId === request.params.originId);
     return {
       ok: true,
       stream: {
@@ -42,7 +42,7 @@ export function registerStreamRoutes(server: FastifyInstance, deps: ApiRouteDeps
       maxMediaPlaylists?: number;
     };
   }>("/streams/:originId/probe", async (request) => {
-    const report = await app.streamer.probeOrigin(request.params.originId, {
+    const report = await app.agent.video.streamer.probeOrigin(request.params.originId, {
       ...(request.body?.timeoutMs != null && Number.isFinite(request.body.timeoutMs)
         ? { timeoutMs: request.body.timeoutMs }
         : {}),
@@ -64,7 +64,7 @@ export function registerStreamRoutes(server: FastifyInstance, deps: ApiRouteDeps
       full?: boolean;
     };
   }>("/streams/:originId/analyze", async (request) => {
-    const report = await app.streamer.analyzeOrigin(request.params.originId, {
+    const report = await app.agent.video.streamer.analyzeOrigin(request.params.originId, {
       ...(request.body?.timeoutMs != null && Number.isFinite(request.body.timeoutMs)
         ? { timeoutMs: request.body.timeoutMs }
         : {}),
@@ -113,8 +113,8 @@ export function registerStreamRoutes(server: FastifyInstance, deps: ApiRouteDeps
     };
     const resolvedFormat = resolveFormat(url, format);
     const result = resolvedFormat === "dash"
-      ? await app.streamer.cloneDash(input)
-      : await app.streamer.cloneHls(input);
+      ? await app.agent.video.streamer.cloneDash(input)
+      : await app.agent.video.streamer.cloneHls(input);
     return { ok: true, stream: result };
   });
 
@@ -125,12 +125,12 @@ export function registerStreamRoutes(server: FastifyInstance, deps: ApiRouteDeps
     };
   }>("/streams/:originId/serve", async (request) => {
     const { originId } = request.params;
-    const origins = await app.streamer.listOrigins();
+    const origins = await app.agent.video.streamer.listOrigins();
     if (!origins.some((o) => o.id === originId)) {
       throw new ApiError(404, "NOT_FOUND", `Origin ${originId} not found`);
     }
     const host = normalizeServeHost(request.body?.host);
-    const active = await app.serveManager.serve(originId, host ? { host } : undefined);
+    const active = await app.agent.video.serveManager.serve(originId, host ? { host } : undefined);
     return {
       ok: true,
       serve: {
@@ -143,7 +143,7 @@ export function registerStreamRoutes(server: FastifyInstance, deps: ApiRouteDeps
   server.post<{
     Params: { originId: string };
   }>("/streams/:originId/stop", async (request) => {
-    const stopped = await app.serveManager.stop(request.params.originId);
+    const stopped = await app.agent.video.serveManager.stop(request.params.originId);
     if (!stopped) {
       throw new ApiError(404, "NOT_FOUND", `Origin ${request.params.originId} is not serving`);
     }
@@ -154,12 +154,12 @@ export function registerStreamRoutes(server: FastifyInstance, deps: ApiRouteDeps
     Params: { originId: string };
   }>("/streams/:originId", async (request) => {
     const { originId } = request.params;
-    const origins = await app.streamer.listOrigins();
+    const origins = await app.agent.video.streamer.listOrigins();
     if (!origins.some((o) => o.id === originId)) {
       throw new ApiError(404, "NOT_FOUND", `Origin ${originId} not found`);
     }
-    await app.serveManager.stop(originId);
-    const result = await app.streamer.removeOrigin(originId);
+    await app.agent.video.serveManager.stop(originId);
+    const result = await app.agent.video.streamer.removeOrigin(originId);
     return { ok: true, removed: result };
   });
 }

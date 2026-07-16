@@ -29,7 +29,7 @@ export function registerStreamWatchRoutes(server: FastifyInstance, deps: ApiRout
       throw new ApiError(400, "BAD_REQUEST", "url is required");
     }
 
-    const id = app.streamMonitor.startWatch({
+    const id = app.agent.video.streamMonitor.startWatch({
       sessionKey,
       url,
       profile: request.body.profile,
@@ -43,13 +43,13 @@ export function registerStreamWatchRoutes(server: FastifyInstance, deps: ApiRout
       allVariants: request.body.allVariants,
     });
 
-    const status = app.streamMonitor.getStatus(id);
+    const status = app.agent.video.streamMonitor.getStatus(id);
     return { ok: true, watchId: id, status };
   });
 
   // GET /streams/watch — lista todas as sessões
   server.get("/streams/watch", async () => {
-    const watches = app.streamMonitor.listWatches();
+    const watches = app.agent.video.streamMonitor.listWatches();
     return { ok: true, watches };
   });
 
@@ -57,7 +57,7 @@ export function registerStreamWatchRoutes(server: FastifyInstance, deps: ApiRout
   server.get<{
     Params: { id: string };
   }>("/streams/watch/:id", async (request) => {
-    const status = app.streamMonitor.getStatus(request.params.id);
+    const status = app.agent.video.streamMonitor.getStatus(request.params.id);
     if (!status) {
       throw new ApiError(404, "NOT_FOUND", `Watch session ${request.params.id} not found`);
     }
@@ -67,12 +67,12 @@ export function registerStreamWatchRoutes(server: FastifyInstance, deps: ApiRout
   // POST /streams/watch/:id/stop — para uma sessão
   server.post<{
     Params: { id: string };
-  }>("/streams/watch/:id/stop", async (request) => {
-    const stopped = app.streamMonitor.stopWatch(request.params.id);
+  }>("/streams/watch/:id", async (request) => {
+    const stopped = app.agent.video.streamMonitor.stopWatch(request.params.id);
     if (!stopped) {
       throw new ApiError(404, "NOT_FOUND", `Watch session ${request.params.id} not found`);
     }
-    const status = app.streamMonitor.getStatus(request.params.id);
+    const status = app.agent.video.streamMonitor.getStatus(request.params.id);
     return { ok: true, stopped: true, status };
   });
 
