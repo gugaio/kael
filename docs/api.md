@@ -70,6 +70,7 @@ flowchart TD
             direction LR
             API --> StreamsGET[GET /streams]
             API --> StreamsId[GET /streams/:originId]
+            API --> StreamsThumb[GET /streams/:originId/thumbnail.jpg]
             API --> StreamsProbe[POST /streams/:originId/probe]
             API --> StreamsAnalyze[POST /streams/:originId/analyze]
             API --> StreamsClone[POST /streams/clone]
@@ -87,6 +88,14 @@ flowchart TD
             API --> StreamWatchReport[GET /streams/watch/:id/report]
             API --> StreamWatchHtml[GET /streams/watch/:id/report.html]
             API --> StreamWatchDEL[DELETE /streams/watch/:id]
+        end
+
+        subgraph MediaInvestigations ["Media Investigations (agent team)"]
+            direction LR
+            API --> MediaInvestigationsGET[GET /media-investigations]
+            API --> MediaInvestigationPOST[POST /media-investigations]
+            API --> MediaInvestigationGET[GET /media-investigations/:id]
+            API --> MediaInvestigationRerun[POST /media-investigations/:id/rerun]
         end
 
         subgraph Schedules ["Schedules (automation)"]
@@ -211,6 +220,7 @@ Exemplo resumido de item em `GET /jobs`:
 |--------|------|-------------|
 | GET | /streams | List all cloned origins with serving status |
 | GET | /streams/:originId | Get detailed origin info with serving status |
+| GET | /streams/:originId/thumbnail.jpg | JPEG poster frame extracted from the local playlist via ffmpeg (cached under `streamer/thumbnails/`). 404 when unavailable |
 | POST | /streams/:originId/probe | Probe cloned media playlists with ffprobe-level stream checks |
 | POST | /streams/:originId/analyze | Analyze cloned chunks with ffprobe. Body: `{ full?, timeoutMs?, maxMediaPlaylists?, maxSegmentsPerPlaylist?, startSegment?, segmentCount? }` |
 | POST | /streams/clone | Clone an HLS/DASH URL. Body: `{ url, durationSeconds?, allVariants?, format? }` |
@@ -228,6 +238,14 @@ Exemplo resumido de item em `GET /jobs`:
 | GET | /streams/watch/:id/report | Get the generated JSON report for chunk/full watches |
 | GET | /streams/watch/:id/report.html | Get the generated HTML report for chunk/full watches |
 | DELETE | /streams/watch/:id | Remove a watch session and persisted artifacts |
+
+### Media Investigations
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /media-investigations | List persisted investigations and report whether PI specialist agents are available |
+| POST | /media-investigations | Start an active investigation over a cloned VHS origin. Body: `{ originId, problemStatement?, problemContext?, fullAnalysis? }` |
+| GET | /media-investigations/:id | Get live state, user problem, tool activity, content/manifest evidence index, specialist reports, prompt snapshots and synthesis |
+| POST | /media-investigations/:id/rerun | Re-run the same origin using the current version of each specialist prompt |
 
 ### Schedules (Automation)
 | Method | Path | Description |

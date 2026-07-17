@@ -3,6 +3,7 @@ import type { MediaInspector, PlaybackTriageService } from "@gugaio/vhs";
 import type { StreamerRuntime, StreamMonitorRuntime } from "../../agents/context.js";
 import type { StreamServeManager } from "../../video/serve-manager.js";
 import { runStreamChunkCommand } from "../../ffmpeg/chunk-command.js";
+import type { MediaInvestigationService } from "../../media-investigation/service.js";
 
 type TextBlock = {
   type: "text";
@@ -15,6 +16,7 @@ export function createVideoPiTools(params: {
   playbackTriage: PlaybackTriageService;
   streamMonitor: StreamMonitorRuntime;
   streamer: StreamerRuntime;
+  investigations: MediaInvestigationService;
   serveManager: StreamServeManager;
   textResult: (text: string) => TextBlock[];
   reserveToolCall: (tool: string) => { blocked: { content: TextBlock[]; details: unknown } } | null;
@@ -428,6 +430,75 @@ export function createVideoPiTools(params: {
 
   const reserveStreamer = params.reserveStreamerCall ?? params.reserveToolCall;
 
+  const mediaInvestigationTool: AgentTool = {
+    name: "media_investigate",
+    label: "Media Investigation Team",
+    description:
+      "Inicia, lista ou consulta investigacoes persistentes feitas por um time de agentes especialistas sobre um origin ja clonado pelo VHS. " +
+      "Use start para Timeline & Container, Audio & Video e Manifest & Delivery analisarem em paralelo, seguidos por sintese do Lead Investigator.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["start", "status", "list", "rerun"] },
+        originId: { type: "string", description: "Origin clonado; obrigatorio para start." },
+        problemStatement: { type: "string", description: "Sintoma ou reclamacao que a equipe deve investigar." },
+        investigationId: { type: "string", description: "Obrigatorio para status/rerun." },
+        fullAnalysis: { type: "boolean", description: "Analisa todos os segmentos. Padrao true." },
+      },
+      required: ["action"],
+      additionalProperties: false,
+    } as unknown as AgentTool["parameters"],
+    execute: async (_toolCallId, rawParams) => {
+      const blocked = reserveStreamer("media_investigate");
+      if (blocked) return blocked.blocked;
+      const startedAtMs = Date.now();
+      const args = (rawParams ?? {}) as {
+        action: "start" | "status" | "list" | "rerun";
+        originId?: string;
+        problemStatement?: string;
+        investigationId?: string;
+        fullAnalysis?: boolean;
+      };
+      const intent = params.logToolStart("media_investigate", args);
+      try {
+        let result: unknown;
+        if (args.action === "start") {
+          if (!args.originId) throw new Error("originId is required for start");
+          result = await params.investigations.start({
+            originId: args.originId,
+            problemStatement: args.problemStatement,
+            fullAnalysis: args.fullAnalysis ?? true,
+          });
+        } else if (args.action === "status") {
+          if (!args.investigationId) throw new Error("investigationId is required for status");
+          result = params.investigations.get(args.investigationId);
+        } else if (args.action === "rerun") {
+          if (!args.investigationId) throw new Error("investigationId is required for rerun");
+          result = await params.investigations.rerun(args.investigationId);
+        } else {
+          result = params.investigations.list(50);
+        }
+        const record = !Array.isArray(result) && result && typeof result === "object"
+          ? result as { id?: string; state?: string; agents?: Array<{ label: string; state: string }> }
+          : null;
+        const text = Array.isArray(result)
+          ? `ok=true\ninvestigations=${result.length}`
+          : [
+              "ok=true",
+              `investigationId=${record?.id ?? "not-found"}`,
+              `state=${record?.state ?? "unknown"}`,
+              ...(record?.agents ?? []).map((agent) => `agent=${agent.label} state=${agent.state}`),
+            ].join("\n");
+        params.logToolEnd("media_investigate", intent, result, startedAtMs);
+        return { content: params.textResult(text), details: result };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        params.logToolEnd("media_investigate", intent, { error: message }, startedAtMs);
+        return { content: params.textResult(`ok=false\nerror=${message}`), details: { error: message } };
+      }
+    },
+  };
+
   const streamListTool: AgentTool = {
     name: "stream_list",
     label: "Stream List",
@@ -790,6 +861,7 @@ export function createVideoPiTools(params: {
     videoProbeTool,
     playbackAnalyzeTool,
     videoStreamWatchTool,
+    mediaInvestigationTool,
     streamListTool,
     streamInspectTool,
     streamChunkExecTool,

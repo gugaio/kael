@@ -1,8 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { Agent } from "@mariozechner/pi-agent-core";
-import { getModel } from "@mariozechner/pi-ai";
 import type { PiEngineConfig } from "../config.js";
 import { ensureDir } from "../infra/fs.js";
 import { kaelLogger } from "../infra/logger.js";
@@ -24,20 +22,10 @@ import type {
   EngineTurnInput,
   EngineTurnOutput,
 } from "./types.js";
+import { PiAgentRuntime, type CreatedPiAgent } from "./pi-runtime.js";
 
 export { buildPrompt } from "./pi-engine-prompt.js";
 export { extractAssistantTextFromSdkMessage } from "./pi-sdk-messages.js";
-
-type PiAgentLike = {
-  prompt: (prompt: string) => Promise<void>;
-  abort: () => void;
-  subscribe: (listener: (event: unknown) => void) => (() => void) | void;
-};
-
-type CreatedPiAgent = {
-  agent: PiAgentLike;
-  abortController: AbortController;
-};
 
 type PiAdapterObservabilityConfig = {
   failureDumpDir?: string;
@@ -73,6 +61,7 @@ export class PiEngineAdapter implements AgentEngine {
   constructor(
     private readonly cfg: PiEngineConfig,
     private readonly obs: PiAdapterObservabilityConfig = {},
+    private readonly runtime: PiAgentRuntime = new PiAgentRuntime(cfg),
   ) {}
 
   async runTurn(input: EngineTurnInput): Promise<EngineTurnOutput> {
@@ -354,24 +343,13 @@ export class PiEngineAdapter implements AgentEngine {
       onToolEvent: (event: PiToolEvent) => void;
     },
   ): CreatedPiAgent {
-    const model = getModel(this.cfg.provider as never, this.cfg.model);
-    if (!model) {
-      throw new PiEngineError({
-        message: `Model not found for provider=${this.cfg.provider} model=${this.cfg.model}`,
-        code: "provider_unavailable",
-        retryable: false,
-      });
-    }
-    const abortController = new AbortController();
-    const agent = new Agent({
-      initialState: {
-        systemPrompt: this.cfg.systemPrompt,
-        model,
-        thinkingLevel: "low",
-        tools: createPiTools({
+    return this.runtime.createAgent({
+      systemPrompt: this.cfg.systemPrompt,
+      thinkingLevel: "low",
+      createTools: (turnSignal) => createPiTools({
           sessionKey: input.sessionKey,
           context: input.context,
-          turnSignal: abortController.signal,
+          turnSignal,
           loopGuard: this.loopGuard,
           trace: {
             turnId: trace.turnId,
@@ -391,24 +369,8 @@ export class PiEngineAdapter implements AgentEngine {
             maxBrowserInteractionCalls: 8,
           },
           onToolEvent: trace.onToolEvent,
-        }),
-        messages: [],
-      },
-      getApiKey: (provider: string) => {
-        if (!this.cfg.apiKey) {
-          return undefined;
-        }
-        if (provider === this.cfg.provider || provider === "openai") {
-          return this.cfg.apiKey;
-        }
-        return undefined;
-      },
-    }) as unknown as PiAgentLike;
-
-    return {
-      agent,
-      abortController,
-    };
+      }),
+    });
   }
 
   private async writeFailureDump(payload: Record<string, unknown>): Promise<void> {

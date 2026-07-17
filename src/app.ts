@@ -9,6 +9,7 @@ import {
 import { bootstrapChatModule } from "./bootstrap/modules/chat.js";
 import { bootstrapCoreModule, type CoreModule } from "./bootstrap/modules/core.js";
 import { bootstrapMediaModule } from "./bootstrap/modules/media.js";
+import { bootstrapMediaInvestigationModule } from "./bootstrap/modules/media-investigation.js";
 import { bootstrapServicesModule } from "./bootstrap/modules/services.js";
 import { bootstrapVideoModule } from "./bootstrap/modules/video.js";
 
@@ -34,12 +35,17 @@ export async function createKaelApp(options: CreateKaelAppOptions = {}): Promise
   const agentCore = await bootstrapAgentCoreModule(core.config);
   const services = await bootstrapServicesModule(core.config, { ffmpeg: video.ffmpeg });
   const media = bootstrapMediaModule(core.config, { mediaArtifacts: video.mediaArtifacts });
+  const mediaInvestigation = await bootstrapMediaInvestigationModule(core.config, {
+    streamer: video.streamer,
+    pi: agentCore.pi,
+  });
   const chat = bootstrapChatModule(core.config, {
     core,
     video,
     agentCore,
     services,
     media,
+    mediaInvestigation,
   });
   const automation = await bootstrapAutomationModule(core.config, {
     startAutomation,

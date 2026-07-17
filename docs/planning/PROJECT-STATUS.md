@@ -1,6 +1,6 @@
 # PROJECT STATUS - Kael
 
-Ultima atualizacao: **2026-07-15**
+Ultima atualizacao: **2026-07-17**
 Owner: projeto Kael
 
 ## Como usar este arquivo
@@ -36,6 +36,199 @@ Proximo passo recomendado:
 ```
 
 ## Registro de Atualizacoes por Commit
+
+### 2026-07-17 - Poster real (primeiro frame) nos cards de streams
+
+Resumo:
+- Novo endpoint `GET /streams/:originId/thumbnail.jpg`: extrai um frame representativo da playlist local do origin via ffmpeg (`thumbnail,scale=640:-2`), cacheia em `dataDir/streamer/thumbnails/<id>.jpg` e limpa o cache ao remover o origin.
+- Cards de `/streams` exibem o frame real como poster (img lazy com `object-cover`); o poster generativo (gradiente + waveform) permanece como fallback quando o endpoint retorna 404.
+- Rota valida caracteres do originId e retorna 404 quando nao ha frame disponivel (ex.: DASH nao suportado pelo ffmpeg local).
+
+Arquivos-chave:
+- `src/video/thumbnails.ts`
+- `src/api/routes/streams.ts`
+- `src/api/server.test.ts`
+- `ui/src/pages/StreamsPage.tsx`
+- `docs/api.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npx vitest run src/api/server.test.ts` (21 testes)
+- [x] `npm --prefix ui run check` + `npm --prefix ui run build`
+- [x] ffmpeg validado manualmente contra origin real (frame extraído corretamente)
+- [ ] revisao visual manual do catalogo com frames reais
+
+Pendencias:
+- Frame pode ser escuro/title card em alguns conteudos; se incomodar, avaliar seek ou maior janela do filtro `thumbnail`.
+
+Proximo passo recomendado:
+- Validar visualmente o catalogo com streams reais servidos.
+
+### 2026-07-17 - Streams em formato de catalogo visual
+
+Resumo:
+- `/streams` virou um catalogo de cards estilo produto de streaming: cada origem clonada ganha um poster conceitual unico (gradiente duotone deterministico via hash do id + waveform de barras derivada do id e do numero de segmentos), badge de duracao estilo player (`2:05`), chip de protocolo e badge pulsante "no ar" quando servindo.
+- Composer de clonagem em linha unica (URL, ID opcional, duracao, variantes) e hierarquia de acoes: "Assistir" primario solido, Servir/LAN/Parar secundarios, Detalhes/Investigar/Excluir como links quietos.
+- URLs de serving (local/LAN) como chips com copy-to-clipboard; estados de loading (skeletons), vazio conceitual e pending por card (nao mais global).
+
+Arquivos-chave:
+- `ui/src/pages/StreamsPage.tsx`
+
+Checklist de validacao:
+- [x] `npm --prefix ui run check`
+- [x] `npm --prefix ui run build`
+- [ ] revisao visual manual do catalogo
+
+Pendencias:
+- Detalhes (`/streams/:id/details`), playground e watch seguem no layout tecnico anterior; podem receber o mesmo tratamento visual no futuro.
+
+Proximo passo recomendado:
+- Validar visualmente com streams reais e avaliar se o poster generativo diferencia bem as origens.
+
+### 2026-07-17 - Investigations em formato de feed social
+
+Resumo:
+- A lista `/investigations` virou um feed: cada caso e um post com avatar stack do time (personas com emoji), relato em texto legivel, conclusao do Lead em destaque e link para a timeline.
+- O detalhe `/investigations/:id` virou uma timeline estilo rede social: post do relato, posts dos especialistas em ordem cronologica, checks de tools do Lead como eventos compactos e post de conclusao em destaque.
+- Cada post de agente linka para a nova pagina `/investigations/:id/agents/:agentId`, com analise completa: achados, hipoteses, cadeia causal, evidencias cruzadas, sintese do Lead, raw output e system prompt.
+- Personas por agente (`🎬 Timeline`, `🎧 A/V`, `📡 Delivery`, `🕵️ Lead`) centralizadas em `ui/src/components/investigation.tsx` com avatar, indicador de digitacao e barra de confianca compartilhados.
+
+Arquivos-chave:
+- `ui/src/components/investigation.tsx`
+- `ui/src/pages/MediaInvestigationsPage.tsx`
+- `ui/src/pages/MediaInvestigationDetailPage.tsx`
+- `ui/src/pages/MediaInvestigationAgentPage.tsx`
+- `ui/src/App.tsx`
+- `ui/src/lib/format.ts`
+
+Checklist de validacao:
+- [x] `npm --prefix ui run check`
+- [x] `npm --prefix ui run build`
+- [x] `npm run check`
+- [ ] revisao visual manual do feed/timeline
+
+Pendencias:
+- Anexos tecnicos (A/V offset, evidence index) seguem na pagina da timeline; podem virar pagina propria se crescerem.
+
+Proximo passo recomendado:
+- Validar visualmente com uma investigacao real e ajustar copy/personas conforme o tom desejado.
+
+### 2026-07-17 - Inspecao ativa de discontinuity HLS
+
+Resumo:
+- O Lead Investigator ganhou `media_manifest_inspect`, uma tool read-only restrita aos manifests do origin clonado.
+- A tool correlaciona playlist e boundary por indice, persistindo URI, tags anteriores, media/discontinuity sequence e `hasDiscontinuityBefore` como evidencia citavel.
+- O prompt `v1.3.0` exige consultar o manifesto diante de reset de PTS ou mudanca de source/formato e so concluir `missing_hls_discontinuity_tag` com ausencia confirmada no mesmo boundary.
+- Adicionada regressao inspirada no TC_004: existe uma discontinuity em outro segmento, mas ela esta ausente antes do segmento 2 suspeito.
+
+Arquivos-chave:
+- `src/media-investigation/content-tools.ts`
+- `src/media-investigation/content-tools.test.ts`
+- `src/media-investigation/types.ts`
+- `.kael/agents/media-investigation/synthesizer.md`
+- `docs/architecture/phases/phase-24.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] testes focados de content tools e media investigation service
+
+Pendencias:
+- Falta executar o TC_004 com um modelo real depois de reiniciar o backend.
+- O parser cobre HLS media playlists clonadas; DASH ainda nao possui tool equivalente de inspecao estrutural.
+
+Proximo passo recomendado:
+- Reexecutar o TC_004 e validar que o Lead cita `manifest.boundary.*` ao concluir `missing_hls_discontinuity_tag`.
+
+### 2026-07-16 - Lead Investigator ativo com content QA
+
+Resumo:
+- Investigacoes agora recebem e persistem `problemStatement` e contexto opcional; o relato orienta a busca sem ser tratado como ground truth.
+- O Lead Investigator usa o mesmo `PiAgentRuntime`, agora com allowlist de tools FFmpeg read-only para freeze, black, silence e decode validation.
+- Cada tool call persiste motivo, parametros, estado, duracao e evidence IDs no bundle antes da sintese final, com budget de 8 chamadas.
+- Freezes contiguos divididos por boundary HLS sao unidos; o caso observado de ~2s passa a produzir uma evidencia causal unica.
+- UI ganhou campo de problema/tempo aproximado e trilha visual da investigacao ativa.
+- Prompts passaram para `v1.2.0`, priorizando o relato e proibindo elevar `pattern=aligned` para causa primaria sem justificativa.
+
+Arquivos-chave:
+- `src/media-investigation/content-tools.ts`
+- `src/media-investigation/service.ts`
+- `src/media-investigation/types.ts`
+- `.kael/agents/media-investigation/synthesizer.md`
+- `ui/src/pages/MediaInvestigationsPage.tsx`
+- `ui/src/pages/MediaInvestigationDetailPage.tsx`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm --prefix ui run check`
+- [x] testes focados de content tools, investigacao, API e PI tools
+
+Pendencias:
+- Falta o escape hatch FFmpeg restrito para analises ainda nao cobertas por tools tipadas.
+- Especialistas ainda nao recebem uma segunda rodada automatica depois das novas evidencias do Lead.
+
+Proximo passo recomendado:
+- Rodar novamente `gap3s` com o relato de freeze e incluir o resultado no benchmark guiado.
+
+### 2026-07-16 - Correlacao causal e offset A/V deterministico
+
+Resumo:
+- O evidence bundle passou a incluir series assinadas `audio PTS - video PTS` por segmento e classificacao deterministica de alinhamento, offset constante, drift, discontinuity ou variacao.
+- Prompts especialistas `v1.1.0` agora exigem agrupamento de sintomas, cobertura causal, observacoes previstas e diferenciacao entre offset, drift, boundary e manifesto.
+- O Lead Investigator passou a ranquear hipoteses concorrentes, produzir cadeia causal e impacto perceptual; consenso deixou de ser criterio primario.
+- Runtime recalcula cobertura sobre findings citados e limita confianca sem suporte, com contradicoes ou evidencias nao explicadas.
+- UI ganhou painel A/V por segmento, cobertura, cadeia causal e comparacao visual de hipoteses.
+- Adicionado caso de regressao `tc_001_audio_delayed`, que valida offset constante proximo de 2s, e controle de drift progressivo.
+
+Arquivos-chave:
+- `src/media-investigation/derived-evidence.ts`
+- `src/media-investigation/types.ts`
+- `src/media-investigation/service.ts`
+- `.kael/agents/media-investigation/*.md`
+- `ui/src/pages/MediaInvestigationDetailPage.tsx`
+- `src/media-investigation/derived-evidence.test.ts`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm --prefix ui run check`
+- [x] testes focados de investigacao, tools e API
+
+Pendencias:
+- O fixture atual valida a evidencia derivada, mas ainda falta o runner que pontua respostas reais de modelos em multiplas execucoes.
+- `requestedChecks` ainda e recomendacao textual; falta o ciclo limitado de aquisicao adicional por tools VHS tipadas.
+
+Proximo passo recomendado:
+- Criar ground truth estruturado e score de root cause, impacto perceptual, cobertura, atribuicao incorreta e estabilidade entre runs.
+
+### 2026-07-16 - Time de investigacao de midia sobre evidencias VHS
+
+Resumo:
+- Criado `MediaInvestigationService` persistente para coletar `probe`/`analyze` de origins clonados e manter um evidence bundle auditavel.
+- Adicionados tres perfis especialistas paralelos (`Timeline & Container`, `Audio & Video`, `Manifest & Delivery`) e um `Lead Investigator` sintetizador.
+- O agente principal e os especialistas agora compartilham a mesma instancia de `PiAgentRuntime`; os perfis usam contextos isolados, sem segunda implementacao PI.
+- Prompts editaveis em `.kael/agents/media-investigation` sao fotografados por run com versao, hash e conteudo completo.
+- Adicionada tool PI `media_investigate` e API `/media-investigations` com list/detail/start/rerun.
+- Criadas UI `/investigations` e detalhe com atividade ao vivo, resultados individuais, evidencias, sintese e inspecao dos system prompts.
+
+Arquivos-chave:
+- `src/agents/pi-runtime.ts`
+- `src/media-investigation/service.ts`
+- `src/api/routes/media-investigations.ts`
+- `.kael/agents/media-investigation/*.md`
+- `ui/src/pages/MediaInvestigationsPage.tsx`
+- `ui/src/pages/MediaInvestigationDetailPage.tsx`
+- `docs/architecture/phases/phase-24.md`
+
+Checklist de validacao:
+- [x] `npm run check`
+- [x] `npm --prefix ui run check`
+- [x] `npx vitest run src/media-investigation/service.test.ts src/agents/pi-tools.test.ts src/api/server.test.ts`
+
+Pendencias:
+- O bundle inicial reutiliza o `analyze` atual do VHS; ainda nao inclui decode/content QA (freeze, black, silence e corruption).
+- O primeiro caso deterministico de offset A/V foi adicionado; falta ampliar o benchmark e executar modelos reais.
+
+Proximo passo recomendado:
+- Adicionar fixtures deterministicas VHS e um runner de evaluacao A/B dos prompts especialistas.
 
 ### 2026-07-14 - Stream watch com perfis, tool e UI
 

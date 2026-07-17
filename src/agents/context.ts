@@ -34,6 +34,7 @@ import type { FfmpegJobs } from "../ffmpeg/jobs.js";
 import type { StreamServeManager } from "../video/serve-manager.js";
 import type { StreamWatchParams, StreamWatchStatus } from "../vhs/types.js";
 import type { WorkspaceInspector } from "../workspace/inspector.js";
+import type { MediaInvestigationService } from "../media-investigation/service.js";
 
 export type StreamerRuntime = {
   listOrigins(): Promise<StreamerOriginSummary[]>;
@@ -53,6 +54,7 @@ export type StreamMonitorRuntime = {
   stopWatch(id: string): boolean;
   getStatus(id: string): StreamWatchStatus | null;
   listWatches(): StreamWatchStatus[];
+  removeWatch(id: string): Promise<boolean>;
   stopAll(): void;
 };
 
@@ -82,6 +84,7 @@ export type AgentContext = {
     playbackTriage: PlaybackTriageService;
     streamMonitor: StreamMonitorRuntime;
     streamer: StreamerRuntime;
+    investigations: MediaInvestigationService;
     serveManager: StreamServeManager;
   };
   generation: {

@@ -49,6 +49,7 @@ Indice rapido para humanos e onboarding inicial.
 - Fase 21: concluida (Clark runtime satelite incubado em `apps/clark` com daemon, protocolo WS com handshake + dispatch remoto baseline, capabilities MVP e bindings explicitos para MCP HTTP).
 - Fase 22: em andamento (stream watch: monitoramento continuo HLS + deteccao de discontinuities, gaps de audio, manifest stale e anomalias de duracao).
 - Fase 23: em andamento (streamer movido para o harness independente `vhs`; Kael o consome como dependencia local durante a migracao).
+- Fase 24: em andamento (investigacao ativa orientada pelo relato, baseline VHS, Lead PI com tools read-only de content QA e manifesto HLS, prompts versionados e UI auditavel).
 
 ## Estudos e referencias tecnicas
 

@@ -1226,3 +1226,211 @@ export async function getExecSessionLog(params: {
   });
   return parseJson(response, schema);
 }
+
+const MediaFindingSchema = z.object({
+  code: z.string(),
+  severity: z.enum(["info", "warning", "error"]),
+  confidence: z.number(),
+  summary: z.string(),
+  evidenceIds: z.array(z.string()),
+});
+
+const MediaSpecialistOutputSchema = z.object({
+  summary: z.string(),
+  findings: z.array(MediaFindingSchema),
+  hypotheses: z.array(z.object({
+    code: z.string().optional(),
+    description: z.string(),
+    likelyStage: z.string().optional(),
+    confidence: z.number(),
+    supportingEvidenceIds: z.array(z.string()),
+    contradictingEvidenceIds: z.array(z.string()),
+    explainedEvidenceIds: z.array(z.string()).optional(),
+    unexplainedEvidenceIds: z.array(z.string()).optional(),
+    predictedObservations: z.array(z.string()).optional(),
+    causalChain: z.array(z.string()).optional(),
+  })),
+  requestedChecks: z.array(z.string()),
+  limitations: z.array(z.string()),
+});
+
+const MediaSynthesisSchema = z.object({
+  summary: z.string(),
+  likelyCause: z.string(),
+  confidence: z.number(),
+  perceptualImpact: z.string().optional(),
+  causalChain: z.array(z.string()).optional(),
+  evidenceCoverage: z.number().optional(),
+  unresolvedEvidenceIds: z.array(z.string()).optional(),
+  rankedHypotheses: z.array(z.object({
+    code: z.string(),
+    description: z.string(),
+    confidence: z.number(),
+    explainedEvidenceIds: z.array(z.string()),
+    contradictingEvidenceIds: z.array(z.string()),
+  })).optional(),
+  consensus: z.array(z.string()),
+  disagreements: z.array(z.string()),
+  nextSteps: z.array(z.string()),
+});
+
+const MediaInvestigationSchema = z.object({
+  id: z.string(),
+  originId: z.string(),
+  problemStatement: z.string().optional(),
+  problemContext: z.object({
+    approximateTime: z.string().optional(),
+    affectedTrack: z.enum(["audio", "video", "both", "unknown"]).optional(),
+    player: z.string().optional(),
+    reproducibility: z.string().optional(),
+    expectedBehavior: z.string().optional(),
+  }).optional(),
+  sourceInvestigationId: z.string().optional(),
+  state: z.enum(["queued", "collecting", "analyzing", "synthesizing", "completed", "failed"]),
+  fullAnalysis: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  completedAt: z.string().optional(),
+  evidence: z.object({
+    id: z.string(),
+    originId: z.string(),
+    capturedAt: z.string(),
+    sourceUrl: z.string(),
+    protocol: z.string(),
+    summary: z.object({
+      segmentCount: z.number(),
+      variantCount: z.number(),
+      renditionCount: z.number(),
+      durationSeconds: z.number(),
+      bytes: z.number(),
+    }),
+    probe: z.unknown(),
+    analysis: z.unknown(),
+    derived: z.object({
+      avOffsetSeries: z.array(z.object({
+        id: z.string(),
+        videoLabel: z.string(),
+        audioLabel: z.string(),
+        pattern: z.enum(["aligned", "constant_offset", "drift", "discontinuity", "variable", "insufficient"]),
+        sampleCount: z.number(),
+        medianOffsetSeconds: z.number(),
+        offsetSpreadSeconds: z.number(),
+        firstToLastChangeSeconds: z.number().optional(),
+        maxAdjacentChangeSeconds: z.number().optional(),
+        samples: z.array(z.object({
+          segmentIndex: z.number(),
+          videoFirstPtsSeconds: z.number(),
+          audioFirstPtsSeconds: z.number(),
+          offsetSeconds: z.number(),
+        })),
+      })),
+      contentQa: z.array(z.object({
+        id: z.string(),
+        kind: z.enum(["freeze", "black", "silence", "decode", "manifest"]),
+        summary: z.string(),
+        startSeconds: z.number().optional(),
+        endSeconds: z.number().optional(),
+        durationSeconds: z.number().optional(),
+        tool: z.string(),
+        parameters: z.record(z.unknown()),
+        playlist: z.string().optional(),
+        segmentIndex: z.number().optional(),
+        segmentUri: z.string().optional(),
+        mediaSequence: z.number().optional(),
+        discontinuitySequence: z.number().optional(),
+        segmentCount: z.number().optional(),
+        discontinuityCount: z.number().optional(),
+        hasDiscontinuityBefore: z.boolean().optional(),
+        previousTags: z.array(z.string()).optional(),
+      })).optional(),
+    }).optional(),
+    evidenceIndex: z.array(z.object({
+      id: z.string(),
+      kind: z.enum(["issue", "segment", "media", "probe", "derived"]),
+      summary: z.string(),
+    })),
+  }).optional(),
+  agents: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    role: z.enum(["specialist", "synthesizer"]),
+    state: z.enum(["queued", "running", "completed", "failed"]),
+    prompt: z.object({
+      path: z.string(),
+      version: z.string(),
+      hash: z.string(),
+      content: z.string(),
+    }),
+    model: z.string().optional(),
+    startedAt: z.string().optional(),
+    completedAt: z.string().optional(),
+    durationMs: z.number().optional(),
+    output: MediaSpecialistOutputSchema.optional(),
+    synthesis: MediaSynthesisSchema.optional(),
+    rawOutput: z.string().optional(),
+    error: z.string().optional(),
+  })),
+  activities: z.array(z.object({
+    id: z.string(),
+    tool: z.string(),
+    reason: z.string(),
+    state: z.enum(["running", "completed", "failed", "blocked"]),
+    parameters: z.record(z.unknown()),
+    startedAt: z.string(),
+    completedAt: z.string().optional(),
+    durationMs: z.number().optional(),
+    evidenceIds: z.array(z.string()),
+    summary: z.string().optional(),
+    error: z.string().optional(),
+  })).optional(),
+  synthesis: MediaSynthesisSchema.optional(),
+  error: z.string().optional(),
+});
+
+export type MediaInvestigation = z.infer<typeof MediaInvestigationSchema>;
+export type MediaInvestigationAgent = MediaInvestigation["agents"][number];
+
+export async function getMediaInvestigations(): Promise<{
+  agentsAvailable: boolean;
+  investigations: MediaInvestigation[];
+}> {
+  const response = await fetch("/api/media-investigations");
+  return parseJson(response, z.object({
+    ok: z.boolean(),
+    agentsAvailable: z.boolean(),
+    investigations: z.array(MediaInvestigationSchema),
+  }));
+}
+
+export async function getMediaInvestigation(id: string): Promise<MediaInvestigation> {
+  const response = await fetch(`/api/media-investigations/${encodeURIComponent(id)}`);
+  const data = await parseJson(response, z.object({ ok: z.boolean(), investigation: MediaInvestigationSchema }));
+  return data.investigation;
+}
+
+export async function startMediaInvestigation(params: {
+  originId: string;
+  problemStatement?: string;
+  problemContext?: {
+    approximateTime?: string;
+    affectedTrack?: "audio" | "video" | "both" | "unknown";
+    player?: string;
+    reproducibility?: string;
+    expectedBehavior?: string;
+  };
+  fullAnalysis?: boolean;
+}): Promise<MediaInvestigation> {
+  const response = await fetch("/api/media-investigations", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const data = await parseJson(response, z.object({ ok: z.boolean(), investigation: MediaInvestigationSchema }));
+  return data.investigation;
+}
+
+export async function rerunMediaInvestigation(id: string): Promise<MediaInvestigation> {
+  const response = await fetch(`/api/media-investigations/${encodeURIComponent(id)}/rerun`, { method: "POST" });
+  const data = await parseJson(response, z.object({ ok: z.boolean(), investigation: MediaInvestigationSchema }));
+  return data.investigation;
+}

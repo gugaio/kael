@@ -44,6 +44,7 @@ function withAgentContext(legacy: Record<string, unknown>): KaelApp {
         playbackTriage: {} as KaelApp["agent"]["video"]["playbackTriage"],
         streamMonitor: legacy.streamMonitor as KaelApp["agent"]["video"]["streamMonitor"],
         streamer: legacy.streamer as KaelApp["agent"]["video"]["streamer"],
+        investigations: (legacy.investigations ?? {}) as KaelApp["agent"]["video"]["investigations"],
         serveManager: legacy.serveManager as KaelApp["agent"]["video"]["serveManager"],
       },
       generation: {

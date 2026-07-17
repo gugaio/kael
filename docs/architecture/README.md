@@ -24,6 +24,10 @@ Esta pasta descreve a evolucao arquitetural do Kael de forma incremental.
 - `docs/architecture/phases/phase-16.md` - Browser control para teste de sites (foundations -> read-only -> interacao)
 - `docs/architecture/phases/phase-17.md` - Orquestracao de planos v2 (controle de lifecycle + validacoes)
 - `docs/architecture/phases/phase-18.md` - Skills no core (`.kael/skills`) com invocacao manual/automatica controlada
+- `docs/architecture/phases/phase-20.md` - Video Intelligence Platform
+- `docs/architecture/phases/phase-22.md` - Stream Watch & Quality Monitor
+- `docs/architecture/phases/phase-23.md` - Streamer/VHS harness independente
+- `docs/architecture/phases/phase-24.md` - Time de investigacao de midia com prompts versionados
 
 ## Diagramas
 

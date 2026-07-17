@@ -77,6 +77,7 @@ export function createPiTools(params: {
       playbackTriage: params.context.video.playbackTriage,
       streamMonitor: params.context.video.streamMonitor,
       streamer: params.context.video.streamer,
+      investigations: params.context.video.investigations,
       serveManager: params.context.video.serveManager,
       textResult,
       reserveToolCall: budget.reserveToolCall,

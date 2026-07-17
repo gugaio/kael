@@ -67,7 +67,7 @@ export function registerStreamWatchRoutes(server: FastifyInstance, deps: ApiRout
   // POST /streams/watch/:id/stop — para uma sessão
   server.post<{
     Params: { id: string };
-  }>("/streams/watch/:id", async (request) => {
+  }>("/streams/watch/:id/stop", async (request) => {
     const stopped = app.agent.video.streamMonitor.stopWatch(request.params.id);
     if (!stopped) {
       throw new ApiError(404, "NOT_FOUND", `Watch session ${request.params.id} not found`);
@@ -80,7 +80,7 @@ export function registerStreamWatchRoutes(server: FastifyInstance, deps: ApiRout
   server.get<{
     Params: { id: string };
   }>("/streams/watch/:id/report", async (request) => {
-    const status = app.streamMonitor.getStatus(request.params.id);
+    const status = app.agent.video.streamMonitor.getStatus(request.params.id);
     if (!status) {
       throw new ApiError(404, "NOT_FOUND", `Watch session ${request.params.id} not found`);
     }
@@ -94,7 +94,7 @@ export function registerStreamWatchRoutes(server: FastifyInstance, deps: ApiRout
   server.get<{
     Params: { id: string };
   }>("/streams/watch/:id/report.html", async (request, reply) => {
-    const status = app.streamMonitor.getStatus(request.params.id);
+    const status = app.agent.video.streamMonitor.getStatus(request.params.id);
     if (!status) {
       throw new ApiError(404, "NOT_FOUND", `Watch session ${request.params.id} not found`);
     }
@@ -110,7 +110,7 @@ export function registerStreamWatchRoutes(server: FastifyInstance, deps: ApiRout
   server.delete<{
     Params: { id: string };
   }>("/streams/watch/:id", async (request) => {
-    const removed = await app.streamMonitor.removeWatch(request.params.id);
+    const removed = await app.agent.video.streamMonitor.removeWatch(request.params.id);
     if (!removed) {
       throw new ApiError(404, "NOT_FOUND", `Watch session ${request.params.id} not found`);
     }

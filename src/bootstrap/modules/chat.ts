@@ -8,6 +8,7 @@ import type { AgentCoreModule } from "./agent-core.js";
 import type { MediaModule } from "./media.js";
 import type { ServicesModule } from "./services.js";
 import type { VideoModule } from "./video.js";
+import type { MediaInvestigationModule } from "./media-investigation.js";
 
 export type ChatModule = {
   agentContext: AgentContext;
@@ -22,9 +23,10 @@ export function bootstrapChatModule(
     agentCore: AgentCoreModule;
     services: ServicesModule;
     media: MediaModule;
+    mediaInvestigation: MediaInvestigationModule;
   },
 ): ChatModule {
-  const engine = createEngine(config);
+  const engine = createEngine(config, deps.agentCore.pi);
   const orchestrator = new TurnOrchestrator(deps.core.sessions, engine, {
     maxContextMessages: config.context.maxMessages,
     maxContextChars: config.context.maxChars,
@@ -55,6 +57,7 @@ export function bootstrapChatModule(
       playbackTriage: deps.video.playback,
       streamMonitor: deps.video.streamMonitor,
       streamer: deps.video.streamer,
+      investigations: deps.mediaInvestigation.investigations,
       serveManager: deps.video.serveManager,
     },
     generation: {

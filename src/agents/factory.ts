@@ -5,8 +5,9 @@ import type { AgentEngine } from "./types.js";
 import { HybridEngine } from "./hybrid-engine.js";
 import { PiEngineAdapter } from "./pi-engine-adapter.js";
 import { SimpleCommandEngine } from "./simple-engine.js";
+import { PiAgentRuntime } from "./pi-runtime.js";
 
-export function createEngine(config: KaelConfig): AgentEngine {
+export function createEngine(config: KaelConfig, runtime: PiAgentRuntime = new PiAgentRuntime(config.pi)): AgentEngine {
   const simple = new SimpleCommandEngine();
 
   if (config.engineMode === "simple") {
@@ -16,7 +17,7 @@ export function createEngine(config: KaelConfig): AgentEngine {
   const pi = new PiEngineAdapter(config.pi, {
     dumpEnabled: true,
     failureDumpDir: path.join(config.dataDir, "debug", "pi-failures"),
-  });
+  }, runtime);
 
   if (config.engineMode === "pi") {
     return pi;

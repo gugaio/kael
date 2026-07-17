@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { approveExecApproval, denyExecApproval, getExecApprovals } from "../lib/api";
 import { useLiveEvents } from "../lib/live-events";
 
@@ -9,6 +9,7 @@ const navItems = [
   { to: "/chat", label: "Chat" },
   { to: "/streams/watch", label: "Watch" },
   { to: "/streams", label: "Streams" },
+  { to: "/investigations", label: "Investigações" },
   { to: "/plans", label: "Plans" },
   { to: "/jobs", label: "Jobs" },
   { to: "/exec", label: "Execuções" },
@@ -17,7 +18,6 @@ const navItems = [
 ];
 
 export function AppShell(props: { children: ReactNode }): JSX.Element {
-  const location = useLocation();
   const queryClient = useQueryClient();
   useLiveEvents();
   const approvals = useQuery({
@@ -41,11 +41,6 @@ export function AppShell(props: { children: ReactNode }): JSX.Element {
 
   const pendingApprovals = approvals.data ?? [];
   const firstApproval = pendingApprovals[0];
-  const activeNav =
-    navItems.find((item) => item.to !== "/" && location.pathname.startsWith(item.to)) ??
-    navItems.find((item) => item.to === location.pathname) ??
-    navItems[0];
-
   return (
     <div className="dashboard-grid min-h-screen md:p-5">
       <div className="relative min-h-[calc(100vh-24px)] w-full">

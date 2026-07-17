@@ -1,10 +1,14 @@
 import type { FastifyInstance } from "fastify";
+import fs from "node:fs/promises";
 import os from "node:os";
+import path from "node:path";
+import { StreamThumbnailService } from "../../video/thumbnails.js";
 import { ApiError } from "../errors.js";
 import type { ApiRouteDeps } from "../route-deps.js";
 
 export function registerStreamRoutes(server: FastifyInstance, deps: ApiRouteDeps): void {
   const { app } = deps;
+  const thumbnails = new StreamThumbnailService(path.join(app.config.dataDir, "streamer", "thumbnails"));
 
   server.get("/streams", async () => {
     const origins = await app.agent.video.streamer.listOrigins();
@@ -33,6 +37,30 @@ export function registerStreamRoutes(server: FastifyInstance, deps: ApiRouteDeps
         networkServingUrl: toNetworkPlaybackUrl(active?.playbackUrl) ?? null,
       },
     };
+  });
+
+  server.get<{
+    Params: { originId: string };
+  }>("/streams/:originId/thumbnail.jpg", async (request, reply) => {
+    const { originId } = request.params;
+    if (!/^[A-Za-z0-9._-]+$/.test(originId)) {
+      throw new ApiError(400, "BAD_REQUEST", "originId contains invalid characters");
+    }
+    const origins = await app.agent.video.streamer.listOrigins();
+    const origin = origins.find((candidate) => candidate.id === originId);
+    if (!origin) {
+      throw new ApiError(404, "NOT_FOUND", `Origin ${originId} not found`);
+    }
+    const file = await thumbnails.ensureThumbnail({
+      originId,
+      rootDir: origin.rootDir,
+      playbackPath: origin.playbackPath,
+    });
+    if (!file) {
+      throw new ApiError(404, "NOT_FOUND", `Thumbnail unavailable for origin ${originId}`);
+    }
+    const data = await fs.readFile(file);
+    return reply.type("image/jpeg").header("Cache-Control", "public, max-age=3600").send(data);
   });
 
   server.post<{
@@ -160,6 +188,7 @@ export function registerStreamRoutes(server: FastifyInstance, deps: ApiRouteDeps
     }
     await app.agent.video.serveManager.stop(originId);
     const result = await app.agent.video.streamer.removeOrigin(originId);
+    await thumbnails.removeThumbnail(originId);
     return { ok: true, removed: result };
   });
 }

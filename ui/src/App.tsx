@@ -14,6 +14,9 @@ import { StreamWatchPage } from "./pages/StreamWatchPage";
 import { StreamsPage } from "./pages/StreamsPage";
 import { PlansPage } from "./pages/PlansPage";
 import { SchedulesPage } from "./pages/SchedulesPage";
+import { MediaInvestigationsPage } from "./pages/MediaInvestigationsPage";
+import { MediaInvestigationDetailPage } from "./pages/MediaInvestigationDetailPage";
+import { MediaInvestigationAgentPage } from "./pages/MediaInvestigationAgentPage";
 
 export function App(): JSX.Element {
   return (
@@ -32,6 +35,9 @@ export function App(): JSX.Element {
               <Route path="/streams" element={<StreamsPage />} />
               <Route path="/streams/watch" element={<StreamWatchPage />} />
               <Route path="/streams/watch/:watchId" element={<StreamWatchDetailPage />} />
+              <Route path="/investigations" element={<MediaInvestigationsPage />} />
+              <Route path="/investigations/:investigationId" element={<MediaInvestigationDetailPage />} />
+              <Route path="/investigations/:investigationId/agents/:agentId" element={<MediaInvestigationAgentPage />} />
               <Route path="/streams/:originId/details" element={<StreamDetailsPage />} />
               <Route path="/streams/:originId/playground" element={<StreamPlaygroundPage />} />
               <Route path="/exec" element={<ExecSessionsPage />} />

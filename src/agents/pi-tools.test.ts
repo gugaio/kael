@@ -326,6 +326,7 @@ function createTooling(overrides: ToolingOverrides = {}): AgentContext {
         stopWatch: () => true,
         getStatus: () => null,
         listWatches: () => [],
+        removeWatch: async () => true,
         stopAll: () => {},
       },
       streamer: {
@@ -335,6 +336,13 @@ function createTooling(overrides: ToolingOverrides = {}): AgentContext {
         },
         cloneHls: (input: any) => tooling.video.streamClone({ sessionKey: "test", ...input }),
         cloneDash: (input: any) => tooling.video.streamClone({ sessionKey: "test", ...input }),
+      } as never,
+      investigations: {
+        agentsAvailable: true,
+        start: async () => ({ id: "investigation-1", state: "queued", agents: [] }),
+        get: () => null,
+        list: () => [],
+        rerun: async () => ({ id: "investigation-2", state: "queued", agents: [] }),
       } as never,
       serveManager: {
         serve: (originId: any) => tooling.video.streamServe({ sessionKey: "test", originId }),

@@ -5,12 +5,14 @@ import { resolveKaelHome } from "../../global-config.js";
 import { BrowserRuntimeService, type BrowserRuntime } from "../../runtime/browser/index.js";
 import { McpBridgeService } from "../../tools/mcp/mcp-bridge-service.js";
 import { ShellToolService } from "../../shell/service.js";
+import { PiAgentRuntime } from "../../agents/pi-runtime.js";
 
 export type AgentCoreModule = {
   shell: ShellToolService;
   mcp: McpBridgeService;
   edge: EdgeRuntime;
   browser: BrowserRuntime;
+  pi: PiAgentRuntime;
 };
 
 async function bootstrapShellRuntime(config: KaelConfig): Promise<ShellToolService> {
@@ -71,5 +73,6 @@ export async function bootstrapAgentCoreModule(config: KaelConfig): Promise<Agen
     mcp,
     edge: new EdgeRuntime(),
     browser: bootstrapBrowserRuntime(config),
+    pi: new PiAgentRuntime(config.pi),
   };
 }

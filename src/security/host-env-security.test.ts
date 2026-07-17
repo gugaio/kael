@@ -148,14 +148,6 @@ describe("sanitizeHostEnv", () => {
     });
 
     it("preserva variaveis seguras mesmo com padroes parciais", () => {
-      const raw: NodeJS.ProcessEnv = {
-        PATH: "/usr/bin",
-        HOME: "/home/user",
-        MY_KEYCHAIN: "/path/to/keychain", // 'KEY' no meio mas não é credential
-        TOKENIZER_MODEL: "gpt-4",          // 'TOKEN' no meio mas não é credential
-      };
-      // KEYCHAIN contém KEY no início, TOKENIZER contém TOKEN no início
-      // Ambos são legítimos mas serão bloqueados pelo padrão conservador
       expect(isDangerousHostEnvVarName("MY_KEYCHAIN")).toBe(true);
       expect(isDangerousHostEnvVarName("TOKENIZER_MODEL")).toBe(true);
     });

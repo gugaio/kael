@@ -1,5 +1,8 @@
 import { once } from "node:events";
-import { describe, expect, it } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import type { KaelApp } from "../app.js";
 import type { SchedulerJob } from "../automation/scheduler/persistent-scheduler.js";
@@ -35,6 +38,7 @@ function withAgentContext(legacy: Record<string, unknown>): KaelApp {
         playbackTriage: {} as KaelApp["agent"]["video"]["playbackTriage"],
         streamMonitor: legacy.streamMonitor as KaelApp["agent"]["video"]["streamMonitor"],
         streamer: legacy.streamer as KaelApp["agent"]["video"]["streamer"],
+        investigations: (legacy.investigations ?? {}) as KaelApp["agent"]["video"]["investigations"],
         serveManager: legacy.serveManager as KaelApp["agent"]["video"]["serveManager"],
       },
       generation: {
@@ -837,6 +841,34 @@ describe("API integration", () => {
     await server.close();
   });
 
+  it("serves a cached stream thumbnail and 404s for unknown origins", async () => {
+    const app = makeFakeApp();
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "kael-thumbs-"));
+    app.config.dataDir = tmp;
+    app.agent.video.streamer.listOrigins = async () => [
+      { id: "origin-a", rootDir: tmp, playbackPath: "index.m3u8" },
+    ] as never;
+    const thumbsDir = path.join(tmp, "streamer", "thumbnails");
+    await fs.mkdir(thumbsDir, { recursive: true });
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+    await fs.writeFile(path.join(thumbsDir, "origin-a.jpg"), jpeg);
+    const server = createApiServer(app);
+
+    const ok = await server.inject({ method: "GET", url: "/streams/origin-a/thumbnail.jpg" });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.headers["content-type"]).toContain("image/jpeg");
+    expect(ok.rawPayload).toEqual(jpeg);
+
+    const missing = await server.inject({ method: "GET", url: "/streams/missing/thumbnail.jpg" });
+    expect(missing.statusCode).toBe(404);
+
+    const invalid = await server.inject({ method: "GET", url: "/streams/..%2F..%2Fetc/thumbnail.jpg" });
+    expect([400, 404]).toContain(invalid.statusCode);
+
+    await server.close();
+    await fs.rm(tmp, { recursive: true, force: true });
+  });
+
   it("starts, stops and removes stream watch sessions through API", async () => {
     const app = makeFakeApp();
     const status = {
@@ -859,14 +891,14 @@ describe("API integration", () => {
       events: [],
       running: true,
     };
-    app.streamMonitor.startWatch = (params) => {
+    app.agent.video.streamMonitor.startWatch = (params: { profile?: string; mode?: string }) => {
       expect(params.profile).toBe("chunks");
       expect(params.mode).toBe("live");
       return "watch-stub";
     };
-    app.streamMonitor.getStatus = () => status;
-    app.streamMonitor.listWatches = () => [status];
-    app.streamMonitor.removeWatch = async () => true;
+    app.agent.video.streamMonitor.getStatus = () => status;
+    app.agent.video.streamMonitor.listWatches = () => [status];
+    app.agent.video.streamMonitor.removeWatch = async () => true;
     const server = createApiServer(app);
 
     const start = await server.inject({
@@ -894,6 +926,58 @@ describe("API integration", () => {
     const removed = await server.inject({ method: "DELETE", url: "/streams/watch/watch-stub" });
     expect(removed.statusCode).toBe(200);
     expect(removed.json()).toEqual({ ok: true, removed: true });
+    await server.close();
+  });
+
+  it("starts and exposes persisted media investigations through API", async () => {
+    const app = makeFakeApp();
+    const record = {
+      id: "investigation-1",
+      originId: "origin-a",
+      state: "queued",
+      fullAnalysis: true,
+      createdAt: "2026-07-16T00:00:00.000Z",
+      updatedAt: "2026-07-16T00:00:00.000Z",
+      agents: [],
+    };
+    const startInvestigation = vi.fn(async () => record);
+    app.agent.video.streamer.listOrigins = async () => [{ id: "origin-a" }] as never;
+    app.agent.video.investigations = {
+      agentsAvailable: true,
+      list: () => [record],
+      get: (id: string) => id === record.id ? record : null,
+      start: startInvestigation,
+      rerun: async () => ({ ...record, id: "investigation-2", sourceInvestigationId: record.id }),
+    } as never;
+    const server = createApiServer(app);
+
+    const start = await server.inject({
+      method: "POST",
+      url: "/media-investigations",
+      payload: {
+        originId: "origin-a",
+        problemStatement: "A imagem congela perto de 3s",
+        problemContext: { approximateTime: "00:00:03", affectedTrack: "video" },
+        fullAnalysis: true,
+      },
+    });
+    expect(start.statusCode).toBe(200);
+    expect(startInvestigation).toHaveBeenCalledWith(expect.objectContaining({
+      originId: "origin-a",
+      problemStatement: "A imagem congela perto de 3s",
+      problemContext: { approximateTime: "00:00:03", affectedTrack: "video" },
+    }));
+    expect(start.json()).toMatchObject({ ok: true, investigation: { id: "investigation-1", state: "queued" } });
+
+    const list = await server.inject({ method: "GET", url: "/media-investigations" });
+    expect(list.json()).toMatchObject({ agentsAvailable: true, investigations: [{ id: "investigation-1" }] });
+
+    const detail = await server.inject({ method: "GET", url: "/media-investigations/investigation-1" });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().investigation.originId).toBe("origin-a");
+
+    const rerun = await server.inject({ method: "POST", url: "/media-investigations/investigation-1/rerun" });
+    expect(rerun.json().investigation).toMatchObject({ id: "investigation-2", sourceInvestigationId: "investigation-1" });
     await server.close();
   });
 

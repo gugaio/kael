@@ -33,7 +33,6 @@ export async function bootstrapVideoModule(
   const vhs = await createVhs({ dataDir: path.join(config.dataDir, "streamer") });
   const mediaArtifacts = new MediaArtifactsService(path.join(config.dataDir, "media", "artifacts"));
   await mediaArtifacts.init();
-  const streamMonitor = new HlsStreamMonitorService(vhs.watch);
   const streamer: StreamerRuntime = {
     listOrigins: () => vhs.stream.listOrigins(),
     inspectOrigin: (originId) => vhs.stream.loadOrigin(originId),
@@ -50,6 +49,12 @@ export async function bootstrapVideoModule(
     (originId, opts) => streamer.serveOrigin(originId, opts),
     (originId, opts) => streamer.serveLiveOrigin(originId, opts),
   );
+  const streamMonitor = new HlsStreamMonitorService(
+    vhs.watch,
+    streamer,
+    path.join(config.dataDir, "streamer", "watches"),
+  );
+  await streamMonitor.init();
 
   return {
     ffmpeg,

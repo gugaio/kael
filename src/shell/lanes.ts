@@ -51,8 +51,6 @@ export class LaneQueue {
     const id = String(this.nextId++);
     return new Promise<T>((resolve, reject) => {
       const execute = async (): Promise<void> => {
-        const prev = this.activeCounts.get(lane) ?? 0;
-        this.activeCounts.set(lane, prev + 1);
         try {
           const result = await fn();
           resolve(result);

@@ -41,6 +41,11 @@ bootstrap/modules/video.ts
         |      |-- image generation
         |      `-- video generation
         |
+        +--> bootstrap/modules/media-investigation.ts
+        |      |-- persistent investigations
+        |      |-- versioned specialist prompts
+        |      `-- PI specialist agent runner
+        |
         +--> bootstrap/modules/chat.ts
         |      |-- engine
         |      |-- turn orchestrator
@@ -100,6 +105,13 @@ O contexto é agrupado por domínio:
 - `services`: memória, workspace, research, planner, skills e media understanding;
 - `video`: jobs, ffmpeg, inspect, streamer, stream monitor, playback e serve manager;
 - `generation`: geração de imagem e vídeo.
+
+### `media-investigation.ts`
+
+Monta o time de investigação de mídia do Kael sobre evidências determinísticas do
+VHS. O serviço persiste cada execução, carrega prompts versionados de
+`.kael/agents/media-investigation` e executa especialistas isolados sem alterar o
+contrato principal de `AgentEngine`.
 
 ### `automation.ts`
 

@@ -203,7 +203,7 @@ describe("ShellProcessSupervisor", () => {
       resolveShell: () => ({ command: "sh", args: ["-c"] }),
       looksLikeCommandNotFound: () => false,
     });
-    const completion = supervisor.getCompletion(started.id);
+    const completion = supervisor.getCompletion(started.id)!;
     holder.child!.emit("close", 126);
     const final = await completion;
     expect(final.status).toBe("failed");
@@ -227,7 +227,7 @@ describe("ShellProcessSupervisor", () => {
       resolveShell: () => ({ command: "sh", args: ["-c"] }),
       looksLikeCommandNotFound: () => false, // heuristica retorna false, mas exit code prevalece
     });
-    const completion = supervisor.getCompletion(started.id);
+    const completion = supervisor.getCompletion(started.id)!;
     holder.child!.emit("close", 127);
     const final = await completion;
     expect(final.status).toBe("failed");
